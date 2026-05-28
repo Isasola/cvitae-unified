@@ -4,6 +4,10 @@ on:
     - cron: '0 0 1,10,20 * *'
   workflow_dispatch:
 
+# Conceder permiso de escritura al token del workflow
+permissions:
+  contents: write
+
 jobs:
   update-jobs:
     runs-on: ubuntu-latest
