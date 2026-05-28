@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /#admin
+
+Sitemap: https://cvitae-py.netlify.app/sitemap.xml
+
+# Crawl delay for search engines
+Crawl-delay: 1
