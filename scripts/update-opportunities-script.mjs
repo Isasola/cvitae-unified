@@ -5,7 +5,8 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const OUTPUT_PATH = path.join(__dirname, '../client/src/data/opportunities.json')
+// Cambiamos la ruta del JSON a public/ que sí existe
+const OUTPUT_PATH = path.join(__dirname, '..', 'public', 'opportunities.json')
 
 const ADZUNA_APP_ID = process.env.ADZUNA_APP_ID
 const ADZUNA_APP_KEY = process.env.ADZUNA_APP_KEY
@@ -87,10 +88,13 @@ if (SERPAPI_KEY) {
   } catch (e) { console.error('Error SerpAPI becas:', e.message) }
 }
 
-// 5. Jooble
+// 5. Jooble (fix: User-Agent agregado)
 if (JOOBLE_API_KEY) {
   try {
-    const res = await axios.post('https://jooble.org/api/', { keywords: 'empleo', location: 'Paraguay', apiKey: JOOBLE_API_KEY })
+    const res = await axios.post('https://jooble.org/api/',
+      { keywords: 'empleo', location: 'Paraguay', apiKey: JOOBLE_API_KEY },
+      { headers: { 'User-Agent': 'CVitae/1.0 (job-aggregator)' } }
+    )
     const jobs = res.data.jobs?.slice(0, 20).map(job => ({
       id: `jooble-${job.id || Math.random().toString(36).substr(2, 9)}`, title: job.title, organization: job.company,
       location: job.location || 'Paraguay', continent: 'Sudamérica', type: 'empleo', rubro: 'General',
@@ -102,11 +106,11 @@ if (JOOBLE_API_KEY) {
   } catch (e) { console.error('Error Jooble:', e.message) }
 }
 
-// 6. ReliefWeb (empleos humanitarios y ONGs)
+// 6. ReliefWeb (fix: appname cambiado)
 try {
   const reliefRes = await axios.get('https://api.reliefweb.int/v2/jobs', {
     params: {
-      appname: 'cvitae',
+      appname: 'cvitae-unified',
       profile: 'list',
       preset: 'latest',
       limit: 20,
@@ -133,28 +137,8 @@ try {
   console.log(`✅ ReliefWeb: ${reliefJobs.length} empleos`);
 } catch (e) { console.error('❌ Error ReliefWeb:', e.message); }
 
-// 7. UN Jobs (Naciones Unidas)
-try {
-  const unRes = await axios.get('https://api.unjobs.net/v2/jobs', { params: { limit: 20 } });
-  const unJobs = unRes.data.results?.map(job => ({
-    id: `unjobs-${job.id}`,
-    title: job.title,
-    organization: job.organization || 'UN',
-    location: job.duty_station || 'Varios países',
-    continent: 'Global',
-    type: 'empleo',
-    rubro: 'Internacional',
-    value: 'Consultar',
-    deadline: job.deadline || 'Consultar',
-    compatibility: 75,
-    tags: ['ONU', 'Internacional'],
-    description: job.description?.substring(0, 200) + '...' || 'Oportunidad en Naciones Unidas.',
-    application_url: job.url || `https://unjobs.org/vacancies/${job.id}`,
-    source: 'UN Jobs',
-  })) || [];
-  allOpportunities = [...allOpportunities, ...unJobs];
-  console.log(`✅ UN Jobs: ${unJobs.length} empleos`);
-} catch (e) { console.error('❌ Error UN Jobs:', e.message); }
+// 7. UN Jobs (DESACTIVADA temporalmente - dominio caído)
+// La reactivaremos en la próxima iteración cuando el dominio responda.
 
 // 8. Remotive (trabajos remotos internacionales)
 try {
@@ -179,7 +163,9 @@ try {
   console.log(`✅ Remotive: ${remotiveJobs.length} empleos`);
 } catch (e) { console.error('❌ Error Remotive:', e.message); }
 
-// Guardar JSON
+// Guardar JSON (ruta corregida)
+const outputDir = path.dirname(OUTPUT_PATH)
+if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true })
 fs.writeFileSync(OUTPUT_PATH, JSON.stringify({ total: allOpportunities.length, timestamp: new Date().toISOString(), opportunities: allOpportunities }, null, 2))
 console.log(`✅ JSON actualizado: ${allOpportunities.length} oportunidades`)
 
