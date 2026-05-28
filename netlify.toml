@@ -1,5 +1,5 @@
 [build]
-  command = "pnpm build"
+  command = "pnpm build && node scripts/prerender.mjs && node scripts/generate-sitemap.mjs && node scripts/generate-robots.mjs"
   publish = "dist"
   functions = "netlify/functions"
 
