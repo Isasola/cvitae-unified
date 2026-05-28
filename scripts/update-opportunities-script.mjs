@@ -14,30 +14,10 @@ const SERPAPI_KEY = process.env.SERPAPI_KEY
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const JOOBLE_API_KEY = process.env.JOOBLE_API_KEY
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
 let allOpportunities = []
 
-// Función de enriquecimiento con Gemini (para todo tipo)
-async function enrichWithGemini(title, company, location, originalUrl, type = 'empleo') {
-  if (!GEMINI_API_KEY) return null
-  const basePrompt = type === 'beca' 
-    ? `Eres un redactor experto en oportunidades educativas. Genera una descripción atractiva en español para la siguiente beca o programa:`
-    : `Eres un redactor profesional de ofertas de empleo. Genera una descripción atractiva en español para la siguiente vacante:`
-  const prompt = `${basePrompt} ${title} en ${company || 'institución'}. Ubicación: ${location || 'Paraguay'}. Incluye responsabilidades, requisitos y beneficios. Al final añade: "Ver oportunidad original: ${originalUrl}"`
-  try {
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      { contents: [{ parts: [{ text: prompt }] }] },
-      { headers: { 'Content-Type': 'application/json' } }
-    )
-    const generatedText = response.data.candidates?.[0]?.content?.parts?.[0]?.text
-    if (generatedText) return generatedText.trim()
-  } catch (e) { console.error(`Gemini error: ${e.message}`) }
-  return null
-}
-
-// 1. Adzuna (empleos)
+// 1. Adzuna (empleos UK/tech)
 if (ADZUNA_APP_ID && ADZUNA_APP_KEY) {
   try {
     const res = await axios.get(`https://api.adzuna.com/v1/api/jobs/gb/search/1?app_id=${ADZUNA_APP_ID}&app_key=${ADZUNA_APP_KEY}&results_per_page=20&what=developer&content-type=application/json`)
@@ -83,7 +63,7 @@ if (SERPAPI_KEY) {
   } catch (e) { console.error('Error SerpAPI:', e.message) }
 }
 
-// 4. SerpAPI (becas y foros Paraguay) - NUEVO
+// 4. SerpAPI (becas y foros Paraguay)
 if (SERPAPI_KEY) {
   try {
     const res = await axios.get('https://serpapi.com/search.json', { params: { engine: 'google', q: 'becas paraguay 2026 foros empleo', hl: 'es', gl: 'py', api_key: SERPAPI_KEY } })
@@ -122,24 +102,88 @@ if (JOOBLE_API_KEY) {
   } catch (e) { console.error('Error Jooble:', e.message) }
 }
 
-// 6. Apify (opcional, descomentá si querés usarlo)
-// if (APIFY_API_KEY) { ... }
+// 6. ReliefWeb (empleos humanitarios y ONGs)
+try {
+  const reliefRes = await axios.get('https://api.reliefweb.int/v2/jobs', {
+    params: {
+      appname: 'cvitae',
+      profile: 'list',
+      preset: 'latest',
+      limit: 20,
+      query: { value: 'Paraguay OR Latin America' }
+    }
+  });
+  const reliefJobs = reliefRes.data.data?.map(job => ({
+    id: `reliefweb-${job.id}`,
+    title: job.fields.title,
+    organization: job.fields.source?.[0]?.name || 'ONG',
+    location: job.fields.country?.[0]?.name || 'Varios países',
+    continent: 'Global',
+    type: 'beca',
+    rubro: job.fields.career_categories?.[0]?.name || 'Humanitario',
+    value: 'Consultar',
+    deadline: job.fields.date?.closing || 'Consultar',
+    compatibility: 70,
+    tags: ['ONG', 'Humanitario'],
+    description: job.fields.body ? job.fields.body.substring(0, 200) + '...' : 'Más información en el enlace original.',
+    application_url: job.fields.url || `https://reliefweb.int/job/${job.id}`,
+    source: 'ReliefWeb',
+  })) || [];
+  allOpportunities = [...allOpportunities, ...reliefJobs];
+  console.log(`✅ ReliefWeb: ${reliefJobs.length} empleos`);
+} catch (e) { console.error('❌ Error ReliefWeb:', e.message); }
 
-// 7. Enriquecimiento con Gemini (limitado a 5)
-console.log('🤖 Enriquecimiento con Gemini...')
-const MAX_GEMINI_CALLS = 5
-let geminiProcessed = 0
-for (const opp of allOpportunities) {
-  if (geminiProcessed >= MAX_GEMINI_CALLS) break
-  const enriched = await enrichWithGemini(opp.title, opp.organization, opp.location, opp.application_url, opp.type)
-  if (enriched) { opp.description = enriched; geminiProcessed++ }
-  await new Promise(resolve => setTimeout(resolve, 3000))
-}
+// 7. UN Jobs (Naciones Unidas)
+try {
+  const unRes = await axios.get('https://api.unjobs.net/v2/jobs', { params: { limit: 20 } });
+  const unJobs = unRes.data.results?.map(job => ({
+    id: `unjobs-${job.id}`,
+    title: job.title,
+    organization: job.organization || 'UN',
+    location: job.duty_station || 'Varios países',
+    continent: 'Global',
+    type: 'empleo',
+    rubro: 'Internacional',
+    value: 'Consultar',
+    deadline: job.deadline || 'Consultar',
+    compatibility: 75,
+    tags: ['ONU', 'Internacional'],
+    description: job.description?.substring(0, 200) + '...' || 'Oportunidad en Naciones Unidas.',
+    application_url: job.url || `https://unjobs.org/vacancies/${job.id}`,
+    source: 'UN Jobs',
+  })) || [];
+  allOpportunities = [...allOpportunities, ...unJobs];
+  console.log(`✅ UN Jobs: ${unJobs.length} empleos`);
+} catch (e) { console.error('❌ Error UN Jobs:', e.message); }
 
-// 8. Guardar JSON
+// 8. Remotive (trabajos remotos internacionales)
+try {
+  const remotiveRes = await axios.get('https://remotive.com/api/remote-jobs');
+  const remotiveJobs = remotiveRes.data.jobs?.slice(0, 20).map(job => ({
+    id: `remotive-${job.id}`,
+    title: job.title,
+    organization: job.company_name,
+    location: job.candidate_required_location || 'Remoto',
+    continent: 'Global',
+    type: 'empleo',
+    rubro: job.category || 'Remoto',
+    value: job.salary || 'Competitivo',
+    deadline: 'Abierto',
+    compatibility: 80,
+    tags: ['Remoto', 'Global'],
+    description: job.description?.substring(0, 200) + '...' || 'Oportunidad remota.',
+    application_url: job.url,
+    source: 'Remotive',
+  })) || [];
+  allOpportunities = [...allOpportunities, ...remotiveJobs];
+  console.log(`✅ Remotive: ${remotiveJobs.length} empleos`);
+} catch (e) { console.error('❌ Error Remotive:', e.message); }
+
+// Guardar JSON
 fs.writeFileSync(OUTPUT_PATH, JSON.stringify({ total: allOpportunities.length, timestamp: new Date().toISOString(), opportunities: allOpportunities }, null, 2))
+console.log(`✅ JSON actualizado: ${allOpportunities.length} oportunidades`)
 
-// 9. Supabase
+// Supabase
 if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
