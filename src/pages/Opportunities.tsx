@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'wouter'
+import { Link, useLocation } from 'wouter'
 import { motion } from 'framer-motion'
-import { MapPin, Calendar, ArrowRight, Search } from 'lucide-react'
+import { Search, MapPin, Calendar, Briefcase, ArrowRight, ArrowLeft } from 'lucide-react'
+import { GlassCard, GoldButton, Badge } from '@/components/cvitae/UI-Elements'
 import { Navbar } from '@/components/cvitae/Navbar'
 import { Footer } from '@/components/cvitae/Footer'
-import { GlassCard, Badge } from '@/components/cvitae/UI-Elements'
 import { supabase } from '@/lib/supabase'
 
 interface Opportunity {
@@ -17,6 +17,7 @@ interface Opportunity {
   ubicacion: string
   fecha_vencimiento: string
   is_active: boolean
+  metadata?: { application_url?: string; organization?: string; source?: string }
 }
 
 export default function Opportunities() {
@@ -40,6 +41,11 @@ export default function Opportunities() {
     <div className="min-h-screen bg-[#0a0a0a]">
       <Navbar />
       <div className="pt-32 pb-20 px-4 max-w-6xl mx-auto">
+        <div className="mb-8">
+          <Link href="/" className="text-[#c9a84c] flex items-center gap-2 hover:underline text-sm">
+            <ArrowLeft size={16} /> Volver al inicio
+          </Link>
+        </div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-12">
           <h1 className="text-4xl font-bold text-white mb-4">Oportunidades</h1>
           <p className="text-[#888888]">Becas, foros y eventos seleccionados para tu crecimiento profesional</p>
@@ -61,19 +67,24 @@ export default function Opportunities() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((opp) => (
-              <Link key={opp.id} href={`/oportunidades/${opp.slug}`}>
-                <GlassCard className="h-full cursor-pointer group">
-                  <Badge variant={opp.tipo === 'beca' ? 'gold' : 'muted'} className="mb-3">{opp.tipo === 'beca' ? 'Beca' : 'Foro'}</Badge>
-                  <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-[#c9a84c] transition-colors">{opp.titulo}</h3>
-                  <div className="space-y-2 text-xs text-[#888888]">
-                    <span className="flex items-center gap-1"><MapPin size={12} /> {opp.ubicacion}</span>
-                    <span className="flex items-center gap-1"><Calendar size={12} /> Vence: {new Date(opp.fecha_vencimiento).toLocaleDateString()}</span>
-                  </div>
-                  <div className="mt-4 flex items-center gap-1 text-sm text-[#c9a84c] group-hover:underline">
-                    Ver detalle <ArrowRight size={14} />
-                  </div>
-                </GlassCard>
-              </Link>
+              <GlassCard
+                key={opp.id}
+                className="h-full cursor-pointer group"
+                onClick={() => {
+                  const appUrl = opp.metadata?.application_url;
+                  if (appUrl) window.open(appUrl, '_blank', 'noopener,noreferrer');
+                }}
+              >
+                <Badge variant={opp.tipo === 'beca' ? 'gold' : 'muted'} className="mb-3">{opp.tipo === 'beca' ? 'Beca' : 'Foro'}</Badge>
+                <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-[#c9a84c] transition-colors">{opp.titulo}</h3>
+                <div className="space-y-2 text-xs text-[#888888]">
+                  <span className="flex items-center gap-1"><MapPin size={12} /> {opp.ubicacion}</span>
+                  <span className="flex items-center gap-1"><Calendar size={12} /> Vence: {new Date(opp.fecha_vencimiento).toLocaleDateString()}</span>
+                </div>
+                <div className="mt-4 flex items-center gap-1 text-sm text-[#c9a84c] group-hover:underline">
+                  Ver detalle <ArrowRight size={14} />
+                </div>
+              </GlassCard>
             ))}
           </div>
         )}

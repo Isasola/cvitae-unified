@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  LayoutDashboard, FileText, Briefcase, Ticket, Settings, LogOut, Save, X,
+  LayoutDashboard, FileText, Users, Zap, Ticket, LogOut, Save, X,
   Edit, Trash2, Eye, EyeOff, CheckCircle, AlertCircle, Lock, Plus, RefreshCw,
-  Users, Zap, TrendingUp, Database
 } from 'lucide-react'
 import { GlassCard, GoldButton, Badge } from '@/components/cvitae/UI-Elements'
 
@@ -30,6 +29,7 @@ interface Subscriber {
   seniority: string
   is_subscribed: boolean
   created_at: string
+  user_id: string
 }
 
 interface SkillCandidate {
@@ -57,23 +57,25 @@ export default function Admin() {
   const [metrics, setMetrics] = useState({ usuarios: 0, matches: 0, oportunidades: 0, suscriptores: 0 })
 
   const [formData, setFormData] = useState<ContentItem>({
-    titulo: '', slug: '', cuerpo: '', categoria: 'Tecnología', imagen_url: '',
-    fecha_vencimiento: new Date().toISOString().split('T')[0], tipo: 'blog', ubicacion: 'Asunción, Paraguay', is_active: true
+    titulo: '', slug: '', cuerpo: '', categoria: 'Tecnología', imagen_url: '', fecha_vencimiento: new Date().toISOString().split('T')[0], tipo: 'blog', ubicacion: 'Asunción, Paraguay', is_active: true
   })
   const [isEditing, setIsEditing] = useState(false)
 
+  // Tokens state
+  const [tokens, setTokens] = useState<any[]>([])
+  const [tokenEmail, setTokenEmail] = useState('')
+  const [tokenBalance, setTokenBalance] = useState(10)
+  const [tokenPlan, setTokenPlan] = useState('starter')
+
   useEffect(() => {
     if (isAuthenticated) {
-      loadAll()
+      loadContent()
+      loadSubscribers()
+      loadSkillCandidates()
+      loadMetrics()
+      loadTokens()
     }
   }, [isAuthenticated, activeTab])
-
-  const loadAll = () => {
-    loadContent()
-    loadSubscribers()
-    loadSkillCandidates()
-    loadMetrics()
-  }
 
   const loadContent = async () => {
     const { data } = await supabase.from('content_hub').select('*').order('created_at', { ascending: false })
@@ -91,17 +93,22 @@ export default function Admin() {
   }
 
   const loadMetrics = async () => {
-    const [usersRes, oppsRes] = await Promise.all([
+    const [usersRes, oppsRes, subsRes] = await Promise.all([
       supabase.from('user_master_profiles').select('id', { count: 'exact', head: true }),
-      supabase.from('content_hub').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('tipo', 'oportunidad')
+      supabase.from('content_hub').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('tipo', 'oportunidad'),
+      supabase.from('user_master_profiles').select('id', { count: 'exact', head: true }).eq('is_subscribed', true)
     ])
-    const subsRes = await supabase.from('user_master_profiles').select('id', { count: 'exact', head: true }).eq('is_subscribed', true)
     setMetrics({
       usuarios: usersRes.count || 0,
       matches: 0,
       oportunidades: oppsRes.count || 0,
       suscriptores: subsRes.count || 0
     })
+  }
+
+  const loadTokens = async () => {
+    const { data } = await supabase.from('recruiter_tokens').select('*').order('created_at', { ascending: false })
+    if (data) setTokens(data)
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -128,7 +135,7 @@ export default function Admin() {
     e.preventDefault()
     setLoading(true)
     try {
-      const dataToSave = { ...formData, fecha_vencimiento: `${formData.fecha_vencimiento}T23:59:59Z` }
+      const dataToSave = { ...formData, fecha_vencimiento: \`\${formData.fecha_vencimiento}T23:59:59Z\` }
       if (formData.tipo === 'blog') dataToSave.fecha_vencimiento = '2099-12-31T23:59:59Z'
       const { error } = isEditing && formData.id
         ? await supabase.from('content_hub').update(dataToSave).eq('id', formData.id)
@@ -144,7 +151,7 @@ export default function Admin() {
   const toggleSubscription = async (userId: string, currentValue: boolean) => {
     await supabase.from('user_master_profiles').update({ is_subscribed: !currentValue }).eq('user_id', userId)
     loadSubscribers()
-    setNotification({ type: 'success', message: `Suscripción ${!currentValue ? 'activada' : 'desactivada'}` })
+    setNotification({ type: 'success', message: \`Suscripción \${!currentValue ? 'activada' : 'desactivada'}\` })
   }
 
   const approveSkill = async (id: number) => {
@@ -157,6 +164,26 @@ export default function Admin() {
     await supabase.from('skill_candidates').update({ status: 'rejected' }).eq('id', id)
     loadSkillCandidates()
     setNotification({ type: 'success', message: 'Habilidad rechazada' })
+  }
+
+  const generateToken = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    const newToken = \`REC-\${Math.random().toString(36).substring(2, 8).toUpperCase()}-\${new Date().getFullYear()}\`
+    try {
+      const { error } = await supabase.from('recruiter_tokens').insert([{
+        email: tokenEmail,
+        token_balance: tokenBalance,
+        access_token: newToken,
+        plan_type: tokenPlan,
+        is_active: true
+      }])
+      if (error) throw error
+      setNotification({ type: 'success', message: 'Token generado con éxito' })
+      setTokenEmail('')
+      loadTokens()
+    } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
+    finally { setLoading(false) }
   }
 
   const toggleStatus = async (item: ContentItem) => {
@@ -196,7 +223,7 @@ export default function Admin() {
             <GoldButton type="submit" className="w-full" disabled={loading}>{loading ? 'Accediendo...' : 'Acceder'}</GoldButton>
           </form>
           {notification && (
-            <div className={`mt-4 p-3 rounded-xl text-sm ${notification.type === 'success' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+            <div className={\`mt-4 p-3 rounded-xl text-sm \${notification.type === 'success' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}\`}>
               {notification.message}
             </div>
           )}
@@ -223,7 +250,7 @@ export default function Admin() {
             { id: 'tokens', label: 'Tokens B2B', icon: Ticket },
           ].map((tab) => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === tab.id ? 'bg-[#c9a84c] text-black font-bold' : 'text-[#888888] hover:bg-white/5'}`}>
+              className={\`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all \${activeTab === tab.id ? 'bg-[#c9a84c] text-black font-bold' : 'text-[#888888] hover:bg-white/5'}\`}>
               <tab.icon size={18} /> {tab.label}
             </button>
           ))}
@@ -236,15 +263,15 @@ export default function Admin() {
       <div className="flex-grow ml-64 p-8">
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-            
+
             {activeTab === 'dashboard' && (
               <div>
                 <h2 className="text-2xl font-bold text-white mb-6">Dashboard</h2>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                   {[
                     { label: 'Usuarios', value: metrics.usuarios, icon: Users },
-                    { label: 'Suscriptores', value: metrics.suscriptores, icon: TrendingUp },
-                    { label: 'Oportunidades', value: metrics.oportunidades, icon: Briefcase },
+                    { label: 'Suscriptores', value: metrics.suscriptores, icon: Zap },
+                    { label: 'Oportunidades', value: metrics.oportunidades, icon: FileText },
                     { label: 'Skills Candidatas', value: skillCandidates.filter(s => s.status === 'pending').length, icon: Zap },
                   ].map((m, i) => (
                     <GlassCard key={i}>
@@ -288,23 +315,22 @@ export default function Admin() {
                     </div>
                   </form>
                 </GlassCard>
-
-                <div className="space-y-3">
-                  {items.map(item => (
-                    <div key={item.id} className="p-4 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <Badge variant={item.tipo === 'blog' ? 'muted' : 'gold'}>{item.tipo.toUpperCase()}</Badge>
-                        <div>
-                          <p className="text-white font-medium">{item.titulo}</p>
-                          <p className="text-xs text-[#888888]">{item.slug}</p>
+                <div className="space-y-2">
+                  {items.map((item) => (
+                    <GlassCard key={item.id} className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={item.tipo === 'blog' ? 'gold' : 'muted'}>{item.tipo}</Badge>
+                          <span className="text-white font-medium">{item.titulo}</span>
                         </div>
+                        <p className="text-xs text-[#888888] mt-1">/{item.slug}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => toggleStatus(item)} className={`p-2 rounded-lg ${item.is_active ? 'text-green-400' : 'text-[#888888]'}`}>{item.is_active ? <Eye size={18} /> : <EyeOff size={18} />}</button>
-                        <button onClick={() => handleEdit(item)} className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg"><Edit size={18} /></button>
-                        <button onClick={() => deleteItem(item.id!)} className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg"><Trash2 size={18} /></button>
+                        <button onClick={() => toggleStatus(item)} className={\`p-2 rounded-lg \${item.is_active ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'}\`}>{item.is_active ? <Eye size={16} /> : <EyeOff size={16} />}</button>
+                        <button onClick={() => handleEdit(item)} className="p-2 rounded-lg text-[#888888] hover:text-white hover:bg-white/5"><Edit size={16} /></button>
+                        <button onClick={() => deleteItem(item.id!)} className="p-2 rounded-lg text-[#888888] hover:text-red-400 hover:bg-red-400/10"><Trash2 size={16} /></button>
                       </div>
-                    </div>
+                    </GlassCard>
                   ))}
                 </div>
               </div>
@@ -312,21 +338,28 @@ export default function Admin() {
 
             {activeTab === 'suscriptores' && (
               <div>
-                <h2 className="text-2xl font-bold text-white mb-6">Suscriptores ({subscribers.length})</h2>
-                <div className="space-y-3">
-                  {subscribers.map(sub => (
-                    <div key={sub.id} className="p-4 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-white">Suscriptores ({subscribers.length})</h2>
+                  <GoldButton variant="ghost" onClick={loadSubscribers}><RefreshCw size={16} /></GoldButton>
+                </div>
+                <div className="space-y-2">
+                  {subscribers.map((sub) => (
+                    <GlassCard key={sub.id} className="flex items-center justify-between">
                       <div>
                         <p className="text-white font-medium">{sub.full_name || 'Sin nombre'}</p>
-                        <p className="text-xs text-[#888888]">{sub.email}</p>
+                        <p className="text-sm text-[#888888]">{sub.email}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          {sub.skills?.slice(0, 3).map(skill => <span key={skill} className="px-2 py-0.5 rounded-md bg-white/5 text-xs text-[#888888]">{skill}</span>)}
+                        </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        <Badge variant={sub.is_subscribed ? 'gold' : 'muted'}>{sub.is_subscribed ? 'PRO' : 'FREE'}</Badge>
-                        <button onClick={() => toggleSubscription(sub.id, sub.is_subscribed)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${sub.is_subscribed ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
-                          {sub.is_subscribed ? 'Degradar' : 'Hacer PRO'}
+                        <span className="text-sm text-[#888888]">{sub.seniority || 'Junior'}</span>
+                        <button onClick={() => toggleSubscription(sub.user_id, sub.is_subscribed)}
+                          className={\`px-3 py-1.5 rounded-lg text-xs font-bold transition-all \${sub.is_subscribed ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-white/5 text-[#888888] border border-white/10'}\`}>
+                          {sub.is_subscribed ? 'Pro' : 'Free'}
                         </button>
                       </div>
-                    </div>
+                    </GlassCard>
                   ))}
                 </div>
               </div>
@@ -334,32 +367,85 @@ export default function Admin() {
 
             {activeTab === 'skills' && (
               <div>
-                <h2 className="text-2xl font-bold text-white mb-6">Habilidades Candidatas ({skillCandidates.filter(s => s.status === 'pending').length})</h2>
-                <div className="space-y-3">
-                  {skillCandidates.map(skill => (
-                    <div key={skill.id} className="p-4 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-white">Skills Candidatas</h2>
+                  <Badge variant="gold">{skillCandidates.filter(s => s.status === 'pending').length} pendientes</Badge>
+                </div>
+                <div className="space-y-2">
+                  {skillCandidates.map((skill) => (
+                    <GlassCard key={skill.id} className="flex items-center justify-between">
                       <div>
-                        <p className="text-white font-medium">{skill.term}</p>
-                        <p className="text-xs text-[#888888]">Normalizado: {skill.normalized} | Menciones: {skill.mention_count}</p>
+                        <p className="text-white font-medium">{skill.term} → <span className="text-[#c9a84c]">{skill.normalized}</span></p>
+                        <p className="text-xs text-[#888888]">{skill.mention_count} menciones · Desde {new Date(skill.first_seen).toLocaleDateString()}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        {skill.status === 'pending' ? (
+                        <Badge variant={skill.status === 'pending' ? 'warning' : skill.status === 'approved' ? 'gold' : 'muted'}>
+                          {skill.status}
+                        </Badge>
+                        {skill.status === 'pending' && (
                           <>
-                            <button onClick={() => approveSkill(skill.id)} className="p-2 text-green-400 hover:bg-green-500/10 rounded-lg"><CheckCircle size={18} /></button>
-                            <button onClick={() => rejectSkill(skill.id)} className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg"><X size={18} /></button>
+                            <button onClick={() => approveSkill(skill.id)} className="p-2 rounded-lg text-green-400 bg-green-400/10 hover:bg-green-400/20"><CheckCircle size={16} /></button>
+                            <button onClick={() => rejectSkill(skill.id)} className="p-2 rounded-lg text-red-400 bg-red-400/10 hover:bg-red-400/20"><X size={16} /></button>
                           </>
-                        ) : (
-                          <Badge variant={skill.status === 'approved' ? 'gold' : 'muted'}>{skill.status.toUpperCase()}</Badge>
                         )}
                       </div>
-                    </div>
+                    </GlassCard>
                   ))}
                 </div>
               </div>
             )}
+
+            {activeTab === 'tokens' && (
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-6">Tokens B2B</h2>
+                <GlassCard className="mb-8">
+                  <form onSubmit={generateToken} className="space-y-4">
+                    <div className="grid grid-cols-3 gap-4">
+                      <input type="email" value={tokenEmail} onChange={(e) => setTokenEmail(e.target.value)} placeholder="Email del reclutador" required
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#c9a84c]/50" />
+                      <input type="number" value={tokenBalance} onChange={(e) => setTokenBalance(parseInt(e.target.value))} placeholder="Balance de tokens" required
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#c9a84c]/50" />
+                      <select value={tokenPlan} onChange={(e) => setTokenPlan(e.target.value)}
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#c9a84c]/50">
+                        <option value="starter">Starter (10)</option>
+                        <option value="pro">Pro (100)</option>
+                        <option value="enterprise">Enterprise (Inf)</option>
+                      </select>
+                    </div>
+                    <GoldButton type="submit" disabled={loading}>Generar Token</GoldButton>
+                  </form>
+                </GlassCard>
+                <div className="space-y-2">
+                  {tokens.map((token) => (
+                    <GlassCard key={token.id} className="flex items-center justify-between">
+                      <div>
+                        <p className="text-white font-medium">{token.email}</p>
+                        <p className="text-sm text-[#c9a84c] font-mono">{token.access_token}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-white">{token.token_balance} tokens</p>
+                        <p className="text-xs text-[#888888]">{token.plan_type}</p>
+                      </div>
+                    </GlassCard>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </motion.div>
         </AnimatePresence>
       </div>
+
+      <AnimatePresence>
+        {notification && (
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+            className={\`fixed bottom-8 right-8 p-4 rounded-xl flex items-center gap-3 text-sm shadow-2xl z-50 \${notification.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}\`}>
+            {notification.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+            {notification.message}
+            <button onClick={() => setNotification(null)}><X size={14} /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

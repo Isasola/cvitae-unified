@@ -127,7 +127,11 @@ export default function Dashboard() {
               <div className="lg:col-span-2 space-y-4">
                 <h2 className="text-xl font-bold text-white flex items-center gap-2"><Briefcase size={20} className="text-[#c9a84c]" /> Oportunidades para vos</h2>
                 {matches.slice(0, 5).map((match) => (
-                  <GlassCard key={match.id} onClick={() => handleOpportunityClick(match)} className="cursor-pointer">
+                  <GlassCard
+                    key={match.id}
+                    onClick={() => handleOpportunityClick(match)}
+                    className="cursor-pointer"
+                  >
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
                         <p className="text-white font-medium truncate">{match.titulo}</p>

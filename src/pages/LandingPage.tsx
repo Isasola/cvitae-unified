@@ -5,6 +5,7 @@ import { Footer } from '@/components/cvitae/Footer'
 import { Logo } from '@/components/cvitae/Logo'
 import { GoldParticles, DotGrid } from '@/components/cvitae/Particles'
 import { GlassCard, GoldButton, Badge } from '@/components/cvitae/UI-Elements'
+import { CVAnalyzer } from '@/components/CVAnalyzer'
 
 function HeroSection() {
   return (
@@ -178,6 +179,27 @@ export default function LandingPage() {
       <Navbar />
       <HeroSection />
       <HowItWorksSection />
+      {/* ==================== CV ANALYZER SECTION ==================== */}
+      <section id="cv-analyzer" className="relative py-24">
+        <DotGrid />
+        <div className="container mx-auto max-w-4xl relative z-10">
+          <motion.div
+            className="text-center mb-12"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <Badge variant="gold" className="mb-4">Analizador de CV</Badge>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Analizá tu CV gratis ahora
+            </h2>
+            <p className="text-[#888888] max-w-2xl mx-auto">
+              Descubrí tu score ATS y mejorá tu perfil profesional en 60 segundos.
+            </p>
+          </motion.div>
+          <CVAnalyzer />
+        </div>
+      </section>
       <PricingSection />
       <Footer />
     </main>
