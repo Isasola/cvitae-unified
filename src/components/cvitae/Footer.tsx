@@ -47,7 +47,7 @@ export function Footer() {
             <div className="flex items-center gap-4">
               <a href="https://www.linkedin.com/company/cvitae-py/" target="_blank" rel="noopener noreferrer" className="text-[#888888] hover:text-white transition-colors"><Linkedin size={20} /></a>
               <a href="https://www.facebook.com/profile.php?id=61580756714500" target="_blank" rel="noopener noreferrer" className="text-[#888888] hover:text-white transition-colors"><Facebook size={20} /></a>
-              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-[#888888] hover:text-white transition-colors"><Instagram size={20} /></a>
+              <a href="https://www.instagram.com/cpdparaguay/" target="_blank" rel="noopener noreferrer" className="text-[#888888] hover:text-white transition-colors"><Instagram size={20} /></a>
               <a href="https://wa.me/595992954169" target="_blank" rel="noopener noreferrer" className="text-[#888888] hover:text-white transition-colors"><MessageCircle size={20} /></a>
             </div>
           </div>

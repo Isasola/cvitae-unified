@@ -9,6 +9,18 @@ const handler: Handler = async (event) => {
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
+interface CandidateAnalysis {
+  atsScore: number
+  strengths: string[]
+  criticalImprovements: string[]
+}
+
+function extractJSON(text: string): any {
+  const codeBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+  if (codeBlockMatch) return JSON.parse(codeBlockMatch[1].trim());
+  return JSON.parse(text.trim());
+}
+
   try {
     const { cvText } = JSON.parse(event.body || "{}")
     const apiKey = process.env.ANTHROPIC_API_KEY
@@ -25,10 +37,12 @@ const handler: Handler = async (event) => {
       messages: [{ role: "user", content: prompt }],
     })
 
-    const content = message.content[0].type === 'text' ? message.content[0].text : ''
+    const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
+    const analysis = extractJSON(responseText) as CandidateAnalysis;
+    
     return {
       statusCode: 200,
-      body: content,
+      body: JSON.stringify(analysis),
     }
   } catch (error: any) {
     return {

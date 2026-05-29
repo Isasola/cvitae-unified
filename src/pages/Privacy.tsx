@@ -1,38 +1,25 @@
-import { motion } from 'framer-motion'
-import { Navbar } from '@/components/cvitae/Navbar'
-import { Footer } from '@/components/cvitae/Footer'
+import React from 'react';
+import { GlassCard } from '@/components/cvitae/UI-Elements';
+import { Navbar } from '@/components/cvitae/Navbar';
+import { Footer } from '@/components/cvitae/Footer';
 
-export default function Privacy() {
-  return (
-    <div className="min-h-screen bg-[#0a0a0a]">
-      <Navbar />
-      <div className="pt-32 pb-20 px-4 max-w-3xl mx-auto">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="prose prose-invert max-w-none">
-          <h1 className="text-3xl font-bold text-white mb-8">Política de Privacidad</h1>
-          <p className="text-[#888888]">Última actualización: Mayo 2026</p>
-          
-          <h2 className="text-xl font-bold text-white mt-8 mb-4">1. Información que recolectamos</h2>
-          <p className="text-[#888888]">
-            Para brindarte nuestros servicios de optimización de carrera, recolectamos información personal que incluyes en tu CV, como nombre, contacto, experiencia laboral y educación.
-          </p>
-
-          <h2 className="text-xl font-bold text-white mt-8 mb-4">2. Uso de Inteligencia Artificial</h2>
-          <p className="text-[#888888]">
-            Utilizamos modelos de IA para analizar tu perfil y compararlo con vacantes laborales. Tus datos se procesan de forma segura y no se utilizan para entrenar modelos públicos sin tu consentimiento explícito.
-          </p>
-
-          <h2 className="text-xl font-bold text-white mt-8 mb-4">3. Compartir Información</h2>
-          <p className="text-[#888888]">
-            No vendemos tus datos a terceros. Solo compartimos información con plataformas de empleo cuando decides postularte a través de nuestros enlaces o servicios integrados.
-          </p>
-
-          <h2 className="text-xl font-bold text-white mt-8 mb-4">4. Tus Derechos</h2>
-          <p className="text-[#888888]">
-            Puedes solicitar el acceso, rectificación o eliminación de tus datos en cualquier momento enviando un correo a cvitaeparaguay@gmail.com.
-          </p>
-        </motion.div>
-      </div>
-      <Footer />
+const Privacy: React.FC = () => (
+  <div className="min-h-screen bg-[#0a0a0a]">
+    <Navbar />
+    <div className="container mx-auto px-4 py-32 max-w-4xl">
+      <GlassCard className="p-8">
+        <h1 className="text-3xl font-bold mb-6 text-white">Política de Privacidad</h1>
+        <div className="text-[#888888] space-y-4">
+          <p>En CVitae, respetamos tu privacidad. Recopilamos únicamente los datos que nos proporcionás voluntariamente al crear tu CV o perfil profesional.</p>
+          <p>Tus datos personales se almacenan de forma segura en servidores de Supabase y no se comparten con terceros sin tu consentimiento explícito, salvo obligación legal.</p>
+          <p>Utilizamos cookies técnicas y de análisis (Google Analytics) para mejorar la experiencia. Podés desactivarlas desde tu navegador.</p>
+          <p>Para ejercer tus derechos de acceso, rectificación o cancelación, escribinos a cvitaeparaguay@gmail.com.</p>
+          <p className="pt-4 border-t border-white/5">Al usar CVitae, aceptás esta política. Última actualización: mayo 2026.</p>
+        </div>
+      </GlassCard>
     </div>
-  )
-}
+    <Footer />
+  </div>
+);
+
+export default Privacy;
