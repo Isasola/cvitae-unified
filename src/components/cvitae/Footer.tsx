@@ -1,6 +1,6 @@
 import { Link } from 'wouter'
 import { Logo } from './Logo'
-import { Twitter, Github, Linkedin, Instagram, Mail, MapPin } from 'lucide-react'
+import { Linkedin, Instagram, Mail, MapPin, Facebook, MessageCircle } from 'lucide-react'
 
 export function Footer() {
   const currentYear = new Date().getFullYear()
@@ -18,8 +18,8 @@ export function Footer() {
     {
       title: 'Empresa',
       links: [
-        { label: 'Sobre nosotros', href: '/sobre-nosotros' },
-        { label: 'Contacto', href: 'mailto:hola@cvitae.com.py' },
+        { label: 'Sobre nosotros', href: '/about' },
+        { label: 'Contacto', href: 'mailto:cvitaeparaguay@gmail.com' },
         { label: 'Prensa', onClick: () => alert('Próximamente') },
         { label: 'Carreras', onClick: () => alert('Próximamente') },
       ],
@@ -45,10 +45,10 @@ export function Footer() {
               Encontrá tu próximo paso profesional con CVitae.
             </p>
             <div className="flex items-center gap-4">
-              <a href="#" className="text-[#888888] hover:text-white transition-colors"><Twitter size={20} /></a>
-              <a href="#" className="text-[#888888] hover:text-white transition-colors"><Github size={20} /></a>
-              <a href="#" className="text-[#888888] hover:text-white transition-colors"><Linkedin size={20} /></a>
-              <a href="#" className="text-[#888888] hover:text-white transition-colors"><Instagram size={20} /></a>
+              <a href="https://www.linkedin.com/company/cvitae-py/" target="_blank" rel="noopener noreferrer" className="text-[#888888] hover:text-white transition-colors"><Linkedin size={20} /></a>
+              <a href="https://www.facebook.com/profile.php?id=61580756714500" target="_blank" rel="noopener noreferrer" className="text-[#888888] hover:text-white transition-colors"><Facebook size={20} /></a>
+              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-[#888888] hover:text-white transition-colors"><Instagram size={20} /></a>
+              <a href="https://wa.me/595992954169" target="_blank" rel="noopener noreferrer" className="text-[#888888] hover:text-white transition-colors"><MessageCircle size={20} /></a>
             </div>
           </div>
           {sections.map((section) => (
