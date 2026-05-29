@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'wouter'
+import { auth } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, User, Briefcase, FileText, Bell, BookOpen, Settings,
@@ -28,6 +29,16 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [location] = useLocation()
+  const [user, setUser] = useState<any>(null)
+
+  useEffect(() => {
+    auth.getUser().then(setUser)
+  }, [])
+
+  const handleLogout = async () => {
+    await auth.signOut()
+    window.location.href = '/'
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
@@ -100,10 +111,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 CV
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">Usuario</p>
-                <p className="text-xs text-[#888888] truncate">Plan Free</p>
+                <p className="text-sm font-medium text-white truncate">{user?.email?.split('@')[0] || 'Usuario'}</p>
+                <p className="text-xs text-[#888888] truncate">{user?.email || 'Plan Free'}</p>
               </div>
-              <button className="p-1.5 text-[#888888] hover:text-red-400 transition-colors">
+              <button onClick={handleLogout} className="p-1.5 text-[#888888] hover:text-red-400 transition-colors">
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
@@ -149,7 +160,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#c9a84c] to-[#e8c97a] flex items-center justify-center text-xs font-bold text-[#0a0a0a]">
                 CV
               </div>
-              <span className="text-sm text-white">Usuario</span>
+              <span className="text-sm text-white">{user?.email?.split('@')[0] || 'Usuario'}</span>
               <ChevronRight className="w-4 h-4 text-[#888888]" />
             </Link>
           </div>

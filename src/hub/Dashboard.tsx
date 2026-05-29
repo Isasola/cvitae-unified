@@ -29,9 +29,6 @@ interface MatchItem {
 export default function Dashboard() {
   const [, setLocation] = useLocation()
   const [user, setUser] = useState<any>(null)
-  const [email, setEmail] = useState('')
-  const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState(false)
   const [matches, setMatches] = useState<MatchItem[]>([])
   const [loadingMatches, setLoadingMatches] = useState(false)
   const [matchesError, setMatchesError] = useState<string | null>(null)
@@ -39,12 +36,7 @@ export default function Dashboard() {
   const [profileCursos, setProfileCursos] = useState<string[]>([])
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [hasProfile, setHasProfile] = useState<boolean | null>(null)
-  const [activeTab, setActiveTab] = useState<'matches' | 'settings' | 'alerts'>('matches')
   const [currentLoaderStep, setCurrentLoaderStep] = useState(0)
-  
-  // Onboarding state
-  const [uploading, setUploading] = useState(false)
-  const [onboardingStep, setOnboardingStep] = useState<'initial' | 'uploading' | 'success'>('initial')
 
   const loaderSteps = ["Leyendo tu perfil...", "Cargando vacantes activas...", "Calculando compatibilidad...", "Ordenando resultados..."]
 
@@ -132,53 +124,6 @@ export default function Dashboard() {
     }
   }
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !email.trim()) return
-
-    setUploading(true)
-    setOnboardingStep('uploading')
-
-    try {
-      // 1. Magic Link sign in first to have a user context
-      const { error: authError } = await auth.signInWithMagicLink(email)
-      if (authError) throw authError
-
-      // 2. Read file as base64
-      const reader = new FileReader()
-      const base64Promise = new Promise<string>((resolve) => {
-        reader.onload = () => resolve((reader.result as string).split(',')[1])
-        reader.readAsDataURL(file)
-      })
-      const base64 = await base64Promise
-
-      // 3. Extract text
-      const extractRes = await fetch('/.netlify/functions/extract-pdf-text', {
-        method: 'POST',
-        body: JSON.stringify({ file: base64 })
-      })
-      const { text } = await extractRes.json()
-
-      // 4. Analyze CV
-      const analyzeRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
-        method: 'POST',
-        body: JSON.stringify({ text })
-      })
-      const { premiumData } = await analyzeRes.json()
-      const skills = premiumData?.missingKeywords || []
-
-      // 5. Update profile (assuming user will click magic link, but we can store intent or try to update if session exists)
-      // For now, we'll show success and tell them to check email
-      setOnboardingStep('success')
-      setSent(true)
-    } catch (err: any) {
-      alert('Error: ' + err.message)
-      setOnboardingStep('initial')
-    } finally {
-      setUploading(false)
-    }
-  }
-
   const missingSkills = useMemo(() => {
     if (matches.length === 0) return null
     const top5 = matches.slice(0, 5)
@@ -193,33 +138,11 @@ export default function Dashboard() {
     setLocation(`/oportunidades/${match.slug}`)
   }
 
-  const handleSendMagicLink = async () => {
-    if (!email.trim()) return
-    setSending(true)
-    const { error } = await auth.signInWithMagicLink(email)
-    setSending(false)
-    if (error) alert('Error al enviar el enlace: ' + error.message)
-    else setSent(true)
-  }
-
   return (
     <DashboardLayout>
-      <div className="grid lg:grid-cols-4 gap-6">
-        {/* Sidebar */}
-        <div className="lg:col-span-1 space-y-2">
-          <button onClick={() => setActiveTab('matches')} className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all", activeTab === 'matches' ? "bg-[#c9a84c]/10 text-[#c9a84c] border border-[#c9a84c]/20" : "text-[#888888] hover:text-white hover:bg-white/5")}>
-            <Layout size={18} /> Oportunidades
-          </button>
-          <button onClick={() => setActiveTab('settings')} className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all", activeTab === 'settings' ? "bg-[#c9a84c]/10 text-[#c9a84c] border border-[#c9a84c]/20" : "text-[#888888] hover:text-white hover:bg-white/5")}>
-            <Settings size={18} /> Configuración
-          </button>
-          <button onClick={() => setActiveTab('alerts')} className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all", activeTab === 'alerts' ? "bg-[#c9a84c]/10 text-[#c9a84c] border border-[#c9a84c]/20" : "text-[#888888] hover:text-white hover:bg-white/5")}>
-            <Bell size={18} /> Alertas
-          </button>
-        </div>
-
+      <div className="grid lg:grid-cols-1 gap-6">
         {/* Main Content */}
-        <div className="lg:col-span-3 space-y-6">
+        <div className="space-y-6">
           {!user ? (
             <GlassCard className="text-center py-16 px-8">
               <Lock className="w-12 h-12 text-[#c9a84c] mx-auto mb-4 opacity-50" />
@@ -237,27 +160,6 @@ export default function Dashboard() {
           ) : loadingMatches ? (
             <GlassCard className="py-12">
               <MatchingLoader steps={loaderSteps} currentStep={currentLoaderStep} totalVacancies={50} />
-            </GlassCard>
-          ) : activeTab === 'settings' ? (
-            <GlassCard className="p-8">
-              <h2 className="text-xl font-bold text-white mb-6">Configuración de Perfil</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs text-[#555555] uppercase tracking-widest mb-2 block">Nombre Completo</label>
-                  <input type="text" defaultValue={user.user_metadata?.full_name} className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white" readOnly />
-                </div>
-                <div>
-                  <label className="text-xs text-[#555555] uppercase tracking-widest mb-2 block">Email</label>
-                  <input type="text" defaultValue={user.email} className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white" readOnly />
-                </div>
-                <p className="text-xs text-[#555555] pt-4 italic">* Los datos básicos se sincronizan con tu cuenta de acceso.</p>
-              </div>
-            </GlassCard>
-          ) : activeTab === 'alerts' ? (
-            <GlassCard className="text-center py-16 px-8">
-              <Bell className="w-12 h-12 text-[#c9a84c] mx-auto mb-4 opacity-50" />
-              <h2 className="text-xl font-bold text-white mb-2">Alertas Proactivas</h2>
-              <p className="text-[#888888]">Próximamente — te avisaremos por email cuando haya un match mayor al 85%.</p>
             </GlassCard>
           ) : (
             <div className="grid lg:grid-cols-3 gap-6">
@@ -331,7 +233,7 @@ export default function Dashboard() {
                 )}
               </div>
             </div>
-          </>
+          </div>
         )}
       </div>
     </DashboardLayout>
