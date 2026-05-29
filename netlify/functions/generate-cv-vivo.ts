@@ -15,8 +15,67 @@ export const handler = async (event: any) => {
 
   try {
     const { profile, vacancy } = JSON.parse(event.body)
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = createClient(supabaseUrl!, supabaseKey!)
 
-    const prompt = `Sos un experto en redacción de CVs para el mercado latinoamericano, especializado en formato híbrido ATS-friendly.
+    // Buscar en caché (menos de 7 días)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const vacancyId = vacancy ? (vacancy.id || vacancy.slug) : 'base_cv'
+    
+    const { data: cached } = await supabase
+      .from('generated_cvs')
+      .select('cv_markdown')
+      .eq('user_id', profile.user_id)
+      .eq('vacancy_id', vacancyId)
+      .gte('created_at', sevenDaysAgo)
+      .maybeSingle()
+
+    if (cached) {
+      return {
+        statusCode: 200,
+        headers: corsHeaders,
+        body: JSON.stringify({ cv: cached.cv_markdown, fromCache: true }),
+      }
+    }
+
+    const isBaseCV = !vacancy
+
+    const prompt = isBaseCV
+      ? `Generá un CV profesional híbrido ATS-friendly en markdown para este candidato. El CV debe:
+- Estar en español
+- Resaltar sus habilidades y experiencia de forma clara y profesional
+- Usar métricas y logros concretos donde sea posible
+- Ser 100% legible por sistemas ATS (sin tablas, sin columnas, texto plano estructurado)
+
+ESTRUCTURA OBLIGATORIA (en este orden exacto):
+# [NOMBRE COMPLETO]
+[título profesional] | [email] | [teléfono] | [ubicación] | [LinkedIn si existe]
+
+## Resumen Profesional
+[3-4 líneas con su propuesta de valor y logros principales]
+
+## Habilidades
+**Técnicas:** [lista de habilidades técnicas]
+**Blandas:** [lista de habilidades blandas]
+
+## Experiencia Profesional
+### [Cargo] — [Empresa] | [Período]
+- [Logro medible con verbo de acción]
+- [Logro medible con verbo de acción]
+
+## Educación
+### [Título] — [Institución] | [Año]
+
+## Idiomas
+- [Idioma]: [Nivel]
+
+PERFIL DEL CANDIDATO:
+${JSON.stringify(profile, null, 2)}
+
+Respondé ÚNICAMENTE con el CV en markdown, sin explicaciones, sin texto antes ni después.`
+      : `Sos un experto en redacción de CVs para el mercado latinoamericano, especializado en formato híbrido ATS-friendly.
 
 Generá un CV profesional en markdown adaptado específicamente para esta vacante. El CV debe:
 - Usar las palabras clave exactas de la descripción de la vacante
@@ -68,10 +127,17 @@ Respondé ÚNICAMENTE con el CV en markdown, sin explicaciones, sin texto antes 
 
     const cvMarkdown = message.content[0].type === 'text' ? message.content[0].text : ''
 
+    // Guardar en caché
+    await supabase.from('generated_cvs').upsert({
+      user_id: profile.user_id,
+      vacancy_id: vacancyId,
+      cv_markdown: cvMarkdown,
+    }, { onConflict: 'user_id,vacancy_id' })
+
     return {
       statusCode: 200,
       headers: corsHeaders,
-      body: JSON.stringify({ cv: cvMarkdown }),
+      body: JSON.stringify({ cv: cvMarkdown, fromCache: false }),
     }
   } catch (err: any) {
     return {

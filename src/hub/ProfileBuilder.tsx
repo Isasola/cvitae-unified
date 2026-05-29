@@ -17,6 +17,7 @@ export default function ProfileBuilder() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [user, setUser] = useState<any>(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [existingProfileId, setExistingProfileId] = useState<string | null>(null)
   const [formData, setFormData] = useState({ full_name: '', professional_title: '', location: '', seniority: 'Junior', summary: '', modality: '', skills: [] as string[], cursos: [] as string[] })
   const [newCurso, setNewCurso] = useState('')
@@ -24,7 +25,15 @@ export default function ProfileBuilder() {
   const [analyzing, setAnalyzing] = useState(false)
 
   useEffect(() => {
-    auth.getUser().then(setUser)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user || null)
+      setAuthLoading(false)
+    })
+    const subscription = auth.onAuthStateChange((user) => {
+      setUser(user)
+      setAuthLoading(false)
+    })
+    return () => { subscription?.unsubscribe() }
   }, [])
 
   const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -94,10 +103,7 @@ export default function ProfileBuilder() {
     }
   }, [user])
 
-  useEffect(() => {
-    const { data: { subscription } } = auth.onAuthStateChange((user) => setUser(user))
-    return () => { subscription.unsubscribe() }
-  }, [])
+  // Removido useEffect duplicado de auth.onAuthStateChange
 
   const addSkill = () => {
     if (newSkill.trim() && !formData.skills.includes(newSkill.trim())) {
@@ -147,6 +153,16 @@ export default function ProfileBuilder() {
       setTimeout(() => setLocation('/mi-carrera'), 2000)
     } catch (err) { alert('Error al guardar el perfil') }
     finally { setSaving(false) }
+  }
+
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex justify-center py-20">
+          <div className="w-8 h-8 border-2 border-[#c9a84c] border-t-transparent rounded-full animate-spin" />
+        </div>
+      </DashboardLayout>
+    )
   }
 
   if (!user) {

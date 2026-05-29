@@ -16,6 +16,7 @@ export default function CVVivo() {
   const [vacancies, setVacancies] = useState<any[]>([])
   const [selectedVacancy, setSelectedVacancy] = useState<any>(null)
   const [generatedCV, setGeneratedCV] = useState<string | null>(null)
+  const [fromCache, setFromCache] = useState(false)
   const [loading, setLoading] = useState(false)
   const [adapting, setAdapting] = useState(false)
   const cvRef = useRef<HTMLDivElement>(null)
@@ -45,6 +46,20 @@ export default function CVVivo() {
       })
       const data = await res.json()
       setVacancies(data.matches || [])
+
+      // Generar CV base automáticamente si no hay uno
+      if (prof && !generatedCV) {
+        const baseRes = await fetch('/.netlify/functions/generate-cv-vivo', {
+          method: 'POST',
+          body: JSON.stringify({ 
+            profile: { ...prof, user_id: user.id }, 
+            vacancy: null 
+          })
+        })
+        const baseData = await baseRes.json()
+        setGeneratedCV(baseData.cv)
+        setFromCache(baseData.fromCache || false)
+      }
     } catch (err) {
       console.error('Error loading data:', err)
     } finally {
@@ -55,13 +70,15 @@ export default function CVVivo() {
   const handleAdaptCV = async () => {
     if (!selectedVacancy || !profile) return
     setAdapting(true)
+    setFromCache(false)
     try {
       const res = await fetch('/.netlify/functions/generate-cv-vivo', {
         method: 'POST',
-        body: JSON.stringify({ profile, vacancy: selectedVacancy })
+        body: JSON.stringify({ profile: { ...profile, user_id: user.id }, vacancy: selectedVacancy })
       })
       const data = await res.json()
       setGeneratedCV(data.cv)
+      setFromCache(data.fromCache || false)
     } catch (err) {
       alert('Error al adaptar el CV')
     } finally {
@@ -95,7 +112,12 @@ export default function CVVivo() {
       <div className="max-w-5xl mx-auto space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">CV Vivo <span className="text-[#c9a84c] text-sm font-normal ml-2 tracking-widest uppercase">Híbrido ATS</span></h1>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              CV Vivo <span className="text-[#c9a84c] text-sm font-normal ml-2 tracking-widest uppercase">Híbrido ATS</span>
+              {fromCache && (
+                <Badge variant="gold" className="ml-3 text-[10px] animate-pulse">⚡ Cargado al instante</Badge>
+              )}
+            </h1>
             <p className="text-[#888888] text-sm">Tu currículum que respira, se adapta y evoluciona con cada vacante.</p>
           </div>
           
@@ -106,7 +128,9 @@ export default function CVVivo() {
             >
               <option value="">Seleccioná una vacante...</option>
               {vacancies.map(v => (
-                <option key={v.id} value={v.id}>{v.titulo} ({v.finalScore}%)</option>
+                <option key={v.id} value={v.id}>
+                  {v.tipo === 'oportunidad' ? '💼' : v.tipo === 'beca' ? '🎓' : v.tipo === 'blog' ? '📝' : '📌'} {v.titulo} ({v.finalScore}%)
+                </option>
               ))}
             </select>
             <GoldButton onClick={handleAdaptCV} disabled={!selectedVacancy || adapting} size="sm">
