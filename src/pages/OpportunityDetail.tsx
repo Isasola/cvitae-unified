@@ -86,7 +86,7 @@ export default function OpportunityDetail() {
               )}
               <GoldButton
                 variant="outline"
-                onClick={() => window.open(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(\`Hola! Quiero mejorar mi CV para la oportunidad: \${opportunity.titulo}\`)}`, '_blank')}
+                onClick={() => window.open(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola! Quiero mejorar mi CV para la oportunidad: ' + opportunity.titulo)}`, '_blank')}
               >
                 Mejorar mi CV para esta oportunidad
               </GoldButton>

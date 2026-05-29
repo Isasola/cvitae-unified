@@ -151,7 +151,7 @@ export default function Admin() {
   const toggleSubscription = async (userId: string, currentValue: boolean) => {
     await supabase.from('user_master_profiles').update({ is_subscribed: !currentValue }).eq('user_id', userId)
     loadSubscribers()
-    setNotification({ type: 'success', message: \`Suscripción \${!currentValue ? 'activada' : 'desactivada'}\` })
+    setNotification({ type: 'success', message: `${!currentValue ? 'activada' : 'desactivada'}` })
   }
 
   const approveSkill = async (id: number) => {
@@ -169,7 +169,7 @@ export default function Admin() {
   const generateToken = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    const newToken = \`REC-\${Math.random().toString(36).substring(2, 8).toUpperCase()}-\${new Date().getFullYear()}\`
+    const newToken = `REC-${Math.random().toString(36).substring(2, 8).toUpperCase()}-${new Date().getFullYear()}`
     try {
       const { error } = await supabase.from('recruiter_tokens').insert([{
         email: tokenEmail,
@@ -223,7 +223,7 @@ export default function Admin() {
             <GoldButton type="submit" className="w-full" disabled={loading}>{loading ? 'Accediendo...' : 'Acceder'}</GoldButton>
           </form>
           {notification && (
-            <div className={\`mt-4 p-3 rounded-xl text-sm \${notification.type === 'success' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}\`}>
+            <div className={`mt-4 p-3 rounded-xl text-sm ${notification.type === 'success' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
               {notification.message}
             </div>
           )}
@@ -250,7 +250,7 @@ export default function Admin() {
             { id: 'tokens', label: 'Tokens B2B', icon: Ticket },
           ].map((tab) => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-              className={\`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all \${activeTab === tab.id ? 'bg-[#c9a84c] text-black font-bold' : 'text-[#888888] hover:bg-white/5'}\`}>
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === tab.id ? 'bg-[#c9a84c] text-black font-bold' : 'text-[#888888] hover:bg-white/5'}`}>
               <tab.icon size={18} /> {tab.label}
             </button>
           ))}
@@ -326,7 +326,7 @@ export default function Admin() {
                         <p className="text-xs text-[#888888] mt-1">/{item.slug}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => toggleStatus(item)} className={\`p-2 rounded-lg \${item.is_active ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'}\`}>{item.is_active ? <Eye size={16} /> : <EyeOff size={16} />}</button>
+                        <button onClick={() => toggleStatus(item)} className={`p-2 rounded-lg ${item.is_active ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'}`}>{item.is_active ? <Eye size={16} /> : <EyeOff size={16} />}</button>
                         <button onClick={() => handleEdit(item)} className="p-2 rounded-lg text-[#888888] hover:text-white hover:bg-white/5"><Edit size={16} /></button>
                         <button onClick={() => deleteItem(item.id!)} className="p-2 rounded-lg text-[#888888] hover:text-red-400 hover:bg-red-400/10"><Trash2 size={16} /></button>
                       </div>
@@ -355,7 +355,7 @@ export default function Admin() {
                       <div className="flex items-center gap-4">
                         <span className="text-sm text-[#888888]">{sub.seniority || 'Junior'}</span>
                         <button onClick={() => toggleSubscription(sub.user_id, sub.is_subscribed)}
-                          className={\`px-3 py-1.5 rounded-lg text-xs font-bold transition-all \${sub.is_subscribed ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-white/5 text-[#888888] border border-white/10'}\`}>
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${sub.is_subscribed ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-white/5 text-[#888888] border border-white/10'}`}>
                           {sub.is_subscribed ? 'Pro' : 'Free'}
                         </button>
                       </div>
@@ -439,7 +439,7 @@ export default function Admin() {
       <AnimatePresence>
         {notification && (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
-            className={\`fixed bottom-8 right-8 p-4 rounded-xl flex items-center gap-3 text-sm shadow-2xl z-50 \${notification.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}\`}>
+            className={`fixed bottom-8 right-8 p-4 rounded-xl flex items-center gap-3 text-sm shadow-2xl z-50 ${notification.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
             {notification.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
             {notification.message}
             <button onClick={() => setNotification(null)}><X size={14} /></button>
