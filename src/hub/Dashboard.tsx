@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useLocation, Link } from 'wouter'
-import { Sparkles, UserCircle, Search, RefreshCw, ArrowRight, Mail, Briefcase, MapPin, Lock, ExternalLink, Upload, FileText, Bell, CheckCircle } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { Sparkles, UserCircle, Search, RefreshCw, ArrowRight, Mail, Briefcase, MapPin, Lock, ExternalLink, Upload, FileText, Bell, CheckCircle, Settings, Layout } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { GlassCard, GoldButton, Badge, MatchArc } from '@/components/cvitae/UI-Elements'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
+import MatchingLoader from '@/components/MatchingLoader'
 import { auth, supabase } from '@/lib/supabase'
 import emailjs from 'emailjs-com'
 
-const MATCH_BATCH_URL = 'https://rbrirxbjbmdxflzaxxzp.supabase.co/functions/v1/match-batch'
+const MATCH_BATCH_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1/match-batch'
 const WA_NUMBER = '595992954169'
 
 interface MatchItem {
@@ -37,16 +38,40 @@ export default function Dashboard() {
   const [profileSkills, setProfileSkills] = useState<string[]>([])
   const [profileCursos, setProfileCursos] = useState<string[]>([])
   const [isSubscribed, setIsSubscribed] = useState(false)
+  const [hasProfile, setHasProfile] = useState<boolean | null>(null)
+  const [activeTab, setActiveTab] = useState<'matches' | 'settings' | 'alerts'>('matches')
+  const [currentLoaderStep, setCurrentLoaderStep] = useState(0)
   
   // Onboarding state
   const [uploading, setUploading] = useState(false)
   const [onboardingStep, setOnboardingStep] = useState<'initial' | 'uploading' | 'success'>('initial')
 
+  const loaderSteps = ["Leyendo tu perfil...", "Cargando vacantes activas...", "Calculando compatibilidad...", "Ordenando resultados..."]
+
   useEffect(() => {
     auth.getUser().then(setUser)
-    const { data } = auth.onAuthStateChange((user) => setUser(user))
-    return () => { data?.subscription.unsubscribe() }
+    const { data: { subscription } } = auth.onAuthStateChange((user) => setUser(user))
+    return () => { subscription.unsubscribe() }
   }, [])
+
+  useEffect(() => {
+    if (user) {
+      supabase.from('user_master_profiles').select('id').eq('user_id', user.id).maybeSingle().then(({ data }) => {
+        setHasProfile(!!data)
+      })
+    }
+  }, [user])
+
+  useEffect(() => {
+    let interval: any
+    if (loadingMatches) {
+      setCurrentLoaderStep(0)
+      interval = setInterval(() => {
+        setCurrentLoaderStep(prev => (prev < loaderSteps.length - 1 ? prev + 1 : prev))
+      }, 2000)
+    }
+    return () => clearInterval(interval)
+  }, [loadingMatches])
 
   useEffect(() => {
     if (user) loadMatches()
@@ -155,10 +180,10 @@ export default function Dashboard() {
   }
 
   const missingSkills = useMemo(() => {
-    if (matches.length === 0) return []
+    if (matches.length === 0) return null
     const top5 = matches.slice(0, 5)
     const allVacancySkills: string[] = []
-    top5.forEach(match => { match.vacancySkills.forEach(skill => { if (!profileSkills.some(ps => ps.toLowerCase() === skill.toLowerCase())) allVacancySkills.push(skill) }) })
+    top5.forEach(match => { match.vacancySkills?.forEach(skill => { if (!profileSkills.some(ps => ps.toLowerCase() === skill.toLowerCase())) allVacancySkills.push(skill) }) })
     const freq: Record<string, number> = {}
     allVacancySkills.forEach(skill => { freq[skill] = (freq[skill] || 0) + 1 })
     return Object.entries(freq).sort(([, a], [, b]) => b - a).slice(0, 4).map(([skill]) => skill)
@@ -179,73 +204,62 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        {!user ? (
-          <GlassCard className="text-center py-16 px-8 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#c9a84c] to-transparent opacity-50" />
-            
-            {onboardingStep === 'initial' && (
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                <h2 className="text-3xl font-bold text-white mb-4">Tu carrera merece <span className="text-[#c9a84c]">Inteligencia</span></h2>
-                <p className="text-[#888888] mb-10 max-w-lg mx-auto">Subí tu CV y nuestra IA encontrará las mejores oportunidades para vos en segundos.</p>
-                
-                <div className="max-w-md mx-auto space-y-6">
-                  <div className="space-y-2">
-                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@email.com"
-                      className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-[#888888] focus:outline-none focus:border-[#c9a84c]/50 text-center" />
-                  </div>
+      <div className="grid lg:grid-cols-4 gap-6">
+        {/* Sidebar */}
+        <div className="lg:col-span-1 space-y-2">
+          <button onClick={() => setActiveTab('matches')} className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all", activeTab === 'matches' ? "bg-[#c9a84c]/10 text-[#c9a84c] border border-[#c9a84c]/20" : "text-[#888888] hover:text-white hover:bg-white/5")}>
+            <Layout size={18} /> Oportunidades
+          </button>
+          <button onClick={() => setActiveTab('settings')} className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all", activeTab === 'settings' ? "bg-[#c9a84c]/10 text-[#c9a84c] border border-[#c9a84c]/20" : "text-[#888888] hover:text-white hover:bg-white/5")}>
+            <Settings size={18} /> Configuración
+          </button>
+          <button onClick={() => setActiveTab('alerts')} className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all", activeTab === 'alerts' ? "bg-[#c9a84c]/10 text-[#c9a84c] border border-[#c9a84c]/20" : "text-[#888888] hover:text-white hover:bg-white/5")}>
+            <Bell size={18} /> Alertas
+          </button>
+        </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-white/10 rounded-2xl hover:border-[#c9a84c]/50 hover:bg-[#c9a84c]/5 transition-all cursor-pointer group">
-                      <Upload className="text-[#888888] group-hover:text-[#c9a84c] mb-2" size={24} />
-                      <span className="text-white font-bold text-sm">Subir mi CV</span>
-                      <span className="text-[#888888] text-[10px] mt-1">PDF, DOCX</span>
-                      <input type="file" className="hidden" accept=".pdf,.docx" onChange={handleFileUpload} disabled={!email.trim()} />
-                    </label>
-                    
-                    <button onClick={() => setLocation('/mi-carrera/perfil')} className="flex flex-col items-center justify-center p-6 border border-white/10 rounded-2xl hover:bg-white/5 transition-all group">
-                      <FileText className="text-[#888888] group-hover:text-white mb-2" size={24} />
-                      <span className="text-white font-bold text-sm">Crear desde cero</span>
-                      <span className="text-[#888888] text-[10px] mt-1">Manual</span>
-                    </button>
-                  </div>
-                  
-                  <p className="text-[10px] text-[#555555]">Al continuar, aceptás nuestros términos y condiciones.</p>
+        {/* Main Content */}
+        <div className="lg:col-span-3 space-y-6">
+          {!user ? (
+            <GlassCard className="text-center py-16 px-8">
+              <Lock className="w-12 h-12 text-[#c9a84c] mx-auto mb-4 opacity-50" />
+              <h2 className="text-2xl font-bold text-white mb-2">Tu sesión expiró</h2>
+              <p className="text-[#888888] mb-8">Volvé a ingresar para ver tus oportunidades personalizadas.</p>
+              <GoldButton onClick={() => setLocation('/')}>Ir al Inicio</GoldButton>
+            </GlassCard>
+          ) : hasProfile === false ? (
+            <GlassCard className="text-center py-16 px-8">
+              <UserCircle className="w-12 h-12 text-[#c9a84c] mx-auto mb-4 opacity-50" />
+              <h2 className="text-2xl font-bold text-white mb-2">Completá tu perfil</h2>
+              <p className="text-[#888888] mb-8">Necesitamos conocer tus habilidades para encontrarte el trabajo ideal.</p>
+              <GoldButton href="/mi-carrera/perfil">Crear mi perfil</GoldButton>
+            </GlassCard>
+          ) : loadingMatches ? (
+            <GlassCard className="py-12">
+              <MatchingLoader steps={loaderSteps} currentStep={currentLoaderStep} totalVacancies={50} />
+            </GlassCard>
+          ) : activeTab === 'settings' ? (
+            <GlassCard className="p-8">
+              <h2 className="text-xl font-bold text-white mb-6">Configuración de Perfil</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs text-[#555555] uppercase tracking-widest mb-2 block">Nombre Completo</label>
+                  <input type="text" defaultValue={user.user_metadata?.full_name} className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white" readOnly />
                 </div>
-              </motion.div>
-            )}
-
-            {onboardingStep === 'uploading' && (
-              <div className="py-12">
-                <div className="w-16 h-16 border-4 border-[#c9a84c] border-t-transparent rounded-full animate-spin mx-auto mb-6" />
-                <h3 className="text-xl font-bold text-white mb-2">Analizando tu perfil...</h3>
-                <p className="text-[#888888]">Nuestra IA está extrayendo tus habilidades.</p>
+                <div>
+                  <label className="text-xs text-[#555555] uppercase tracking-widest mb-2 block">Email</label>
+                  <input type="text" defaultValue={user.email} className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white" readOnly />
+                </div>
+                <p className="text-xs text-[#555555] pt-4 italic">* Los datos básicos se sincronizan con tu cuenta de acceso.</p>
               </div>
-            )}
-
-            {onboardingStep === 'success' && (
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="py-12">
-                <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <CheckCircle className="text-green-500" size={32} />
-                </div>
-                <h3 className="text-2xl font-bold text-white mb-2">¡CV Analizado con éxito!</h3>
-                <p className="text-[#888888] mb-8">Te enviamos un enlace mágico a <b>{email}</b> para que veas tus matches.</p>
-                <GoldButton onClick={() => setOnboardingStep('initial')}>Volver</GoldButton>
-              </motion.div>
-            )}
-          </GlassCard>
-        ) : loadingMatches ? (
-          <GlassCard className="text-center py-12">
-            <div className="w-12 h-12 border-4 border-[#c9a84c] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-white">Buscando las mejores oportunidades para vos...</p>
-          </GlassCard>
-        ) : matchesError ? (
-          <GlassCard className="text-center py-12">
-            <p className="text-red-400 mb-3">{matchesError}</p>
-            <GoldButton onClick={loadMatches}>Reintentar</GoldButton>
-          </GlassCard>
-        ) : (
-          <>
+            </GlassCard>
+          ) : activeTab === 'alerts' ? (
+            <GlassCard className="text-center py-16 px-8">
+              <Bell className="w-12 h-12 text-[#c9a84c] mx-auto mb-4 opacity-50" />
+              <h2 className="text-xl font-bold text-white mb-2">Alertas Proactivas</h2>
+              <p className="text-[#888888]">Próximamente — te avisaremos por email cuando haya un match mayor al 85%.</p>
+            </GlassCard>
+          ) : (
             <div className="grid lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
                 <h2 className="text-xl font-bold text-white flex items-center gap-2"><Briefcase size={20} className="text-[#c9a84c]" /> Oportunidades para vos</h2>
@@ -254,19 +268,12 @@ export default function Dashboard() {
                   <GlassCard className="text-center py-12 border-dashed border-white/10">
                     <Search className="w-12 h-12 text-[#333333] mx-auto mb-4" />
                     <h3 className="text-white font-bold mb-2">No encontramos matches aún</h3>
-                    <p className="text-[#888888] mb-6 text-sm max-w-xs mx-auto">Completá tu perfil o subí un nuevo CV para que podamos encontrar oportunidades.</p>
-                    <div className="flex justify-center gap-3">
-                      <GoldButton href="/mi-carrera/perfil" size="sm" variant="outline">Completar perfil</GoldButton>
-                      <GoldButton href="/oportunidades" size="sm">Ver todas</GoldButton>
-                    </div>
+                    <p className="text-[#888888] mb-6 text-sm max-w-xs mx-auto">Completá tu perfil con más habilidades para ver oportunidades.</p>
+                    <GoldButton href="/mi-carrera/perfil" size="sm" variant="outline">Mejorar perfil</GoldButton>
                   </GlassCard>
                 ) : (
                   matches.slice(0, 5).map((match) => (
-                    <GlassCard
-                      key={match.id}
-                      onClick={() => handleOpportunityClick(match)}
-                      className="cursor-pointer hover:border-[#c9a84c]/30 transition-all"
-                    >
+                    <GlassCard key={match.id} onClick={() => handleOpportunityClick(match)} className="cursor-pointer hover:border-[#c9a84c]/30 transition-all">
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
                           <p className="text-white font-medium truncate">{match.titulo}</p>
@@ -285,30 +292,20 @@ export default function Dashboard() {
                 <GlassCard>
                   <h3 className="text-white font-bold mb-3 flex items-center gap-2">
                     <Sparkles size={16} className="text-[#c9a84c]" /> 
-                    {missingSkills.length > 0 ? 'Habilidades faltantes' : profileCursos.length > 0 ? 'Tus cursos' : 'Habilidades sugeridas'}
+                    Habilidades faltantes
                   </h3>
                   <div className="space-y-2">
-                    {missingSkills.length > 0 ? (
+                    {!missingSkills ? (
+                      <p className="text-[#555555] text-xs italic">Cargando sugerencias...</p>
+                    ) : missingSkills.length > 0 ? (
                       missingSkills.map((skill) => (
                         <div key={skill} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
                           <span className="text-gray-300 text-sm">{skill}</span>
                           <span className="text-xs text-[#c9a84c]">+Curso</span>
                         </div>
                       ))
-                    ) : profileCursos.length > 0 ? (
-                      profileCursos.map((curso) => (
-                        <div key={curso} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
-                          <span className="text-gray-300 text-sm">{curso}</span>
-                          <CheckCircle size={14} className="text-emerald-500" />
-                        </div>
-                      ))
                     ) : (
-                      ['Inglés', 'Liderazgo', 'Excel avanzado', 'Gestión de proyectos'].map((skill) => (
-                        <div key={skill} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
-                          <span className="text-gray-300 text-sm">{skill}</span>
-                          <span className="text-[10px] text-[#888888]">Recomendado</span>
-                        </div>
-                      ))
+                      <p className="text-[#888888] text-sm">¡Perfil completo!</p>
                     )}
                   </div>
                 </GlassCard>

@@ -21,10 +21,58 @@ export default function ProfileBuilder() {
   const [formData, setFormData] = useState({ full_name: '', professional_title: '', location: '', seniority: 'Junior', summary: '', modality: '', skills: [] as string[], cursos: [] as string[] })
   const [newCurso, setNewCurso] = useState('')
   const [newSkill, setNewSkill] = useState('')
+  const [analyzing, setAnalyzing] = useState(false)
 
   useEffect(() => {
     auth.getUser().then(setUser)
   }, [])
+
+  const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setAnalyzing(true)
+    try {
+      let text = ""
+      if (file.type === 'application/pdf') {
+        const reader = new FileReader()
+        const base64Promise = new Promise<string>((resolve) => {
+          reader.onload = () => resolve((reader.result as string).split(',')[1])
+          reader.readAsDataURL(file)
+        })
+        const base64 = await base64Promise
+        const res = await fetch('/.netlify/functions/extract-pdf-text', { method: 'POST', body: JSON.stringify({ file: base64 }) })
+        const data = await res.json()
+        text = data.text
+      } else if (file.name.endsWith('.docx')) {
+        const mammoth = await import('mammoth')
+        const arrayBuffer = await file.arrayBuffer()
+        const result = await mammoth.extractRawText({ arrayBuffer })
+        text = result.value
+      }
+
+      const analyzeRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
+        method: 'POST',
+        body: JSON.stringify({ cvText: text, mode: 'extract' })
+      })
+      const extracted = await analyzeRes.json()
+      
+      setFormData({
+        full_name: extracted.full_name || '',
+        professional_title: extracted.professional_title || '',
+        location: extracted.location || '',
+        seniority: extracted.seniority || 'Junior',
+        summary: extracted.experience?.[0]?.achievements?.join('. ') || '',
+        modality: 'Remoto',
+        skills: extracted.skills || [],
+        cursos: extracted.education?.map((e: any) => `${e.degree} - ${e.institution}`) || []
+      })
+    } catch (err) {
+      alert('No pudimos autocompletar tu perfil. Por favor, completalo manualmente.')
+    } finally {
+      setAnalyzing(false)
+    }
+  }
 
   useEffect(() => {
     if (user) {
@@ -45,6 +93,11 @@ export default function ProfileBuilder() {
       })
     }
   }, [user])
+
+  useEffect(() => {
+    const { data: { subscription } } = auth.onAuthStateChange((user) => setUser(user))
+    return () => { subscription.unsubscribe() }
+  }, [])
 
   const addSkill = () => {
     if (newSkill.trim() && !formData.skills.includes(newSkill.trim())) {
@@ -123,6 +176,31 @@ export default function ProfileBuilder() {
           </div>
 
           <h1 className="text-2xl font-bold text-white mb-2">{STEPS[step]}</h1>
+
+          {step === 0 && (
+            <div className="mt-6 mb-8">
+              <label className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-[#c9a84c]/30 rounded-2xl hover:border-[#c9a84c] hover:bg-[#c9a84c]/5 transition-all cursor-pointer group bg-white/5">
+                {analyzing ? (
+                  <div className="flex flex-col items-center">
+                    <div className="w-8 h-8 border-2 border-[#c9a84c] border-t-transparent rounded-full animate-spin mb-3" />
+                    <span className="text-white font-medium">Analizando CV...</span>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="text-[#c9a84c] mb-3 group-hover:scale-110 transition-transform" size={32} />
+                    <span className="text-white font-bold">Subir mi CV y autocompletar</span>
+                    <span className="text-[#888888] text-xs mt-1">PDF o DOCX • Ahorrá tiempo con nuestra IA</span>
+                  </>
+                )}
+                <input type="file" className="hidden" accept=".pdf,.docx" onChange={handleCVUpload} disabled={analyzing} />
+              </label>
+              <div className="flex items-center gap-4 my-6">
+                <div className="h-px bg-white/10 flex-1" />
+                <span className="text-[10px] text-[#555555] uppercase tracking-widest">o completá manualmente</span>
+                <div className="h-px bg-white/10 flex-1" />
+              </div>
+            </div>
+          )}
 
           <GlassCard className="mt-6">
             {step === 0 && (

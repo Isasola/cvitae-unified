@@ -27,7 +27,7 @@ export function Footer() {
     {
       title: 'Legal',
       links: [
-        { label: 'Privacidad', href: '/privacidad' },
+        { label: 'Privacidad', href: '/privacy' },
         { label: 'Términos', href: '/terminos' },
         { label: 'Cookies', href: '/cookies' },
       ],

@@ -59,6 +59,8 @@
     "react-helmet-async": "^3.0.0",
     "react-hook-form": "^7.64.0",
     "react-markdown": "^10.1.0",
+    "jspdf": "^2.5.1",
+    "html2canvas": "^1.4.1",
     "react-resizable-panels": "^3.0.6",
     "recharts": "^2.15.2",
     "rehype-sanitize": "^6.0.0",
