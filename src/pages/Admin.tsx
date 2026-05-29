@@ -135,7 +135,7 @@ export default function Admin() {
     e.preventDefault()
     setLoading(true)
     try {
-      const dataToSave = { ...formData, fecha_vencimiento: \`\${formData.fecha_vencimiento}T23:59:59Z\` }
+      const dataToSave = { ...formData, fecha_vencimiento: `${formData.fecha_vencimiento}T23:59:59Z` }
       if (formData.tipo === 'blog') dataToSave.fecha_vencimiento = '2099-12-31T23:59:59Z'
       const { error } = isEditing && formData.id
         ? await supabase.from('content_hub').update(dataToSave).eq('id', formData.id)
