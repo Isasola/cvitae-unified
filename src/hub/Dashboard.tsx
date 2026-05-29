@@ -159,7 +159,12 @@ export default function Dashboard() {
               <Lock className="w-12 h-12 text-[#c9a84c] mx-auto mb-4 opacity-50" />
               <h2 className="text-2xl font-bold text-white mb-2">Tu sesión expiró</h2>
               <p className="text-[#888888] mb-8">Volvé a ingresar para ver tus oportunidades personalizadas.</p>
-              <GoldButton onClick={() => setLocation('/')}>Ir al Inicio</GoldButton>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <GoldButton onClick={() => setLocation('/')}>Ir al Inicio</GoldButton>
+                <button onClick={() => window.location.reload()} className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-medium hover:bg-white/10 transition-all">
+                  Reintentar conexión
+                </button>
+              </div>
             </GlassCard>
           ) : hasProfile === false ? (
             <GlassCard className="text-center py-16 px-8">

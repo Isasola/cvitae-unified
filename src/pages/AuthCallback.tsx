@@ -5,24 +5,60 @@ import { supabase } from '@/lib/supabase'
 export default function AuthCallback() {
   const [, setLocation] = useLocation()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
+  const [mensaje, setMensaje] = useState('Iniciando sesión...')
 
   useEffect(() => {
-    const handleCallback = async () => {
+    let cancelado = false
+
+    const procesar = async () => {
       try {
+        // Forzar el procesamiento del hash de la URL (magic link)
         const { data, error } = await supabase.auth.getSession()
+
         if (error || !data.session) {
-          setStatus('error')
-          setTimeout(() => setLocation('/'), 2000)
-          return
+          // Si no hay sesión, esperar un momento y reintentar
+          // A veces Supabase tarda en procesar el hash
+          await new Promise(r => setTimeout(r, 1500))
+          const { data: data2, error: error2 } = await supabase.auth.getSession()
+          if (error2 || !data2.session) {
+            if (!cancelado) {
+              setStatus('error')
+              setMensaje('No se pudo iniciar sesión. Volvé a intentar.')
+              setTimeout(() => setLocation('/'), 3000)
+            }
+            return
+          }
         }
-        setStatus('success')
-        setTimeout(() => setLocation('/mi-carrera'), 800)
+
+        if (!cancelado) {
+          setStatus('success')
+          setMensaje('¡Bienvenido! Redirigiendo...')
+          setTimeout(() => setLocation('/mi-carrera'), 800)
+        }
       } catch {
-        setStatus('error')
-        setTimeout(() => setLocation('/'), 2000)
+        if (!cancelado) {
+          setStatus('error')
+          setMensaje('Error inesperado. Volvé a intentar.')
+          setTimeout(() => setLocation('/'), 3000)
+        }
       }
     }
-    handleCallback()
+
+    // También escuchar cambios de autenticación por si entra por otra vía
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && !cancelado) {
+        setStatus('success')
+        setMensaje('¡Sesión iniciada!')
+        setTimeout(() => setLocation('/mi-carrera'), 600)
+      }
+    })
+
+    procesar()
+
+    return () => {
+      cancelado = true
+      subscription?.unsubscribe()
+    }
   }, [setLocation])
 
   return (
@@ -31,22 +67,26 @@ export default function AuthCallback() {
         {status === 'loading' && (
           <>
             <div className="w-10 h-10 border-4 border-[#c9a84c] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-white font-medium">Iniciando sesión...</p>
+            <p className="text-white font-medium">{mensaje}</p>
             <p className="text-[#888888] text-sm mt-1">Preparando tu espacio</p>
           </>
         )}
         {status === 'success' && (
           <>
             <div className="text-5xl mb-4">✅</div>
-            <p className="text-white font-medium">¡Bienvenido!</p>
-            <p className="text-[#888888] text-sm mt-1">Redirigiendo...</p>
+            <p className="text-white font-medium">{mensaje}</p>
           </>
         )}
         {status === 'error' && (
           <>
             <div className="text-5xl mb-4">⚠️</div>
-            <p className="text-white font-medium">Algo salió mal</p>
-            <p className="text-[#888888] text-sm mt-1">Volviendo al inicio...</p>
+            <p className="text-white font-medium">{mensaje}</p>
+            <button
+              onClick={() => setLocation('/')}
+              className="mt-4 px-6 py-2 bg-[#c9a84c] text-[#0a0a0a] font-bold rounded-xl hover:bg-[#e8c97a] transition-colors"
+            >
+              Volver al inicio
+            </button>
           </>
         )}
       </div>
