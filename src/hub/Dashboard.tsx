@@ -42,8 +42,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     auth.getUser().then(setUser)
-    const { data: { subscription } } = auth.onAuthStateChange((user) => setUser(user))
-    return () => { subscription.unsubscribe() }
+    const subscription = auth.onAuthStateChange((user) => setUser(user))
+    return () => { subscription?.unsubscribe() }
   }, [])
 
   useEffect(() => {
