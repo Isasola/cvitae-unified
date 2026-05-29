@@ -20,7 +20,8 @@ export function Footer() {
       links: [
         { label: 'Sobre nosotros', href: '/sobre-nosotros' },
         { label: 'Contacto', href: 'mailto:hola@cvitae.com.py' },
-        { label: 'Prensa', href: '/prensa' },
+        { label: 'Prensa', onClick: () => alert('Próximamente') },
+        { label: 'Carreras', onClick: () => alert('Próximamente') },
       ],
     },
     {
@@ -56,9 +57,15 @@ export function Footer() {
               <ul className="space-y-4">
                 {section.links.map((link) => (
                   <li key={link.label}>
-                    <Link href={link.href} className="text-[#888888] hover:text-white transition-colors text-sm">
-                      {link.label}
-                    </Link>
+                    {link.href ? (
+                      <Link href={link.href} className="text-[#888888] hover:text-white transition-colors text-sm">
+                        {link.label}
+                      </Link>
+                    ) : (
+                      <button onClick={link.onClick} className="text-[#888888] hover:text-white transition-colors text-sm text-left">
+                        {link.label}
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>

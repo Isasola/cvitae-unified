@@ -7,6 +7,8 @@ import OpportunityDetail from './pages/OpportunityDetail'
 import Admin from './pages/Admin'
 import Blog from './pages/Blog'
 import BlogPost from './pages/BlogPost'
+import Terms from './pages/Terms'
+import Cookies from './pages/Cookies'
 import Dashboard from './hub/Dashboard'
 import ProfileBuilder from './hub/ProfileBuilder'
 import JobMatcher from './hub/JobMatcher'
@@ -23,6 +25,8 @@ export default function App() {
       <Route path="/blog/:slug" component={BlogPost} />
       <Route path="/about" component={About} />
       <Route path="/privacy" component={Privacy} />
+      <Route path="/terminos" component={Terms} />
+      <Route path="/cookies" component={Cookies} />
       <Route path="/admin" component={Admin} />
       <Route path="/mi-carrera" component={Dashboard} />
       <Route path="/mi-carrera/perfil" component={ProfileBuilder} />

@@ -35,6 +35,7 @@ export default function Dashboard() {
   const [loadingMatches, setLoadingMatches] = useState(false)
   const [matchesError, setMatchesError] = useState<string | null>(null)
   const [profileSkills, setProfileSkills] = useState<string[]>([])
+  const [profileCursos, setProfileCursos] = useState<string[]>([])
   const [isSubscribed, setIsSubscribed] = useState(false)
   
   // Onboarding state
@@ -92,6 +93,7 @@ export default function Dashboard() {
       const newMatches = data.matches || []
       setMatches(newMatches)
       setProfileSkills(data.profileSkills || [])
+      setProfileCursos(data.profileCursos || [])
       setIsSubscribed(data.is_subscribed || false)
 
       // Send alert for top match
@@ -281,17 +283,34 @@ export default function Dashboard() {
               </div>
               <div className="space-y-6">
                 <GlassCard>
-                  <h3 className="text-white font-bold mb-3 flex items-center gap-2"><Sparkles size={16} className="text-[#c9a84c]" /> Habilidades faltantes</h3>
-                  {missingSkills.length > 0 ? (
-                    <div className="space-y-2">
-                      {missingSkills.map((skill) => (
+                  <h3 className="text-white font-bold mb-3 flex items-center gap-2">
+                    <Sparkles size={16} className="text-[#c9a84c]" /> 
+                    {missingSkills.length > 0 ? 'Habilidades faltantes' : profileCursos.length > 0 ? 'Tus cursos' : 'Habilidades sugeridas'}
+                  </h3>
+                  <div className="space-y-2">
+                    {missingSkills.length > 0 ? (
+                      missingSkills.map((skill) => (
                         <div key={skill} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
                           <span className="text-gray-300 text-sm">{skill}</span>
                           <span className="text-xs text-[#c9a84c]">+Curso</span>
                         </div>
-                      ))}
-                    </div>
-                  ) : <p className="text-[#888888] text-sm">¡Perfil completo!</p>}
+                      ))
+                    ) : profileCursos.length > 0 ? (
+                      profileCursos.map((curso) => (
+                        <div key={curso} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
+                          <span className="text-gray-300 text-sm">{curso}</span>
+                          <CheckCircle size={14} className="text-emerald-500" />
+                        </div>
+                      ))
+                    ) : (
+                      ['Inglés', 'Liderazgo', 'Excel avanzado', 'Gestión de proyectos'].map((skill) => (
+                        <div key={skill} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
+                          <span className="text-gray-300 text-sm">{skill}</span>
+                          <span className="text-[10px] text-[#888888]">Recomendado</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </GlassCard>
 
                 <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
