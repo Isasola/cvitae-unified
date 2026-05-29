@@ -9,16 +9,20 @@ import Blog from './pages/Blog'
 import BlogPost from './pages/BlogPost'
 import Terms from './pages/Terms'
 import Cookies from './pages/Cookies'
+import AuthCallback from './pages/AuthCallback'
 import Dashboard from './hub/Dashboard'
 import ProfileBuilder from './hub/ProfileBuilder'
 import JobMatcher from './hub/JobMatcher'
 import CVVivo from './hub/CVVivo'
+import Alertas from './hub/Alertas'
+import Configuracion from './hub/Configuracion'
 import NotFound from './pages/NotFound'
 
 export default function App() {
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
+      <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/oportunidades" component={Opportunities} />
       <Route path="/oportunidades/:slug" component={OpportunityDetail} />
       <Route path="/blog" component={Blog} />
@@ -32,6 +36,9 @@ export default function App() {
       <Route path="/mi-carrera/perfil" component={ProfileBuilder} />
       <Route path="/mi-carrera/analizar" component={JobMatcher} />
       <Route path="/mi-carrera/cv" component={CVVivo} />
+      <Route path="/mi-carrera/alertas" component={Alertas} />
+      <Route path="/mi-carrera/oportunidades" component={Dashboard} />
+      <Route path="/mi-carrera/configuracion" component={Configuracion} />
       <Route component={NotFound} />
     </Switch>
   )

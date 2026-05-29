@@ -29,6 +29,7 @@ interface MatchItem {
 export default function Dashboard() {
   const [, setLocation] = useLocation()
   const [user, setUser] = useState<any>(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [matches, setMatches] = useState<MatchItem[]>([])
   const [loadingMatches, setLoadingMatches] = useState(false)
   const [matchesError, setMatchesError] = useState<string | null>(null)
@@ -41,8 +42,14 @@ export default function Dashboard() {
   const loaderSteps = ["Leyendo tu perfil...", "Cargando vacantes activas...", "Calculando compatibilidad...", "Ordenando resultados..."]
 
   useEffect(() => {
-    auth.getUser().then(setUser)
-    const subscription = auth.onAuthStateChange((user) => setUser(user))
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user || null)
+      setAuthLoading(false)
+    })
+    const subscription = auth.onAuthStateChange((user) => {
+      setUser(user)
+      setAuthLoading(false)
+    })
     return () => { subscription?.unsubscribe() }
   }, [])
 
@@ -143,7 +150,11 @@ export default function Dashboard() {
       <div className="grid lg:grid-cols-1 gap-6">
         {/* Main Content */}
         <div className="space-y-6">
-          {!user ? (
+          {authLoading ? (
+            <div className="flex items-center justify-center py-32">
+              <div className="w-8 h-8 border-2 border-[#c9a84c] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : !user ? (
             <GlassCard className="text-center py-16 px-8">
               <Lock className="w-12 h-12 text-[#c9a84c] mx-auto mb-4 opacity-50" />
               <h2 className="text-2xl font-bold text-white mb-2">Tu sesión expiró</h2>
