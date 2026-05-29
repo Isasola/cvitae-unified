@@ -18,7 +18,8 @@ export default function ProfileBuilder() {
   const [saved, setSaved] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [existingProfileId, setExistingProfileId] = useState<string | null>(null)
-  const [formData, setFormData] = useState({ full_name: '', professional_title: '', location: '', seniority: 'Junior', summary: '', modality: '', skills: [] as string[] })
+  const [formData, setFormData] = useState({ full_name: '', professional_title: '', location: '', seniority: 'Junior', summary: '', modality: '', skills: [] as string[], cursos: [] as string[] })
+  const [newCurso, setNewCurso] = useState('')
   const [newSkill, setNewSkill] = useState('')
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function ProfileBuilder() {
             summary: data.summary || '',
             modality: data.profile_data?.modality || '',
             skills: data.profile_data?.habilidades || [],
+            cursos: data.profile_data?.cursos || [],
           })
         }
       })
@@ -53,6 +55,17 @@ export default function ProfileBuilder() {
 
   const removeSkill = (skill: string) => {
     setFormData(prev => ({ ...prev, skills: prev.skills.filter(s => s !== skill) }))
+  }
+
+  const addCurso = () => {
+    if (newCurso.trim() && !formData.cursos.includes(newCurso.trim())) {
+      setFormData(prev => ({ ...prev, cursos: [...prev.cursos, newCurso.trim()] }))
+      setNewCurso('')
+    }
+  }
+
+  const removeCurso = (curso: string) => {
+    setFormData(prev => ({ ...prev, cursos: prev.cursos.filter(c => c !== curso) }))
   }
 
   const toggleSkill = (skill: string) => {
@@ -71,7 +84,7 @@ export default function ProfileBuilder() {
         full_name: formData.full_name,
         professional_title: formData.professional_title,
         summary: formData.summary,
-        profile_data: { habilidades: formData.skills, seniority: formData.seniority, location: formData.location, modality: formData.modality },
+        profile_data: { habilidades: formData.skills, cursos: formData.cursos, seniority: formData.seniority, location: formData.location, modality: formData.modality },
       }
       const { error } = existingProfileId
         ? await supabase.from('user_master_profiles').update(payload).eq('id', existingProfileId)
@@ -145,6 +158,20 @@ export default function ProfileBuilder() {
                     ))}
                   </div>
                 </div>
+                <div className="pt-4 border-t border-white/5">
+                  <label className="text-sm text-[#888888] mb-3 block">Cursos y certificaciones</label>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {formData.cursos.map(curso => (
+                      <Badge key={curso} variant="muted" className="gap-2 bg-white/5 text-white">
+                        {curso} <X size={12} className="cursor-pointer" onClick={() => removeCurso(curso)} />
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input type="text" value={newCurso} onChange={(e) => setNewCurso(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && addCurso()} placeholder="Ej: Certificación Google Ads..." className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm" />
+                    <button onClick={addCurso} className="p-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"><Plus size={20} /></button>
+                  </div>
+                </div>
               </div>
             )}
             {step === 2 && (
@@ -185,10 +212,18 @@ export default function ProfileBuilder() {
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-[#888888] uppercase tracking-wider mb-2">Habilidades</h4>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 mb-4">
                     {formData.skills.map(s => <Badge key={s} variant="gold">{s}</Badge>)}
                   </div>
                 </div>
+                {formData.cursos.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold text-[#888888] uppercase tracking-wider mb-2">Cursos</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.cursos.map(c => <Badge key={c} variant="muted" className="bg-white/5 text-white">{c}</Badge>)}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

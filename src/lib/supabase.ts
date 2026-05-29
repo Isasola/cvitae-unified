@@ -10,7 +10,7 @@ export const auth = {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/mi-carrera`,
+        emailRedirectTo: 'https://cvitae-py.netlify.app/mi-carrera',
       },
     })
     return { error }

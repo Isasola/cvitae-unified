@@ -15,6 +15,7 @@ interface BlogPost {
   cuerpo: string
   categoria: string
   fecha_vencimiento: string
+  imagen_url?: string
 }
 
 export default function BlogPost() {
@@ -27,7 +28,7 @@ export default function BlogPost() {
     if (slug) {
       supabase
         .from('content_hub')
-        .select('id, titulo, slug, cuerpo, categoria, fecha_vencimiento')
+        .select('id, titulo, slug, cuerpo, categoria, fecha_vencimiento, imagen_url')
         .eq('slug', slug)
         .eq('tipo', 'blog')
         .eq('is_active', true)
@@ -59,6 +60,11 @@ export default function BlogPost() {
               </span>
             </div>
             <h1 className="text-3xl font-bold text-white mb-6">{post.titulo}</h1>
+            {post.imagen_url && (
+              <div className="aspect-video w-full mb-8 rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
+                <img src={post.imagen_url} alt={post.titulo} className="w-full h-full object-cover" />
+              </div>
+            )}
             <div className="prose prose-invert max-w-none text-[#888888]">
               <ReactMarkdown>{post.cuerpo}</ReactMarkdown>
             </div>

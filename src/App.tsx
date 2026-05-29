@@ -10,6 +10,7 @@ import BlogPost from './pages/BlogPost'
 import Dashboard from './hub/Dashboard'
 import ProfileBuilder from './hub/ProfileBuilder'
 import JobMatcher from './hub/JobMatcher'
+import CVVivo from './hub/CVVivo'
 import NotFound from './pages/NotFound'
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
       <Route path="/mi-carrera" component={Dashboard} />
       <Route path="/mi-carrera/perfil" component={ProfileBuilder} />
       <Route path="/mi-carrera/analizar" component={JobMatcher} />
+      <Route path="/mi-carrera/cv" component={CVVivo} />
       <Route component={NotFound} />
     </Switch>
   )

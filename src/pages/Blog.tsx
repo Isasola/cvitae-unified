@@ -15,6 +15,7 @@ interface BlogPost {
   categoria: string
   fecha_vencimiento: string
   tipo: string
+  imagen_url?: string
 }
 
 export default function Blog() {
@@ -25,7 +26,7 @@ export default function Blog() {
   useEffect(() => {
     supabase
       .from('content_hub')
-      .select('id, titulo, slug, cuerpo, categoria, fecha_vencimiento, tipo')
+      .select('id, titulo, slug, cuerpo, categoria, fecha_vencimiento, tipo, imagen_url')
       .eq('tipo', 'blog')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
@@ -52,7 +53,12 @@ export default function Blog() {
         ) : (
           <div className="space-y-6">
             {posts.map((post) => (
-              <GlassCard key={post.id} className="cursor-pointer group" onClick={() => setLocation(`/blog/${post.slug}`)}>
+              <GlassCard key={post.id} className="cursor-pointer group overflow-hidden" onClick={() => setLocation(`/blog/${post.slug}`)}>
+                {post.imagen_url && (
+                  <div className="aspect-video w-full mb-4 rounded-xl overflow-hidden border border-white/5">
+                    <img src={post.imagen_url} alt={post.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  </div>
+                )}
                 <div className="flex items-center gap-2 mb-3">
                   <Badge variant="gold">{post.categoria}</Badge>
                   <span className="text-xs text-[#888888] flex items-center gap-1">

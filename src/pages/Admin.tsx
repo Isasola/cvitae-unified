@@ -308,6 +308,7 @@ export default function Admin() {
                       </select>
                       <input name="ubicacion" value={formData.ubicacion} onChange={(e) => setFormData(prev => ({ ...prev, ubicacion: e.target.value }))} placeholder="Ubicación" className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#c9a84c]/50" />
                     </div>
+                    <input name="imagen_url" value={formData.imagen_url} onChange={(e) => setFormData(prev => ({ ...prev, imagen_url: e.target.value }))} placeholder="URL de la imagen (opcional)" className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#c9a84c]/50" />
                     <textarea name="cuerpo" value={formData.cuerpo} onChange={(e) => setFormData(prev => ({ ...prev, cuerpo: e.target.value }))} placeholder="Contenido (Markdown)" rows={8} required className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#c9a84c]/50 resize-none" />
                     <div className="flex justify-end gap-3">
                       {isEditing && <GoldButton variant="ghost" onClick={resetForm}>Cancelar</GoldButton>}

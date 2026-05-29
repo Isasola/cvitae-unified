@@ -97,6 +97,75 @@ function HowItWorksSection() {
   )
 }
 
+function AISection() {
+  return (
+    <section className="relative py-24 px-4 overflow-hidden">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#c9a84c]/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="container mx-auto max-w-6xl relative z-10">
+        <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
+            <Badge variant="gold" className="mb-6">Inteligencia Artificial</Badge>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-8 leading-tight">
+              La plataforma que <span className="text-[#c9a84c]">aprende sola</span>
+            </h2>
+            <p className="text-[#888888] text-lg mb-10 leading-relaxed">
+              Nuestra IA no solo busca palabras clave; entiende el contexto de tu carrera, 
+              tus aspiraciones y cómo evoluciona el mercado laboral en tiempo real.
+            </p>
+            <div className="space-y-6">
+              {[
+                { icon: Brain, title: 'Red Neuronal de Oportunidades', desc: 'Conectamos miles de puntos de datos para encontrar el match perfecto.' },
+                { icon: TrendingUp, title: 'Predicción de Carrera', desc: 'Anticipamos qué habilidades serán tendencia en tu industria.' },
+                { icon: Sparkles, title: 'Optimización Dinámica', desc: 'Tu perfil se actualiza y mejora con cada nueva experiencia que sumás.' }
+              ].map((item, i) => (
+                <div key={i} className="flex gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-[#c9a84c]/10 flex items-center justify-center shrink-0">
+                    <item.icon className="text-[#c9a84c]" size={24} />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold mb-1">{item.title}</h4>
+                    <p className="text-[#888888] text-sm">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+          <motion.div 
+            className="relative aspect-square flex items-center justify-center"
+            initial={{ opacity: 0, scale: 0.8 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+          >
+            <svg width="400" height="400" viewBox="0 0 400 400" className="w-full h-full opacity-40">
+              <motion.circle cx="200" cy="200" r="4" fill="#c9a84c" animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 2, repeat: Infinity }} />
+              {[0, 60, 120, 180, 240, 300].map((angle, i) => {
+                const x = 200 + 120 * Math.cos((angle * Math.PI) / 180)
+                const y = 200 + 120 * Math.sin((angle * Math.PI) / 180)
+                return (
+                  <g key={i}>
+                    <motion.line x1="200" y1="200" x2={x} y2={y} stroke="#c9a84c" strokeWidth="1" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ duration: 1.5, delay: i * 0.2 }} />
+                    <circle cx={x} cy={y} r="3" fill="#c9a84c" />
+                    {[0, 45, 90].map((a, j) => {
+                      const x2 = x + 40 * Math.cos(((angle + a - 45) * Math.PI) / 180)
+                      const y2 = y + 40 * Math.sin(((angle + a - 45) * Math.PI) / 180)
+                      return (
+                        <g key={j}>
+                          <line x1={x} y1={y} x2={x2} y2={y2} stroke="#c9a84c" strokeWidth="0.5" strokeOpacity="0.5" />
+                          <circle cx={x2} cy={y2} r="1.5" fill="#c9a84c" fillOpacity="0.5" />
+                        </g>
+                      )
+                    })}
+                  </g>
+                )
+              })}
+            </svg>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function PricingSection() {
   const plans = [
     {
@@ -200,6 +269,7 @@ export default function LandingPage() {
           <CVAnalyzer />
         </div>
       </section>
+      <AISection />
       <PricingSection />
       <Footer />
     </main>
