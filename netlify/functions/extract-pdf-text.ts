@@ -1,5 +1,3 @@
-import * as pdfParse from "pdf-parse"
-
 export const handler = async (event: any) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -11,9 +9,14 @@ export const handler = async (event: any) => {
     return { statusCode: 200, headers: corsHeaders, body: '' }
   }
 
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method not allowed' }) }
+  }
+
   try {
     const body = JSON.parse(event.body || '{}')
     const pdfBase64 = body.pdfBase64 || body.file
+
     if (!pdfBase64) {
       return {
         statusCode: 400,
@@ -23,7 +26,21 @@ export const handler = async (event: any) => {
     }
 
     const pdfBuffer = Buffer.from(pdfBase64, 'base64')
-    const data = await pdfParse.default(pdfBuffer)
+
+    // Usar require dinámico — compatible con esbuild de Netlify
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const pdfParse = require('pdf-parse')
+    const data = await pdfParse(pdfBuffer)
+
+    if (!data.text || data.text.trim().length < 20) {
+      return {
+        statusCode: 422,
+        headers: corsHeaders,
+        body: JSON.stringify({ 
+          error: 'El PDF no tiene texto legible. Probá con un PDF que no sea imagen escaneada.' 
+        }),
+      }
+    }
 
     return {
       statusCode: 200,
@@ -34,7 +51,9 @@ export const handler = async (event: any) => {
     return {
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: error.message }),
+      body: JSON.stringify({ 
+        error: 'Error procesando el PDF: ' + (error.message || 'Error desconocido')
+      }),
     }
   }
 }

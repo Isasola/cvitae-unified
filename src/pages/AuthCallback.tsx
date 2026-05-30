@@ -1,73 +1,69 @@
 import { useEffect, useState } from 'react'
-import { useLocation } from 'wouter'
 import { supabase } from '@/lib/supabase'
 import { motion } from 'framer-motion'
 
 export default function AuthCallback() {
-  const [, setLocation] = useLocation()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [mensaje, setMensaje] = useState('Procesando tu acceso...')
+  const [intentos, setIntentos] = useState(0)
+
+  const irA = (path: string) => {
+    window.location.href = path
+  }
+
+  const reintentar = () => {
+    setStatus('loading')
+    setMensaje('Reintentando...')
+    setIntentos(0)
+    verificar()
+  }
+
+  const verificar = async () => {
+    // Esperar que Supabase procese el hash/token
+    await new Promise(r => setTimeout(r, 500))
+
+    for (let i = 0; i < 5; i++) {
+      const { data } = await supabase.auth.getSession()
+      if (data.session) {
+        setStatus('success')
+        setMensaje('¡Bienvenido a CVitae!')
+        setTimeout(() => irA('/mi-carrera'), 1000)
+        return
+      }
+      await new Promise(r => setTimeout(r, 1000))
+      setIntentos(i + 1)
+    }
+
+    // Último recurso: refreshSession
+    const { data: refreshData } = await supabase.auth.refreshSession()
+    if (refreshData.session) {
+      setStatus('success')
+      setMensaje('¡Sesión verificada!')
+      setTimeout(() => irA('/mi-carrera'), 1000)
+      return
+    }
+
+    setStatus('error')
+    setMensaje('No pudimos verificar tu acceso.')
+  }
 
   useEffect(() => {
     let cancelado = false
-    let timer: any
 
-    const redirigir = (path: string, ms = 900) => {
-      timer = setTimeout(() => {
-        if (!cancelado) window.location.href = path
-      }, ms)
-    }
-
-    // CRÍTICO: suscribirse ANTES de llamar getSession
-    // Esto captura el evento SIGNED_IN cuando Supabase procesa el hash
+    // Suscribirse primero — captura SIGNED_IN, EMAIL_CONFIRMED, PASSWORD_RECOVERY
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelado) return
-      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
+      if (session && ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED', 'PASSWORD_RECOVERY'].includes(event)) {
         setStatus('success')
         setMensaje('¡Bienvenido a CVitae!')
-        redirigir('/mi-carrera', 900)
+        setTimeout(() => irA('/mi-carrera'), 1000)
       }
     })
 
-    // Fallback: intentar getSession después de un tick
-    const intentar = async () => {
-      await new Promise(r => setTimeout(r, 200))
-      if (cancelado) return
-
-      const { data } = await supabase.auth.getSession()
-      if (data.session && !cancelado) {
-        setStatus('success')
-        setMensaje('¡Bienvenido!')
-        redirigir('/mi-carrera', 800)
-        return
-      }
-
-      // Segundo intento después de 2 segundos
-      await new Promise(r => setTimeout(r, 2000))
-      if (cancelado) return
-
-      const { data: data2 } = await supabase.auth.getSession()
-      if (data2.session && !cancelado) {
-        setStatus('success')
-        setMensaje('¡Sesión iniciada!')
-        redirigir('/mi-carrera', 800)
-        return
-      }
-
-      // Último recurso
-      const { data: data3 } = await supabase.auth.refreshSession()
-      if (!data3.session && !cancelado) {
-        setStatus('error')
-        setMensaje('No pudimos verificar tu acceso. El enlace puede haber expirado.')
-        redirigir('/', 3500)
-      }
-    }
-
-    intentar()
+    verificar()
 
     return () => {
       cancelado = true
-      clearTimeout(timer)
       subscription?.unsubscribe()
     }
   }, [])
@@ -84,11 +80,9 @@ export default function AuthCallback() {
             <div className="w-12 h-12 border-4 border-[#c9a84c] border-t-transparent rounded-full animate-spin mx-auto mb-6" />
             <h2 className="text-xl font-semibold text-white mb-2">{mensaje}</h2>
             <p className="text-[#888888] text-sm">No cierres esta pestaña</p>
-            <div className="mt-6 flex gap-1 justify-center">
-              {[0,1,2].map(i => (
-                <div key={i} className="w-2 h-2 rounded-full bg-[#c9a84c]/40 animate-pulse" style={{ animationDelay: `${i * 0.2}s` }} />
-              ))}
-            </div>
+            {intentos > 2 && (
+              <p className="text-[#555555] text-xs mt-3">Verificando... intento {intentos}/5</p>
+            )}
           </>
         )}
         {status === 'success' && (
@@ -102,13 +96,23 @@ export default function AuthCallback() {
           <>
             <div className="text-6xl mb-4">⚠️</div>
             <h2 className="text-xl font-semibold text-white mb-3">{mensaje}</h2>
-            <p className="text-[#888888] text-sm mb-6">Intentá solicitar un nuevo enlace desde el inicio.</p>
-            <button
-              onClick={() => window.location.href = '/'}
-              className="px-8 py-3 bg-[#c9a84c] text-[#0a0a0a] font-bold rounded-2xl hover:bg-[#e8c97a] transition-all"
-            >
-              Volver al inicio
-            </button>
+            <p className="text-[#888888] text-sm mb-6">
+              El enlace puede haber expirado. Pedí uno nuevo desde el inicio.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={reintentar}
+                className="px-8 py-3 bg-white/10 border border-white/20 text-white font-bold rounded-2xl hover:bg-white/20 transition-all"
+              >
+                Reintentar
+              </button>
+              <button
+                onClick={() => irA('/')}
+                className="px-8 py-3 bg-[#c9a84c] text-[#0a0a0a] font-bold rounded-2xl hover:bg-[#e8c97a] transition-all"
+              >
+                Pedir nuevo enlace
+              </button>
+            </div>
           </>
         )}
       </motion.div>
