@@ -12,7 +12,8 @@ export const handler = async (event: any) => {
   }
 
   try {
-    const { pdfBase64 } = JSON.parse(event.body || "{}")
+    const body = JSON.parse(event.body || '{}')
+    const pdfBase64 = body.pdfBase64 || body.file
     if (!pdfBase64) {
       return {
         statusCode: 400,

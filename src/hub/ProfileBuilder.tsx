@@ -47,8 +47,8 @@ export default function ProfileBuilder() {
       setUser(session?.user || null)
       setAuthLoading(false)
     })
-    const subscription = auth.onAuthStateChange((u) => {
-      setUser(u)
+    const subscription = auth.onAuthStateChange((user) => {
+      setUser(user)
       setAuthLoading(false)
     })
     return () => { subscription?.unsubscribe() }
