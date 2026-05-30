@@ -61,7 +61,8 @@ export function CVAnalyzer() {
             body: JSON.stringify({ pdfBase64: base64, fileName: file.name }),
           })
           const extractData = await extractResponse.json()
-          if (!extractResponse.ok || !extractData.success) throw new Error(extractData.error || 'Error extrayendo texto')
+          if (!extractResponse.ok) throw new Error(extractData.error || 'Error extrayendo texto')
+          if (!extractData.text || extractData.text.trim().length < 20) throw new Error(extractData.error || 'No se pudo extraer texto del archivo')
 
           setExtractionStep('analyzing')
           const response = await fetch('/.netlify/functions/analyze-cv-candidate', {

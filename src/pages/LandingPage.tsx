@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronRight, Star, Briefcase, Users, DollarSign, CheckCircle2, XCircle, Brain, Sparkles, TrendingUp } from 'lucide-react'
 import { Navbar } from '@/components/cvitae/Navbar'
@@ -7,7 +8,14 @@ import { GoldParticles, DotGrid } from '@/components/cvitae/Particles'
 import { GlassCard, GoldButton, Badge } from '@/components/cvitae/UI-Elements'
 import { CVAnalyzer } from '@/components/CVAnalyzer'
 
-function HeroSection() {
+function HeroSection({ magicEmail, setMagicEmail, magicSending, magicSent, setMagicSent, handleMagicLink }: {
+  magicEmail: string
+  setMagicEmail: (v: string) => void
+  magicSending: boolean
+  magicSent: boolean
+  setMagicSent: (v: boolean) => void
+  handleMagicLink: () => void
+}) {
   return (
     <section className="relative min-h-screen flex flex-col items-center justify-center px-4 overflow-hidden">
       <DotGrid />
@@ -41,14 +49,35 @@ function HeroSection() {
           CVitae resuelve los dos — <span className="text-[#c9a84c]">solo</span>.
         </motion.p>
         <motion.div
-          className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
+          className="flex flex-col items-center justify-center gap-4 mb-16"
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.4 }}
         >
-          <GoldButton href="/mi-carrera" size="lg">
-            Empezá gratis
-            <ChevronRight className="w-5 h-5" />
-          </GoldButton>
-          <GoldButton href="/oportunidades" variant="outline" size="lg">
+          {!magicSent ? (
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-md mx-auto">
+              <input
+                type="email"
+                value={magicEmail}
+                onChange={e => setMagicEmail(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleMagicLink()}
+                placeholder="tu@email.com"
+                className="flex-1 w-full px-5 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-[#888888] focus:outline-none focus:border-[#c9a84c]/50 transition-all"
+              />
+              <GoldButton onClick={handleMagicLink} disabled={magicSending || !magicEmail.trim()} size="lg">
+                {magicSending ? 'Enviando...' : 'Empezá gratis'}
+                {!magicSending && <ChevronRight className="w-5 h-5" />}
+              </GoldButton>
+            </div>
+          ) : (
+            <div className="text-center">
+              <div className="text-4xl mb-3">📬</div>
+              <p className="text-white font-semibold text-lg mb-1">¡Revisá tu correo!</p>
+              <p className="text-[#888888] text-sm">Te enviamos un enlace mágico a <strong className="text-[#c9a84c]">{magicEmail}</strong></p>
+              <button onClick={() => { setMagicSent(false); setMagicEmail('') }} className="mt-4 text-xs text-[#555555] hover:text-white transition-colors">
+                Usar otro correo
+              </button>
+            </div>
+          )}
+          <GoldButton href="/oportunidades" variant="outline" size="lg" className="mt-2">
             Ver oportunidades
           </GoldButton>
         </motion.div>
@@ -243,10 +272,42 @@ function PricingSection() {
 }
 
 export default function LandingPage() {
+  const [magicEmail, setMagicEmail] = useState('')
+  const [magicSending, setMagicSending] = useState(false)
+  const [magicSent, setMagicSent] = useState(false)
+
+  const handleMagicLink = async () => {
+    if (!magicEmail.trim()) return
+    setMagicSending(true)
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_SUPABASE_ANON_KEY
+      )
+      await supabase.auth.signInWithOtp({
+        email: magicEmail,
+        options: { emailRedirectTo: 'https://cvitae-py.netlify.app/auth/callback' }
+      })
+      setMagicSent(true)
+    } catch {
+      alert('Error al enviar el enlace. Intentá de nuevo.')
+    } finally {
+      setMagicSending(false)
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#0a0a0a]">
       <Navbar />
-      <HeroSection />
+      <HeroSection
+        magicEmail={magicEmail}
+        setMagicEmail={setMagicEmail}
+        magicSending={magicSending}
+        magicSent={magicSent}
+        setMagicSent={setMagicSent}
+        handleMagicLink={handleMagicLink}
+      />
       <HowItWorksSection />
       {/* ==================== CV ANALYZER SECTION ==================== */}
       <section id="cv-analyzer" className="relative py-24">
