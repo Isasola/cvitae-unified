@@ -42,12 +42,34 @@ export default function Dashboard() {
   const loaderSteps = ["Leyendo tu perfil...", "Cargando vacantes activas...", "Calculando compatibilidad...", "Ordenando resultados..."]
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user || null)
+    // Esperar más tiempo para que Supabase procese el hash del magic link
+    const init = async () => {
+      // Primer intento inmediato
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        setUser(session.user)
+        setAuthLoading(false)
+        return
+      }
+      // Si no hay sesión, esperar hasta 4 segundos más (para magic link)
+      for (let i = 0; i < 4; i++) {
+        await new Promise(r => setTimeout(r, 1000))
+        const { data: { session: s } } = await supabase.auth.getSession()
+        if (s) {
+          setUser(s.user)
+          setAuthLoading(false)
+          return
+        }
+      }
+      // Después de 4 segundos sin sesión, mostrar el mensaje
+      setUser(null)
       setAuthLoading(false)
-    })
-    const subscription = auth.onAuthStateChange((user) => {
-      setUser(user)
+    }
+
+    init()
+
+    const subscription = auth.onAuthStateChange((u) => {
+      setUser(u)
       setAuthLoading(false)
     })
     return () => { subscription?.unsubscribe() }
@@ -156,15 +178,10 @@ export default function Dashboard() {
             </div>
           ) : !user ? (
             <GlassCard className="text-center py-16 px-8">
-              <Lock className="w-12 h-12 text-[#c9a84c] mx-auto mb-4 opacity-50" />
-              <h2 className="text-2xl font-bold text-white mb-2">Tu sesión expiró</h2>
-              <p className="text-[#888888] mb-8">Volvé a ingresar para ver tus oportunidades personalizadas.</p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                <GoldButton onClick={() => setLocation('/')}>Ir al Inicio</GoldButton>
-                <button onClick={() => window.location.reload()} className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-medium hover:bg-white/10 transition-all">
-                  Reintentar conexión
-                </button>
-              </div>
+              <UserCircle className="w-12 h-12 text-[#c9a84c] mx-auto mb-4 opacity-50" />
+              <h2 className="text-2xl font-bold text-white mb-2">Bienvenido a CVitae</h2>
+              <p className="text-[#888888] mb-8">Ingresá con tu email para ver tus oportunidades personalizadas.</p>
+              <GoldButton onClick={() => window.location.href = '/'}>Ingresar</GoldButton>
             </GlassCard>
           ) : hasProfile === false ? (
             <GlassCard className="text-center py-16 px-8">

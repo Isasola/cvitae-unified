@@ -8,7 +8,6 @@ export const handler = async (event: any) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders, body: '' }
   }
-
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
@@ -26,18 +25,36 @@ export const handler = async (event: any) => {
     }
 
     const pdfBuffer = Buffer.from(pdfBase64, 'base64')
+    let text = ''
 
-    // Usar require dinámico — compatible con esbuild de Netlify
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pdfParse = require('pdf-parse')
-    const data = await pdfParse(pdfBuffer)
+    try {
+      // Intento 1: pdf-parse con require
+      const pdfParse = require('pdf-parse')
+      const data = await pdfParse(pdfBuffer)
+      text = data.text || ''
+    } catch (parseError) {
+      try {
+        // Intento 2: leer el buffer como texto y extraer lo legible
+        const rawText = pdfBuffer.toString('latin1')
+        // Extraer texto legible entre streams PDF
+        const matches = rawText.match(/BT[\s\S]*?ET/g) || []
+        const extracted = matches
+          .join(' ')
+          .replace(/[^\x20-\x7E\xC0-\xFF]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+        text = extracted.length > 50 ? extracted : rawText.replace(/[^\x20-\x7E]/g, ' ').replace(/\s+/g, ' ').trim()
+      } catch {
+        text = ''
+      }
+    }
 
-    if (!data.text || data.text.trim().length < 20) {
+    if (!text || text.trim().length < 20) {
       return {
         statusCode: 422,
         headers: corsHeaders,
-        body: JSON.stringify({ 
-          error: 'El PDF no tiene texto legible. Probá con un PDF que no sea imagen escaneada.' 
+        body: JSON.stringify({
+          error: 'No pudimos leer el PDF. Intentá con un PDF de texto (no escaneado) o copiá el texto manualmente.',
         }),
       }
     }
@@ -45,14 +62,14 @@ export const handler = async (event: any) => {
     return {
       statusCode: 200,
       headers: corsHeaders,
-      body: JSON.stringify({ text: data.text }),
+      body: JSON.stringify({ text: text.substring(0, 8000) }),
     }
   } catch (error: any) {
     return {
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ 
-        error: 'Error procesando el PDF: ' + (error.message || 'Error desconocido')
+      body: JSON.stringify({
+        error: 'Error procesando el PDF: ' + (error.message || 'Error desconocido'),
       }),
     }
   }
