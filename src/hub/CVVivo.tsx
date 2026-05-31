@@ -97,8 +97,9 @@ export default function CVVivo() {
   const downloadPDF = async () => {
     if (!cvRef.current) return
     const el = cvRef.current
-    const prevHeight = el.style.maxHeight
+    const prevMaxHeight = el.style.maxHeight
     el.style.maxHeight = 'none'
+    await new Promise(r => setTimeout(r, 150))
 
     const canvas = await html2canvas(el, {
       scale: 2,
@@ -108,7 +109,7 @@ export default function CVVivo() {
       windowWidth: el.scrollWidth,
       windowHeight: el.scrollHeight,
     })
-    el.style.maxHeight = prevHeight
+    el.style.maxHeight = prevMaxHeight
 
     const imgData = canvas.toDataURL('image/png')
     const pdf = new jsPDF('p', 'mm', 'a4')

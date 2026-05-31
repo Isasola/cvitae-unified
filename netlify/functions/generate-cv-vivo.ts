@@ -74,6 +74,12 @@ ESTRUCTURA OBLIGATORIA (en este orden exacto):
 PERFIL DEL CANDIDATO:
 ${JSON.stringify(profile, null, 2)}
 
+REGLAS DE ESTILO OBLIGATORIAS:
+- Todo el CV en PRIMERA PERSONA. Verbos: "Lideré", "Desarrollé", "Implementé", "Gestioné", "Aumenté X%", "Reduje", "Coordiné", "Diseñé", "Logré"
+- Nunca uses tercera persona ("Profesional con experiencia en..." está MAL. "Cuento con experiencia en..." está BIEN)
+- Incluí métricas reales o estimadas en cada logro: porcentajes, cantidades, períodos de tiempo
+- El resumen profesional debe empezar con "Soy..." o "Cuento con..."
+
 Respondé ÚNICAMENTE con el CV en markdown, sin explicaciones, sin texto antes ni después.`
       : `Sos un experto en redacción de CVs para el mercado latinoamericano, especializado en formato híbrido ATS-friendly.
 
@@ -116,6 +122,12 @@ Categoría: ${vacancy.categoria}
 Ubicación: ${vacancy.ubicacion}
 Descripción: ${vacancy.cuerpo || vacancy.titulo}
 Habilidades requeridas: ${vacancy.vacancySkills?.join(', ') || 'No especificadas'}
+
+REGLAS DE ESTILO OBLIGATORIAS:
+- Todo el CV en PRIMERA PERSONA. Verbos: "Lideré", "Desarrollé", "Implementé", "Gestioné", "Aumenté X%", "Reduje", "Coordiné", "Diseñé", "Logré"
+- Nunca uses tercera persona ("Profesional con experiencia en..." está MAL. "Cuento con experiencia en..." está BIEN)
+- Incluí métricas reales o estimadas en cada logro: porcentajes, cantidades, períodos de tiempo
+- El resumen profesional debe empezar con "Soy..." o "Cuento con..."
 
 Respondé ÚNICAMENTE con el CV en markdown, sin explicaciones, sin texto antes ni después.`
 

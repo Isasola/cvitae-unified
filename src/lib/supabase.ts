@@ -12,7 +12,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 })
 
 const getSiteUrl = () => {
-  if (import.meta.env.PROD) return 'https://cvitae-py.netlify.app'
+  if (import.meta.env.PROD) return 'https://cvitae.lat'
   return 'http://localhost:5173'
 }
 

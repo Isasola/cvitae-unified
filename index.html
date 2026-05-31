@@ -1,51 +1,78 @@
 <!doctype html>
 <html lang="es">
-  <head>
-<meta charset="UTF-8" />
-<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>CVitae | Tu Agente de Carrera Inteligente</title>
-<meta name="description" content="CVitae es tu agente de carrera con IA. Busca automáticamente los empleos ideales para vos, adapta tu CV a cada puesto, te recomienda cursos y te avisa cuando hay una oportunidad perfecta." />
-<meta name="keywords" content="empleo Paraguay, trabajo Paraguay, CV inteligente, agente IA carrera, buscar trabajo, oportunidades laborales Asunción" />
-<meta name="robots" content="index, follow" />
-<link rel="canonical" href="https://cvitae-py.netlify.app" />
-<meta property="og:type" content="website" />
-<meta property="og:url" content="https://cvitae-py.netlify.app" />
-<meta property="og:title" content="CVitae | Tu Agente de Carrera Inteligente" />
-<meta property="og:description" content="El primer agente de carrera con IA para Paraguay. Encontrá trabajo, adaptá tu CV y crecé profesionalmente." />
-<meta property="og:locale" content="es_PY" />
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="CVitae | Tu Agente de Carrera Inteligente" />
-<meta name="twitter:description" content="El primer agente de carrera con IA para Paraguay." />
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "Organization",
-      "@id": "https://cvitae-py.netlify.app/#organization",
-      "name": "CVitae",
-      "url": "https://cvitae-py.netlify.app",
-      "description": "Agente de carrera con inteligencia artificial para Paraguay y Latinoamérica",
-      "foundingDate": "2024",
-      "sameAs": ["https://www.linkedin.com/company/cvitae-py/"]
-    },
-    {
-      "@type": "SoftwareApplication",
-      "name": "CVitae Intelligence Hub",
-      "applicationCategory": "BusinessApplication",
-      "operatingSystem": "Web",
-      "url": "https://cvitae-py.netlify.app",
-      "description": "Agente de carrera con IA que busca empleos automáticamente, adapta tu CV a cada vacante y recomienda cursos personalizados.",
-      "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
-      "featureList": ["Matching automático con +1000 oportunidades", "CV Vivo adaptado por IA", "Recomendación de cursos", "Alertas proactivas"]
-    }
-  ]
-}
-</script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CVitae | Tu Agente de Carrera Inteligente para Paraguay</title>
+  <meta name="description" content="CVitae es el primer agente de carrera con IA para Paraguay y Latinoamérica. Encontrá empleos ideales automáticamente, adaptá tu CV a cada vacante con IA y recibí alertas de oportunidades perfectas para vos." />
+  <meta name="keywords" content="empleo Paraguay, trabajo Paraguay, buscar empleo Asunción, CV inteligente, agente IA carrera, oportunidades laborales Paraguay, becas Paraguay, curriculum vitae ATS" />
+  <meta name="robots" content="index, follow" />
+  <meta name="author" content="CVitae" />
+  <link rel="canonical" href="https://cvitae.lat" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://cvitae.lat" />
+  <meta property="og:title" content="CVitae | Tu Agente de Carrera Inteligente" />
+  <meta property="og:description" content="El primer agente de carrera con IA para Paraguay. Matching automático con +1000 oportunidades, CV Vivo adaptado por IA y alertas proactivas." />
+  <meta property="og:image" content="https://cvitae.lat/og-image.jpg" />
+  <meta property="og:locale" content="es_PY" />
+  <meta property="og:site_name" content="CVitae" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="CVitae | Agente de Carrera con IA" />
+  <meta name="twitter:description" content="El primer agente de carrera con IA para Paraguay." />
+  <meta name="twitter:image" content="https://cvitae.lat/og-image.jpg" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://cvitae.lat/#organization",
+        "name": "CVitae",
+        "url": "https://cvitae.lat",
+        "logo": { "@type": "ImageObject", "url": "https://cvitae.lat/favicon.svg" },
+        "description": "Agente de carrera con inteligencia artificial para Paraguay y Latinoamérica. Top 100 Moonshot Paraguay 2026.",
+        "foundingDate": "2024",
+        "areaServed": ["Paraguay", "Argentina", "Uruguay", "Bolivia", "Latinoamérica"],
+        "sameAs": ["https://www.linkedin.com/company/cvitae-py/", "https://www.facebook.com/profile.php?id=61580756714500"]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://cvitae.lat/#website",
+        "url": "https://cvitae.lat",
+        "name": "CVitae",
+        "publisher": { "@id": "https://cvitae.lat/#organization" },
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": { "@type": "EntryPoint", "urlTemplate": "https://cvitae.lat/oportunidades?q={search_term_string}" },
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://cvitae.lat/#app",
+        "name": "CVitae Intelligence Hub",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "url": "https://cvitae.lat",
+        "description": "Agente de carrera con IA que busca empleos automáticamente, adapta tu CV a cada vacante y recomienda cursos personalizados.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "featureList": ["Matching automático con +1000 oportunidades", "CV Vivo adaptado por IA", "Recomendación de cursos con IA", "Alertas proactivas por email"]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "¿Qué es CVitae?", "acceptedAnswer": { "@type": "Answer", "text": "CVitae es el primer agente de carrera con inteligencia artificial para Paraguay y Latinoamérica. Centraliza oportunidades laborales, adapta tu CV automáticamente y te avisa cuando aparece algo perfecto para tu perfil." } },
+          { "@type": "Question", "name": "¿CVitae es gratuito?", "acceptedAnswer": { "@type": "Answer", "text": "Sí, CVitae tiene un plan gratuito. El plan Pro (USD 5/mes) incluye matches ilimitados, CV Vivo con IA y alertas proactivas." } },
+          { "@type": "Question", "name": "¿Cómo funciona el matching automático?", "acceptedAnswer": { "@type": "Answer", "text": "CVitae analiza tu perfil y lo compara con más de 1000 oportunidades activas usando IA. Te muestra las que mejor encajan con tus habilidades y experiencia." } }
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
 </html>
