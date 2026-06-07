@@ -13,77 +13,6 @@ import { GlassCard, GoldButton, Badge } from '@/components/cvitae/UI-Elements'
 import { CVAnalyzer } from '@/components/CVAnalyzer'
 import { supabase } from '@/lib/supabase'
 
-function QuickLogin() {
-  const [email, setEmail] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [sent, setSent] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const handleLogin = async () => {
-    if (!email.trim()) return
-    setLoading(true)
-    setError(null)
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { 
-          shouldCreateUser: true, 
-          emailRedirectTo: 'https://cvitae.lat/auth/callback' 
-        }
-      })
-      if (error) throw error
-      setSent(true)
-    } catch (err: any) {
-      setError(err.message || 'Error al enviar el enlace')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <GlassCard className="max-w-md mx-auto mb-12 p-6 border-[#c9a84c]/20">
-      {!sent ? (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Mail size={16} className="text-[#c9a84c]" />
-            <span className="text-white font-medium text-sm">Acceso rápido / Registro</span>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="tu@email.com"
-              className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555555] focus:outline-none focus:border-[#c9a84c]/50 text-sm"
-            />
-            <GoldButton onClick={handleLogin} disabled={loading || !email.trim()} size="sm">
-              {loading ? 'Enviando...' : 'Enviar enlace'}
-            </GoldButton>
-          </div>
-          {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
-          <p className="text-[10px] text-[#555555] text-center italic">
-            Te enviaremos un enlace mágico para entrar sin contraseña.
-          </p>
-        </div>
-      ) : (
-        <div className="text-center py-2">
-          <div className="flex items-center justify-center gap-2 text-emerald-400 mb-3">
-            <CheckCircle size={20} />
-            <span className="font-bold">¡Enlace enviado!</span>
-          </div>
-          <p className="text-white text-sm mb-4">Revisá tu correo para continuar.</p>
-          <a 
-            href="/mi-carrera" 
-            className="inline-flex items-center gap-2 text-[#c9a84c] text-xs font-bold hover:underline"
-          >
-            Ya hice clic en el enlace <ArrowRight size={14} />
-          </a>
-        </div>
-      )}
-    </GlassCard>
-  )
-}
-
 function HeroSection() {
   return (
     <section className="relative min-h-screen flex flex-col items-center justify-center px-4 overflow-hidden">
@@ -474,11 +403,71 @@ function B2BSection() {
   )
 }
 
+function QuickLoginForm() {
+  const [email, setEmail] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  const handleLogin = async () => {
+    if (!email.trim()) return
+    setLoading(true); setError(''); setMessage('')
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          shouldCreateUser: true,
+          emailRedirectTo: 'https://cvitae.lat/auth/callback'
+        }
+      })
+      if (error) throw error
+      setMessage('✅ Revisá tu correo y hacé clic en el enlace mágico.')
+    } catch (err: any) {
+      setError(err.message || 'Error al enviar el enlace')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <input
+        type="email"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+        placeholder="tu@email.com"
+        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555555] focus:outline-none focus:border-[#c9a84c]/50"
+        disabled={loading}
+        onKeyDown={e => e.key === 'Enter' && handleLogin()}
+      />
+      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {message && <p className="text-green-400 text-sm">{message}</p>}
+      <GoldButton onClick={handleLogin} disabled={loading || !email.trim()} className="w-full">
+        {loading ? 'Enviando...' : 'Enviar enlace mágico'}
+      </GoldButton>
+      <p className="text-[#555555] text-xs">
+        Ya tengo sesión: <a href="/mi-carrera" className="text-[#c9a84c] hover:underline">Ir a Mi Carrera</a>
+      </p>
+    </div>
+  )
+}
+
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-[#0a0a0a]">
       <Navbar />
       <HeroSection />
+      
+      {/* QuickLogin – se muestra justo debajo del héroe */}
+      <section className="relative py-12 px-4 -mt-10">
+        <div className="container mx-auto max-w-md relative z-10">
+          <GlassCard className="text-center p-6">
+            <h3 className="text-white font-semibold mb-4">Ingresá con tu email</h3>
+            <QuickLoginForm />
+          </GlassCard>
+        </div>
+      </section>
+
       <HowItWorksSection />
       {/* ==================== CV ANALYZER SECTION ==================== */}
       <section id="cv-analyzer" className="relative py-24">
@@ -499,7 +488,6 @@ export default function LandingPage() {
             </p>
           </motion.div>
           
-          <QuickLogin />
           <CVAnalyzer />
         </div>
       </section>
