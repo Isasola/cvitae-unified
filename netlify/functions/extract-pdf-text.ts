@@ -28,7 +28,7 @@ export const handler = async (event: any) => {
     return {
       statusCode: 200,
       headers: corsHeaders,
-      body: JSON.stringify({ text: data.text }),
+      body: JSON.stringify({ text: data.text, success: true }),
     }
   } catch (error: any) {
     return {
