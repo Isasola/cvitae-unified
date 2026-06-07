@@ -19,7 +19,7 @@ const handler: Handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ valid: false, error: "Token requerido" }) }
     }
 
-    // Buscar el token en la columna access_token (la que usa generate-token)
+    // Buscar token
     const { data, error } = await supabase
       .from("recruiter_tokens")
       .select("id, access_token, token_balance, is_active")
@@ -31,15 +31,15 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ valid: false, error: "Token inválido o inactivo" }) }
     }
 
-    if (data.token_balance <= 0) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ valid: false, error: "Sin créditos disponibles. Contactá a CVitae para recargar." }),
-      }
-    }
-
-    // Guardar análisis + descontar crédito
+    // ─── Acción: Guardar análisis (requiere créditos) ───
     if (action === "save_analysis" && analysisData) {
+      if (data.token_balance <= 0) {
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ error: "Sin créditos disponibles. Contactá a CVitae para recargar." }),
+        }
+      }
+
       const { error: insertError } = await supabase
         .from("recruiter_analyses")
         .insert({
@@ -68,7 +68,7 @@ const handler: Handler = async (event) => {
       }
     }
 
-    // Obtener historial
+    // ─── Acción: Obtener historial (no requiere créditos) ───
     if (action === "get_history") {
       const { data: history } = await supabase
         .from("recruiter_analyses")
@@ -83,7 +83,7 @@ const handler: Handler = async (event) => {
       }
     }
 
-    // Toggle estrella
+    // ─── Acción: Toggle estrella (no requiere créditos) ───
     if (action === "toggle_star" && body.analysis_id) {
       const { data: analysis } = await supabase
         .from("recruiter_analyses")
@@ -103,13 +103,13 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
-    // Solo validar
+    // ─── Validación simple o inicio de sesión (siempre permitido) ───
     return {
       statusCode: 200,
       body: JSON.stringify({
         valid: true,
         balance: data.token_balance,
-        company_name: "Empresa",   // La tabla actual no tiene company_name, pero el panel lo espera
+        company_name: "Empresa",
         token_id: data.id,
       }),
     }
