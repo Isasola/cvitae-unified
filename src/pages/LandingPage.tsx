@@ -275,7 +275,7 @@ function B2BSection() {
       if (err.code === '23505') {
         setFormError('Este email ya está registrado. ¡Te avisaremos pronto!')
       } else {
-        setFormError('Error al registrar. Escribinos a hola@cvitae.lat')
+        setFormError('Error al registrar. Escribinos a contacto@cvitae.lat')
       }
     } finally {
       setSending(false)
@@ -386,7 +386,7 @@ function B2BSection() {
                     <div className="flex items-center justify-between pt-1">
                       <p className="text-xs text-[#3a3a3a]">
                         O escribinos a{' '}
-                        <a href="mailto:hola@cvitae.lat" className="text-[#c9a84c] hover:underline">hola@cvitae.lat</a>
+                        <a href="mailto:contacto@cvitae.lat" className="text-[#c9a84c] hover:underline">contacto@cvitae.lat</a>
                       </p>
                       <GoldButton href="/reclutadores" variant="ghost" size="sm" className="text-xs">
                         Ya tengo token →
