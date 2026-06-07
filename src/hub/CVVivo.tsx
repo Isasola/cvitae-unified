@@ -186,18 +186,18 @@ export default function CVVivo() {
             </div>
 
             {mode === 'match' ? (
-              <select
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#c9a84c]/50"
-                onChange={e => setSelectedVacancy(vacancies.find(v => v.id === e.target.value) || null)}
-                value={selectedVacancy?.id || ''}
-              >
-                <option value="">Seleccioná una vacante...</option>
-                {vacancies.map(v => (
-                  <option key={v.id} value={v.id}>
-                    {v.titulo} ({v.finalScore}%)
-                  </option>
-                ))}
-              </select>
+                <select
+                  className="w-full bg-[#0a0a0a] text-white border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#c9a84c]/50"
+                  onChange={e => setSelectedVacancy(vacancies.find(v => v.id === e.target.value) || null)}
+                  value={selectedVacancy?.id || ''}
+                >
+                  <option value="" className="bg-[#0a0a0a] text-white">Seleccioná una vacante...</option>
+                  {vacancies.map(v => (
+                    <option key={v.id} value={v.id} className="bg-[#0a0a0a] text-white">
+                      {v.titulo} ({v.finalScore}%)
+                    </option>
+                  ))}
+                </select>
             ) : (
               <div className="relative">
                 <textarea
