@@ -19,11 +19,11 @@ const handler: Handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ valid: false, error: "Token requerido" }) }
     }
 
-    // FIX: columna correcta es token_key (no access_token)
+    // Buscar el token en la columna access_token (la que usa generate-token)
     const { data, error } = await supabase
       .from("recruiter_tokens")
-      .select("id, token_key, credits_remaining, company_name, is_active")
-      .eq("token_key", token.trim())
+      .select("id, access_token, token_balance, is_active")
+      .eq("access_token", token.trim())
       .eq("is_active", true)
       .single()
 
@@ -31,20 +31,19 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ valid: false, error: "Token inválido o inactivo" }) }
     }
 
-    if (data.credits_remaining <= 0) {
+    if (data.token_balance <= 0) {
       return {
         statusCode: 200,
         body: JSON.stringify({ valid: false, error: "Sin créditos disponibles. Contactá a CVitae para recargar." }),
       }
     }
 
-    // Acción: guardar análisis + descontar crédito
+    // Guardar análisis + descontar crédito
     if (action === "save_analysis" && analysisData) {
       const { error: insertError } = await supabase
         .from("recruiter_analyses")
         .insert({
           token_id: data.id,
-          company_name: data.company_name,
           candidate_name: analysisData.candidate_name || null,
           file_name: analysisData.file_name || null,
           ats_score: analysisData.ats_score,
@@ -59,17 +58,17 @@ const handler: Handler = async (event) => {
       if (!insertError) {
         await supabase
           .from("recruiter_tokens")
-          .update({ credits_remaining: data.credits_remaining - 1 })
+          .update({ token_balance: data.token_balance - 1 })
           .eq("id", data.id)
       }
 
       return {
         statusCode: 200,
-        body: JSON.stringify({ saved: !insertError, new_balance: data.credits_remaining - 1 }),
+        body: JSON.stringify({ saved: !insertError, new_balance: data.token_balance - 1 }),
       }
     }
 
-    // Acción: obtener historial
+    // Obtener historial
     if (action === "get_history") {
       const { data: history } = await supabase
         .from("recruiter_analyses")
@@ -84,7 +83,7 @@ const handler: Handler = async (event) => {
       }
     }
 
-    // Acción: toggle estrella
+    // Toggle estrella
     if (action === "toggle_star" && body.analysis_id) {
       const { data: analysis } = await supabase
         .from("recruiter_analyses")
@@ -104,13 +103,13 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
-    // Default: solo validar
+    // Solo validar
     return {
       statusCode: 200,
       body: JSON.stringify({
         valid: true,
-        balance: data.credits_remaining,
-        company_name: data.company_name || "Empresa",
+        balance: data.token_balance,
+        company_name: "Empresa",   // La tabla actual no tiene company_name, pero el panel lo espera
         token_id: data.id,
       }),
     }
