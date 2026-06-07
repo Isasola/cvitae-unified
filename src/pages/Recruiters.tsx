@@ -69,7 +69,7 @@ async function extractTextFromFile(file: File): Promise<string> {
         const res = await fetch('/.netlify/functions/extract-pdf-text', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileBase64: base64, fileName: file.name }),
+          body: JSON.stringify({ pdfBase64: base64, fileName: file.name }),
         })
         const data = await res.json()
         resolve(data.text || '')
