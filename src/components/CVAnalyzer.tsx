@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, Zap, Loader2, AlertTriangle, ArrowRight, Lock, CheckCircle, AlertCircle } from 'lucide-react'
 import { GlassCard, GoldButton, Badge, MatchArc } from '@/components/cvitae/UI-Elements'
 import { TetrisLoader } from '@/components/TetrisLoader'
+import { supabase } from '@/lib/supabase'  // ← IMPORTANTE: Asegurate de que esta línea esté
 
 interface AnalysisResult {
   success: boolean
@@ -155,8 +156,31 @@ export function CVAnalyzer() {
               <h3 className="text-xl font-bold text-white mb-2">¿Querés ver las oportunidades que encajan con tu perfil?</h3>
               <p className="text-[#888888] mb-4">Ingresá tu correo y te mostramos las {1154} vacantes activas que tenemos para vos.</p>
               <div className="flex items-center justify-center gap-2 max-w-md mx-auto">
-                <input type="email" placeholder="tu@email.com" className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#888888] focus:outline-none focus:border-[#c9a84c]/50" />
-                <GoldButton onClick={() => window.location.href = '/mi-carrera'}>Activar Mi Carrera</GoldButton>
+                <input
+                  type="email"
+                  placeholder="tu@email.com"
+                  id="analyzer-email-input"
+                  className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#888888] focus:outline-none focus:border-[#c9a84c]/50"
+                />
+                <GoldButton onClick={async () => {
+                  const email = (document.getElementById('analyzer-email-input') as HTMLInputElement)?.value?.trim();
+                  if (!email) return;
+                  try {
+                    const { error } = await supabase.auth.signInWithOtp({
+                      email,
+                      options: {
+                        shouldCreateUser: true,
+                        emailRedirectTo: 'https://cvitae.lat/auth/callback'
+                      }
+                    });
+                    if (error) throw error;
+                    alert('✅ Revisá tu correo y hacé clic en el enlace mágico.');
+                  } catch (err: any) {
+                    alert('Error: ' + err.message);
+                  }
+                }}>
+                  Activar Mi Carrera
+                </GoldButton>
               </div>
             </div>
           </motion.div>

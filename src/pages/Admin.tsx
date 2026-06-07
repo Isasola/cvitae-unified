@@ -169,21 +169,27 @@ export default function Admin() {
   const generateToken = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    const newToken = `REC-${Math.random().toString(36).substring(2, 8).toUpperCase()}-${new Date().getFullYear()}`
     try {
-      const { error } = await supabase.from('recruiter_tokens').insert([{
-        email: tokenEmail,
-        token_balance: tokenBalance,
-        access_token: newToken,
-        plan_type: tokenPlan,
-        is_active: true
-      }])
-      if (error) throw error
+      const response = await fetch('/.netlify/functions/generate-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: tokenEmail,
+          token_balance: tokenBalance,
+          plan_type: tokenPlan,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Error generando token')
+      
       setNotification({ type: 'success', message: 'Token generado con éxito' })
       setTokenEmail('')
       loadTokens()
-    } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
-    finally { setLoading(false) }
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const toggleStatus = async (item: ContentItem) => {
