@@ -1,13 +1,5 @@
 import { Handler } from "@netlify/functions"
 import Anthropic from "@anthropic-ai/sdk"
-import { createClient } from "@supabase/supabase-js"
-
-const handler: Handler = async (event) => {
-  if (event.httpMethod !== "POST") return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
-
-  const SUPABASE_URL = process.env.VITE_SUPABASE_URL || ""
-  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 interface CandidateAnalysis {
   atsScore: number
@@ -16,10 +8,13 @@ interface CandidateAnalysis {
 }
 
 function extractJSON(text: string): any {
-  const codeBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
-  if (codeBlockMatch) return JSON.parse(codeBlockMatch[1].trim());
-  return JSON.parse(text.trim());
+  const codeBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
+  if (codeBlockMatch) return JSON.parse(codeBlockMatch[1].trim())
+  return JSON.parse(text.trim())
 }
+
+const handler: Handler = async (event) => {
+  if (event.httpMethod !== "POST") return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
 
   try {
     const { cvText, mode } = JSON.parse(event.body || "{}")
@@ -56,17 +51,11 @@ ${cvText}`
     })
 
     const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
-    const analysis = extractJSON(responseText);
-    
-    return {
-      statusCode: 200,
-      body: JSON.stringify(analysis),
-    }
+    const analysis = extractJSON(responseText)
+
+    return { statusCode: 200, body: JSON.stringify(analysis) }
   } catch (error: any) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message }),
-    }
+    return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
   }
 }
 
