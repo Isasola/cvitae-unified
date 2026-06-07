@@ -10,10 +10,7 @@ export const handler = async (event: any) => {
 
   try {
     const { profileSkills, missingSkills, profileTitle, profileSeniority } = JSON.parse(event.body || '{}')
-
-    if (!missingSkills?.length) {
-      return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ courses: [] }) }
-    }
+    if (!missingSkills?.length) return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ courses: [] }) }
 
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) throw new Error('GEMINI_API_KEY no configurada')
@@ -73,7 +70,6 @@ Respondé ÚNICAMENTE con este JSON válido, sin texto extra ni markdown:
     const data = await response.json()
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]'
     const clean = text.replace(/```json|```/g, '').trim()
-
     let courses = []
     try {
       courses = JSON.parse(clean)
@@ -86,7 +82,6 @@ Respondé ÚNICAMENTE con este JSON válido, sin texto extra ni markdown:
       headers: corsHeaders,
       body: JSON.stringify({ courses }),
     }
-
   } catch (err: any) {
     console.error('gemini-courses error:', err.message)
     return {
@@ -107,7 +102,7 @@ async function useFallbackHaiku(
   try {
     const anthropicKey = process.env.ANTHROPIC_API_KEY
     if (!anthropicKey) throw new Error('Sin API key de fallback')
-
+    
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -120,7 +115,7 @@ async function useFallbackHaiku(
         max_tokens: 1000,
         messages: [{
           role: 'user',
-          content: `Sos asesor de carrera para Paraguay. El usuario es ${profileTitle || 'profesional'} ${profileSeniority || ''} con skills: ${profileSkills?.join(', ')}. Le faltan: ${missingSkills.join(', ')}. Recomendá ${Math.min(missingSkills.length, 4)} cursos online accesibles. Respondé SOLO con JSON array: [{"skill":"...","course":"...","platform":"Udemy|Coursera|YouTube","url":"URL de búsqueda real","level":"Básico|Intermedio","duration":"X horas","impact":"Puede mejorar tus chances un X%...","why":"Con tu experiencia en..."}]`
+          content: `Sos asesor de carrera para Paraguay. El usuario es ${profileTitle || 'profesional'} ${profileSeniority || ''} con skills: ${profileSkills?.join(', ')}. Le faltan: ${missingSkills.join(', ')}. Recomendá ${Math.min(missingSkills.length, 4)} cursos online accesibles. Respondé SOLO con JSON array: [{"skill":"...","course":"...","platform":"Udemy|Coursera|YouTube","url":"URL de búsqueda real","level":"Básico|Intermedio","duration":"X horas","impact":"Puede mejorar tus chances un X%","why":"Con tu experiencia en..."}]`
         }],
       }),
     })
@@ -129,7 +124,7 @@ async function useFallbackHaiku(
     const text = data.content?.[0]?.text || '[]'
     const clean = text.replace(/```json|```/g, '').trim()
     const courses = JSON.parse(clean)
-
+    
     return {
       statusCode: 200,
       headers: corsHeaders,
