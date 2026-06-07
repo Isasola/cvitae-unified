@@ -10,6 +10,7 @@ const navLinks = [
   { href: '/', label: 'Inicio' },
   { href: '/oportunidades', label: 'Oportunidades' },
   { href: '/blog', label: 'Blog' },
+  { href: '/reclutadores', label: 'Empresas' },
 ]
 
 export function Navbar() {

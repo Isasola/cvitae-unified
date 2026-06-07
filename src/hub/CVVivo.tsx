@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
-import { Download, Copy, RefreshCw, Briefcase, FileText, CheckCircle, Sun, Moon, Edit3, Eye } from 'lucide-react'
+import { Download, Copy, RefreshCw, Briefcase, FileText, CheckCircle, Sun, Moon, Edit3, Eye, Zap, AlertCircle } from 'lucide-react'
 import { GlassCard, GoldButton, Badge } from '@/components/cvitae/UI-Elements'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { auth, supabase } from '@/lib/supabase'
@@ -15,6 +15,8 @@ export default function CVVivo() {
   const [profile, setProfile] = useState<any>(null)
   const [vacancies, setVacancies] = useState<any[]>([])
   const [selectedVacancy, setSelectedVacancy] = useState<any>(null)
+  const [customVacancy, setCustomVacancy] = useState('')
+  const [mode, setMode] = useState<'match' | 'custom'>('match')
   const [generatedCV, setGeneratedCV] = useState<string>('')
   const [editableCV, setEditableCV] = useState<string>('')
   const [fromCache, setFromCache] = useState(false)
@@ -51,7 +53,7 @@ export default function CVVivo() {
       const data = await res.json()
       setVacancies(data.matches || [])
 
-      // Generar CV base automáticamente
+      // Generar CV base automáticamente si no hay uno
       if (prof) {
         const baseRes = await fetch('/.netlify/functions/generate-cv-vivo', {
           method: 'POST',
@@ -73,19 +75,23 @@ export default function CVVivo() {
   }
 
   const handleAdaptCV = async () => {
-    if (!selectedVacancy || !profile) return
+    if (!profile) return
+    const vacancyToUse = mode === 'match' ? selectedVacancy : { titulo: 'Vacante Personalizada', cuerpo: customVacancy, id: 'custom' }
+    if (!vacancyToUse) return
+
     setAdapting(true)
     try {
       const res = await fetch('/.netlify/functions/generate-cv-vivo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile: { ...profile, user_id: user.id }, vacancy: selectedVacancy }),
+        body: JSON.stringify({ profile: { ...profile, user_id: user.id }, vacancy: vacancyToUse }),
       })
       const data = await res.json()
       if (data.cv) {
         setGeneratedCV(data.cv)
         setEditableCV(data.cv)
         setFromCache(data.fromCache || false)
+        setEditMode(false)
       }
     } catch {
       alert('Error al adaptar el CV. Intentá de nuevo.')
@@ -138,8 +144,6 @@ export default function CVVivo() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const currentCV = editMode ? editableCV : generatedCV
-
   if (loading) {
     return (
       <DashboardLayout>
@@ -151,36 +155,65 @@ export default function CVVivo() {
     )
   }
 
+  const canAdapt = mode === 'match' ? !!selectedVacancy : customVacancy.trim().length > 20
+
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto space-y-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+          <div className="flex-1">
             <h1 className="text-3xl font-bold text-white mb-1">
               CV Vivo{' '}
               <span className="text-[#c9a84c] text-sm font-normal ml-2 tracking-widest uppercase">Híbrido ATS</span>
             </h1>
-            <p className="text-[#888888] text-sm">
-              💡 La IA mejora el <strong className="text-white">contenido y las palabras</strong> para pasar filtros ATS. El diseño final es tuyo.
+            <p className="text-[#888888] text-sm leading-relaxed max-w-xl">
+              💡 La IA mejora el <strong className="text-white">contenido y las palabras</strong> para pasar filtros ATS. 
+              Elegí una vacante de CVitae o pegá una descripción externa.
             </p>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <select
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#c9a84c]/50 max-w-[220px]"
-              onChange={e => setSelectedVacancy(vacancies.find(v => v.id === e.target.value) || null)}
-            >
-              <option value="">Seleccioná una vacante...</option>
-              {vacancies.map(v => (
-                <option key={v.id} value={v.id}>
-                  {v.tipo === 'oportunidad' ? '💼' : v.tipo === 'beca' ? '🎓' : v.tipo === 'blog' ? '📝' : '📌'}{' '}
-                  {v.titulo} ({v.finalScore}%)
-                </option>
-              ))}
-            </select>
-            <GoldButton onClick={handleAdaptCV} disabled={!selectedVacancy || adapting} size="sm">
-              {adapting ? <RefreshCw className="animate-spin" size={16} /> : <Briefcase size={16} />}
-              {adapting ? 'Adaptando...' : 'Adaptar CV'}
+
+          <div className="w-full md:w-80 space-y-3">
+            <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+              <button onClick={() => setMode('match')}
+                className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all ${mode === 'match' ? 'bg-[#c9a84c] text-[#0a0a0a]' : 'text-[#888888] hover:text-white'}`}>
+                Vacantes CVitae
+              </button>
+              <button onClick={() => setMode('custom')}
+                className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all ${mode === 'custom' ? 'bg-[#c9a84c] text-[#0a0a0a]' : 'text-[#888888] hover:text-white'}`}>
+                Pegar vacante
+              </button>
+            </div>
+
+            {mode === 'match' ? (
+              <select
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#c9a84c]/50"
+                onChange={e => setSelectedVacancy(vacancies.find(v => v.id === e.target.value) || null)}
+                value={selectedVacancy?.id || ''}
+              >
+                <option value="">Seleccioná una vacante...</option>
+                {vacancies.map(v => (
+                  <option key={v.id} value={v.id}>
+                    {v.titulo} ({v.finalScore}%)
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="relative">
+                <textarea
+                  value={customVacancy}
+                  onChange={e => setCustomVacancy(e.target.value)}
+                  placeholder="Pegá acá la descripción del empleo (LinkedIn, diario, etc)..."
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#c9a84c]/50 min-h-[100px] resize-none"
+                />
+                {customVacancy.trim().length > 0 && customVacancy.trim().length < 20 && (
+                  <p className="text-[#555555] text-xs mt-1">Agregá más detalle para un mejor resultado.</p>
+                )}
+              </div>
+            )}
+
+            <GoldButton onClick={handleAdaptCV} disabled={!canAdapt || adapting} size="sm" className="w-full">
+              {adapting ? <><RefreshCw className="animate-spin" size={16} />Adaptando...</> : <><Briefcase size={16} />Adaptar CV</>}
             </GoldButton>
           </div>
         </div>
@@ -218,32 +251,21 @@ export default function CVVivo() {
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setDarkMode(!darkMode)}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-xs font-medium hover:bg-white/10 transition-all"
-                  >
+                  <button onClick={() => setDarkMode(!darkMode)}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-xs font-medium hover:bg-white/10 transition-all">
                     {darkMode ? <Sun size={14} /> : <Moon size={14} />}
                     {darkMode ? 'Modo claro' : 'Modo oscuro'}
                   </button>
-                  <button
-                    onClick={() => {
-                      if (!editMode) setEditableCV(generatedCV)
-                      setEditMode(!editMode)
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-xs font-medium hover:bg-white/10 transition-all"
-                  >
+                  <button onClick={() => { if (!editMode) setEditableCV(generatedCV); setEditMode(!editMode) }}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-xs font-medium hover:bg-white/10 transition-all">
                     {editMode ? <Eye size={14} /> : <Edit3 size={14} />}
                     {editMode ? 'Vista previa' : 'Editar'}
                   </button>
                 </div>
-                <GoldButton onClick={downloadPDF} className="w-full">
-                  <Download size={18} /> Descargar PDF
-                </GoldButton>
-                <button
-                  onClick={handleCopy}
-                  className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-medium hover:bg-white/10 transition-all flex items-center justify-center gap-2"
-                >
-                  <Copy size={18} /> {copied ? '¡Copiado!' : 'Copiar texto'}
+                <GoldButton onClick={downloadPDF} className="w-full"><Download size={18} />Descargar PDF</GoldButton>
+                <button onClick={handleCopy}
+                  className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-medium hover:bg-white/10 transition-all flex items-center justify-center gap-2">
+                  <Copy size={18} />{copied ? '¡Copiado!' : 'Copiar texto'}
                 </button>
               </div>
             )}
@@ -255,42 +277,26 @@ export default function CVVivo() {
               {editMode ? (
                 <textarea
                   value={editableCV}
-                  onChange={e => {
-                    setEditableCV(e.target.value)
-                    setGeneratedCV(e.target.value)
-                  }}
+                  onChange={e => { setEditableCV(e.target.value); setGeneratedCV(e.target.value) }}
                   className={`w-full p-8 min-h-[800px] font-mono text-sm resize-none focus:outline-none ${darkMode ? 'bg-[#111111] text-white' : 'bg-white text-gray-900'}`}
                   placeholder="Editá el markdown de tu CV acá..."
                 />
               ) : (
-                <div
-                  ref={cvRef}
-                  className={`p-10 min-h-[800px] font-['Inter',sans-serif] ${darkMode ? 'text-white' : 'text-gray-900'}`}
-                >
+                <div ref={cvRef} className={`p-10 min-h-[800px] font-['Inter',sans-serif] ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   {generatedCV ? (
                     <ReactMarkdown
                       components={{
-                        h1: ({...props}) => (
-                          <h1 className={`text-3xl font-black mb-2 pb-6 pt-8 -mx-10 px-10 border-b ${darkMode ? 'text-white bg-[#0a0a0a] border-[#c9a84c]/30' : 'text-gray-900 bg-gray-50 border-gray-300'}`} {...props} />
-                        ),
-                        h2: ({...props}) => (
-                          <h2 className={`text-xs font-bold uppercase tracking-[0.2em] mt-10 mb-4 pl-4 border-l-2 border-[#c9a84c] ${darkMode ? 'text-[#c9a84c]' : 'text-[#8a6a1f]'}`} {...props} />
-                        ),
-                        h3: ({...props}) => (
-                          <h3 className={`text-base font-bold mt-6 mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`} {...props} />
-                        ),
+                        h1: ({...props}) => <h1 className={`text-3xl font-black mb-2 pb-6 pt-8 -mx-10 px-10 border-b ${darkMode ? 'text-white bg-[#0a0a0a] border-[#c9a84c]/30' : 'text-gray-900 bg-gray-50 border-gray-300'}`} {...props} />,
+                        h2: ({...props}) => <h2 className={`text-xs font-bold uppercase tracking-[0.2em] mt-10 mb-4 pl-4 border-l-2 border-[#c9a84c] ${darkMode ? 'text-[#c9a84c]' : 'text-[#8a6a1f]'}`} {...props} />,
+                        h3: ({...props}) => <h3 className={`text-base font-bold mt-6 mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`} {...props} />,
                         p: ({...props}) => {
                           const isContact = typeof props.children === 'string' && String(props.children).includes('|')
                           return isContact
                             ? <p className={`text-xs font-medium tracking-wide mb-8 -mt-2 -mx-10 px-10 pb-4 ${darkMode ? 'text-[#888888] bg-[#0a0a0a]' : 'text-gray-500 bg-gray-50'}`} {...props} />
                             : <p className={`text-sm leading-relaxed mb-3 ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`} {...props} />
                         },
-                        li: ({...props}) => (
-                          <li className={`text-sm mb-2 list-none relative pl-5 before:content-[''] before:absolute before:left-0 before:top-[0.55em] before:w-1.5 before:h-1.5 before:bg-[#c9a84c] before:rounded-full ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`} {...props} />
-                        ),
-                        strong: ({...props}) => (
-                          <strong className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`} {...props} />
-                        ),
+                        li: ({...props}) => <li className={`text-sm mb-2 list-none relative pl-5 before:content-[''] before:absolute before:left-0 before:top-[0.55em] before:w-1.5 before:h-1.5 before:bg-[#c9a84c] before:rounded-full ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`} {...props} />,
+                        strong: ({...props}) => <strong className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`} {...props} />,
                       }}
                     >
                       {generatedCV}
@@ -298,12 +304,8 @@ export default function CVVivo() {
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full py-20 text-center opacity-30">
                       <FileText size={64} className="mb-6" />
-                      <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        Tu CV aparecerá acá
-                      </h3>
-                      <p className="max-w-xs text-sm">
-                        Seleccioná una vacante y hacé click en "Adaptar CV"
-                      </p>
+                      <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Tu CV aparecerá acá</h3>
+                      <p className="max-w-xs text-sm">Seleccioná una vacante o pegá una descripción y hacé click en "Adaptar CV"</p>
                     </div>
                   )}
                 </div>

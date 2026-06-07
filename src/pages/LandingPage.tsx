@@ -1,11 +1,16 @@
-import { motion } from 'framer-motion'
-import { ChevronRight, Star, Briefcase, Users, DollarSign, CheckCircle2, XCircle, Brain, Sparkles, TrendingUp } from 'lucide-react'
+import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  ChevronRight, Star, Briefcase, Users, DollarSign, CheckCircle2, 
+  XCircle, Brain, Sparkles, TrendingUp, Mail, Building2, Zap, Loader2 
+} from 'lucide-react'
 import { Navbar } from '@/components/cvitae/Navbar'
 import { Footer } from '@/components/cvitae/Footer'
 import { Logo } from '@/components/cvitae/Logo'
 import { GoldParticles, DotGrid } from '@/components/cvitae/Particles'
 import { GlassCard, GoldButton, Badge } from '@/components/cvitae/UI-Elements'
 import { CVAnalyzer } from '@/components/CVAnalyzer'
+import { supabase } from '@/lib/supabase'
 
 function HeroSection() {
   return (
@@ -178,7 +183,7 @@ function PricingSection() {
     },
     {
       name: 'Pro',
-      price: 'USD 5',
+      price: 'USD 9',
       period: '/mes',
       description: 'Para profesionales serios',
       features: ['Todo de Free', 'Matches ilimitados', 'CV optimizado para ATS', 'Análisis de vacante con IA', 'Recomendaciones de cursos', 'Soporte prioritario'],
@@ -242,6 +247,161 @@ function PricingSection() {
   )
 }
 
+function B2BSection() {
+  const [formName, setFormName] = useState('')
+  const [formEmail, setFormEmail] = useState('')
+  const [formCompany, setFormCompany] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [formError, setFormError] = useState('')
+
+  const handleSubmit = async () => {
+    if (!formEmail.trim() || !formCompany.trim()) {
+      setFormError('El email y el nombre de empresa son obligatorios.')
+      return
+    }
+    setSending(true); setFormError('')
+    try {
+      const { error } = await supabase.from('recruiter_leads').insert({
+        name: formName.trim() || null,
+        email: formEmail.trim().toLowerCase(),
+        company_name: formCompany.trim(),
+        source: 'landing_b2b',
+      })
+      if (error) throw error
+      setSent(true)
+    } catch (err: any) {
+      if (err.code === '23505') {
+        setFormError('Este email ya está registrado. ¡Te avisaremos pronto!')
+      } else {
+        setFormError('Error al registrar. Escribinos a hola@cvitae.lat')
+      }
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const benefits = [
+    { icon: Zap, title: 'Análisis en segundos', desc: 'La IA lee el CV y te da un score ATS, fortalezas y debilidades del candidato al instante. Sin leer pilas de PDFs.' },
+    { icon: Users, title: 'Historial y ranking', desc: 'Todos los CVs analizados quedan guardados con score y puesto. Filtrá por los mejores con un clic.' },
+    { icon: Building2, title: 'Para equipos de RRHH', desc: 'Panel con token de acceso, historial por vacante y candidatos destacados marcados con estrella.' },
+  ]
+
+  return (
+    <section id="empresas" className="relative py-24 px-4 overflow-hidden">
+      <DotGrid />
+      <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[500px] h-[500px] bg-[#c9a84c]/5 rounded-full blur-[100px] pointer-events-none" />
+      <div className="container mx-auto max-w-6xl relative z-10">
+
+        <motion.div className="text-center mb-16" initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
+          <Badge variant="gold" className="mb-4"><Building2 size={12} />Para Empresas · Beta</Badge>
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">¿Buscando talento en Paraguay?</h2>
+          <p className="text-[#888888] text-lg max-w-2xl mx-auto leading-relaxed">
+            Subí el CV de cualquier candidato y nuestra IA te dice en segundos si es el perfil que necesitás.{' '}
+            <span className="text-white">Sin leer pilas de PDFs.</span>
+          </p>
+        </motion.div>
+
+        <div className="grid lg:grid-cols-2 gap-12 items-start">
+          {/* Beneficios */}
+          <motion.div className="space-y-6" initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
+            {benefits.map((b, i) => (
+              <motion.div key={i} className="flex gap-4" initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}>
+                <div className="w-12 h-12 rounded-xl bg-[#c9a84c]/10 border border-[#c9a84c]/20 flex items-center justify-center shrink-0">
+                  <b.icon className="text-[#c9a84c]" size={22} />
+                </div>
+                <div>
+                  <h3 className="text-white font-semibold mb-1">{b.title}</h3>
+                  <p className="text-[#888888] text-sm leading-relaxed">{b.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+
+            {/* Pricing */}
+            <div className="pt-6 border-t border-white/5 space-y-3">
+              <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/10 rounded-xl">
+                <div>
+                  <p className="text-white font-semibold text-sm">Plan Empresa</p>
+                  <p className="text-[#555555] text-xs">Hasta 5 usuarios · 100 análisis/mes</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[#c9a84c] font-bold text-xl">USD 79</p>
+                  <p className="text-[#555555] text-xs">/mes</p>
+                </div>
+              </div>
+              <p className="text-[#444444] text-xs text-center">
+                <Star size={10} className="inline mr-1 text-[#c9a84c]" />
+                Seleccionado entre los proyectos destacados de Moonshot Paraguay 2026
+              </p>
+            </div>
+          </motion.div>
+
+          {/* Formulario */}
+          <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
+            <GlassCard className="relative overflow-hidden">
+              <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#c9a84c]/10 rounded-full blur-[60px] pointer-events-none" />
+              <AnimatePresence mode="wait">
+                {sent ? (
+                  <motion.div key="sent" className="text-center py-8" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
+                    <div className="text-5xl mb-4">🎉</div>
+                    <h3 className="text-white font-bold text-xl mb-2">¡Estás en la lista!</h3>
+                    <p className="text-[#888888] text-sm leading-relaxed">
+                      Te contactamos a <strong className="text-[#c9a84c]">{formEmail}</strong> para coordinar el acceso a la Beta.
+                    </p>
+                    <div className="mt-6 flex items-center justify-center gap-2 text-sm text-[#555555]">
+                      <CheckCircle2 size={14} className="text-emerald-400" />Respuesta en menos de 48 hs
+                    </div>
+                    <div className="mt-4">
+                      <GoldButton href="/reclutadores" variant="outline" size="sm">
+                        Ya tengo token — Ir al panel
+                      </GoldButton>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div key="form" className="relative space-y-4">
+                    <div>
+                      <h3 className="text-white font-bold text-xl mb-1">Solicitá acceso a la Beta</h3>
+                      <p className="text-[#666666] text-sm">Gratis durante el período de prueba. Sin tarjeta requerida.</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-white/50 mb-1.5">Tu nombre (opcional)</label>
+                      <input type="text" value={formName} onChange={e => setFormName(e.target.value)} placeholder="María García"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#3a3a3a] focus:outline-none focus:border-[#c9a84c]/50 transition-all text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-white/50 mb-1.5">Email corporativo <span className="text-[#c9a84c]">*</span></label>
+                      <input type="email" value={formEmail} onChange={e => setFormEmail(e.target.value)} placeholder="maria@empresa.com.py"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#3a3a3a] focus:outline-none focus:border-[#c9a84c]/50 transition-all text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-white/50 mb-1.5">Empresa <span className="text-[#c9a84c]">*</span></label>
+                      <input type="text" value={formCompany} onChange={e => setFormCompany(e.target.value)} placeholder="Nombre de tu empresa"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#3a3a3a] focus:outline-none focus:border-[#c9a84c]/50 transition-all text-sm" />
+                    </div>
+                    {formError && <p className="text-red-400 text-sm">{formError}</p>}
+                    <GoldButton onClick={handleSubmit} disabled={sending || !formEmail.trim() || !formCompany.trim()} className="w-full" size="lg">
+                      {sending ? <><Loader2 className="animate-spin" size={16} />Enviando...</> : <><Mail size={16} />Solicitar acceso gratuito<ChevronRight size={16} /></>}
+                    </GoldButton>
+                    <div className="flex items-center justify-between pt-1">
+                      <p className="text-xs text-[#3a3a3a]">
+                        O escribinos a{' '}
+                        <a href="mailto:hola@cvitae.lat" className="text-[#c9a84c] hover:underline">hola@cvitae.lat</a>
+                      </p>
+                      <GoldButton href="/reclutadores" variant="ghost" size="sm" className="text-xs">
+                        Ya tengo token →
+                      </GoldButton>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </GlassCard>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-[#0a0a0a]">
@@ -271,6 +431,7 @@ export default function LandingPage() {
       </section>
       <AISection />
       <PricingSection />
+      <B2BSection />
       <Footer />
     </main>
   )
