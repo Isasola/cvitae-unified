@@ -4,7 +4,7 @@ import {
   Building2, Key, Upload, FileText, CheckCircle2, XCircle,
   AlertCircle, ChevronRight, RotateCcw, Coins, Brain,
   TrendingUp, TrendingDown, Star, LogOut, Loader2, History,
-  Filter, ChevronDown, ChevronUp
+  Filter, ChevronDown, ChevronUp, Users
 } from 'lucide-react'
 import { Navbar } from '@/components/cvitae/Navbar'
 import { Footer } from '@/components/cvitae/Footer'
@@ -25,6 +25,8 @@ interface ATSResult {
   atsScore: number
   strengths: string[]
   criticalImprovements: string[]
+  summary?: string
+  recommendation?: string
 }
 
 interface AnalysisRecord {
@@ -37,6 +39,16 @@ interface AnalysisRecord {
   vacancy_label: string | null
   is_starred: boolean
   created_at: string
+}
+
+interface ComparisonResult {
+  top3: Array<{
+    name: string
+    score: number
+    strengths: string[]
+    reason: string
+  }>
+  finalRecommendation: string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -208,6 +220,11 @@ function AnalysisResult({ result, fileName, vacancyLabel, onReset }: {
           <p className="text-[#888888] text-sm leading-relaxed">
             Score ATS — indica qué tan bien pasa el CV los filtros automáticos. Mayor a 80 es ideal para posiciones competitivas.
           </p>
+          {result.recommendation && (
+            <div className="mt-2 flex items-center gap-2">
+              <Badge variant="gold">Recomendación: {result.recommendation}</Badge>
+            </div>
+          )}
           <div className="flex justify-center sm:justify-start mt-4">
             <button onClick={onReset} className="flex items-center gap-2 text-xs text-[#c9a84c] hover:text-white transition-colors">
               <RotateCcw size={14} />Analizar otro CV
@@ -215,6 +232,12 @@ function AnalysisResult({ result, fileName, vacancyLabel, onReset }: {
           </div>
         </div>
       </GlassCard>
+
+      {result.summary && (
+        <GlassCard>
+          <p className="text-white/90 text-sm leading-relaxed">{result.summary}</p>
+        </GlassCard>
+      )}
 
       <div className="grid md:grid-cols-2 gap-6">
         <GlassCard>
@@ -254,14 +277,13 @@ function AnalysisResult({ result, fileName, vacancyLabel, onReset }: {
 
 // ─── Historial ────────────────────────────────────────────────────────────────
 
-function HistoryPanel({ token }: { token: string; onToggleStar: () => void }) {
+function HistoryPanel({ token, onToggleStar, onCompare }: { token: string; onToggleStar: () => void; onCompare: (ids: string[]) => void }) {
   const [history, setHistory] = useState<AnalysisRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
 
-  useEffect(() => {
-    loadHistory()
-  }, [])
+  useEffect(() => { loadHistory() }, [])
 
   const loadHistory = async () => {
     try {
@@ -272,11 +294,8 @@ function HistoryPanel({ token }: { token: string; onToggleStar: () => void }) {
       })
       const data = await res.json()
       setHistory(data.history || [])
-    } catch {
-      console.error('Error cargando historial')
-    } finally {
-      setLoading(false)
-    }
+    } catch { console.error('Error cargando historial') }
+    finally { setLoading(false) }
   }
 
   const toggleStar = async (id: string) => {
@@ -287,7 +306,14 @@ function HistoryPanel({ token }: { token: string; onToggleStar: () => void }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, action: 'toggle_star', analysis_id: id }),
       })
-    } catch { /* silencioso */ }
+    } catch {}
+    onToggleStar()
+  }
+
+  const handleCheck = (id: string) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
   }
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#c9a84c]" /></div>
@@ -300,21 +326,34 @@ function HistoryPanel({ token }: { token: string; onToggleStar: () => void }) {
           <p className="text-[#666666]">No hay análisis guardados aún.</p>
         </GlassCard>
       ) : (
-        <div className="space-y-3">
-          {history.map(record => (
-            <GlassCard key={record.id} className="group hover:border-[#c9a84c]/30 transition-all">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1 min-w-0" onClick={() => setExpandedId(expandedId === record.id ? null : record.id)}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-lg font-bold" style={{ color: scoreColor(record.ats_score) }}>{record.ats_score}</span>
-                    <p className="text-white font-medium truncate">{record.candidate_name || record.file_name}</p>
-                    {record.vacancy_label && <Badge variant="gold" className="text-[10px] py-0">{record.vacancy_label}</Badge>}
+        <>
+          {selectedIds.length >= 2 && (
+            <div className="flex justify-end">
+              <GoldButton onClick={() => onCompare(selectedIds)}>
+                <Users size={16} /> Comparar {selectedIds.length} seleccionados
+              </GoldButton>
+            </div>
+          )}
+          <div className="space-y-3">
+            {history.map(record => (
+              <GlassCard key={record.id} className="group hover:border-[#c9a84c]/30 transition-all">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(record.id)}
+                    onChange={() => handleCheck(record.id)}
+                    className="w-4 h-4 accent-[#c9a84c]"
+                  />
+                  <div className="flex-1 min-w-0" onClick={() => setExpandedId(expandedId === record.id ? null : record.id)}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-lg font-bold" style={{ color: scoreColor(record.ats_score) }}>{record.ats_score}</span>
+                      <p className="text-white font-medium truncate">{record.candidate_name || record.file_name}</p>
+                      {record.vacancy_label && <Badge variant="gold" className="text-[10px] py-0">{record.vacancy_label}</Badge>}
+                    </div>
+                    <p className="text-[#555555] text-xs">
+                      {new Date(record.created_at).toLocaleDateString()} · {record.file_name}
+                    </p>
                   </div>
-                  <p className="text-[#555555] text-xs">
-                    {new Date(record.created_at).toLocaleDateString()} · {record.file_name}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
                   <button onClick={() => toggleStar(record.id)} className={`p-2 rounded-lg transition-colors ${record.is_starred ? 'text-[#c9a84c]' : 'text-[#333333] hover:text-[#c9a84c]'}`}>
                     <Star size={18} fill={record.is_starred ? 'currentColor' : 'none'} />
                   </button>
@@ -322,38 +361,38 @@ function HistoryPanel({ token }: { token: string; onToggleStar: () => void }) {
                     {expandedId === record.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                   </button>
                 </div>
-              </div>
 
-              <AnimatePresence>
-                {expandedId === record.id && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                    className="mt-4 pt-4 border-t border-white/5 grid md:grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-emerald-400 text-xs font-semibold mb-2 uppercase tracking-wider">Puntos fuertes</p>
-                      <ul className="space-y-1">
-                        {(record.strengths as any as string[]).map((s, i) => (
-                          <li key={i} className="text-white/70 text-xs flex items-start gap-2">
-                            <CheckCircle2 size={10} className="text-emerald-400 shrink-0 mt-0.5" />{s}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <p className="text-red-400 text-xs font-semibold mb-2 uppercase tracking-wider">Mejoras críticas</p>
-                      <ul className="space-y-1">
-                        {(record.critical_improvements as any as string[]).map((m, i) => (
-                          <li key={i} className="text-white/70 text-xs flex items-start gap-2">
-                            <XCircle size={10} className="text-red-400 shrink-0 mt-0.5" />{m}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </GlassCard>
-          ))}
-        </div>
+                <AnimatePresence>
+                  {expandedId === record.id && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                      className="mt-4 pt-4 border-t border-white/5 grid md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-emerald-400 text-xs font-semibold mb-2 uppercase tracking-wider">Puntos fuertes</p>
+                        <ul className="space-y-1">
+                          {(record.strengths as any as string[]).map((s, i) => (
+                            <li key={i} className="text-white/70 text-xs flex items-start gap-2">
+                              <CheckCircle2 size={10} className="text-emerald-400 shrink-0 mt-0.5" />{s}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="text-red-400 text-xs font-semibold mb-2 uppercase tracking-wider">Mejoras críticas</p>
+                        <ul className="space-y-1">
+                          {(record.critical_improvements as any as string[]).map((m, i) => (
+                            <li key={i} className="text-white/70 text-xs flex items-start gap-2">
+                              <XCircle size={10} className="text-red-400 shrink-0 mt-0.5" />{m}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </GlassCard>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )
@@ -371,6 +410,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   const [balance, setBalance] = useState(session.balance)
   const [activeTab, setActiveTab] = useState<'analyze' | 'history'>('analyze')
   const [historyKey, setHistoryKey] = useState(0)
+  const [comparison, setComparison] = useState<ComparisonResult | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleFile = (f: File) => {
@@ -389,7 +429,6 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
         throw new Error('No se pudo extraer texto del CV. Asegurate de que el PDF no sea una imagen escaneada.')
       }
 
-      // Paso 1: análisis ATS
       const res = await fetch('/.netlify/functions/analyze-cv-candidate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -398,10 +437,8 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Error en el análisis') }
       const data: ATSResult = await res.json()
 
-      // Detectar nombre del candidato del CV (primera línea del texto)
       const firstLine = cvText.split('\n').find(l => l.trim().length > 2)?.trim() || null
 
-      // Paso 2: guardar en historial + descontar crédito
       const saveRes = await fetch('/.netlify/functions/validate-recruiter-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -425,9 +462,24 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
       setResult(data)
       setHistoryKey(k => k + 1)
     } catch (err: any) {
-      setError(err.message || 'Error inesperado. Intentá de nuevo.')
+      setError(err.message || 'Error inesperado')
     } finally {
       setAnalyzing(false)
+    }
+  }
+
+  const handleCompare = async (ids: string[]) => {
+    try {
+      const res = await fetch('/.netlify/functions/compare-candidates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, token: session.token }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setComparison(data)
+    } catch (err: any) {
+      alert(err.message)
     }
   }
 
@@ -485,7 +537,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                           <h2 className="text-white font-semibold mb-1">¿Cómo funciona?</h2>
                           <p className="text-[#888888] text-sm leading-relaxed">
                             Subí el CV de un candidato (PDF, DOCX o TXT). La IA analiza en segundos y devuelve un{' '}
-                            <strong className="text-white">score ATS (0–100)</strong>, puntos fuertes y mejoras críticas.
+                            <strong className="text-white">score ATS (0–100)</strong>, puntos fuertes, mejoras críticas y una recomendación automática.
                             Cada análisis se guarda automáticamente en tu historial y consume{' '}
                             <strong className="text-[#c9a84c]">1 crédito</strong>.
                           </p>
@@ -578,7 +630,17 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
               </motion.div>
             ) : (
               <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <HistoryPanel key={historyKey} token={session.token} onToggleStar={() => {}} />
+                <HistoryPanel
+                  key={historyKey}
+                  token={session.token}
+                  onToggleStar={() => setHistoryKey(k => k + 1)}
+                  onCompare={handleCompare}
+                />
+                {comparison && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-8">
+                    <ComparisonResultComponent result={comparison} onClose={() => setComparison(null)} />
+                  </motion.div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -586,6 +648,39 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
       </div>
       <Footer />
     </main>
+  )
+}
+
+// ─── Componente de comparación ────────────────────────────────────────────────
+
+function ComparisonResultComponent({ result, onClose }: { result: ComparisonResult; onClose: () => void }) {
+  return (
+    <GlassCard>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-white">Resultado de comparación</h2>
+        <button onClick={onClose} className="text-[#888888] hover:text-white">Cerrar</button>
+      </div>
+      <div className="space-y-6">
+        {result.top3.map((c, i) => (
+          <div key={i} className="p-4 bg-white/5 rounded-xl border border-white/10">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white font-bold text-lg">{c.name || `Candidato ${i+1}`}</span>
+              <span className="text-lg font-bold" style={{ color: scoreColor(c.score) }}>{c.score}</span>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {c.strengths.map((s, j) => (
+                <Badge key={j} variant="gold">{s}</Badge>
+              ))}
+            </div>
+            <p className="text-[#888888] text-sm">{c.reason}</p>
+          </div>
+        ))}
+        <div className="p-4 bg-[#c9a84c]/10 border border-[#c9a84c]/20 rounded-xl">
+          <p className="text-white font-semibold mb-2">Recomendación final</p>
+          <p className="text-[#c9a84c] text-sm">{result.finalRecommendation}</p>
+        </div>
+      </div>
+    </GlassCard>
   )
 }
 

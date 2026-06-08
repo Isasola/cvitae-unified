@@ -5,6 +5,8 @@ interface CandidateAnalysis {
   atsScore: number
   strengths: string[]
   criticalImprovements: string[]
+  summary?: string            // nuevo
+  recommendation?: string     // nuevo: "Llamar", "No llamar", "Considerar"
 }
 
 function extractJSON(text: string): any {
@@ -41,7 +43,15 @@ const handler: Handler = async (event) => {
 CV:
 ${cvText}`
     } else {
-      prompt = `Analizá este CV y devolvé un JSON con: atsScore (0-100), strengths (array strings), criticalImprovements (array strings). CV: ${cvText}`
+      prompt = `Analizá este CV como si fueras un reclutador experto. Devolvé SOLO el JSON con:
+- atsScore (0-100)
+- strengths (array de strings)
+- criticalImprovements (array de strings)
+- summary (un párrafo de máximo 4 líneas resumiendo el perfil del candidato)
+- recommendation (una de estas: "Llamar", "No llamar", "Considerar", basada en la adecuación al puesto y la calidad del CV)
+
+CV:
+${cvText}`
     }
 
     const message = await client.messages.create({

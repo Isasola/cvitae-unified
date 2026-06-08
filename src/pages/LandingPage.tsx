@@ -263,20 +263,24 @@ function B2BSection() {
     }
     setSending(true); setFormError('')
     try {
-      const { error } = await supabase.from('recruiter_leads').insert({
-        name: formName.trim() || null,
-        email: formEmail.trim().toLowerCase(),
-        company_name: formCompany.trim(),
-        source: 'landing_b2b',
+      const res = await fetch('/.netlify/functions/submit-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formName.trim() || null,
+          email: formEmail.trim().toLowerCase(),
+          company: formCompany.trim(),
+        }),
       })
-      if (error) throw error
-      setSent(true)
-    } catch (err: any) {
-      if (err.code === '23505') {
-        setFormError('Este email ya está registrado. ¡Te avisaremos pronto!')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al registrar')
+      if (data.success === false) {
+        setFormError(data.error)
       } else {
-        setFormError('Error al registrar. Escribinos a contacto@cvitae.lat')
+        setSent(true)
       }
+    } catch (err: any) {
+      setFormError(err.message)
     } finally {
       setSending(false)
     }
