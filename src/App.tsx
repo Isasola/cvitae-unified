@@ -17,6 +17,7 @@ import CVVivo from './hub/CVVivo'
 import Alertas from './hub/Alertas'
 import Configuracion from './hub/Configuracion'
 import Recruiters from './pages/Recruiters'
+import BatchAnalysis from './pages/BatchAnalysis'
 import NotFound from './pages/NotFound'
 
 export default function App() {
@@ -34,6 +35,7 @@ export default function App() {
       <Route path="/cookies" component={Cookies} />
       <Route path="/admin" component={Admin} />
       <Route path="/reclutadores" component={Recruiters} />
+      <Route path="/reclutadores/batch" component={BatchAnalysis} />
       <Route path="/mi-carrera" component={Dashboard} />
       <Route path="/mi-carrera/perfil" component={ProfileBuilder} />
       <Route path="/mi-carrera/analizar" component={JobMatcher} />

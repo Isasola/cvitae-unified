@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react'
+import { ReactNode, useState, useEffect } from 'react'
 import { Link, useLocation } from 'wouter'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
 
 interface CareerLayoutProps {
   children: ReactNode
@@ -22,25 +23,44 @@ interface CareerLayoutProps {
 
 const sidebarLinks = [
   { href: '/mi-carrera', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/mi-carrera/analisis', label: 'Análisis IA', icon: Sparkles },
-  { href: '/mi-carrera/cv', label: 'Mis CVs', icon: FileText },
-  { href: '/mi-carrera/postulaciones', label: 'Postulaciones', icon: Briefcase },
-  { href: '/oportunidades', label: 'Buscar Empleo', icon: Search },
+  { href: '/mi-carrera/analizar', label: 'Análisis IA', icon: Sparkles },
+  { href: '/mi-carrera/cv', label: 'CV Vivo', icon: FileText },
+  { href: '/oportunidades', label: 'Oportunidades', icon: Search },
+  { href: '/mi-carrera/alertas', label: 'Alertas', icon: Bell },
 ]
 
 const bottomLinks = [{ href: '/mi-carrera/configuracion', label: 'Configuración', icon: Settings }]
 
 export function CareerLayout({ children }: CareerLayoutProps) {
-  const [location] = useLocation()
+  const [location, setLocation] = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [user, setUser] = useState<any>(null)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    setLocation('/')
+  }
+
+  const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuario'
+  const initials = displayName.substring(0, 2).toUpperCase()
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/5 z-40 px-4 flex items-center justify-between">
-        <span style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#c9a84c' }}>
-          <span style={{ fontWeight: 900 }}>CV</span>
-          <span style={{ fontStyle: 'italic', fontWeight: 400 }}>itae</span>
-        </span>
+        <Link href="/">
+          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#c9a84c', cursor: 'pointer' }}>
+            <span style={{ fontWeight: 900 }}>CV</span>
+            <span style={{ fontStyle: 'italic', fontWeight: 400 }}>itae</span>
+          </span>
+        </Link>
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className="p-2 text-[#888888] hover:text-white transition-colors"
@@ -107,13 +127,13 @@ export function CareerLayout({ children }: CareerLayoutProps) {
           <div className="mt-4 p-3 rounded-xl bg-white/[0.03] border border-white/5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#c9a84c] to-[#e8c97a] flex items-center justify-center text-sm font-bold text-[#0a0a0a]">
-                CV
+                {initials}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">Usuario</p>
-                <p className="text-xs text-[#888888] truncate">Plan Free</p>
+                <p className="text-sm font-medium text-white truncate">{displayName}</p>
+                <p className="text-xs text-[#888888] truncate">{user?.email || ''}</p>
               </div>
-              <button className="p-1.5 text-[#888888] hover:text-red-400 transition-colors">
+              <button onClick={handleSignOut} className="p-1.5 text-[#888888] hover:text-red-400 transition-colors">
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
@@ -153,9 +173,9 @@ export function CareerLayout({ children }: CareerLayoutProps) {
               className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors"
             >
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#c9a84c] to-[#e8c97a] flex items-center justify-center text-xs font-bold text-[#0a0a0a]">
-                CV
+                {initials}
               </div>
-              <span className="text-sm text-white">Usuario</span>
+              <span className="text-sm text-white">{displayName}</span>
               <ChevronRight className="w-4 h-4 text-[#888888]" />
             </Link>
           </div>

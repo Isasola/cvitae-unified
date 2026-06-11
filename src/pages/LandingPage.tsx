@@ -463,7 +463,7 @@ export default function LandingPage() {
       <HeroSection />
       
       {/* QuickLogin – se muestra justo debajo del héroe */}
-      <section className="relative py-12 px-4 -mt-10">
+      <section id="login" className="relative py-12 px-4 -mt-10">
         <div className="container mx-auto max-w-md relative z-10">
           <GlassCard className="text-center p-6">
             <h3 className="text-white font-semibold mb-4">Ingresá con tu email</h3>

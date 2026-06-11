@@ -327,13 +327,16 @@ function HistoryPanel({ token, onToggleStar, onCompare }: { token: string; onTog
         </GlassCard>
       ) : (
         <>
-          {selectedIds.length >= 2 && (
-            <div className="flex justify-end">
+          <div className="flex justify-between items-center">
+            <GoldButton href="/reclutadores/batch" variant="outline" size="sm">
+              <Sparkles size={14} /> Análisis Masivo (NUEVO)
+            </GoldButton>
+            {selectedIds.length >= 2 && (
               <GoldButton onClick={() => onCompare(selectedIds)}>
                 <Users size={16} /> Comparar {selectedIds.length} seleccionados
               </GoldButton>
-            </div>
-          )}
+            )}
+          </div>
           <div className="space-y-3">
             {history.map(record => (
               <GlassCard key={record.id} className="group hover:border-[#c9a84c]/30 transition-all">

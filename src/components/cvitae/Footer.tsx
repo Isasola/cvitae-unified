@@ -19,7 +19,7 @@ export function Footer() {
       title: 'Empresa',
       links: [
         { label: 'Sobre nosotros', href: '/about' },
-        { label: 'Contacto', href: 'mailto:cvitaeparaguay@gmail.com' },
+        { label: 'Contacto', href: 'mailto:contacto@cvitae.lat' },
         { label: 'Prensa', onClick: () => alert('Próximamente') },
         { label: 'Carreras', onClick: () => alert('Próximamente') },
       ],
@@ -77,6 +77,15 @@ export function Footer() {
             <p>© {currentYear} CVitae Intelligence Hub. Todos los derechos reservados.</p>
             <span className="hidden md:block">•</span>
             <p className="flex items-center gap-1"><MapPin size={12} /> Asunción, Paraguay</p>
+            <span className="hidden md:block">•</span>
+            <a href="mailto:contacto@cvitae.lat" className="text-[#c9a84c] hover:underline transition-colors">
+              contacto@cvitae.lat
+            </a>
+            <span className="hidden md:block">•</span>
+            <a href="https://wa.me/595992954169" target="_blank" rel="noopener noreferrer"
+              className="text-[#888888] hover:text-[#c9a84c] transition-colors">
+              WhatsApp
+            </a>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

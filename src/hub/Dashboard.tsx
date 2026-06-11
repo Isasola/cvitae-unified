@@ -33,6 +33,45 @@ interface CourseRecommendation {
   why: string
 }
 
+function QuickLoginInline() {
+  const [email, setEmail] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  const handleLogin = async () => {
+    if (!email.trim()) return
+    setLoading(true); setError(''); setMessage('')
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: { shouldCreateUser: true, emailRedirectTo: 'https://cvitae.lat/auth/callback' }
+      })
+      if (error) throw error
+      setMessage('✅ Revisá tu correo y hacé clic en el enlace mágico.')
+    } catch (err: any) {
+      setError(err.message || 'Error al enviar el enlace')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3 text-left">
+      <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && handleLogin()}
+        placeholder="tu@email.com"
+        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555555] focus:outline-none focus:border-[#c9a84c]/50 transition-all"
+        disabled={loading} />
+      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {message && <p className="text-green-400 text-sm">{message}</p>}
+      <GoldButton onClick={handleLogin} disabled={loading || !email.trim()} className="w-full">
+        {loading ? 'Enviando...' : 'Enviar enlace mágico'}
+      </GoldButton>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const [, setLocation] = useLocation()
   const [user, setUser] = useState<any>(null)
@@ -202,11 +241,14 @@ export default function Dashboard() {
               <div className="w-8 h-8 border-2 border-[#c9a84c] border-t-transparent rounded-full animate-spin" />
             </div>
           ) : !user ? (
-            <GlassCard className="text-center py-16 px-8">
+            <GlassCard className="text-center py-16 px-8 max-w-md mx-auto">
               <UserCircle className="w-12 h-12 text-[#c9a84c] mx-auto mb-4 opacity-50" />
               <h2 className="text-2xl font-bold text-white mb-2">Bienvenido a CVitae</h2>
               <p className="text-[#888888] mb-8">Ingresá con tu email para ver tus oportunidades personalizadas.</p>
-              <GoldButton onClick={() => window.location.href = '/'}>Ingresar</GoldButton>
+              <QuickLoginInline />
+              <p className="text-[#555555] text-xs mt-4">
+                Ya tenés sesión: <a href="/mi-carrera" className="text-[#c9a84c] hover:underline">Ir a Mi Carrera</a>
+              </p>
             </GlassCard>
           ) : hasProfile === false ? (
             <GlassCard className="text-center py-16 px-8">

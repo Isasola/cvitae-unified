@@ -29,6 +29,30 @@ const handler: Handler = async (event) => {
       throw error
     }
 
+    try {
+      if (process.env.RESEND_API_KEY) {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'CVitae <noreply@cvitae.lat>',
+            to: ['contacto@cvitae.lat'],
+            subject: `🎯 Nuevo lead Beta: ${company} (${email})`,
+            html: `
+              <h2>Nuevo lead en la landing</h2>
+              <p><strong>Nombre:</strong> ${name || 'No indicó'}</p>
+              <p><strong>Email:</strong> ${email}</p>
+              <p><strong>Empresa:</strong> ${company}</p>
+              <p><strong>Fecha:</strong> ${new Date().toLocaleString('es-PY')}</p>
+            `
+          })
+        })
+      }
+    } catch { /* silencioso */ }
+
     return { statusCode: 200, body: JSON.stringify({ success: true }) }
   } catch (err: any) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) }
