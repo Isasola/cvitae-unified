@@ -2,13 +2,33 @@ import { Handler } from "@netlify/functions"
 import { createClient } from "@supabase/supabase-js"
 
 const handler: Handler = async (event) => {
-  if (event.httpMethod !== "POST") return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
+  }
 
   try {
     const { email, token_balance, plan_type } = JSON.parse(event.body || "{}")
+
+    if (!email) {
+      return { statusCode: 400, body: JSON.stringify({ error: "Email is required" }) }
+    }
+
     const token = `REC-${Math.random().toString(36).substring(2, 8).toUpperCase()}-${new Date().getFullYear()}`
 
-    const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!)
+    console.log("SUPABASE_URL:", process.env.SUPABASE_URL ? "OK" : "MISSING")
+    console.log("SUPABASE_ANON_KEY:", process.env.SUPABASE_ANON_KEY ? "OK" : "MISSING")
+    console.log("SUPABASE_KEY:", process.env.SUPABASE_KEY ? "OK" : "MISSING")
+    console.log("SUPABASE_SERVICE_ROLE_KEY:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "OK" : "MISSING")
+
+    const supabaseUrl = process.env.SUPABASE_URL!
+    const supabaseKey = process.env.SUPABASE_ANON_KEY!
+
+    if (!supabaseUrl || !supabaseKey) {
+      return { statusCode: 500, body: JSON.stringify({ error: "Missing Supabase credentials" }) }
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
     const { error } = await supabase.from("recruiter_tokens").insert([{
       email,
       token_balance: token_balance || 10,
@@ -17,10 +37,16 @@ const handler: Handler = async (event) => {
       is_active: true
     }])
 
-    if (error) return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
+    if (error) {
+      console.error("Supabase insert error:", error)
+      return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
+    }
+
     return { statusCode: 200, body: JSON.stringify({ token }) }
-  } catch (err: any) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message || "Error interno" }) }
+
+  } catch (error: any) {
+    console.error("generate-token error:", error)
+    return { statusCode: 500, body: JSON.stringify({ error: error.message || "Internal server error" }) }
   }
 }
 
