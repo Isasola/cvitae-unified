@@ -37,7 +37,7 @@ export function Navbar() {
         )}
       >
         <nav className="container mx-auto px-4 flex items-center justify-between">
-          <Logo size="md" showTagline={false} />
+          <Link href="/"><Logo size="md" showTagline={false} /></Link>
 
           <div className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (

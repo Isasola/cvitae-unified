@@ -43,7 +43,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-16 bg-background/90 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-4">
-        <Logo size="sm" showTagline={false} />
+        <Link href="/"><Logo size="sm" showTagline={false} /></Link>
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className="p-2 text-white hover:bg-white/5 rounded-lg transition-colors"
@@ -62,7 +62,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         )}
       >
         <div className="h-20 flex items-center justify-center border-b border-white/5">
-          <Logo size="md" showTagline={false} />
+          <Link href="/"><Logo size="md" showTagline={false} /></Link>
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">

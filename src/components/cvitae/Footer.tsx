@@ -40,7 +40,7 @@ export function Footer() {
       <div className="container mx-auto max-w-6xl">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-12 mb-16">
           <div className="col-span-2">
-            <Logo size="sm" className="mb-6" />
+            <Link href="/"><Logo size="sm" className="mb-6" /></Link>
             <p className="text-muted text-sm leading-relaxed max-w-xs mb-6">
               Empoderando el talento paraguayo con inteligencia artificial.
               Encontrá tu próximo paso profesional con CVitae.
