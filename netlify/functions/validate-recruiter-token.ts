@@ -31,7 +31,7 @@ const handler: Handler = async (event) => {
     // Buscar token
     const { data, error } = await supabase
       .from("recruiter_tokens")
-      .select("id, access_token, token_balance, is_active, metadata, company_name")
+      .select("id, email, access_token, token_balance, plan_type, is_active, created_at")
       .eq("access_token", token.trim())
       .eq("is_active", true)
       .single()
@@ -120,7 +120,7 @@ const handler: Handler = async (event) => {
       body: JSON.stringify({
         valid: true,
         balance: data.token_balance,
-        company_name: data.company_name || (data.metadata as any)?.company_name || "Empresa",
+        company_name: "Empresa",
         token_id: data.id,
       }),
     }
