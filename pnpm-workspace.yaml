@@ -1,0 +1,6 @@
+allowBuilds:
+  core-js: true
+  esbuild: true
+minimumReleaseAgeExclude:
+  - '@aws-sdk/client-bedrock-runtime@3.1072.0'
+  - '@aws-sdk/token-providers@3.1072.0'
