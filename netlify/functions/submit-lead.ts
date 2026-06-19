@@ -1,20 +1,39 @@
 import { Handler } from "@netlify/functions"
+import * as pdfParse from "pdf-parse"
 import { makeSupabaseAdmin } from "./_supabase"
 
 const SITE_URL = process.env.SITE_URL || "https://cvitae.lat"
 const RESEND_KEY = process.env.RESEND_API_KEY
 
 async function sendResendEmail(to: string, subject: string, html: string): Promise<boolean> {
-  if (!RESEND_KEY) return false
+  if (!RESEND_KEY) {
+    console.error("RESEND_API_KEY not set — skipping email")
+    return false
+  }
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: "CVitae <noreply@cvitae.lat>", to: [to], subject, html }),
     })
+    if (!res.ok) {
+      const body = await res.text()
+      console.error("Resend error", res.status, body)
+    }
     return res.ok
-  } catch {
+  } catch (e: any) {
+    console.error("Resend fetch error:", e.message)
     return false
+  }
+}
+
+async function extractCvText(base64: string): Promise<string> {
+  try {
+    const buf = Buffer.from(base64, "base64")
+    const data = await pdfParse.default(buf)
+    return (data.text || "").substring(0, 8000)
+  } catch {
+    return ""
   }
 }
 
@@ -114,13 +133,39 @@ const handler: Handler = async (event) => {
     const vacancySlug = source.replace("vacante:", "")
     const normalizedEmail = email.trim().toLowerCase()
 
-    // 1. Upsert candidate into user_master_profiles
+    // 1. Extract CV text for analysis (runs in parallel with profile upsert)
+    const cvText = cv_base64 ? await extractCvText(cv_base64) : ""
+
+    // 2. Look up vacancy id
+    const { data: vacancyRow } = await supabase
+      .from("recruiter_vacancies")
+      .select("id")
+      .eq("slug", vacancySlug)
+      .single()
+
+    // 3. Save application record (separate from user profile)
+    const { error: appError } = await supabase
+      .from("vacancy_applications")
+      .insert({
+        vacancy_id: vacancyRow?.id || null,
+        vacancy_slug: vacancySlug,
+        name: name || "",
+        email: normalizedEmail,
+        cv_text: cvText || null,
+        cv_file_name: cv_file_name || null,
+        cover_letter: cover_letter || null,
+      })
+
+    if (appError) {
+      console.error("insert vacancy_applications:", appError.message)
+    }
+
+    // 4. Upsert candidate into user_master_profiles
     const profilePayload: Record<string, any> = {
       email: normalizedEmail,
       full_name: name || null,
       updated_at: new Date().toISOString(),
     }
-    // Store cover letter and cv filename in profile_data jsonb
     const profileData: Record<string, any> = { vacancy_slug: vacancySlug }
     if (cover_letter) profileData.cover_letter = cover_letter
     if (cv_file_name) profileData.cv_file_name = cv_file_name

@@ -7,7 +7,8 @@ import {
   Coins, LogOut, Loader2, History, Sparkles,
   ChevronDown, ChevronUp, CheckCircle2, XCircle,
   Star, Brain, Users, Trophy, ArrowLeft, Share2, Database,
-  FileText, Upload, RotateCcw, X, Link2, Plus, Copy, Check as CheckIcon
+  FileText, Upload, RotateCcw, X, Link2, Plus, Copy, Check as CheckIcon,
+  UserCheck, Mail, Calendar, ChevronLeft
 } from 'lucide-react'
 
 const ease = [0.22, 1, 0.36, 1] as const
@@ -424,6 +425,147 @@ function ComparisonResultComponent({ result, onClose }: { result: ComparisonResu
   )
 }
 
+// ─── Applicants panel ─────────────────────────────────────────────────────────
+
+interface Applicant {
+  id: string
+  name: string
+  email: string
+  cv_file_name: string | null
+  cv_text: string | null
+  cover_letter: string | null
+  ats_score: number | null
+  applied_at: string
+}
+
+function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyze }: {
+  token: string
+  vacancyId: string
+  vacancyTitle: string
+  onBack: () => void
+  onAnalyze: (applicant: Applicant) => void
+}) {
+  const [applicants, setApplicants] = useState<Applicant[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/.netlify/functions/validate-recruiter-token', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, action: 'get_applicants', vacancy_id: vacancyId }),
+    })
+      .then(r => r.json())
+      .then(d => setApplicants(d.applicants || []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [vacancyId])
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="inline-flex items-center gap-1.5 text-xs text-white/40 hover:text-white transition-colors">
+          <ChevronLeft strokeWidth={1.5} className="h-4 w-4" /> Volver
+        </button>
+        <span className="text-white/20">·</span>
+        <span className="text-sm text-white/70 truncate">{vacancyTitle}</span>
+      </div>
+
+      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/40">
+        <span className="h-px w-8 bg-white/20" />
+        {loading ? 'Cargando…' : `${applicants.length} postulante${applicants.length !== 1 ? 's' : ''}`}
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16"><Loader2 className="animate-spin text-[#c9a84c]" /></div>
+      ) : applicants.length === 0 ? (
+        <div className="glass-card rounded-2xl py-16 text-center">
+          <UserCheck strokeWidth={1.25} className="mx-auto mb-4 h-10 w-10 text-white/20" />
+          <p className="text-sm font-light text-white/40">Todavía no hay postulantes para esta vacante.</p>
+          <p className="mt-1 text-xs text-white/25">Compartí el link de postulación para empezar a recibir CVs.</p>
+        </div>
+      ) : (
+        <ol className="space-y-3">
+          {applicants.map((a, i) => (
+            <motion.li
+              key={a.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: i * 0.04, ease }}
+              className="glass-card rounded-2xl overflow-hidden"
+            >
+              <div
+                className="flex items-center gap-4 px-5 py-4 cursor-pointer"
+                onClick={() => setExpandedId(expandedId === a.id ? null : a.id)}
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-sm font-display text-white/50">
+                  {String(i + 1).padStart(2, '0')}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white font-medium truncate">{a.name}</p>
+                  <div className="flex items-center gap-3 mt-0.5 text-xs text-white/35">
+                    <span className="flex items-center gap-1"><Mail strokeWidth={1.5} className="h-3 w-3" />{a.email}</span>
+                    <span className="flex items-center gap-1">
+                      <Calendar strokeWidth={1.5} className="h-3 w-3" />
+                      {new Date(a.applied_at).toLocaleDateString('es-PY')}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  {a.ats_score !== null && (
+                    <span className="font-display text-lg" style={{ color: a.ats_score >= 80 ? 'oklch(0.75 0.18 145)' : a.ats_score >= 60 ? 'oklch(0.78 0.13 82)' : 'oklch(0.65 0.22 25)' }}>
+                      {a.ats_score}
+                    </span>
+                  )}
+                  {a.cv_text && (
+                    <button
+                      onClick={e => { e.stopPropagation(); onAnalyze(a) }}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                    >
+                      <Brain strokeWidth={1.5} className="h-3 w-3" /> Analizar
+                    </button>
+                  )}
+                  {expandedId === a.id
+                    ? <ChevronUp strokeWidth={1.5} className="h-4 w-4 text-white/30" />
+                    : <ChevronDown strokeWidth={1.5} className="h-4 w-4 text-white/30" />
+                  }
+                </div>
+              </div>
+
+              <AnimatePresence>
+                {expandedId === a.id && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="px-5 pb-5 pt-0 border-t border-white/5"
+                  >
+                    <div className="pt-4 space-y-4">
+                      {a.cv_file_name && (
+                        <div className="flex items-center gap-2 text-xs text-white/40">
+                          <FileText strokeWidth={1.5} className="h-3.5 w-3.5" /> {a.cv_file_name}
+                        </div>
+                      )}
+                      {a.cover_letter && (
+                        <div>
+                          <p className="text-[10px] uppercase tracking-[0.18em] text-white/30 mb-1.5">Carta de interés</p>
+                          <p className="text-sm font-light text-white/60 leading-relaxed">{a.cover_letter}</p>
+                        </div>
+                      )}
+                      {!a.cv_text && (
+                        <p className="text-xs text-white/30 italic">CV enviado sin texto extraíble (imagen escaneada o archivo protegido).</p>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.li>
+          ))}
+        </ol>
+      )}
+    </div>
+  )
+}
+
 // ─── Vacancy creation panel ───────────────────────────────────────────────────
 
 interface VacancyRecord {
@@ -435,7 +577,7 @@ interface VacancyRecord {
   created_at: string
 }
 
-function VacancyPanel({ token }: { token: string }) {
+function VacancyPanel({ token, onAnalyzeApplicant }: { token: string; onAnalyzeApplicant: (cvText: string, name: string) => void }) {
   const [form, setForm] = useState({
     title: '', description: '', requirements: '',
     location: '', modality: 'Presencial', salary_range: '', company_name: '',
@@ -446,6 +588,7 @@ function VacancyPanel({ token }: { token: string }) {
   const [vacancies, setVacancies] = useState<VacancyRecord[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
+  const [selectedVacancy, setSelectedVacancy] = useState<VacancyRecord | null>(null)
 
   useEffect(() => { loadVacancies() }, [])
 
@@ -486,6 +629,20 @@ function VacancyPanel({ token }: { token: string }) {
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
+
+  if (selectedVacancy) {
+    return (
+      <ApplicantsPanel
+        token={token}
+        vacancyId={selectedVacancy.id}
+        vacancyTitle={selectedVacancy.title}
+        onBack={() => setSelectedVacancy(null)}
+        onAnalyze={applicant => {
+          if (applicant.cv_text) onAnalyzeApplicant(applicant.cv_text, applicant.name)
+        }}
+      />
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -595,19 +752,29 @@ function VacancyPanel({ token }: { token: string }) {
             {vacancies.map((v) => {
               const url = `https://cvitae.lat/vacante/${v.slug}`
               return (
-                <li key={v.id} className="glass-card flex items-center gap-4 rounded-2xl px-5 py-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm text-white font-medium">{v.title}</p>
-                    <p className="mt-0.5 text-xs font-light text-white/35">
-                      {v.location} · {v.modality} · {new Date(v.created_at).toLocaleDateString()}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-[#c9a84c]/70 font-mono">{url}</p>
+                <li key={v.id} className="glass-card rounded-2xl px-5 py-4">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-sm text-white font-medium">{v.title}</p>
+                      <p className="mt-0.5 text-xs font-light text-white/35">
+                        {v.location} · {v.modality} · {new Date(v.created_at).toLocaleDateString()}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-[#c9a84c]/70 font-mono">{url}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => setSelectedVacancy(v)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                      >
+                        <UserCheck strokeWidth={1.5} className="h-3.5 w-3.5" /> Postulantes
+                      </button>
+                      <button onClick={() => copyToClipboard(url, v.id)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/50 transition hover:border-[#c9a84c]/40 hover:text-[#c9a84c]">
+                        {copied === v.id ? <CheckIcon strokeWidth={2} className="h-3.5 w-3.5" /> : <Copy strokeWidth={1.5} className="h-3.5 w-3.5" />}
+                        {copied === v.id ? 'Copiado' : 'Link'}
+                      </button>
+                    </div>
                   </div>
-                  <button onClick={() => copyToClipboard(url, v.id)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/50 transition hover:border-[#c9a84c]/40 hover:text-[#c9a84c] shrink-0">
-                    {copied === v.id ? <CheckIcon strokeWidth={2} className="h-3.5 w-3.5" /> : <Copy strokeWidth={1.5} className="h-3.5 w-3.5" />}
-                    {copied === v.id ? 'Copiado' : 'Copiar link'}
-                  </button>
                 </li>
               )
             })}
@@ -632,6 +799,8 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   const [historyKey, setHistoryKey] = useState(0)
   const [comparison, setComparison] = useState<ComparisonResult | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [injectCvText, setInjectCvText] = useState<string | null>(null)
+  const [injectCandidateName, setInjectCandidateName] = useState<string>('')
 
   const handleFile = (f: File) => {
     const ok = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']
@@ -640,11 +809,9 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
     setFile(f); setResult(null); setError('')
   }
 
-  const handleAnalyze = async () => {
-    if (!file) return
+  const runAnalysis = async (cvText: string, fileName: string, candidateName: string) => {
     setAnalyzing(true); setError('')
     try {
-      const cvText = await extractTextFromFile(file)
       if (!cvText || cvText.trim().length < 50) throw new Error('No se pudo extraer texto del CV. Asegurate de que no sea una imagen escaneada.')
 
       const res = await fetch('/.netlify/functions/analyze-cv-candidate', {
@@ -659,8 +826,8 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
         body: JSON.stringify({
           token: session.token, action: 'save_analysis',
           analysisData: {
-            candidate_name: cvText.split('\n').find(l => l.trim().length > 2)?.trim() || null,
-            file_name: file.name,
+            candidate_name: candidateName || cvText.split('\n').find(l => l.trim().length > 2)?.trim() || null,
+            file_name: fileName,
             ats_score: data.atsScore,
             strengths: data.strengths,
             critical_improvements: data.criticalImprovements,
@@ -679,6 +846,20 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
     }
   }
 
+  const handleAnalyze = async () => {
+    if (!file) return
+    const cvText = await extractTextFromFile(file)
+    await runAnalysis(cvText, file.name, '')
+  }
+
+  const handleAnalyzeApplicant = (cvText: string, name: string) => {
+    setActiveTab('analyze')
+    setInjectCvText(cvText)
+    setInjectCandidateName(name)
+    setVacancyLabel(name)
+    setResult(null)
+  }
+
   const handleCompare = async (ids: string[]) => {
     try {
       const res = await fetch('/.netlify/functions/compare-candidates', {
@@ -691,7 +872,16 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
     } catch (err: any) { alert(err.message) }
   }
 
-  const handleReset = () => { setFile(null); setResult(null); setError(''); setVacancyLabel('') }
+  const handleReset = () => { setFile(null); setResult(null); setError(''); setVacancyLabel(''); setInjectCvText(null); setInjectCandidateName('') }
+
+  // When inject mode is active and user clicks Analizar, run directly on injected text
+  const handleAnalyzeOrInject = async () => {
+    if (injectCvText) {
+      await runAnalysis(injectCvText, `${injectCandidateName}.pdf`, injectCandidateName)
+    } else {
+      await handleAnalyze()
+    }
+  }
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
@@ -801,7 +991,20 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                         <span className="text-xs font-light text-white/30">PDF, DOCX, TXT · máx 5 MB</span>
                       </div>
 
-                      <div
+                      {injectCvText && (
+                        <div className="mt-6 flex items-center gap-3 rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] px-4 py-3">
+                          <UserCheck strokeWidth={1.5} className="h-4 w-4 text-[#c9a84c] shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white truncate">{injectCandidateName}</p>
+                            <p className="text-[11px] text-[#c9a84c]/70 mt-0.5">CV extraído de postulación · listo para analizar</p>
+                          </div>
+                          <button onClick={handleReset} className="text-white/30 hover:text-white transition-colors">
+                            <X strokeWidth={1.5} className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+
+                      {!injectCvText && <div
                         onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
                         onDragLeave={() => setIsDragging(false)}
                         onDrop={e => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
@@ -837,7 +1040,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                             <p className="text-xs font-light text-white/45">o hacé click para seleccionarlo</p>
                           </div>
                         )}
-                      </div>
+                      </div>}
 
                       <AnimatePresence>
                         {error && (
@@ -858,8 +1061,8 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                           )}
                         </p>
                         <button
-                          onClick={handleAnalyze}
-                          disabled={!file || analyzing || balance === 0}
+                          onClick={handleAnalyzeOrInject}
+                          disabled={(!file && !injectCvText) || analyzing || balance === 0}
                           className="group inline-flex items-center justify-center gap-2 rounded-full bg-[#c9a84c] px-6 py-3 text-sm font-medium text-[#0a0a0a] transition-all hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.6)] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/30 disabled:shadow-none"
                         >
                           {analyzing ? <><Loader2 strokeWidth={1.5} className="h-4 w-4 animate-spin" /> Analizando…</> : <><Brain strokeWidth={1.5} className="h-4 w-4" /> Analizar CV</>}
@@ -880,7 +1083,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
               </motion.div>
             ) : (
               <motion.div key="vacancies" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <VacancyPanel token={session.token} />
+                <VacancyPanel token={session.token} onAnalyzeApplicant={handleAnalyzeApplicant} />
               </motion.div>
             )}
           </AnimatePresence>

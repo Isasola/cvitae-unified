@@ -100,6 +100,33 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
+    // ─── Acción: Listar postulantes de una vacante ───
+    if (action === "get_applicants" && body.vacancy_id) {
+      // verify vacancy belongs to this token
+      const { data: vac } = await supabase
+        .from("recruiter_vacancies")
+        .select("id")
+        .eq("id", body.vacancy_id)
+        .eq("recruiter_token_id", data.id)
+        .single()
+
+      if (!vac) {
+        return { statusCode: 403, body: JSON.stringify({ error: "Vacante no pertenece a este token" }) }
+      }
+
+      const { data: applicants } = await supabase
+        .from("vacancy_applications")
+        .select("id, name, email, cv_file_name, cover_letter, ats_score, applied_at, cv_text")
+        .eq("vacancy_id", body.vacancy_id)
+        .order("applied_at", { ascending: false })
+        .limit(100)
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ applicants: applicants || [] }),
+      }
+    }
+
     // ─── Acción: Listar vacantes del reclutador ───
     if (action === "get_vacancies") {
       const { data: vacancies } = await supabase
