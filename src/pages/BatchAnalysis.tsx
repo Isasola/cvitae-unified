@@ -69,7 +69,7 @@ export default function BatchAnalysis() {
 
   useEffect(() => {
     const s = localStorage.getItem('recruiter_session')
-    if (!s) setLocation('/reclutadores')
+    if (!s) setLocation('/empresas')
     else setSession(JSON.parse(s))
   }, [])
 
@@ -179,7 +179,7 @@ export default function BatchAnalysis() {
   const progressPct = candidates.length > 0 ? Math.round((doneCount / candidates.length) * 100) : 0
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
+    <div className="min-h-screen bg-background">
       <Helmet>
         <title>Análisis Masivo de CVs | CVitae Empresas</title>
         <meta name="description" content="Analizá hasta 30 CVs en lote con IA. Ranking comparativo, score ATS y recomendación de contratación automática." />
@@ -189,12 +189,12 @@ export default function BatchAnalysis() {
       
       <main className="container mx-auto max-w-5xl px-4 py-24 relative z-10">
         <div className="flex items-center justify-between mb-8">
-          <button onClick={() => setLocation('/reclutadores')} className="flex items-center gap-2 text-[#888888] hover:text-white transition-colors">
+          <button onClick={() => setLocation('/empresas')} className="flex items-center gap-2 text-muted hover:text-white transition-colors">
             <ArrowLeft size={20} /> Volver al panel
           </button>
           <div className="text-right">
-            <p className="text-[#c9a84c] font-bold">{session?.company_name || 'Empresa'}</p>
-            <p className="text-xs text-[#555555]">Créditos: {session?.balance || 0}</p>
+            <p className="text-gold font-bold">{session?.company_name || 'Empresa'}</p>
+            <p className="text-xs text-muted/70">Créditos: {session?.balance || 0}</p>
           </div>
         </div>
 
@@ -203,42 +203,42 @@ export default function BatchAnalysis() {
           <div className="lg:col-span-1 space-y-6">
             <GlassCard>
               <h2 className="text-white font-bold mb-4 flex items-center gap-2">
-                <Briefcase size={18} className="text-[#c9a84c]" /> Configuración
+                <Briefcase size={18} className="text-gold" /> Configuración
               </h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs text-[#888888] mb-1.5 uppercase tracking-wider">Nombre del Puesto *</label>
+                  <label className="block text-xs text-muted mb-1.5 uppercase tracking-wider">Nombre del Puesto *</label>
                   <input type="text" value={jobTitle} onChange={e => setJobTitle(e.target.value)}
                     placeholder="Ej: Desarrollador Fullstack Senior"
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#333] focus:outline-none focus:border-[#c9a84c]/50 text-sm" />
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#333] focus:outline-none focus:border-gold/50 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs text-[#888888] mb-1.5 uppercase tracking-wider">Descripción / Requisitos</label>
+                  <label className="block text-xs text-muted mb-1.5 uppercase tracking-wider">Descripción / Requisitos</label>
                   <textarea value={jobDesc} onChange={e => setJobDesc(e.target.value)}
                     placeholder="Pegá los requisitos clave para un mejor análisis..."
-                    className="w-full h-32 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#333] focus:outline-none focus:border-[#c9a84c]/50 text-sm resize-none" />
+                    className="w-full h-32 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#333] focus:outline-none focus:border-gold/50 text-sm resize-none" />
                 </div>
               </div>
             </GlassCard>
 
             <GlassCard>
               <h2 className="text-white font-bold mb-4 flex items-center gap-2">
-                <Upload size={18} className="text-[#c9a84c]" /> Subir CVs
+                <Upload size={18} className="text-gold" /> Subir CVs
               </h2>
               <input type="file" multiple accept=".pdf,.txt" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
               <button onClick={() => fileInputRef.current?.click()} 
-                className="w-full py-8 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-3 hover:border-[#c9a84c]/30 hover:bg-[#c9a84c]/5 transition-all group">
+                className="w-full py-8 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-3 hover:border-gold/30 hover:bg-gold/5 transition-all group">
                 <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Upload className="text-[#c9a84c]" size={24} />
+                  <Upload className="text-gold" size={24} />
                 </div>
-                <p className="text-sm text-[#888888]">Seleccioná múltiples PDFs</p>
+                <p className="text-sm text-muted">Seleccioná múltiples PDFs</p>
               </button>
               
               <div className="mt-6 space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                 {candidates.map(c => (
                   <div key={c.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
                     <div className="flex items-center gap-3 min-w-0">
-                      <FileText size={16} className="text-[#c9a84c] shrink-0" />
+                      <FileText size={16} className="text-gold shrink-0" />
                       <span className="text-xs text-white truncate">{c.file.name}</span>
                     </div>
                     <button onClick={() => removeCandidate(c.id)} className="text-[#555] hover:text-red-400 transition-colors">
@@ -261,15 +261,15 @@ export default function BatchAnalysis() {
             {isProcessing && (
               <GlassCard className="py-12 text-center overflow-hidden">
                 <h3 className="text-xl font-bold text-white mb-1" style={{ fontFamily: 'Playfair Display, serif' }}>Procesando Candidatos</h3>
-                <p className="text-[#888888] text-sm mb-8">La IA está leyendo y evaluando cada CV. Esto puede demorar un minuto.</p>
+                <p className="text-muted text-sm mb-8">La IA está leyendo y evaluando cada CV. Esto puede demorar un minuto.</p>
                 <div className="flex justify-center mb-4">
                   <ProgressLine percentage={progressPct} width={400} height={60} animated />
                 </div>
-                <p className="text-[#c9a84c] text-sm font-semibold">{doneCount} / {candidates.length} analizados</p>
+                <p className="text-gold text-sm font-semibold">{doneCount} / {candidates.length} analizados</p>
                 <div className="mt-6 flex justify-center gap-2 flex-wrap">
                   {candidates.map(c => (
                     <div key={c.id} title={c.file.name} className={`w-2 h-2 rounded-full ${
-                      c.status === 'done' ? 'bg-[#c9a84c]' :
+                      c.status === 'done' ? 'bg-gold' :
                       c.status === 'pending' ? 'bg-white/10' : 'bg-white/40 animate-pulse'
                     }`} />
                   ))}
@@ -279,17 +279,17 @@ export default function BatchAnalysis() {
 
             {summary && (
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                <GlassCard className="bg-gradient-to-br from-[#c9a84c]/20 to-transparent border-[#c9a84c]/30">
+                <GlassCard className="bg-gradient-to-br from-gold/20 to-transparent border-gold/30">
                   <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-                    <Sparkles className="text-[#c9a84c]" /> Veredicto de la IA
+                    <Sparkles className="text-gold" /> Veredicto de la IA
                   </h2>
                   <div className="space-y-4">
                     <div className="p-4 bg-white/5 rounded-2xl">
-                      <p className="text-[#c9a84c] text-xs font-bold uppercase tracking-widest mb-2">Recomendación Final</p>
+                      <p className="text-gold text-xs font-bold uppercase tracking-widest mb-2">Recomendación Final</p>
                       <p className="text-white text-lg leading-relaxed">{summary.finalRecommendation}</p>
                     </div>
                     <div className="p-4 bg-white/5 rounded-2xl">
-                      <p className="text-[#888888] text-xs font-bold uppercase tracking-widest mb-2">Diagnóstico del Pool</p>
+                      <p className="text-muted text-xs font-bold uppercase tracking-widest mb-2">Diagnóstico del Pool</p>
                       <p className="text-white/80 leading-relaxed">{summary.hiringInsight}</p>
                     </div>
                   </div>
@@ -297,11 +297,11 @@ export default function BatchAnalysis() {
 
                 <div className="grid md:grid-cols-2 gap-4">
                   <GlassCard>
-                    <h3 className="text-white font-bold mb-4 flex items-center gap-2"><Users size={18} className="text-[#c9a84c]" /> Orden de Entrevista</h3>
+                    <h3 className="text-white font-bold mb-4 flex items-center gap-2"><Users size={18} className="text-gold" /> Orden de Entrevista</h3>
                     <div className="space-y-3">
                       {summary.interviewOrder.map((name, i) => (
                         <div key={i} className="flex items-center gap-4 p-3 bg-white/5 rounded-xl">
-                          <span className="w-6 h-6 rounded-full bg-[#c9a84c] flex items-center justify-center text-[#0a0a0a] font-bold text-xs">{i+1}</span>
+                          <span className="w-6 h-6 rounded-full bg-gold flex items-center justify-center text-[#0a0a0a] font-bold text-xs">{i+1}</span>
                           <span className="text-white font-medium">{name}</span>
                         </div>
                       ))}
@@ -311,19 +311,19 @@ export default function BatchAnalysis() {
                   <div className="space-y-4">
                     {candidates.filter(c => c.status === 'done').sort((a,b) => (b.result?.fitScore || 0) - (a.result?.fitScore || 0)).slice(0, 3).map((c, i) => (
                       <div key={c.id} className={`p-4 rounded-2xl flex items-center justify-between border ${
-                        i === 0 ? 'border-[#c9a84c] bg-[#c9a84c]/5' :
-                        i === 1 ? 'border-[#c9a84c]/40 bg-white/5' :
+                        i === 0 ? 'border-gold bg-gold/5' :
+                        i === 1 ? 'border-gold/40 bg-white/5' :
                         'border-white/10 bg-white/5'
                       }`}>
                         <div className="flex items-center gap-2">
-                          {i === 0 && <Star size={14} className="text-[#c9a84c] fill-current shrink-0" />}
+                          {i === 0 && <Star size={14} className="text-gold fill-current shrink-0" />}
                           <div>
                             <p className="text-white font-bold" style={i === 0 ? { fontFamily: 'Playfair Display, serif' } : {}}>{c.result.candidateName || c.file.name}</p>
-                            <p className="text-xs text-[#888888]">{c.result.recommendation}</p>
+                            <p className="text-xs text-muted">{c.result.recommendation}</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-2xl font-bold text-[#c9a84c]">{c.result.fitScore}%</p>
+                          <p className="text-2xl font-bold text-gold">{c.result.fitScore}%</p>
                           <p className="text-[10px] text-[#555] uppercase">Fit Score</p>
                         </div>
                       </div>
@@ -350,7 +350,7 @@ export default function BatchAnalysis() {
                          <p className="text-white font-bold truncate pr-2">{c.result.candidateName || c.file.name}</p>
                          <Badge variant="gold">{c.result.fitScore}%</Badge>
                        </div>
-                       <p className="text-[#888888] text-xs line-clamp-3 mb-4">{c.result.summary}</p>
+                       <p className="text-muted text-xs line-clamp-3 mb-4">{c.result.summary}</p>
                        <div className="flex flex-wrap gap-1">
                          {c.result.keyMatches?.slice(0, 3).map((s: string, i: number) => (
                            <span key={i} className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded text-[10px]">{s}</span>

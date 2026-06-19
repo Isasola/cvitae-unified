@@ -129,14 +129,14 @@ export function ScoreLine({ percentage, className = '' }: ScoreLineProps) {
         style={{ top: '4px' }}
       >
         <motion.span
-          className="text-2xl font-bold text-[#c9a84c]"
+          className="text-2xl font-bold text-gold"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.8 }}
         >
           {percentage}%
         </motion.span>
-        <span className="text-[10px] text-[#888888] uppercase tracking-wider">empleabilidad</span>
+        <span className="text-[10px] text-muted uppercase tracking-wider">empleabilidad</span>
       </div>
     </div>
   )

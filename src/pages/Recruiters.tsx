@@ -128,28 +128,28 @@ function TokenLogin({ onSuccess }: { onSuccess: (session: RecruiterSession) => v
   return (
     <section className="relative min-h-screen flex items-center justify-center px-4">
       <DotGrid />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#c9a84c]/5 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gold/5 rounded-full blur-[100px] pointer-events-none" />
       <motion.div className="relative z-10 w-full max-w-md" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}>
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#c9a84c]/10 border border-[#c9a84c]/20 mb-6">
-            <Building2 className="text-[#c9a84c]" size={32} />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gold/10 border border-gold/20 mb-6">
+            <Building2 className="text-gold" size={32} />
           </div>
           <Badge variant="gold" className="mb-4"><Star className="w-3 h-3 fill-current" />Panel Empresas · Beta</Badge>
           <h1 className="text-3xl font-bold text-white mb-3" style={{ fontFamily: 'Playfair Display, serif' }}>Panel de Reclutadores</h1>
-          <p className="text-[#888888] leading-relaxed">Analizá CVs con IA, guardá el historial y encontrá al candidato ideal en segundos.</p>
+          <p className="text-muted leading-relaxed">Analizá CVs con IA, guardá el historial y encontrá al candidato ideal en segundos.</p>
         </div>
         <GlassCard className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-white/70 mb-2">Token de acceso</label>
             <div className="relative">
-              <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-[#555555]" size={16} />
+              <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-muted/70" size={16} />
               <input
                 type="text"
                 value={token}
                 onChange={e => setToken(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleValidate()}
                 placeholder="REC-XXXXX-2026"
-                className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555555] focus:outline-none focus:border-[#c9a84c]/50 transition-all font-mono text-sm"
+                className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555555] focus:outline-none focus:border-gold/50 transition-all font-mono text-sm"
               />
             </div>
           </div>
@@ -165,9 +165,9 @@ function TokenLogin({ onSuccess }: { onSuccess: (session: RecruiterSession) => v
           <GoldButton onClick={handleValidate} disabled={loading || !token.trim()} className="w-full" size="lg">
             {loading ? <><Loader2 className="animate-spin" size={16} />Verificando...</> : <>Acceder al panel<ChevronRight size={18} /></>}
           </GoldButton>
-          <p className="text-center text-xs text-[#444444]">
+          <p className="text-center text-xs text-muted/60">
             ¿No tenés token?{' '}
-            <a href="/#empresas" className="text-[#c9a84c] hover:underline">Solicitá acceso a la Beta</a>
+            <a href="/#empresas" className="text-gold hover:underline">Solicitá acceso a la Beta</a>
           </p>
         </GlassCard>
       </motion.div>
@@ -196,7 +196,7 @@ function ScoreRing({ score, size = 120 }: { score: number; size?: number }) {
           <motion.span className="text-3xl font-bold" style={{ color }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
             {score}
           </motion.span>
-          <span className="text-xs text-[#666666]">/ 100</span>
+          <span className="text-xs text-muted/80">/ 100</span>
         </div>
       </div>
       <span className="mt-3 text-sm font-medium" style={{ color }}>{scoreLabel(score)}</span>
@@ -218,7 +218,7 @@ function AnalysisResult({ result, fileName, vacancyLabel, onReset }: {
             <p className="text-white font-semibold truncate">{fileName}</p>
             {vacancyLabel && <Badge variant="gold" className="shrink-0">{vacancyLabel}</Badge>}
           </div>
-          <p className="text-[#888888] text-sm leading-relaxed">
+          <p className="text-muted text-sm leading-relaxed">
             Score ATS — indica qué tan bien pasa el CV los filtros automáticos. Mayor a 80 es ideal para posiciones competitivas.
           </p>
           {result.recommendation && (
@@ -227,7 +227,7 @@ function AnalysisResult({ result, fileName, vacancyLabel, onReset }: {
             </div>
           )}
           <div className="flex justify-center sm:justify-start mt-4">
-            <button onClick={onReset} className="flex items-center gap-2 text-xs text-[#c9a84c] hover:text-white transition-colors">
+            <button onClick={onReset} className="flex items-center gap-2 text-xs text-gold hover:text-white transition-colors">
               <RotateCcw size={14} />Analizar otro CV
             </button>
           </div>
@@ -317,19 +317,19 @@ function HistoryPanel({ token, onToggleStar, onCompare }: { token: string; onTog
     )
   }
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#c9a84c]" /></div>
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-gold" /></div>
 
   return (
     <div className="space-y-4">
       {history.length === 0 ? (
         <GlassCard className="text-center py-20">
           <History size={40} className="text-[#333333] mx-auto mb-4" />
-          <p className="text-[#666666]">No hay análisis guardados aún.</p>
+          <p className="text-muted/80">No hay análisis guardados aún.</p>
         </GlassCard>
       ) : (
         <>
           <div className="flex justify-between items-center">
-            <GoldButton href="/reclutadores/batch" variant="outline" size="sm">
+            <GoldButton href="/empresas/masivo" variant="outline" size="sm">
               <Sparkles size={14} /> Análisis Masivo (NUEVO)
             </GoldButton>
             {selectedIds.length >= 2 && (
@@ -340,7 +340,7 @@ function HistoryPanel({ token, onToggleStar, onCompare }: { token: string; onTog
           </div>
           <div className="space-y-3">
             {history.map(record => (
-              <GlassCard key={record.id} className="group hover:border-[#c9a84c]/30 transition-all">
+              <GlassCard key={record.id} className="group hover:border-gold/30 transition-all">
                 <div className="flex items-center gap-3">
                   <input
                     type="checkbox"
@@ -354,11 +354,11 @@ function HistoryPanel({ token, onToggleStar, onCompare }: { token: string; onTog
                       <p className="text-white font-medium truncate">{record.candidate_name || record.file_name}</p>
                       {record.vacancy_label && <Badge variant="gold" className="text-[10px] py-0">{record.vacancy_label}</Badge>}
                     </div>
-                    <p className="text-[#555555] text-xs">
+                    <p className="text-muted/70 text-xs">
                       {new Date(record.created_at).toLocaleDateString()} · {record.file_name}
                     </p>
                   </div>
-                  <button onClick={() => toggleStar(record.id)} className={`p-2 rounded-lg transition-colors ${record.is_starred ? 'text-[#c9a84c]' : 'text-[#333333] hover:text-[#c9a84c]'}`}>
+                  <button onClick={() => toggleStar(record.id)} className={`p-2 rounded-lg transition-colors ${record.is_starred ? 'text-gold' : 'text-[#333333] hover:text-gold'}`}>
                     <Star size={18} fill={record.is_starred ? 'currentColor' : 'none'} />
                   </button>
                   <button onClick={() => setExpandedId(expandedId === record.id ? null : record.id)} className="p-2 text-[#333333] hover:text-white transition-colors">
@@ -490,7 +490,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   const handleReset = () => { setFile(null); setResult(null); setError(''); setVacancyLabel('') }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a]">
+    <main className="min-h-screen bg-background">
       <Navbar />
       <div className="relative pt-24 pb-16 px-4">
         <DotGrid />
@@ -502,13 +502,13 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
             <div>
               <Badge variant="gold" className="mb-2"><Building2 size={12} />Panel Empresas</Badge>
               <h1 className="text-2xl font-bold text-white">{session.company_name}</h1>
-              <p className="text-[#666666] text-sm mt-1">Analizador de CV con inteligencia artificial</p>
+              <p className="text-muted/80 text-sm mt-1">Analizador de CV con inteligencia artificial</p>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/10 rounded-xl">
-                <Coins className="text-[#c9a84c]" size={16} />
+                <Coins className="text-gold" size={16} />
                 <span className="text-white font-semibold">{balance}</span>
-                <span className="text-[#555555] text-sm">créditos</span>
+                <span className="text-muted/70 text-sm">créditos</span>
               </div>
               <GoldButton variant="ghost" size="sm" onClick={onLogout}><LogOut size={14} />Salir</GoldButton>
             </div>
@@ -518,7 +518,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
           <div className="flex gap-2 mb-6">
             {([['analyze', 'Analizar CV', Brain], ['history', 'Historial', History]] as const).map(([tab, label, Icon]) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === tab ? 'bg-[#c9a84c] text-[#0a0a0a]' : 'bg-white/5 text-[#888888] hover:bg-white/10'}`}>
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === tab ? 'bg-gold text-[#0a0a0a]' : 'bg-white/5 text-muted hover:bg-white/10'}`}>
                 <Icon size={15} />{label}
               </button>
             ))}
@@ -534,16 +534,16 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                     {/* Instrucciones */}
                     <GlassCard>
                       <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-[#c9a84c]/10 flex items-center justify-center shrink-0">
-                          <Brain className="text-[#c9a84c]" size={20} />
+                        <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center shrink-0">
+                          <Brain className="text-gold" size={20} />
                         </div>
                         <div>
                           <h2 className="text-white font-semibold mb-1">¿Cómo funciona?</h2>
-                          <p className="text-[#888888] text-sm leading-relaxed">
+                          <p className="text-muted text-sm leading-relaxed">
                             Subí el CV de un candidato (PDF, DOCX o TXT). La IA analiza en segundos y devuelve un{' '}
                             <strong className="text-white">score ATS (0–100)</strong>, puntos fuertes, mejoras críticas y una recomendación automática.
                             Cada análisis se guarda automáticamente en tu historial y consume{' '}
-                            <strong className="text-[#c9a84c]">1 crédito</strong>.
+                            <strong className="text-gold">1 crédito</strong>.
                           </p>
                         </div>
                       </div>
@@ -552,22 +552,22 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                     {/* Etiqueta de vacante (opcional) */}
                     <div>
                       <label className="block text-sm font-medium text-white/60 mb-2">
-                        ¿Para qué puesto es este CV? <span className="text-[#444444]">(opcional, para organizar el historial)</span>
+                        ¿Para qué puesto es este CV? <span className="text-muted/60">(opcional, para organizar el historial)</span>
                       </label>
                       <input
                         type="text"
                         value={vacancyLabel}
                         onChange={e => setVacancyLabel(e.target.value)}
                         placeholder="Ej: Desarrollador React · Junio 2026"
-                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#3a3a3a] focus:outline-none focus:border-[#c9a84c]/50 transition-all text-sm"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#3a3a3a] focus:outline-none focus:border-gold/50 transition-all text-sm"
                       />
                     </div>
 
                     {/* Drop zone */}
                     <div
                       className={`relative border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 cursor-pointer ${
-                        isDragging ? 'border-[#c9a84c] bg-[#c9a84c]/5'
-                        : file ? 'border-[#c9a84c]/40 bg-[#c9a84c]/[0.03]'
+                        isDragging ? 'border-gold bg-gold/5'
+                        : file ? 'border-gold/40 bg-gold/[0.03]'
                         : 'border-white/10 hover:border-white/20 hover:bg-white/[0.02]'
                       }`}
                       onClick={() => !file && fileRef.current?.click()}
@@ -580,27 +580,27 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                       <AnimatePresence mode="wait">
                         {file ? (
                           <motion.div key="file" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center gap-3">
-                            <div className="w-14 h-14 rounded-2xl bg-[#c9a84c]/10 flex items-center justify-center">
-                              <FileText className="text-[#c9a84c]" size={28} />
+                            <div className="w-14 h-14 rounded-2xl bg-gold/10 flex items-center justify-center">
+                              <FileText className="text-gold" size={28} />
                             </div>
                             <div>
                               <p className="text-white font-semibold">{file.name}</p>
-                              <p className="text-[#555555] text-sm mt-1">{(file.size / 1024).toFixed(0)} KB · listo para analizar</p>
+                              <p className="text-muted/70 text-sm mt-1">{(file.size / 1024).toFixed(0)} KB · listo para analizar</p>
                             </div>
-                            <button onClick={e => { e.stopPropagation(); handleReset() }} className="text-xs text-[#444444] hover:text-white transition-colors">
+                            <button onClick={e => { e.stopPropagation(); handleReset() }} className="text-xs text-muted/60 hover:text-white transition-colors">
                               Cambiar archivo
                             </button>
                           </motion.div>
                         ) : (
                           <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center gap-3">
                             <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center">
-                              <Upload className="text-[#555555]" size={28} />
+                              <Upload className="text-muted/70" size={28} />
                             </div>
                             <div>
                               <p className="text-white font-medium">Arrastrá el CV acá</p>
-                              <p className="text-[#555555] text-sm mt-1">o hacé clic para seleccionar</p>
+                              <p className="text-muted/70 text-sm mt-1">o hacé clic para seleccionar</p>
                             </div>
-                            <p className="text-[#3a3a3a] text-xs">PDF, DOCX o TXT · máx. 5 MB</p>
+                            <p className="text-muted/50 text-xs">PDF, DOCX o TXT · máx. 5 MB</p>
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -624,9 +624,9 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                       </GoldButton>
                     </div>
                     {balance === 0 && (
-                      <p className="text-center text-sm text-[#555555]">
+                      <p className="text-center text-sm text-muted/70">
                         Necesitás más créditos.{' '}
-                        <a href="mailto:hola@cvitae.lat" className="text-[#c9a84c] hover:underline">Contactá a CVitae</a>
+                        <a href="mailto:hola@cvitae.lat" className="text-gold hover:underline">Contactá a CVitae</a>
                       </p>
                     )}
                   </div>
@@ -662,14 +662,14 @@ function ComparisonResultComponent({ result, onClose }: { result: ComparisonResu
     <GlassCard>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-white">Resultado de comparación</h2>
-        <button onClick={onClose} className="text-[#888888] hover:text-white">Cerrar</button>
+        <button onClick={onClose} className="text-muted hover:text-white">Cerrar</button>
       </div>
       <div className="space-y-6">
         {result.top3.map((c, i) => (
-          <div key={i} className={`p-4 rounded-xl border ${i === 0 ? 'border-[#c9a84c] bg-[#c9a84c]/5' : 'bg-white/5 border-white/10'}`}>
+          <div key={i} className={`p-4 rounded-xl border ${i === 0 ? 'border-gold bg-gold/5' : 'bg-white/5 border-white/10'}`}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                {i === 0 && <Star size={14} className="text-[#c9a84c] fill-current" />}
+                {i === 0 && <Star size={14} className="text-gold fill-current" />}
                 <span className="text-white font-bold text-lg" style={i === 0 ? { fontFamily: 'Playfair Display, serif' } : {}}>{c.name || `Candidato ${i+1}`}</span>
               </div>
               <span className="text-lg font-bold" style={{ color: scoreColor(c.score) }}>{c.score}</span>
@@ -679,12 +679,12 @@ function ComparisonResultComponent({ result, onClose }: { result: ComparisonResu
                 <Badge key={j} variant="gold">{s}</Badge>
               ))}
             </div>
-            <p className="text-[#888888] text-sm">{c.reason}</p>
+            <p className="text-muted text-sm">{c.reason}</p>
           </div>
         ))}
-        <div className="p-4 bg-[#c9a84c]/10 border border-[#c9a84c]/20 rounded-xl">
+        <div className="p-4 bg-gold/10 border border-gold/20 rounded-xl">
           <p className="text-white font-semibold mb-2">Recomendación final</p>
-          <p className="text-[#c9a84c] text-sm">{result.finalRecommendation}</p>
+          <p className="text-gold text-sm">{result.finalRecommendation}</p>
         </div>
       </div>
     </GlassCard>
@@ -697,7 +697,7 @@ export default function Recruiters() {
   const [session, setSession] = useState<RecruiterSession | null>(null)
   if (!session) {
     return (
-      <main className="min-h-screen bg-[#0a0a0a]">
+      <main className="min-h-screen bg-background">
         <Helmet>
           <title>Panel de Reclutadores | CVitae</title>
           <meta name="description" content="Analizá CVs con IA, guardá el historial y encontrá al candidato ideal en segundos." />

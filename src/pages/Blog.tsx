@@ -35,7 +35,7 @@ export default function Blog() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
+    <div className="min-h-screen bg-background">
       <Helmet>
         <title>Blog | Consejos de Carrera y Mercado Laboral — CVitae</title>
         <meta name="description" content="Artículos sobre mercado laboral paraguayo, consejos para mejorar tu CV, entrevistas y tendencias de empleo en Latinoamérica." />
@@ -43,7 +43,7 @@ export default function Blog() {
       <Navbar />
       <div className="pt-32 pb-20 px-4 max-w-4xl mx-auto">
         <div className="mb-8">
-          <Link href="/" className="text-[#c9a84c] flex items-center gap-2 hover:underline text-sm">
+          <Link href="/" className="text-gold flex items-center gap-2 hover:underline text-sm">
             <ArrowLeft size={16} /> Volver al inicio
           </Link>
         </div>
@@ -52,9 +52,9 @@ export default function Blog() {
         </motion.div>
 
         {loading ? (
-          <div className="text-center py-12"><div className="w-8 h-8 border-4 border-[#c9a84c] border-t-transparent rounded-full animate-spin mx-auto" /></div>
+          <div className="text-center py-12"><div className="w-8 h-8 border-4 border-gold border-t-transparent rounded-full animate-spin mx-auto" /></div>
         ) : posts.length === 0 ? (
-          <p className="text-[#888888] text-center py-12">No hay artículos publicados.</p>
+          <p className="text-muted text-center py-12">No hay artículos publicados.</p>
         ) : (
           <div className="space-y-6">
             {posts.map((post) => (
@@ -66,13 +66,13 @@ export default function Blog() {
                 )}
                 <div className="flex items-center gap-2 mb-3">
                   <Badge variant="gold">{post.categoria}</Badge>
-                  <span className="text-xs text-[#888888] flex items-center gap-1">
+                  <span className="text-xs text-muted flex items-center gap-1">
                     <Calendar size={12} />
                     {new Date(post.fecha_vencimiento).toLocaleDateString()}
                   </span>
                 </div>
-                <h2 className="text-xl font-bold text-white mb-2 group-hover:text-[#c9a84c] transition-colors">{post.titulo}</h2>
-                <p className="text-[#888888] text-sm line-clamp-2">
+                <h2 className="text-xl font-bold text-white mb-2 group-hover:text-gold transition-colors">{post.titulo}</h2>
+                <p className="text-muted text-sm line-clamp-2">
                   {post.cuerpo?.replace(/[#*`>]/g, '').substring(0, 150)}...
                 </p>
               </GlassCard>

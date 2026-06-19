@@ -81,7 +81,7 @@ function HeroSection() {
         {/* Logo/Title with Playfair Display */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="mb-6">
           <h1 className="text-6xl md:text-8xl leading-none tracking-tight" style={{ fontFamily: 'Playfair Display, serif' }}>
-            <span className="font-black text-[#c9a84c]">CV</span><span className="font-normal italic text-white">itae</span>
+            <span className="font-black text-gold">CV</span><span className="font-normal italic text-white">itae</span>
           </h1>
         </motion.div>
 
@@ -92,7 +92,7 @@ function HeroSection() {
           El ecosistema de talento con IA para Paraguay y Latinoamérica.
         </motion.p>
         <motion.p
-          className="text-base md:text-lg text-[#888888] font-light leading-relaxed max-w-xl mx-auto mb-12"
+          className="text-base md:text-lg text-muted font-light leading-relaxed max-w-xl mx-auto mb-12"
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}
         >
           Candidatos que consiguen el trabajo ideal. Empresas que encuentran al candidato perfecto.
@@ -106,12 +106,12 @@ function HeroSection() {
           <AnimatePresence mode="wait">
             {step === 'sent' ? (
               <motion.div key="sent" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                className="border border-[#c9a84c] bg-[#c9a84c]/5 rounded-2xl p-8 text-center">
+                className="border border-gold bg-gold/5 rounded-2xl p-8 text-center">
                 <div className="text-4xl mb-4">🎉</div>
                 <h3 className="text-white font-bold text-xl mb-2" style={{ fontFamily: 'Playfair Display, serif' }}>
                   ¡Revisá tu correo!
                 </h3>
-                <p className="text-[#888888] text-sm">
+                <p className="text-muted text-sm">
                   Te enviamos un enlace mágico a <strong className="text-white">{email}</strong>.
                   Tu CV queda guardado para cuando ingreses.
                 </p>
@@ -128,7 +128,7 @@ function HeroSection() {
                   onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
                   className={`flex items-center gap-3 p-4 rounded-xl border transition-all cursor-pointer ${
                     file
-                      ? 'border-[#c9a84c]/40 bg-[#c9a84c]/5'
+                      ? 'border-gold/40 bg-gold/5'
                       : 'border-dashed border-white/15 hover:border-white/30 hover:bg-white/[0.02]'
                   }`}
                 >
@@ -136,17 +136,17 @@ function HeroSection() {
                     onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
                   {file ? (
                     <>
-                      <FileText className="text-[#c9a84c] shrink-0" size={20} />
+                      <FileText className="text-gold shrink-0" size={20} />
                       <div className="flex-1 min-w-0 text-left">
                         <p className="text-white text-sm font-medium truncate">{file.name}</p>
-                        <p className="text-[#888888] text-xs">{(file.size / 1024).toFixed(0)} KB · listo</p>
+                        <p className="text-muted text-xs">{(file.size / 1024).toFixed(0)} KB · listo</p>
                       </div>
                       <button onClick={e => { e.stopPropagation(); setFile(null) }} className="text-[#555] hover:text-white text-xs transition-colors">cambiar</button>
                     </>
                   ) : (
                     <>
                       <Upload className="text-[#555] shrink-0" size={20} />
-                      <p className="text-[#888888] text-sm text-left">
+                      <p className="text-muted text-sm text-left">
                         Subí tu CV <span className="text-[#555]">— PDF, DOCX o TXT</span>
                       </p>
                     </>
@@ -161,7 +161,7 @@ function HeroSection() {
                   placeholder="tu@email.com"
                   disabled={step === 'loading'}
                   onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555] focus:outline-none focus:border-[#c9a84c]/50 transition-all text-sm"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555] focus:outline-none focus:border-gold/50 transition-all text-sm"
                 />
 
                 {errorMsg && <p className="text-red-400 text-sm text-left">{errorMsg}</p>}
@@ -186,10 +186,10 @@ function HeroSection() {
         </motion.div>
 
         <motion.div
-          className="flex flex-col sm:flex-row items-center justify-center gap-6 mt-10 text-sm text-[#888888]"
+          className="flex flex-col sm:flex-row items-center justify-center gap-6 mt-10 text-sm text-muted"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.4 }}
         >
-          <GoldButton href="/reclutadores" variant="ghost" size="sm">
+          <GoldButton href="/empresas" variant="ghost" size="sm">
             Soy empresa — ver herramientas B2B <ChevronRight size={14} />
           </GoldButton>
           <GoldButton href="/oportunidades" variant="ghost" size="sm">
@@ -206,14 +206,14 @@ function HeroSection() {
 function VirtuousCycleSection() {
   return (
     <section className="relative py-24 px-4 overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-[#c9a84c]/4 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-gold/4 rounded-full blur-[120px] pointer-events-none" />
       <div className="container mx-auto max-w-5xl relative z-10">
         <motion.div className="text-center mb-16" initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
           <Badge variant="gold" className="mb-4">El ecosistema</Badge>
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>
             Dos lados que se potencian
           </h2>
-          <p className="text-[#888888] max-w-xl mx-auto leading-relaxed">
+          <p className="text-muted max-w-xl mx-auto leading-relaxed">
             Cada vacante publicada por una empresa alimenta la base de candidatos B2C.
             Cada CV analizado enriquece el banco de talento B2B.
           </p>
@@ -222,10 +222,10 @@ function VirtuousCycleSection() {
         <div className="grid md:grid-cols-2 gap-6 items-stretch">
           {/* B2C */}
           <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
-            className="border border-[#c9a84c]/20 bg-[#c9a84c]/5 rounded-2xl p-8">
+            className="border border-gold/20 bg-gold/5 rounded-2xl p-8">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-[#c9a84c]/10 flex items-center justify-center shrink-0">
-                <Briefcase className="text-[#c9a84c]" size={20} />
+              <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center shrink-0">
+                <Briefcase className="text-gold" size={20} />
               </div>
               <div>
                 <Badge variant="gold" className="text-[10px] mb-1">Para Candidatos</Badge>
@@ -241,7 +241,7 @@ function VirtuousCycleSection() {
                 'Recomendación de cursos para cerrar brechas',
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-3 text-sm text-white/80">
-                  <CheckCircle2 size={14} className="text-[#c9a84c] mt-0.5 shrink-0" />
+                  <CheckCircle2 size={14} className="text-gold mt-0.5 shrink-0" />
                   {item}
                 </li>
               ))}
@@ -256,7 +256,7 @@ function VirtuousCycleSection() {
             className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
-                <Building2 className="text-[#888888]" size={20} />
+                <Building2 className="text-muted" size={20} />
               </div>
               <div>
                 <Badge variant="muted" className="text-[10px] mb-1">Para Empresas · Beta</Badge>
@@ -272,7 +272,7 @@ function VirtuousCycleSection() {
                 'Cada link de postulación nutre la base B2C',
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-3 text-sm text-white/80">
-                  <CheckCircle2 size={14} className="text-[#888888] mt-0.5 shrink-0" />
+                  <CheckCircle2 size={14} className="text-muted mt-0.5 shrink-0" />
                   {item}
                 </li>
               ))}
@@ -284,10 +284,10 @@ function VirtuousCycleSection() {
         </div>
 
         {/* Arrow connecting both */}
-        <motion.div className="flex items-center justify-center mt-8 gap-4 text-[#888888] text-sm"
+        <motion.div className="flex items-center justify-center mt-8 gap-4 text-muted text-sm"
           initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.4 }}>
           <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#c9a84c]/30 to-transparent" />
-          <span className="shrink-0 text-[#c9a84c] font-medium px-3">el círculo virtuoso</span>
+          <span className="shrink-0 text-gold font-medium px-3">el círculo virtuoso</span>
           <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#c9a84c]/30 to-transparent" />
         </motion.div>
       </div>
@@ -314,7 +314,7 @@ function HowItWorksSection() {
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>
             De tu CV a tu próxima oportunidad
           </h2>
-          <p className="text-[#888888] max-w-2xl mx-auto">Un proceso simple que trabaja para vos las 24 horas</p>
+          <p className="text-muted max-w-2xl mx-auto">Un proceso simple que trabaja para vos las 24 horas</p>
         </motion.div>
 
         {/* Progress line threading through the steps */}
@@ -327,9 +327,9 @@ function HowItWorksSection() {
             <motion.div key={index} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * 0.1 }}>
               <GlassCard className="text-center h-full">
                 <div className="text-4xl mb-4">{step.icon}</div>
-                <span className="text-[#c9a84c] text-sm font-medium">Paso {index + 1}</span>
+                <span className="text-gold text-sm font-medium">Paso {index + 1}</span>
                 <h3 className="text-lg font-semibold text-white mt-2 mb-2" style={{ fontFamily: 'Playfair Display, serif' }}>{step.title}</h3>
-                <p className="text-[#888888] text-sm leading-relaxed">{step.description}</p>
+                <p className="text-muted text-sm leading-relaxed">{step.description}</p>
               </GlassCard>
             </motion.div>
           ))}
@@ -369,7 +369,7 @@ function PricingSection() {
         <motion.div className="text-center mb-16" initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
           <Badge variant="gold" className="mb-4">Precios</Badge>
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>Planes para cada etapa</h2>
-          <p className="text-[#888888] max-w-2xl mx-auto">Empezá gratis y escalá cuando estés listo</p>
+          <p className="text-muted max-w-2xl mx-auto">Empezá gratis y escalá cuando estés listo</p>
         </motion.div>
         <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
           {plans.map((plan, index) => (
@@ -378,7 +378,7 @@ function PricingSection() {
               initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * 0.1 }}
               className={`relative rounded-2xl p-6 transition-all duration-300 ${
                 plan.popular
-                  ? 'bg-[#c9a84c]/5 border-2 border-[#c9a84c] shadow-[0_0_40px_rgba(201,168,76,0.2)] scale-105 z-10'
+                  ? 'bg-gold/5 border-2 border-gold shadow-[0_0_40px_rgba(201,168,76,0.2)] scale-105 z-10'
                   : 'bg-white/[0.03] backdrop-blur-xl border border-white/10'
               }`}
             >
@@ -390,15 +390,15 @@ function PricingSection() {
               <div className="text-center mb-6 pt-4">
                 <h3 className="text-xl font-bold text-white mb-2" style={{ fontFamily: 'Playfair Display, serif' }}>{plan.name}</h3>
                 <div className="flex items-baseline justify-center gap-1">
-                  <span className="text-4xl font-bold text-[#c9a84c]">{plan.price}</span>
-                  {plan.period && <span className="text-[#888888]">{plan.period}</span>}
+                  <span className="text-4xl font-bold text-gold">{plan.price}</span>
+                  {plan.period && <span className="text-muted">{plan.period}</span>}
                 </div>
-                <p className="text-sm text-[#888888] mt-2">{plan.description}</p>
+                <p className="text-sm text-muted mt-2">{plan.description}</p>
               </div>
               <ul className="space-y-3 mb-8">
                 {plan.features.map((feature, i) => (
                   <li key={i} className="flex items-center gap-3 text-sm text-white/80">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-[#c9a84c]" />
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-gold" />
                     {feature}
                   </li>
                 ))}
@@ -460,7 +460,7 @@ function B2BSection() {
   return (
     <section id="empresas" className="relative py-24 px-4 overflow-hidden">
       <DotGrid />
-      <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[500px] h-[500px] bg-[#c9a84c]/5 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[500px] h-[500px] bg-gold/5 rounded-full blur-[100px] pointer-events-none" />
       <div className="container mx-auto max-w-6xl relative z-10">
 
         <motion.div className="text-center mb-16" initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
@@ -468,7 +468,7 @@ function B2BSection() {
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>
             ¿Buscando talento en Paraguay?
           </h2>
-          <p className="text-[#888888] text-lg max-w-2xl mx-auto leading-relaxed">
+          <p className="text-muted text-lg max-w-2xl mx-auto leading-relaxed">
             Subí el CV de cualquier candidato y la IA te dice en segundos si es el perfil que necesitás.
           </p>
         </motion.div>
@@ -477,29 +477,29 @@ function B2BSection() {
           <motion.div className="space-y-6" initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
             {benefits.map((b, i) => (
               <motion.div key={i} className="flex gap-4" initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}>
-                <div className="w-12 h-12 rounded-xl bg-[#c9a84c]/10 border border-[#c9a84c]/20 flex items-center justify-center shrink-0">
-                  <b.icon className="text-[#c9a84c]" size={22} />
+                <div className="w-12 h-12 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0">
+                  <b.icon className="text-gold" size={22} />
                 </div>
                 <div>
                   <h3 className="text-white font-semibold mb-1">{b.title}</h3>
-                  <p className="text-[#888888] text-sm leading-relaxed">{b.desc}</p>
+                  <p className="text-muted text-sm leading-relaxed">{b.desc}</p>
                 </div>
               </motion.div>
             ))}
 
             <div className="pt-6 border-t border-white/5 space-y-3">
-              <div className="border border-[#c9a84c] bg-[#c9a84c]/5 rounded-xl p-4 flex items-center justify-between">
+              <div className="border border-gold bg-gold/5 rounded-xl p-4 flex items-center justify-between">
                 <div>
                   <p className="text-white font-semibold text-sm">Plan Empresa</p>
                   <p className="text-[#555] text-xs">Hasta 5 usuarios · 100 análisis/mes</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[#c9a84c] font-bold text-xl">USD 79</p>
+                  <p className="text-gold font-bold text-xl">USD 79</p>
                   <p className="text-[#555] text-xs">/mes</p>
                 </div>
               </div>
               <p className="text-[#444] text-xs text-center">
-                <Star size={10} className="inline mr-1 text-[#c9a84c]" />
+                <Star size={10} className="inline mr-1 text-gold" />
                 Seleccionado entre los proyectos destacados de Moonshot Paraguay 2026
               </p>
             </div>
@@ -508,20 +508,20 @@ function B2BSection() {
           {/* Formulario con glassmorphism (superficie secundaria) */}
           <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
             <GlassCard className="relative overflow-hidden">
-              <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#c9a84c]/10 rounded-full blur-[60px] pointer-events-none" />
+              <div className="absolute -top-10 -right-10 w-40 h-40 bg-gold/10 rounded-full blur-[60px] pointer-events-none" />
               <AnimatePresence mode="wait">
                 {sent ? (
                   <motion.div key="sent" className="text-center py-8" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
                     <div className="text-5xl mb-4">🎉</div>
                     <h3 className="text-white font-bold text-xl mb-2" style={{ fontFamily: 'Playfair Display, serif' }}>¡Estás en la lista!</h3>
-                    <p className="text-[#888888] text-sm leading-relaxed">
+                    <p className="text-muted text-sm leading-relaxed">
                       Te contactamos a <strong className="text-white">{formEmail}</strong> para coordinar el acceso a la Beta.
                     </p>
                     <div className="mt-6 flex items-center justify-center gap-2 text-sm text-[#555]">
-                      <CheckCircle2 size={14} className="text-[#c9a84c]" />Respuesta en menos de 48 hs
+                      <CheckCircle2 size={14} className="text-gold" />Respuesta en menos de 48 hs
                     </div>
                     <div className="mt-4">
-                      <GoldButton href="/reclutadores" variant="outline" size="sm">
+                      <GoldButton href="/empresas" variant="outline" size="sm">
                         Ya tengo token — Ir al panel
                       </GoldButton>
                     </div>
@@ -535,28 +535,28 @@ function B2BSection() {
                     <div>
                       <label className="block text-xs font-medium text-white/50 mb-1.5">Tu nombre (opcional)</label>
                       <input type="text" value={formName} onChange={e => setFormName(e.target.value)} placeholder="María García"
-                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#3a3a3a] focus:outline-none focus:border-[#c9a84c]/50 transition-all text-sm" />
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#3a3a3a] focus:outline-none focus:border-gold/50 transition-all text-sm" />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-white/50 mb-1.5">Email corporativo <span className="text-[#c9a84c]">*</span></label>
+                      <label className="block text-xs font-medium text-white/50 mb-1.5">Email corporativo <span className="text-gold">*</span></label>
                       <input type="email" value={formEmail} onChange={e => setFormEmail(e.target.value)} placeholder="maria@empresa.com.py"
-                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#3a3a3a] focus:outline-none focus:border-[#c9a84c]/50 transition-all text-sm" />
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#3a3a3a] focus:outline-none focus:border-gold/50 transition-all text-sm" />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-white/50 mb-1.5">Empresa <span className="text-[#c9a84c]">*</span></label>
+                      <label className="block text-xs font-medium text-white/50 mb-1.5">Empresa <span className="text-gold">*</span></label>
                       <input type="text" value={formCompany} onChange={e => setFormCompany(e.target.value)} placeholder="Nombre de tu empresa"
-                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#3a3a3a] focus:outline-none focus:border-[#c9a84c]/50 transition-all text-sm" />
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#3a3a3a] focus:outline-none focus:border-gold/50 transition-all text-sm" />
                     </div>
                     {formError && <p className="text-red-400 text-sm">{formError}</p>}
                     <GoldButton onClick={handleSubmit} disabled={sending || !formEmail.trim() || !formCompany.trim()} className="w-full" size="lg">
                       {sending ? <><Loader2 className="animate-spin" size={16} />Enviando...</> : <><Mail size={16} />Solicitar acceso gratuito<ChevronRight size={16} /></>}
                     </GoldButton>
                     <div className="flex items-center justify-between pt-1">
-                      <p className="text-xs text-[#3a3a3a]">
+                      <p className="text-xs text-muted/50">
                         O escribinos a{' '}
-                        <a href="mailto:contacto@cvitae.lat" className="text-[#c9a84c] hover:underline">contacto@cvitae.lat</a>
+                        <a href="mailto:contacto@cvitae.lat" className="text-gold hover:underline">contacto@cvitae.lat</a>
                       </p>
-                      <GoldButton href="/reclutadores" variant="ghost" size="sm" className="text-xs">
+                      <GoldButton href="/empresas" variant="ghost" size="sm" className="text-xs">
                         Ya tengo token →
                       </GoldButton>
                     </div>
@@ -575,7 +575,7 @@ function B2BSection() {
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-[#0a0a0a]">
+    <main className="min-h-screen bg-background">
       <Helmet>
         <title>CVitae | Tu Agente de Carrera Inteligente para Paraguay</title>
         <meta name="description" content="El ecosistema de talento con IA para Paraguay y LatAm. Candidatos que consiguen el trabajo ideal. Empresas que encuentran al candidato perfecto." />

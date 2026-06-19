@@ -64,10 +64,10 @@ function QuickLoginInline() {
       <input type="email" value={email} onChange={e => setEmail(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && handleLogin()}
         placeholder="tu@email.com"
-        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555] focus:outline-none focus:border-[#c9a84c]/50 transition-all"
+        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555] focus:outline-none focus:border-gold/50 transition-all"
         disabled={loading} />
       {error && <p className="text-red-400 text-sm">{error}</p>}
-      {message && <p className="text-[#c9a84c] text-sm">{message}</p>}
+      {message && <p className="text-gold text-sm">{message}</p>}
       <GoldButton onClick={handleLogin} disabled={loading || !email.trim()} className="w-full">
         {loading ? 'Enviando...' : 'Enviar enlace mágico'}
       </GoldButton>
@@ -260,20 +260,20 @@ export default function Dashboard() {
       <div className="space-y-6">
         {authLoading ? (
           <div className="flex items-center justify-center py-32">
-            <div className="w-8 h-8 border-2 border-[#c9a84c] border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin" />
           </div>
         ) : !user ? (
           <GlassCard className="text-center py-16 px-8 max-w-md mx-auto">
-            <UserCircle className="w-12 h-12 text-[#c9a84c] mx-auto mb-4 opacity-50" />
+            <UserCircle className="w-12 h-12 text-gold mx-auto mb-4 opacity-50" />
             <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: 'Playfair Display, serif' }}>Bienvenido a CVitae</h2>
-            <p className="text-[#888888] mb-8">Ingresá con tu email para ver tus oportunidades personalizadas.</p>
+            <p className="text-muted mb-8">Ingresá con tu email para ver tus oportunidades personalizadas.</p>
             <QuickLoginInline />
           </GlassCard>
         ) : hasProfile === false ? (
           <GlassCard className="text-center py-16 px-8">
-            <UserCircle className="w-12 h-12 text-[#c9a84c] mx-auto mb-4 opacity-50" />
+            <UserCircle className="w-12 h-12 text-gold mx-auto mb-4 opacity-50" />
             <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: 'Playfair Display, serif' }}>Completá tu perfil</h2>
-            <p className="text-[#888888] mb-8">Necesitamos conocer tus habilidades para encontrarte el trabajo ideal.</p>
+            <p className="text-muted mb-8">Necesitamos conocer tus habilidades para encontrarte el trabajo ideal.</p>
             <GoldButton href="/mi-carrera/perfil">Crear mi perfil</GoldButton>
           </GlassCard>
         ) : loadingMatches ? (
@@ -287,23 +287,23 @@ export default function Dashboard() {
 
               {/* Score de Empleabilidad */}
               {employabilityScore > 0 && (
-                <div className="border border-[#c9a84c] bg-[#c9a84c]/5 rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center gap-6">
+                <div className="border border-gold bg-gold/5 rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center gap-6">
                   <div className="flex-1">
-                    <p className="text-[#888888] text-xs uppercase tracking-wider mb-1">Score de Empleabilidad</p>
+                    <p className="text-muted text-xs uppercase tracking-wider mb-1">Score de Empleabilidad</p>
                     <ScoreLine percentage={employabilityScore} className="max-w-xs" />
                   </div>
                   {/* Visibility indicator */}
-                  <div className="flex items-center gap-2 text-sm text-[#888888] shrink-0">
-                    <Eye size={14} className="text-[#c9a84c]" />
+                  <div className="flex items-center gap-2 text-sm text-muted shrink-0">
+                    <Eye size={14} className="text-gold" />
                     <span>Tu perfil es visible para empresas</span>
                   </div>
                 </div>
               )}
 
               {/* Next step block */}
-              <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/10 rounded-2xl hover:border-[#c9a84c]/20 transition-all">
+              <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/10 rounded-2xl hover:border-gold/20 transition-all">
                 <div>
-                  <p className="text-[#888888] text-xs uppercase tracking-wider mb-0.5">Tu próximo paso</p>
+                  <p className="text-muted text-xs uppercase tracking-wider mb-0.5">Tu próximo paso</p>
                   <p className="text-white font-semibold">{nextStep.label}</p>
                   <p className="text-[#555] text-xs mt-0.5">{nextStep.detail}</p>
                 </div>
@@ -313,25 +313,25 @@ export default function Dashboard() {
               </div>
 
               <h2 className="text-xl font-bold text-white flex items-center gap-2 pt-2" style={{ fontFamily: 'Playfair Display, serif' }}>
-                <Briefcase size={20} className="text-[#c9a84c]" /> Oportunidades para vos
+                <Briefcase size={20} className="text-gold" /> Oportunidades para vos
               </h2>
 
               {matches.length === 0 ? (
                 <GlassCard className="text-center py-12 border-dashed border-white/10">
                   <Search className="w-12 h-12 text-[#333] mx-auto mb-4" />
                   <h3 className="text-white font-bold mb-2">No encontramos matches aún</h3>
-                  <p className="text-[#888888] mb-6 text-sm max-w-xs mx-auto">Completá tu perfil con más habilidades para ver oportunidades.</p>
+                  <p className="text-muted mb-6 text-sm max-w-xs mx-auto">Completá tu perfil con más habilidades para ver oportunidades.</p>
                   <GoldButton href="/mi-carrera/perfil" size="sm" variant="outline">Mejorar perfil</GoldButton>
                 </GlassCard>
               ) : (
                 matches.slice(0, 5).map((match) => (
-                  <div key={match.id} className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-4 hover:border-[#c9a84c]/30 transition-all">
+                  <div key={match.id} className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-4 hover:border-gold/30 transition-all">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <p className="text-white font-medium truncate">{match.titulo}</p>
                         <div className="flex items-center gap-3 mt-1 mb-3">
-                          <span className="text-xs text-[#888888] flex items-center gap-1"><MapPin size={11} /> {match.ubicacion}</span>
-                          <span className="text-xs text-[#888888] flex items-center gap-1"><Briefcase size={11} /> {match.categoria}</span>
+                          <span className="text-xs text-muted flex items-center gap-1"><MapPin size={11} /> {match.ubicacion}</span>
+                          <span className="text-xs text-muted flex items-center gap-1"><Briefcase size={11} /> {match.categoria}</span>
                         </div>
                         {/* Per-card actions */}
                         <div className="flex items-center gap-2">
@@ -349,7 +349,7 @@ export default function Dashboard() {
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={() => analytics.cvAnalyzed('apply_click')}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#c9a84c] text-[#c9a84c] text-xs font-semibold hover:bg-[#c9a84c]/10 transition-all"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gold text-gold text-xs font-semibold hover:bg-gold/10 transition-all"
                             >
                               Postular <ExternalLink size={11} />
                             </a>
@@ -367,7 +367,7 @@ export default function Dashboard() {
             <div className="space-y-6">
               <GlassCard>
                 <h3 className="text-white font-bold mb-3 flex items-center gap-2">
-                  <Sparkles size={16} className="text-[#c9a84c]" />
+                  <Sparkles size={16} className="text-gold" />
                   Habilidades faltantes
                 </h3>
                 <div className="space-y-2">
@@ -377,7 +377,7 @@ export default function Dashboard() {
                     missingSkills.map((skill) => (
                       <div key={skill} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
                         <span className="text-white/80 text-sm">{skill}</span>
-                        <span className="text-xs text-[#c9a84c]">↓ ver cursos</span>
+                        <span className="text-xs text-gold">↓ ver cursos</span>
                       </div>
                     ))
                   )}
@@ -386,7 +386,7 @@ export default function Dashboard() {
 
               <GlassCard>
                 <h3 className="text-white font-bold mb-3 flex items-center gap-2">
-                  <BookOpen size={16} className="text-[#c9a84c]" />
+                  <BookOpen size={16} className="text-gold" />
                   Cursos recomendados
                   <Badge variant="gold" className="text-[9px] px-1.5 py-0 ml-auto">IA</Badge>
                 </h3>
@@ -398,15 +398,15 @@ export default function Dashboard() {
                   <div className="space-y-3">
                     {courses.map((c, i) => (
                       <a key={i} href={c.url} target="_blank" rel="noopener noreferrer"
-                        className="block p-3 bg-white/5 border border-white/10 rounded-xl hover:border-[#c9a84c]/30 hover:bg-[#c9a84c]/5 transition-all group">
+                        className="block p-3 bg-white/5 border border-white/10 rounded-xl hover:border-gold/30 hover:bg-gold/5 transition-all group">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <p className="text-[10px] text-[#c9a84c] mb-0.5">{c.skill}</p>
+                            <p className="text-[10px] text-gold mb-0.5">{c.skill}</p>
                             <p className="text-white text-xs font-medium truncate">{c.course}</p>
                             <p className="text-[#555] text-[10px]">{c.platform}</p>
-                            {c.why && <p className="text-[#888888] text-[10px] mt-1 italic">{c.why}</p>}
+                            {c.why && <p className="text-muted text-[10px] mt-1 italic">{c.why}</p>}
                           </div>
-                          <ExternalLinkIcon size={12} className="text-[#555] group-hover:text-[#c9a84c] shrink-0 mt-1 transition-colors" />
+                          <ExternalLinkIcon size={12} className="text-[#555] group-hover:text-gold shrink-0 mt-1 transition-colors" />
                         </div>
                       </a>
                     ))}
@@ -418,16 +418,16 @@ export default function Dashboard() {
 
               <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-white font-bold flex items-center gap-2 text-sm"><Bell size={14} className="text-[#c9a84c]" /> Alertas Proactivas</h3>
+                  <h3 className="text-white font-bold flex items-center gap-2 text-sm"><Bell size={14} className="text-gold" /> Alertas Proactivas</h3>
                   <Badge variant="gold" className="text-[8px] px-1.5 py-0">PRÓXIMAMENTE</Badge>
                 </div>
               </div>
 
               {!isSubscribed && (
-                <div className="border border-[#c9a84c] bg-[#c9a84c]/5 rounded-xl p-4 text-center">
-                  <Lock size={20} className="text-[#c9a84c] mx-auto mb-2" />
+                <div className="border border-gold bg-gold/5 rounded-xl p-4 text-center">
+                  <Lock size={20} className="text-gold mx-auto mb-2" />
                   <p className="text-white text-sm font-semibold mb-1">Límite diario alcanzado</p>
-                  <p className="text-[#888888] text-xs mb-3">Suscribite para matches ilimitados</p>
+                  <p className="text-muted text-xs mb-3">Suscribite para matches ilimitados</p>
                   <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola! Quiero activar mi suscripción a CVitae Pro por USD 9/mes.')}`}
                     target="_blank" rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-500 transition-all text-sm">
