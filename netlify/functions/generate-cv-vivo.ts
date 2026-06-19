@@ -1,7 +1,13 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
 
 const MODEL_ID = "global.anthropic.claude-sonnet-4-6"
-const bedrockClient = new BedrockRuntimeClient({ region: "us-east-1" })
+const bedrockClient = new BedrockRuntimeClient({
+  region: process.env.CVITAE_AWS_REGION || "us-east-1",
+  credentials: {
+    accessKeyId: process.env.CVITAE_AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.CVITAE_AWS_SECRET_ACCESS_KEY!,
+  },
+})
 
 async function invokeModel(userPrompt: string, maxTokens: number): Promise<string> {
   const command = new InvokeModelCommand({
