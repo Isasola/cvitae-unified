@@ -1,4 +1,5 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
+import { makeSupabaseAdmin } from "./_supabase"
 
 const MODEL_ID = "global.anthropic.claude-sonnet-4-6"
 const bedrockClient = new BedrockRuntimeClient({
@@ -38,10 +39,7 @@ export const handler = async (event: any) => {
 
   try {
     const { profile, vacancy } = JSON.parse(event.body)
-    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
-    const { createClient } = await import('@supabase/supabase-js')
-    const supabase = createClient(supabaseUrl!, supabaseKey!)
+    const supabase = makeSupabaseAdmin()
 
     // Buscar en caché (menos de 7 días)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()

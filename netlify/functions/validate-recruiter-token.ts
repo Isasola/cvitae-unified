@@ -1,19 +1,12 @@
 import { Handler } from "@netlify/functions"
-import { createClient } from "@supabase/supabase-js"
+import { makeSupabaseAdmin } from "./_supabase"
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ""
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-
-  if (!supabaseUrl || !supabaseKey) {
-    return { statusCode: 500, body: JSON.stringify({ valid: false, error: "Missing Supabase credentials" }) }
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseKey)
+  const supabase = makeSupabaseAdmin()
 
   try {
     const body = JSON.parse(event.body || "{}")

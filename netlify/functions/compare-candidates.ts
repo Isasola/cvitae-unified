@@ -1,6 +1,6 @@
 import { Handler } from "@netlify/functions"
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
-import { createClient } from "@supabase/supabase-js"
+import { makeSupabaseAdmin } from "./_supabase"
 
 const MODEL_ID = "global.anthropic.claude-sonnet-4-6"
 const bedrockClient = new BedrockRuntimeClient({
@@ -83,7 +83,7 @@ Respondé ÚNICAMENTE con JSON:
       return { statusCode: 400, body: JSON.stringify({ error: "Se necesitan al menos 2 CVs para comparar" }) }
     }
 
-    const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const supabase = makeSupabaseAdmin()
     const { data: analyses, error: dbError } = await supabase
       .from("recruiter_analyses")
       .select("raw_cv_text, candidate_name, file_name")

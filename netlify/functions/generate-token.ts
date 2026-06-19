@@ -1,5 +1,5 @@
 import { Handler } from "@netlify/functions"
-import { createClient } from "@supabase/supabase-js"
+import { makeSupabaseAdmin } from "./_supabase"
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -15,14 +15,7 @@ const handler: Handler = async (event) => {
 
     const token = `REC-${Math.random().toString(36).substring(2, 8).toUpperCase()}-${new Date().getFullYear()}`
 
-    const supabaseUrl = process.env.SUPABASE_URL!
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-
-    if (!supabaseUrl || !supabaseKey) {
-      return { statusCode: 500, body: JSON.stringify({ error: "Missing Supabase credentials" }) }
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    const supabase = makeSupabaseAdmin()
 
     const { error } = await supabase.from("recruiter_tokens").insert([{
       email,

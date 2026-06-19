@@ -1,12 +1,10 @@
 import { Handler } from "@netlify/functions"
-import { createClient } from "@supabase/supabase-js"
+import { makeSupabaseAdmin } from "./_supabase"
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method not allowed" }
 
-  const SUPABASE_URL = process.env.SUPABASE_URL!
-  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
-  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+  const supabase = makeSupabaseAdmin()
 
   const { action, orderId } = JSON.parse(event.body || "{}")
 
