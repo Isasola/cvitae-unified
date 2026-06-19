@@ -7,7 +7,7 @@ import {
   Coins, LogOut, Loader2, History, Sparkles,
   ChevronDown, ChevronUp, CheckCircle2, XCircle,
   Star, Brain, Users, Trophy, ArrowLeft, Share2, Database,
-  FileText, Upload, RotateCcw, X
+  FileText, Upload, RotateCcw, X, Link2, Plus, Copy, Check as CheckIcon
 } from 'lucide-react'
 
 const ease = [0.22, 1, 0.36, 1] as const
@@ -424,6 +424,200 @@ function ComparisonResultComponent({ result, onClose }: { result: ComparisonResu
   )
 }
 
+// ─── Vacancy creation panel ───────────────────────────────────────────────────
+
+interface VacancyRecord {
+  id: string
+  title: string
+  slug: string
+  location: string
+  modality: string
+  created_at: string
+}
+
+function VacancyPanel({ token }: { token: string }) {
+  const [form, setForm] = useState({
+    title: '', description: '', requirements: '',
+    location: '', modality: 'Presencial', salary_range: '', company_name: '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [createdUrl, setCreatedUrl] = useState('')
+  const [vacancies, setVacancies] = useState<VacancyRecord[]>([])
+  const [loadingList, setLoadingList] = useState(true)
+  const [copied, setCopied] = useState<string | null>(null)
+
+  useEffect(() => { loadVacancies() }, [])
+
+  const loadVacancies = async () => {
+    try {
+      const res = await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action: 'get_vacancies' }),
+      })
+      setVacancies((await res.json()).vacancies || [])
+    } catch { /* silencioso */ }
+    finally { setLoadingList(false) }
+  }
+
+  const copyToClipboard = async (text: string, id: string) => {
+    try { await navigator.clipboard.writeText(text); setCopied(id); setTimeout(() => setCopied(null), 2000) } catch { /* silencioso */ }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true); setSaveError(''); setCreatedUrl('')
+    try {
+      const res = await fetch('/.netlify/functions/create-vacancy', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, ...form }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al crear la vacante')
+      setCreatedUrl(data.url)
+      setForm({ title: '', description: '', requirements: '', location: '', modality: 'Presencial', salary_range: '', company_name: '' })
+      loadVacancies()
+    } catch (err: any) {
+      setSaveError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }))
+
+  return (
+    <div className="space-y-8">
+      {/* Form */}
+      <motion.form
+        onSubmit={handleSubmit}
+        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease }}
+        className="glass-card rounded-3xl p-7"
+      >
+        <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">Nueva vacante</p>
+        <p className="mt-1 text-sm font-light text-white/40">Generá un link de postulación único para compartir con candidatos.</p>
+
+        <div className="mt-7 grid gap-5 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Título del puesto *</label>
+            <input required value={form.title} onChange={set('title')} placeholder="Ej: Desarrollador Frontend React"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition" />
+          </div>
+
+          <div>
+            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Empresa *</label>
+            <input required value={form.company_name} onChange={set('company_name')} placeholder="Nombre de tu empresa"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition" />
+          </div>
+
+          <div>
+            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Ubicación *</label>
+            <input required value={form.location} onChange={set('location')} placeholder="Ej: Asunción, Paraguay"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition" />
+          </div>
+
+          <div>
+            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Modalidad *</label>
+            <select required value={form.modality} onChange={set('modality')}
+              className="w-full rounded-xl border border-white/10 bg-[#111] px-4 py-3 text-sm text-white focus:border-[#c9a84c]/50 focus:outline-none transition">
+              <option value="Presencial">Presencial</option>
+              <option value="Remoto">Remoto</option>
+              <option value="Híbrido">Híbrido</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Rango salarial <span className="normal-case text-white/20">(opcional)</span></label>
+            <input value={form.salary_range} onChange={set('salary_range')} placeholder="Ej: Gs. 3.000.000 – 5.000.000"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition" />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Descripción *</label>
+            <textarea required value={form.description} onChange={set('description')} rows={4}
+              placeholder="Describí el rol, responsabilidades y el equipo de trabajo..."
+              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition resize-none" />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Requisitos *</label>
+            <textarea required value={form.requirements} onChange={set('requirements')} rows={4}
+              placeholder="Experiencia requerida, habilidades técnicas, formación..."
+              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition resize-none" />
+          </div>
+        </div>
+
+        {saveError && (
+          <div className="mt-5 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-4 text-sm text-red-400">
+            <AlertCircle strokeWidth={1.5} className="h-4 w-4 shrink-0" /> {saveError}
+          </div>
+        )}
+
+        {createdUrl && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+            className="mt-5 rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] p-5">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[#c9a84c] mb-2">¡Vacante creada! Tu link de postulación:</p>
+            <div className="flex items-center gap-3">
+              <code className="flex-1 min-w-0 truncate text-sm text-white/90 font-mono">{createdUrl}</code>
+              <button type="button" onClick={() => copyToClipboard(createdUrl, 'new')}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.08] px-3 py-1.5 text-xs text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15] shrink-0">
+                {copied === 'new' ? <CheckIcon strokeWidth={2} className="h-3.5 w-3.5" /> : <Copy strokeWidth={1.5} className="h-3.5 w-3.5" />}
+                {copied === 'new' ? 'Copiado' : 'Copiar'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button type="submit" disabled={saving}
+            className="inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-6 py-3 text-sm font-medium text-[#0a0a0a] transition hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.6)] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/30">
+            {saving ? <><Loader2 strokeWidth={1.5} className="h-4 w-4 animate-spin" /> Creando…</> : <><Plus strokeWidth={2} className="h-4 w-4" /> Crear vacante</>}
+          </button>
+        </div>
+      </motion.form>
+
+      {/* Vacancies list */}
+      <div>
+        <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/40 mb-4">
+          <span className="h-px w-8 bg-white/20" /> Vacantes activas
+        </div>
+        {loadingList ? (
+          <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#c9a84c]" /></div>
+        ) : vacancies.length === 0 ? (
+          <div className="glass-card rounded-2xl py-14 text-center">
+            <Link2 strokeWidth={1.25} className="mx-auto mb-4 h-8 w-8 text-white/20" />
+            <p className="text-sm font-light text-white/40">Todavía no creaste ninguna vacante.</p>
+          </div>
+        ) : (
+          <ol className="space-y-3">
+            {vacancies.map((v) => {
+              const url = `https://cvitae.lat/vacante/${v.slug}`
+              return (
+                <li key={v.id} className="glass-card flex items-center gap-4 rounded-2xl px-5 py-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-sm text-white font-medium">{v.title}</p>
+                    <p className="mt-0.5 text-xs font-light text-white/35">
+                      {v.location} · {v.modality} · {new Date(v.created_at).toLocaleDateString()}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-[#c9a84c]/70 font-mono">{url}</p>
+                  </div>
+                  <button onClick={() => copyToClipboard(url, v.id)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/50 transition hover:border-[#c9a84c]/40 hover:text-[#c9a84c] shrink-0">
+                    {copied === v.id ? <CheckIcon strokeWidth={2} className="h-3.5 w-3.5" /> : <Copy strokeWidth={1.5} className="h-3.5 w-3.5" />}
+                    {copied === v.id ? 'Copiado' : 'Copiar link'}
+                  </button>
+                </li>
+              )
+            })}
+          </ol>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Panel principal (autenticado) ────────────────────────────────────────────
 
 function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLogout: () => void }) {
@@ -434,7 +628,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   const [result, setResult] = useState<ATSResult | null>(null)
   const [error, setError] = useState('')
   const [balance, setBalance] = useState(session.balance)
-  const [activeTab, setActiveTab] = useState<'analyze' | 'history'>('analyze')
+  const [activeTab, setActiveTab] = useState<'analyze' | 'history' | 'vacancies'>('analyze')
   const [historyKey, setHistoryKey] = useState(0)
   const [comparison, setComparison] = useState<ComparisonResult | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -546,8 +740,8 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
         </div>
 
         {/* Tabs */}
-        <div className="mt-12 flex gap-2">
-          {([['analyze', 'Analizar CV', Brain], ['history', 'Historial', History]] as const).map(([tab, label, Icon]) => (
+        <div className="mt-12 flex flex-wrap gap-2">
+          {([['analyze', 'Analizar CV', Brain], ['history', 'Historial', History], ['vacancies', 'Mis Vacantes', Link2]] as const).map(([tab, label, Icon]) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -675,7 +869,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                   </div>
                 )}
               </motion.div>
-            ) : (
+            ) : activeTab === 'history' ? (
               <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <HistoryPanel key={historyKey} token={session.token} onToggleStar={() => setHistoryKey(k => k + 1)} onCompare={handleCompare} />
                 {comparison && (
@@ -683,6 +877,10 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                     <ComparisonResultComponent result={comparison} onClose={() => setComparison(null)} />
                   </motion.div>
                 )}
+              </motion.div>
+            ) : (
+              <motion.div key="vacancies" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <VacancyPanel token={session.token} />
               </motion.div>
             )}
           </AnimatePresence>

@@ -20,7 +20,7 @@ export default function Terms() {
           <h1 className="text-4xl font-bold text-white mb-8">Términos de Uso de CVitae</h1>
           
           <GlassCard className="mb-8">
-            <div className="prose prose-invert max-w-none text-muted space-y-6">
+            <div className="prose prose-invert max-w-none text-white/65 space-y-6">
               <section>
                 <div className="flex items-center gap-3 text-white mb-4">
                   <ShieldCheck className="text-gold" size={24} />

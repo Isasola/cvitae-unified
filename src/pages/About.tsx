@@ -27,7 +27,7 @@ export default function About() {
         </div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-16">
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-6">Nuestra Misión</h1>
-          <p className="text-xl text-muted leading-relaxed">
+          <p className="text-xl text-white/70 leading-relaxed">
             En CVitae, creemos que el talento no debe ser invisible. Nuestra misión es conectar a los profesionales paraguayos con las mejores oportunidades locales e internacionales utilizando inteligencia artificial de vanguardia.
           </p>
         </motion.div>
@@ -36,14 +36,14 @@ export default function About() {
           <GlassCard>
             <Brain className="w-10 h-10 text-gold mb-4" />
             <h3 className="text-xl font-bold text-white mb-2">IA con Propósito</h3>
-            <p className="text-muted text-sm">
+            <p className="text-white/65 text-sm">
               No solo usamos tecnología; la aplicamos para resolver el problema real de la empleabilidad en Paraguay.
             </p>
           </GlassCard>
           <GlassCard>
             <Target className="w-10 h-10 text-gold mb-4" />
             <h3 className="text-xl font-bold text-white mb-2">Enfoque en Resultados</h3>
-            <p className="text-muted text-sm">
+            <p className="text-white/65 text-sm">
               Nuestra plataforma está diseñada para que consigas tu próximo gran paso profesional, no solo para que mires vacantes.
             </p>
           </GlassCard>
@@ -51,10 +51,10 @@ export default function About() {
 
         <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} className="prose prose-invert max-w-none">
           <h2 className="text-2xl font-bold text-white mb-4">¿Por qué CVitae?</h2>
-          <p className="text-muted">
+          <p className="text-white/65">
             El mercado laboral actual es complejo. Los filtros automáticos (ATS) descartan miles de CVs excelentes simplemente por formato. Al mismo tiempo, las oportunidades están dispersas en cientos de portales.
           </p>
-          <p className="text-muted">
+          <p className="text-white/65">
             CVitae centraliza, analiza y optimiza. Somos tu agente de carrera personal que trabaja 24/7 para que vos solo tengas que preocuparte por brillar en la entrevista.
           </p>
         </motion.div>

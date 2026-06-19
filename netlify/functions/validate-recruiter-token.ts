@@ -100,6 +100,22 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
+    // ─── Acción: Listar vacantes del reclutador ───
+    if (action === "get_vacancies") {
+      const { data: vacancies } = await supabase
+        .from("recruiter_vacancies")
+        .select("id, title, slug, location, modality, is_active, created_at")
+        .eq("token_id", data.id)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(50)
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ vacancies: vacancies || [] }),
+      }
+    }
+
     // ─── Validación simple / inicio de sesión ───
     return {
       statusCode: 200,

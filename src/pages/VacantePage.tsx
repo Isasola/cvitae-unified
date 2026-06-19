@@ -1,13 +1,25 @@
-import { useRef, useState, type DragEvent, type ChangeEvent, type FormEvent } from 'react'
+import { useRef, useState, useEffect, type DragEvent, type ChangeEvent, type FormEvent } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link, useParams } from 'wouter'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft, Upload, FileText, X, MapPin, Clock, Briefcase,
-  Check, Sparkles, ArrowRight, Loader2, AlertCircle
+  Check, Sparkles, ArrowRight, Loader2, AlertCircle, Mail
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 const ease = [0.22, 1, 0.36, 1] as const
+
+interface Vacancy {
+  id: string
+  title: string
+  company_name: string
+  location: string
+  modality: string
+  description: string
+  requirements: string
+  salary_range: string | null
+}
 
 function Ambient() {
   return (
@@ -47,7 +59,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-function SuccessState({ name, title, company }: { name: string; title: string; company: string }) {
+function SuccessState({ name }: { name: string }) {
   const first = name.split(' ')[0] || 'Hola'
   return (
     <motion.div
@@ -68,33 +80,62 @@ function SuccessState({ name, title, company }: { name: string; title: string; c
       </motion.div>
 
       <h2 className="mt-8 text-center font-display text-4xl leading-tight text-white sm:text-5xl">
-        Postulación recibida, <em className="not-italic text-white/70">{first}</em>.
+        ¡Postulación enviada, <em className="not-italic text-white/70">{first}</em>!
       </h2>
       <p className="mx-auto mt-4 max-w-md text-center text-sm font-light leading-relaxed text-white/55">
-        {company} ya tiene tu CV para la búsqueda de <span className="text-white">{title}</span>.
-        Te van a contactar si avanzás en el proceso.
+        Revisá tu email — te enviamos un link para acceder a tu perfil en CVitae y ver el estado de tu postulación.
       </p>
 
-      <div className="mx-auto mt-10 max-w-md rounded-2xl border border-white/8 bg-white/[0.025] p-5 text-left">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Tu perfil en CVitae</p>
-        <p className="mt-2 text-sm font-light leading-relaxed text-white/60">
-          Tu CV quedó guardado en la base de talento. Completá tu perfil para que otras empresas también puedan encontrarte.
-        </p>
+      <div className="mx-auto mt-8 max-w-md rounded-2xl border border-[#c9a84c]/15 bg-[#c9a84c]/[0.04] p-5 text-left flex items-start gap-3">
+        <Mail strokeWidth={1.5} className="h-5 w-5 text-[#c9a84c] mt-0.5 shrink-0" />
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Revisá tu correo</p>
+          <p className="mt-1 text-sm font-light leading-relaxed text-white/60">
+            Asunto: <span className="text-white">"Tu acceso a CVitae está listo ✦"</span>
+          </p>
+        </div>
       </div>
 
       <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <Link
-          href="/mi-carrera/perfil"
-          className="group inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-[#0a0a0a] transition hover:bg-white/90"
-        >
-          Completar mi perfil
-          <ArrowRight strokeWidth={1.75} className="h-4 w-4 transition group-hover:translate-x-0.5" />
-        </Link>
         <Link
           href="/oportunidades"
           className="inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-6 py-3 text-sm text-white/70 transition hover:border-white/30 hover:text-white"
         >
           Ver otras oportunidades
+          <ArrowRight strokeWidth={1.75} className="h-4 w-4" />
+        </Link>
+      </div>
+    </motion.div>
+  )
+}
+
+function NotFoundState({ slug }: { slug: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.7, ease }}
+      className="mt-20 text-center"
+    >
+      <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-white/[0.03]">
+        <AlertCircle strokeWidth={1.5} className="h-7 w-7 text-white/30" />
+      </div>
+      <h1 className="font-display text-4xl text-white">Vacante no encontrada</h1>
+      <p className="mx-auto mt-4 max-w-md text-sm font-light text-white/50">
+        La vacante <span className="text-white/70">"{slug}"</span> no existe o ya no está disponible.
+      </p>
+      <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+        <Link
+          href="/oportunidades"
+          className="inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-6 py-3 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]"
+        >
+          Ver oportunidades disponibles
+        </Link>
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 rounded-full border border-white/15 px-6 py-3 text-sm text-white/60 transition hover:border-white/30 hover:text-white"
+        >
+          Volver al inicio
         </Link>
       </div>
     </motion.div>
@@ -105,8 +146,13 @@ export default function VacantePage() {
   const params = useParams<{ slug: string }>()
   const slug = params.slug || ''
 
+  const [vacancy, setVacancy] = useState<Vacancy | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
+
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [coverLetter, setCoverLetter] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -114,10 +160,20 @@ export default function VacantePage() {
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const title = slug && slug.length > 2
-    ? slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
-    : 'Vacante'
-  const company = 'CVitae'
+  useEffect(() => {
+    if (!slug) { setNotFound(true); setLoading(false); return }
+    supabase
+      .from('recruiter_vacancies')
+      .select('id, title, company_name, location, modality, description, requirements, salary_range')
+      .eq('slug', slug)
+      .eq('is_active', true)
+      .maybeSingle()
+      .then(({ data, error: err }) => {
+        if (err || !data) setNotFound(true)
+        else setVacancy(data)
+        setLoading(false)
+      })
+  }, [slug])
 
   function pickFiles(list: FileList | null) {
     if (!list || !list[0]) return
@@ -157,17 +213,16 @@ export default function VacantePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name, email,
-          company_name: '', phone: '', message: '',
+          name,
+          email,
           source: `vacante:${slug}`,
           cv_base64: base64,
           cv_file_name: file.name,
+          cover_letter: coverLetter.trim() || undefined,
         }),
       })
-      if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d.error || 'Error al enviar la postulación')
-      }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al enviar la postulación')
       setSubmitted(true)
     } catch (err: any) {
       setError(err.message || 'Error de conexión. Intentá de nuevo.')
@@ -176,12 +231,14 @@ export default function VacantePage() {
     }
   }
 
+  const pageTitle = vacancy?.title || (slug ? slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'Vacante')
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
       <Ambient />
       <Helmet>
-        <title>{title} · CVitae</title>
-        <meta name="description" content={`Postulá a ${title}. Tu perfil queda guardado en CVitae para futuras búsquedas.`} />
+        <title>{pageTitle} · CVitae</title>
+        <meta name="description" content={`Postulá a ${pageTitle}. Tu perfil queda guardado en CVitae para futuras búsquedas.`} />
       </Helmet>
 
       {/* Top bar */}
@@ -196,7 +253,15 @@ export default function VacantePage() {
       </header>
 
       <section className="relative z-10 mx-auto max-w-3xl px-6 pb-32 pt-16">
-        {!submitted ? (
+        {loading ? (
+          <div className="flex justify-center pt-20">
+            <Loader2 className="h-8 w-8 animate-spin text-[#c9a84c]" />
+          </div>
+        ) : notFound ? (
+          <NotFoundState slug={slug} />
+        ) : submitted ? (
+          <SuccessState name={name} />
+        ) : (
           <>
             {/* Vacancy header */}
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease }}>
@@ -204,20 +269,47 @@ export default function VacantePage() {
                 <span className="h-1.5 w-1.5 rounded-full bg-[#c9a84c]" />
                 Vacante abierta
               </div>
-              <h1 className="mt-6 font-display text-5xl leading-[1.05] tracking-tight text-white sm:text-6xl md:text-7xl">{title}</h1>
-              <p className="mt-4 text-base text-white/55">en <span className="text-white">{company}</span></p>
+              <h1 className="mt-6 font-display text-5xl leading-[1.05] tracking-tight text-white sm:text-6xl md:text-7xl">{vacancy!.title}</h1>
+              <p className="mt-4 text-base text-white/55">en <span className="text-white">{vacancy!.company_name}</span></p>
               <ul className="mt-8 flex flex-wrap gap-2">
-                <Meta icon={<MapPin strokeWidth={1.5} className="h-3.5 w-3.5" />}>Asunción, Paraguay</Meta>
-                <Meta icon={<Briefcase strokeWidth={1.5} className="h-3.5 w-3.5" />}>Híbrido</Meta>
+                <Meta icon={<MapPin strokeWidth={1.5} className="h-3.5 w-3.5" />}>{vacancy!.location}</Meta>
+                <Meta icon={<Briefcase strokeWidth={1.5} className="h-3.5 w-3.5" />}>{vacancy!.modality}</Meta>
                 <Meta icon={<Clock strokeWidth={1.5} className="h-3.5 w-3.5" />}>Tiempo completo</Meta>
+                {vacancy!.salary_range && (
+                  <Meta icon={<span className="text-[10px]">₲</span>}>{vacancy!.salary_range}</Meta>
+                )}
               </ul>
             </motion.div>
+
+            {/* Description */}
+            {vacancy!.description && (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, delay: 0.06, ease }}
+                className="glass-card mt-10 rounded-2xl p-6"
+              >
+                <p className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-3">Descripción del puesto</p>
+                <p className="text-sm font-light leading-relaxed text-white/70 whitespace-pre-line">{vacancy!.description}</p>
+              </motion.div>
+            )}
+
+            {/* Requirements */}
+            {vacancy!.requirements && (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, delay: 0.1, ease }}
+                className="glass-card mt-4 rounded-2xl p-6"
+              >
+                <p className="text-[11px] uppercase tracking-[0.18em] text-white/40 mb-3">Requisitos</p>
+                <p className="text-sm font-light leading-relaxed text-white/70 whitespace-pre-line">{vacancy!.requirements}</p>
+              </motion.div>
+            )}
 
             {/* Double-value note */}
             <motion.div
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.08, ease }}
-              className="glass-card mt-12 flex items-start gap-4 rounded-2xl p-5"
+              transition={{ duration: 0.7, delay: 0.14, ease }}
+              className="glass-card mt-6 flex items-start gap-4 rounded-2xl p-5"
             >
               <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/10">
                 <Sparkles strokeWidth={1.5} className="h-4 w-4 text-[#c9a84c]" />
@@ -233,11 +325,11 @@ export default function VacantePage() {
             <motion.form
               onSubmit={onSubmit}
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.14, ease }}
+              transition={{ duration: 0.7, delay: 0.18, ease }}
               className="glass-card mt-6 rounded-3xl p-7 sm:p-9"
             >
               <h2 className="font-display text-2xl italic text-white">Postulación rápida</h2>
-              <p className="mt-1 text-sm font-light text-white/50">Tres campos. Menos de un minuto.</p>
+              <p className="mt-1 text-sm font-light text-white/50">Menos de un minuto.</p>
 
               <div className="mt-8 grid gap-5 sm:grid-cols-2">
                 <Field label="Nombre completo">
@@ -256,7 +348,7 @@ export default function VacantePage() {
                 </Field>
               </div>
 
-              {/* Drag & drop */}
+              {/* CV upload */}
               <div className="mt-6">
                 <label className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-white/45">Tu CV (PDF)</label>
                 <div
@@ -292,6 +384,20 @@ export default function VacantePage() {
                 </div>
               </div>
 
+              {/* Cover letter */}
+              <div className="mt-5">
+                <label className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-white/45">
+                  Carta de interés <span className="normal-case text-white/25">(opcional)</span>
+                </label>
+                <textarea
+                  value={coverLetter}
+                  onChange={e => setCoverLetter(e.target.value)}
+                  rows={3}
+                  placeholder="Contanos brevemente por qué te interesa esta posición..."
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm font-light text-white placeholder:text-white/25 focus:border-[#c9a84c]/40 focus:outline-none resize-none transition"
+                />
+              </div>
+
               {error && (
                 <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-sm text-red-400">
                   <AlertCircle strokeWidth={1.5} className="h-4 w-4 shrink-0" /> {error}
@@ -314,8 +420,6 @@ export default function VacantePage() {
               </div>
             </motion.form>
           </>
-        ) : (
-          <SuccessState name={name} title={title} company={company} />
         )}
       </section>
     </main>
