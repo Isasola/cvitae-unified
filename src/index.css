@@ -1,61 +1,98 @@
 @import "tailwindcss";
 
-@theme {
-  /* Palette tokens */
-  --color-gold: oklch(0.78 0.13 82);
-  --color-gold-soft: oklch(0.86 0.10 86);
-  --color-background: oklch(0.16 0.012 60);
-  --color-cream: oklch(0.96 0.015 85);
-  --color-ink: oklch(0.12 0.01 60);
-  --color-muted: oklch(0.70 0.01 85);
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-ink: var(--ink);
+  --color-cream: var(--cream);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-body);
+}
 
-  /* Font families */
-  --font-display: 'Playfair Display', serif;
-  --font-body: 'Inter', sans-serif;
+:root {
+  --radius: 0.5rem;
+  --background: oklch(0.16 0.012 60);
+  --foreground: oklch(0.95 0.015 85);
+  --card: oklch(0.20 0.012 60);
+  --card-foreground: oklch(0.95 0.015 85);
+  --muted: oklch(0.24 0.010 60);
+  --muted-foreground: oklch(0.70 0.020 80);
+  --border: oklch(0.32 0.015 75 / 60%);
+  --input: oklch(0.32 0.015 75 / 60%);
+  --ring: oklch(0.78 0.13 82);
+  /* CVitae brand tokens */
+  --gold: oklch(0.78 0.13 82);
+  --gold-soft: oklch(0.86 0.10 86);
+  --ink: oklch(0.10 0.008 60);
+  --cream: oklch(0.96 0.015 85);
+  --glass-bg: oklch(0.96 0.015 85 / 4%);
+  --glass-border: oklch(0.96 0.015 85 / 10%);
+  --gradient-warm: radial-gradient(120% 80% at 20% 0%, oklch(0.26 0.04 70 / 60%) 0%, transparent 60%),
+                   radial-gradient(80% 60% at 100% 100%, oklch(0.30 0.08 70 / 35%) 0%, transparent 60%);
+  --shadow-editorial: 0 1px 0 oklch(0.96 0.015 85 / 6%) inset, 0 20px 50px -20px oklch(0 0 0 / 50%);
+  --shadow-gold: 0 0 0 1px oklch(0.78 0.13 82 / 35%), 0 20px 60px -20px oklch(0.78 0.13 82 / 25%);
+  --font-display: "Playfair Display", ui-serif, Georgia, serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
+  * {
+    border-color: var(--color-border);
+  }
   body {
     background-color: var(--color-background);
-    color: var(--color-cream);
+    color: var(--color-foreground);
     font-family: var(--font-body);
-    @apply antialiased;
+    background-image: var(--gradient-warm);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
   }
-  h1, h2, h3 {
+  .font-display {
     font-family: var(--font-display);
+    letter-spacing: -0.01em;
   }
 }
 
+/* CVitae surfaces */
 @utility glass-panel {
-  background-color: rgb(255 255 255 / 0.03);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgb(255 255 255 / 0.10);
-  border-radius: var(--radius-2xl, 1rem);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border-radius: var(--radius-lg);
 }
 
 @utility editorial-panel {
-  background-color: oklch(0.20 0.010 60);
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: var(--radius-2xl, 1rem);
+  background: oklch(0.19 0.012 60);
+  border: 1px solid oklch(0.32 0.015 75 / 50%);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-editorial);
 }
 
 @utility gold-panel {
-  background-color: oklch(0.78 0.13 82 / 0.08);
-  border: 1px solid oklch(0.78 0.13 82 / 0.35);
-  border-radius: var(--radius-2xl, 1rem);
+  background: linear-gradient(180deg, oklch(0.22 0.025 75) 0%, oklch(0.18 0.015 65) 100%);
+  border: 1px solid oklch(0.78 0.13 82 / 45%);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-gold);
 }
 
-/* glass-card: glass-panel styles + padding (avoid @apply of another @utility) */
+/* Legacy alias — glass-panel + padding */
 @utility glass-card {
-  background-color: rgb(255 255 255 / 0.03);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgb(255 255 255 / 0.10);
-  border-radius: var(--radius-2xl, 1rem);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
-}
-
-@utility gold-text {
-  color: var(--color-gold);
 }
