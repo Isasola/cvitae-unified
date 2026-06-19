@@ -116,7 +116,7 @@ const handler: Handler = async (event) => {
 
       const { data: applicants } = await supabase
         .from("vacancy_applications")
-        .select("id, name, email, cv_file_name, cover_letter, ats_score, applied_at, cv_text")
+        .select("id, name, email, cv_file_name, cover_letter, cv_text, ats_score, fit_score, recommendation, ai_summary, strengths, key_matches, key_gaps, analyzed_at, applied_at")
         .eq("vacancy_id", body.vacancy_id)
         .order("applied_at", { ascending: false })
         .limit(100)

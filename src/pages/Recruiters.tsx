@@ -435,21 +435,53 @@ interface Applicant {
   cv_text: string | null
   cover_letter: string | null
   ats_score: number | null
+  fit_score: number | null
+  recommendation: string | null
+  ai_summary: string | null
+  strengths: string[]
+  key_matches: string[]
+  key_gaps: string[]
+  analyzed_at: string | null
   applied_at: string
 }
 
-function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyze }: {
+interface AISummary {
+  executiveSummary: string
+  topPick: string
+  callList: string[]
+  redFlag: string | null
+  nextStep: string
+}
+
+function recColor(r: string | null) {
+  if (r === 'Llamar') return 'text-emerald-400 border-emerald-500/30 bg-emerald-500/[0.06]'
+  if (r === 'Considerar') return 'text-[#c9a84c] border-[#c9a84c]/30 bg-[#c9a84c]/[0.06]'
+  return 'text-red-400 border-red-500/30 bg-red-500/[0.06]'
+}
+function fitColor(s: number) {
+  if (s >= 75) return 'oklch(0.75 0.18 145)'
+  if (s >= 50) return 'oklch(0.78 0.13 82)'
+  return 'oklch(0.65 0.22 25)'
+}
+
+function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSingle }: {
   token: string
   vacancyId: string
   vacancyTitle: string
   onBack: () => void
-  onAnalyze: (applicant: Applicant) => void
+  onAnalyzeSingle: (cvText: string, name: string) => void
 }) {
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [loading, setLoading] = useState(true)
+  const [ranking, setRanking] = useState(false)
+  const [rankProgress, setRankProgress] = useState('')
+  const [aiSummary, setAiSummary] = useState<AISummary | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [filter, setFilter] = useState<'all' | 'Llamar' | 'Considerar' | 'No llamar'>('all')
+  const [rankError, setRankError] = useState('')
 
-  useEffect(() => {
+  const loadApplicants = () => {
+    setLoading(true)
     fetch('/.netlify/functions/validate-recruiter-token', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, action: 'get_applicants', vacancy_id: vacancyId }),
@@ -458,22 +490,157 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyze }: 
       .then(d => setApplicants(d.applicants || []))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [vacancyId])
+  }
+
+  useEffect(() => { loadApplicants() }, [vacancyId])
+
+  const handleRankAll = async () => {
+    setRanking(true); setRankError(''); setRankProgress('Analizando CVs en paralelo…')
+    try {
+      const res = await fetch('/.netlify/functions/analyze-vacancy-applicants', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, vacancy_id: vacancyId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error en el análisis')
+
+      setRankProgress(`${data.analyzed} CVs analizados${data.failed > 0 ? ` (${data.failed} sin texto)` : ''}`)
+      if (data.summary) setAiSummary(data.summary)
+
+      // Merge results into applicants list
+      if (data.results?.length) {
+        setApplicants(prev => prev.map(a => {
+          const r = data.results.find((x: any) => x.applicantId === a.id)
+          if (!r) return a
+          return {
+            ...a,
+            ats_score: r.atsScore,
+            fit_score: r.fitScore,
+            recommendation: r.recommendation,
+            ai_summary: r.summary,
+            strengths: r.strengths,
+            key_matches: r.keyMatches,
+            key_gaps: r.keyGaps,
+            analyzed_at: new Date().toISOString(),
+          }
+        }).sort((a, b) => (b.fit_score ?? -1) - (a.fit_score ?? -1)))
+      }
+    } catch (err: any) {
+      setRankError(err.message)
+    } finally {
+      setRanking(false)
+    }
+  }
+
+  const analyzed = applicants.filter(a => a.analyzed_at)
+  const withCv = applicants.filter(a => a.cv_text)
+  const filtered = filter === 'all' ? applicants : applicants.filter(a => a.recommendation === filter)
+  const counts = {
+    Llamar: applicants.filter(a => a.recommendation === 'Llamar').length,
+    Considerar: applicants.filter(a => a.recommendation === 'Considerar').length,
+    'No llamar': applicants.filter(a => a.recommendation === 'No llamar').length,
+  }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      {/* Breadcrumb */}
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="inline-flex items-center gap-1.5 text-xs text-white/40 hover:text-white transition-colors">
-          <ChevronLeft strokeWidth={1.5} className="h-4 w-4" /> Volver
+          <ChevronLeft strokeWidth={1.5} className="h-4 w-4" /> Vacantes
         </button>
         <span className="text-white/20">·</span>
-        <span className="text-sm text-white/70 truncate">{vacancyTitle}</span>
+        <span className="text-sm text-white/60 truncate max-w-xs">{vacancyTitle}</span>
       </div>
 
-      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/40">
-        <span className="h-px w-8 bg-white/20" />
-        {loading ? 'Cargando…' : `${applicants.length} postulante${applicants.length !== 1 ? 's' : ''}`}
+      {/* Stats + CTA */}
+      <div className="glass-card rounded-2xl p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-6 flex-wrap">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Total</p>
+              <p className="font-display text-3xl text-white">{applicants.length}</p>
+            </div>
+            {analyzed.length > 0 && (
+              <>
+                <div className="h-8 w-px bg-white/8" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Llamar</p>
+                  <p className="font-display text-3xl text-emerald-400">{counts['Llamar']}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Considerar</p>
+                  <p className="font-display text-3xl text-[#c9a84c]">{counts['Considerar']}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">No llamar</p>
+                  <p className="font-display text-3xl text-red-400">{counts['No llamar']}</p>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            {withCv.length > 0 && (
+              <button
+                onClick={handleRankAll}
+                disabled={ranking}
+                className="inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-medium text-[#0a0a0a] transition hover:shadow-[0_0_30px_-4px_rgba(201,168,76,0.5)] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {ranking
+                  ? <><Loader2 strokeWidth={1.5} className="h-4 w-4 animate-spin" /> Analizando…</>
+                  : <><Sparkles strokeWidth={1.5} className="h-4 w-4" /> {analyzed.length > 0 ? 'Re-analizar todos' : `Analizar ${withCv.length} CVs con IA`}</>
+                }
+              </button>
+            )}
+            {rankProgress && !ranking && (
+              <p className="text-[11px] text-white/40">{rankProgress}</p>
+            )}
+            {rankError && (
+              <p className="text-[11px] text-red-400">{rankError}</p>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Executive summary */}
+      <AnimatePresence>
+        {aiSummary && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="relative glass-card rounded-3xl p-7 overflow-hidden"
+          >
+            <div className="pointer-events-none absolute -top-20 right-0 h-60 w-60 rounded-full bg-[#c9a84c]/[0.08] blur-[80px]" />
+            <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/40 mb-5">
+              <span className="h-px w-8 bg-[#c9a84c]/40" /> Decisión de la IA
+            </div>
+
+            <p className="font-display text-xl text-white leading-snug mb-4">{aiSummary.topPick}</p>
+            <p className="text-sm font-light text-white/60 leading-relaxed mb-5">{aiSummary.executiveSummary}</p>
+
+            {aiSummary.callList?.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className="text-[10px] uppercase tracking-[0.18em] text-white/35 self-center mr-1">Llamar a:</span>
+                {aiSummary.callList.map(name => (
+                  <span key={name} className="rounded-full border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-1 text-xs text-emerald-400">
+                    {name}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {aiSummary.redFlag && (
+              <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.04] p-3">
+                <AlertCircle strokeWidth={1.5} className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+                <p className="text-xs font-light text-red-400 leading-relaxed">{aiSummary.redFlag}</p>
+              </div>
+            )}
+
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-white/8 bg-white/[0.02] p-3">
+              <CheckCircle2 strokeWidth={1.5} className="h-4 w-4 text-[#c9a84c] shrink-0 mt-0.5" />
+              <p className="text-xs font-light text-white/55 leading-relaxed">{aiSummary.nextStep}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {loading ? (
         <div className="flex justify-center py-16"><Loader2 className="animate-spin text-[#c9a84c]" /></div>
@@ -484,83 +651,181 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyze }: 
           <p className="mt-1 text-xs text-white/25">Compartí el link de postulación para empezar a recibir CVs.</p>
         </div>
       ) : (
-        <ol className="space-y-3">
-          {applicants.map((a, i) => (
-            <motion.li
-              key={a.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: i * 0.04, ease }}
-              className="glass-card rounded-2xl overflow-hidden"
-            >
-              <div
-                className="flex items-center gap-4 px-5 py-4 cursor-pointer"
-                onClick={() => setExpandedId(expandedId === a.id ? null : a.id)}
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-sm font-display text-white/50">
-                  {String(i + 1).padStart(2, '0')}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white font-medium truncate">{a.name}</p>
-                  <div className="flex items-center gap-3 mt-0.5 text-xs text-white/35">
-                    <span className="flex items-center gap-1"><Mail strokeWidth={1.5} className="h-3 w-3" />{a.email}</span>
-                    <span className="flex items-center gap-1">
-                      <Calendar strokeWidth={1.5} className="h-3 w-3" />
-                      {new Date(a.applied_at).toLocaleDateString('es-PY')}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  {a.ats_score !== null && (
-                    <span className="font-display text-lg" style={{ color: a.ats_score >= 80 ? 'oklch(0.75 0.18 145)' : a.ats_score >= 60 ? 'oklch(0.78 0.13 82)' : 'oklch(0.65 0.22 25)' }}>
-                      {a.ats_score}
-                    </span>
-                  )}
-                  {a.cv_text && (
-                    <button
-                      onClick={e => { e.stopPropagation(); onAnalyze(a) }}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
-                    >
-                      <Brain strokeWidth={1.5} className="h-3 w-3" /> Analizar
-                    </button>
-                  )}
-                  {expandedId === a.id
-                    ? <ChevronUp strokeWidth={1.5} className="h-4 w-4 text-white/30" />
-                    : <ChevronDown strokeWidth={1.5} className="h-4 w-4 text-white/30" />
-                  }
-                </div>
-              </div>
+        <>
+          {/* Filter tabs — only when analyzed */}
+          {analyzed.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {(['all', 'Llamar', 'Considerar', 'No llamar'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                    filter === f
+                      ? 'bg-white/10 text-white'
+                      : 'border border-white/10 text-white/40 hover:border-white/25 hover:text-white/70'
+                  }`}
+                >
+                  {f === 'all' ? `Todos (${applicants.length})` : `${f} (${counts[f]})`}
+                </button>
+              ))}
+            </div>
+          )}
 
-              <AnimatePresence>
-                {expandedId === a.id && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="px-5 pb-5 pt-0 border-t border-white/5"
-                  >
-                    <div className="pt-4 space-y-4">
-                      {a.cv_file_name && (
-                        <div className="flex items-center gap-2 text-xs text-white/40">
-                          <FileText strokeWidth={1.5} className="h-3.5 w-3.5" /> {a.cv_file_name}
-                        </div>
-                      )}
-                      {a.cover_letter && (
-                        <div>
-                          <p className="text-[10px] uppercase tracking-[0.18em] text-white/30 mb-1.5">Carta de interés</p>
-                          <p className="text-sm font-light text-white/60 leading-relaxed">{a.cover_letter}</p>
-                        </div>
-                      )}
-                      {!a.cv_text && (
-                        <p className="text-xs text-white/30 italic">CV enviado sin texto extraíble (imagen escaneada o archivo protegido).</p>
+          {/* Candidate list */}
+          <ol className="space-y-3">
+            {filtered.map((a, i) => (
+              <motion.li
+                key={a.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: i * 0.03, ease }}
+                className={`glass-card rounded-2xl overflow-hidden transition-colors ${a.recommendation === 'Llamar' ? 'hover:border-emerald-500/20' : ''}`}
+              >
+                <div
+                  className="flex items-center gap-4 px-5 py-4 cursor-pointer"
+                  onClick={() => setExpandedId(expandedId === a.id ? null : a.id)}
+                >
+                  {/* Rank number */}
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-display ${
+                    a.recommendation === 'Llamar'
+                      ? 'border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-400'
+                      : 'border-white/10 bg-white/[0.03] text-white/40'
+                  }`}>
+                    {String(i + 1).padStart(2, '0')}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm text-white font-medium">{a.name}</p>
+                      {a.recommendation && (
+                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${recColor(a.recommendation)}`}>
+                          {a.recommendation}
+                        </span>
                       )}
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.li>
-          ))}
-        </ol>
+                    <div className="flex items-center gap-3 mt-0.5 text-[11px] text-white/35 flex-wrap">
+                      <span className="flex items-center gap-1"><Mail strokeWidth={1.5} className="h-3 w-3" />{a.email}</span>
+                      <span className="flex items-center gap-1">
+                        <Calendar strokeWidth={1.5} className="h-3 w-3" />
+                        {new Date(a.applied_at).toLocaleDateString('es-PY')}
+                      </span>
+                    </div>
+                    {a.ai_summary && (
+                      <p className="mt-1.5 text-xs font-light text-white/50 leading-relaxed line-clamp-2">{a.ai_summary}</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-4 shrink-0">
+                    {a.fit_score !== null && (
+                      <div className="text-right">
+                        <p className="font-display text-2xl" style={{ color: fitColor(a.fit_score) }}>{a.fit_score}</p>
+                        <p className="text-[9px] uppercase tracking-[0.15em] text-white/30">fit</p>
+                      </div>
+                    )}
+                    {expandedId === a.id
+                      ? <ChevronUp strokeWidth={1.5} className="h-4 w-4 text-white/30" />
+                      : <ChevronDown strokeWidth={1.5} className="h-4 w-4 text-white/30" />
+                    }
+                  </div>
+                </div>
+
+                <AnimatePresence>
+                  {expandedId === a.id && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="border-t border-white/5"
+                    >
+                      <div className="px-5 pb-5 pt-4 space-y-4">
+                        {/* Scores row */}
+                        {(a.ats_score !== null || a.fit_score !== null) && (
+                          <div className="flex gap-4 flex-wrap">
+                            {a.fit_score !== null && (
+                              <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-2.5 text-center">
+                                <p className="font-display text-2xl" style={{ color: fitColor(a.fit_score) }}>{a.fit_score}</p>
+                                <p className="text-[9px] uppercase tracking-[0.15em] text-white/30 mt-0.5">Fit al puesto</p>
+                              </div>
+                            )}
+                            {a.ats_score !== null && (
+                              <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-2.5 text-center">
+                                <p className="font-display text-2xl text-white/70">{a.ats_score}</p>
+                                <p className="text-[9px] uppercase tracking-[0.15em] text-white/30 mt-0.5">ATS score</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Matches / Gaps */}
+                        {(a.key_matches?.length > 0 || a.key_gaps?.length > 0) && (
+                          <div className="grid md:grid-cols-2 gap-4">
+                            {a.key_matches?.length > 0 && (
+                              <div>
+                                <p className="text-[10px] uppercase tracking-[0.18em] text-white/30 mb-2">Skills que encajan</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {a.key_matches.map(m => (
+                                    <span key={m} className="rounded-full border border-emerald-500/25 bg-emerald-500/[0.06] px-2.5 py-0.5 text-[11px] text-emerald-400">{m}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {a.key_gaps?.length > 0 && (
+                              <div>
+                                <p className="text-[10px] uppercase tracking-[0.18em] text-white/30 mb-2">Skills que faltan</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {a.key_gaps.map(g => (
+                                    <span key={g} className="rounded-full border border-red-500/20 bg-red-500/[0.05] px-2.5 py-0.5 text-[11px] text-red-400">{g}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Strengths */}
+                        {a.strengths?.length > 0 && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-[0.18em] text-white/30 mb-2">Puntos fuertes</p>
+                            <ul className="space-y-1">
+                              {a.strengths.map(s => (
+                                <li key={s} className="flex items-start gap-2 text-xs font-light text-white/55">
+                                  <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#c9a84c]" />{s}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Cover letter */}
+                        {a.cover_letter && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-[0.18em] text-white/30 mb-1.5">Carta de interés</p>
+                            <p className="text-sm font-light text-white/55 leading-relaxed">{a.cover_letter}</p>
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-3 pt-1">
+                          {a.cv_text && (
+                            <button
+                              onClick={() => onAnalyzeSingle(a.cv_text!, a.name)}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                            >
+                              <Brain strokeWidth={1.5} className="h-3.5 w-3.5" /> Análisis individual
+                            </button>
+                          )}
+                          {!a.cv_text && (
+                            <p className="text-xs text-white/25 italic">Sin texto extraíble (imagen o PDF protegido)</p>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.li>
+            ))}
+          </ol>
+        </>
       )}
     </div>
   )
@@ -637,9 +902,7 @@ function VacancyPanel({ token, onAnalyzeApplicant }: { token: string; onAnalyzeA
         vacancyId={selectedVacancy.id}
         vacancyTitle={selectedVacancy.title}
         onBack={() => setSelectedVacancy(null)}
-        onAnalyze={applicant => {
-          if (applicant.cv_text) onAnalyzeApplicant(applicant.cv_text, applicant.name)
-        }}
+        onAnalyzeSingle={(cvText, name) => onAnalyzeApplicant(cvText, name)}
       />
     )
   }
