@@ -13,7 +13,7 @@ const ease = [0.22, 1, 0.36, 1] as const
 interface Vacancy {
   id: string
   title: string
-  company_name: string
+  company: string
   location: string
   modality: string
   description: string
@@ -164,7 +164,7 @@ export default function VacantePage() {
     if (!slug) { setNotFound(true); setLoading(false); return }
     supabase
       .from('recruiter_vacancies')
-      .select('id, title, company_name, location, modality, description, requirements, salary_range')
+      .select('id, title, company, location, modality, description, requirements, salary_range')
       .eq('slug', slug)
       .eq('is_active', true)
       .maybeSingle()
@@ -270,7 +270,7 @@ export default function VacantePage() {
                 Vacante abierta
               </div>
               <h1 className="mt-6 font-display text-5xl leading-[1.05] tracking-tight text-white sm:text-6xl md:text-7xl">{vacancy!.title}</h1>
-              <p className="mt-4 text-base text-white/55">en <span className="text-white">{vacancy!.company_name}</span></p>
+              <p className="mt-4 text-base text-white/55">en <span className="text-white">{vacancy!.company}</span></p>
               <ul className="mt-8 flex flex-wrap gap-2">
                 <Meta icon={<MapPin strokeWidth={1.5} className="h-3.5 w-3.5" />}>{vacancy!.location}</Meta>
                 <Meta icon={<Briefcase strokeWidth={1.5} className="h-3.5 w-3.5" />}>{vacancy!.modality}</Meta>

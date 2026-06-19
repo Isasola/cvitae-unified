@@ -61,9 +61,9 @@ const handler: Handler = async (event) => {
         location: location.trim(),
         modality: modality || "Presencial",
         salary_range: salary_range?.trim() || null,
-        company_name: company_name.trim(),
+        company: company_name.trim(),       // real column name in DB
         slug,
-        token_id: tokenData.id,
+        recruiter_token_id: tokenData.id,   // real column name in DB
         is_active: true,
       })
       .select("id, slug")

@@ -105,7 +105,7 @@ const handler: Handler = async (event) => {
       const { data: vacancies } = await supabase
         .from("recruiter_vacancies")
         .select("id, title, slug, location, modality, is_active, created_at")
-        .eq("token_id", data.id)
+        .eq("recruiter_token_id", data.id)
         .eq("is_active", true)
         .order("created_at", { ascending: false })
         .limit(50)

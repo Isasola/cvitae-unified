@@ -6,7 +6,7 @@
 
 INSERT INTO recruiter_vacancies (
   title, description, requirements, location, modality,
-  salary_range, company_name, slug, token_id, is_active
+  salary_range, company, slug, recruiter_token_id, is_active
 ) VALUES
 (
   'Desarrollador Frontend React',
