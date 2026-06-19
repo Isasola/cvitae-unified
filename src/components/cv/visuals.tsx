@@ -2,7 +2,7 @@ import { type ReactNode } from 'react'
 
 export function Logo({ className = '' }: { className?: string }) {
   return (
-    <div className={`font-display leading-none text-gold ${className}`}>
+    <div className={`font-display leading-none text-gold cursor-pointer ${className}`}>
       <span className="font-black">CV</span>
       <span className="italic font-normal">itae</span>
     </div>

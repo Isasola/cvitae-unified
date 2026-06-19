@@ -83,7 +83,9 @@ function Footer() {
     <footer className="border-t border-border/40 mt-24 bg-[oklch(0.13_0.010_60)]">
       <div className="max-w-6xl mx-auto px-6 py-14 grid grid-cols-2 md:grid-cols-5 gap-10">
         <div className="col-span-2">
-          <Logo className="text-2xl" />
+          <Link href="/">
+            <Logo className="text-2xl" />
+          </Link>
           <p className="text-sm text-muted-foreground mt-4 max-w-xs leading-relaxed">
             Tu carrera, trazada con intención. Ecosistema de gestión de talento con IA para Paraguay y Latinoamérica.
           </p>
