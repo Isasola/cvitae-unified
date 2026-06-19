@@ -1,0 +1,61 @@
+name: CVitae Scrapers
+
+on:
+  schedule:
+    # Run at 6:00 AM Paraguay time (UTC-4), every day
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+    inputs:
+      scraper:
+        description: 'Scraper to run (all | oya | buscojobs | abc | fundacion | multi)'
+        required: false
+        default: 'all'
+
+jobs:
+  run-scrapers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: scrapers/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install -r scrapers/requirements.txt
+          playwright install chromium --with-deps
+
+      - name: Run OYA scraper
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'oya' || github.event_name == 'schedule' }}
+        run: python scrapers/oya_scraper.py
+        continue-on-error: true
+
+      - name: Run BuscoJobs scraper
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'buscojobs' || github.event_name == 'schedule' }}
+        run: python scrapers/buscojobs_scraper.py
+        continue-on-error: true
+
+      - name: Run multi-site scraper (clasipar, mtess, tigo, personal, itau, copaco)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'multi' || github.event_name == 'schedule' }}
+        run: python scrapers/scrapper.py
+        continue-on-error: true
+
+      - name: Run ABC Color scraper (Playwright)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'abc' || github.event_name == 'schedule' }}
+        run: python scrapers/abc_scrapper.py
+        continue-on-error: true
+
+      - name: Run Fundación Paraguaya scraper (Playwright)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'fundacion' || github.event_name == 'schedule' }}
+        run: python scrapers/fundacion_scraper.py
+        continue-on-error: true
