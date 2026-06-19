@@ -112,7 +112,7 @@ function HeroSection() {
                   ¡Revisá tu correo!
                 </h3>
                 <p className="text-muted text-sm">
-                  Te enviamos un enlace mágico a <strong className="text-white">{email}</strong>.
+                  Te enviamos un enlace mágico a <strong>{email}</strong>.
                   Tu CV queda guardado para cuando ingreses.
                 </p>
               </motion.div>
@@ -141,13 +141,13 @@ function HeroSection() {
                         <p className="text-white text-sm font-medium truncate">{file.name}</p>
                         <p className="text-muted text-xs">{(file.size / 1024).toFixed(0)} KB · listo</p>
                       </div>
-                      <button onClick={e => { e.stopPropagation(); setFile(null) }} className="text-[#555] hover:text-white text-xs transition-colors">cambiar</button>
+                      <button onClick={e => { e.stopPropagation(); setFile(null) }} className="text-muted/50 hover:text-white text-xs transition-colors">cambiar</button>
                     </>
                   ) : (
                     <>
-                      <Upload className="text-[#555] shrink-0" size={20} />
+                      <Upload className="text-muted/50 shrink-0" size={20} />
                       <p className="text-muted text-sm text-left">
-                        Subí tu CV <span className="text-[#555]">— PDF, DOCX o TXT</span>
+                        Subí tu CV <span className="text-muted/50">— PDF, DOCX o TXT</span>
                       </p>
                     </>
                   )}
@@ -177,7 +177,7 @@ function HeroSection() {
                     : <>Analizar mi CV <ArrowRight size={16} /></>}
                 </GoldButton>
 
-                <p className="text-[#444] text-xs text-center">
+                <p className="text-muted/40 text-xs text-center">
                   Gratis · Sin tarjeta · Resultados en 60 segundos
                 </p>
               </motion.div>
@@ -491,14 +491,14 @@ function B2BSection() {
               <div className="border border-gold bg-gold/5 rounded-xl p-4 flex items-center justify-between">
                 <div>
                   <p className="text-white font-semibold text-sm">Plan Empresa</p>
-                  <p className="text-[#555] text-xs">Hasta 5 usuarios · 100 análisis/mes</p>
+                  <p className="text-muted/50 text-xs">Hasta 5 usuarios · 100 análisis/mes</p>
                 </div>
                 <div className="text-right">
                   <p className="text-gold font-bold text-xl">USD 79</p>
-                  <p className="text-[#555] text-xs">/mes</p>
+                  <p className="text-muted/50 text-xs">/mes</p>
                 </div>
               </div>
-              <p className="text-[#444] text-xs text-center">
+              <p className="text-muted/40 text-xs text-center">
                 <Star size={10} className="inline mr-1 text-gold" />
                 Seleccionado entre los proyectos destacados de Moonshot Paraguay 2026
               </p>
@@ -515,9 +515,9 @@ function B2BSection() {
                     <div className="text-5xl mb-4">🎉</div>
                     <h3 className="text-white font-bold text-xl mb-2" style={{ fontFamily: 'Playfair Display, serif' }}>¡Estás en la lista!</h3>
                     <p className="text-muted text-sm leading-relaxed">
-                      Te contactamos a <strong className="text-white">{formEmail}</strong> para coordinar el acceso a la Beta.
+                      Te contactamos a <strong>{formEmail}</strong> para coordinar el acceso a la Beta.
                     </p>
-                    <div className="mt-6 flex items-center justify-center gap-2 text-sm text-[#555]">
+                    <div className="mt-6 flex items-center justify-center gap-2 text-sm text-muted">
                       <CheckCircle2 size={14} className="text-gold" />Respuesta en menos de 48 hs
                     </div>
                     <div className="mt-4">
@@ -530,7 +530,7 @@ function B2BSection() {
                   <motion.div key="form" className="relative space-y-4">
                     <div>
                       <h3 className="text-white font-bold text-xl mb-1" style={{ fontFamily: 'Playfair Display, serif' }}>Solicitá acceso a la Beta</h3>
-                      <p className="text-[#666] text-sm">Gratis durante el período de prueba. Sin tarjeta requerida.</p>
+                      <p className="text-muted text-sm">Gratis durante el período de prueba. Sin tarjeta requerida.</p>
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-white/50 mb-1.5">Tu nombre (opcional)</label>

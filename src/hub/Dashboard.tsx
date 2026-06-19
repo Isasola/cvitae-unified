@@ -305,7 +305,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-muted text-xs uppercase tracking-wider mb-0.5">Tu próximo paso</p>
                   <p className="text-white font-semibold">{nextStep.label}</p>
-                  <p className="text-[#555] text-xs mt-0.5">{nextStep.detail}</p>
+                  <p className="text-muted/50 text-xs mt-0.5">{nextStep.detail}</p>
                 </div>
                 <GoldButton href={nextStep.href} variant="outline" size="sm">
                   Ir <ChevronRight size={14} />
@@ -318,7 +318,7 @@ export default function Dashboard() {
 
               {matches.length === 0 ? (
                 <GlassCard className="text-center py-12 border-dashed border-white/10">
-                  <Search className="w-12 h-12 text-[#333] mx-auto mb-4" />
+                  <Search className="w-12 h-12 text-muted/30 mx-auto mb-4" />
                   <h3 className="text-white font-bold mb-2">No encontramos matches aún</h3>
                   <p className="text-muted mb-6 text-sm max-w-xs mx-auto">Completá tu perfil con más habilidades para ver oportunidades.</p>
                   <GoldButton href="/mi-carrera/perfil" size="sm" variant="outline">Mejorar perfil</GoldButton>
@@ -372,7 +372,7 @@ export default function Dashboard() {
                 </h3>
                 <div className="space-y-2">
                   {missingSkills.length === 0 ? (
-                    <p className="text-[#555] text-xs italic">Calculando...</p>
+                    <p className="text-muted/50 text-xs italic">Calculando...</p>
                   ) : (
                     missingSkills.map((skill) => (
                       <div key={skill} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
@@ -403,16 +403,16 @@ export default function Dashboard() {
                           <div className="flex-1 min-w-0">
                             <p className="text-[10px] text-gold mb-0.5">{c.skill}</p>
                             <p className="text-white text-xs font-medium truncate">{c.course}</p>
-                            <p className="text-[#555] text-[10px]">{c.platform}</p>
+                            <p className="text-muted/50 text-[10px]">{c.platform}</p>
                             {c.why && <p className="text-muted text-[10px] mt-1 italic">{c.why}</p>}
                           </div>
-                          <ExternalLinkIcon size={12} className="text-[#555] group-hover:text-gold shrink-0 mt-1 transition-colors" />
+                          <ExternalLinkIcon size={12} className="text-muted/50 group-hover:text-gold shrink-0 mt-1 transition-colors" />
                         </div>
                       </a>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[#555] text-xs italic">Completá tu perfil para ver cursos personalizados.</p>
+                  <p className="text-muted/50 text-xs italic">Completá tu perfil para ver cursos personalizados.</p>
                 )}
               </GlassCard>
 

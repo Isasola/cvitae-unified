@@ -241,7 +241,7 @@ export default function BatchAnalysis() {
                       <FileText size={16} className="text-gold shrink-0" />
                       <span className="text-xs text-white truncate">{c.file.name}</span>
                     </div>
-                    <button onClick={() => removeCandidate(c.id)} className="text-[#555] hover:text-red-400 transition-colors">
+                    <button onClick={() => removeCandidate(c.id)} className="text-muted/50 hover:text-red-400 transition-colors">
                       <Trash2 size={14} />
                     </button>
                   </div>
@@ -324,7 +324,7 @@ export default function BatchAnalysis() {
                         </div>
                         <div className="text-right">
                           <p className="text-2xl font-bold text-gold">{c.result.fitScore}%</p>
-                          <p className="text-[10px] text-[#555] uppercase">Fit Score</p>
+                          <p className="text-[10px] text-muted/50 uppercase">Fit Score</p>
                         </div>
                       </div>
                     ))}

@@ -1,0 +1,319 @@
+import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import ReactMarkdown from 'react-markdown'
+import { Download, Copy, RefreshCw, Briefcase, FileText, CheckCircle, Sun, Moon, Edit3, Eye, Zap, AlertCircle } from 'lucide-react'
+import { GlassCard, GoldButton, Badge } from '@/components/cvitae/UI-Elements'
+import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
+import { auth, supabase } from '@/lib/supabase'
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
+
+const MATCH_BATCH_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1/match-batch'
+
+export default function CVVivo() {
+  const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<any>(null)
+  const [vacancies, setVacancies] = useState<any[]>([])
+  const [selectedVacancy, setSelectedVacancy] = useState<any>(null)
+  const [customVacancy, setCustomVacancy] = useState('')
+  const [mode, setMode] = useState<'match' | 'custom'>('match')
+  const [generatedCV, setGeneratedCV] = useState<string>('')
+  const [editableCV, setEditableCV] = useState<string>('')
+  const [fromCache, setFromCache] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [adapting, setAdapting] = useState(false)
+  const [darkMode, setDarkMode] = useState(true)
+  const [editMode, setEditMode] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const cvRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    auth.getUser().then(setUser)
+  }, [])
+
+  useEffect(() => {
+    if (user) loadData()
+  }, [user])
+
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const { data: prof } = await supabase
+        .from('user_master_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      setProfile(prof)
+
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(MATCH_BATCH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+      })
+      const data = await res.json()
+      setVacancies(data.matches || [])
+
+      // Generar CV base automáticamente si no hay uno
+      if (prof) {
+        const baseRes = await fetch('/.netlify/functions/generate-cv-vivo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile: { ...prof, user_id: user.id }, vacancy: null }),
+        })
+        const baseData = await baseRes.json()
+        if (baseData.cv) {
+          setGeneratedCV(baseData.cv)
+          setEditableCV(baseData.cv)
+          setFromCache(baseData.fromCache || false)
+        }
+      }
+    } catch (err) {
+      console.error('Error cargando CV Vivo:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAdaptCV = async () => {
+    if (!profile) return
+    const vacancyToUse = mode === 'match' ? selectedVacancy : { titulo: 'Vacante Personalizada', cuerpo: customVacancy, id: 'custom' }
+    if (!vacancyToUse) return
+
+    setAdapting(true)
+    try {
+      const res = await fetch('/.netlify/functions/generate-cv-vivo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile: { ...profile, user_id: user.id }, vacancy: vacancyToUse }),
+      })
+      const data = await res.json()
+      if (data.cv) {
+        setGeneratedCV(data.cv)
+        setEditableCV(data.cv)
+        setFromCache(data.fromCache || false)
+        setEditMode(false)
+      }
+    } catch {
+      alert('Error al adaptar el CV. Intentá de nuevo.')
+    } finally {
+      setAdapting(false)
+    }
+  }
+
+  const downloadPDF = async () => {
+    if (!cvRef.current) return
+    const el = cvRef.current
+    const prevMaxHeight = el.style.maxHeight
+    el.style.maxHeight = 'none'
+    await new Promise(r => setTimeout(r, 150))
+
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      backgroundColor: darkMode ? '#111111' : '#ffffff',
+      useCORS: true,
+      logging: false,
+      windowWidth: el.scrollWidth,
+      windowHeight: el.scrollHeight,
+    })
+    el.style.maxHeight = prevMaxHeight
+
+    const imgData = canvas.toDataURL('image/png')
+    const pdf = new jsPDF('p', 'mm', 'a4')
+    const pdfW = pdf.internal.pageSize.getWidth()
+    const pdfH = pdf.internal.pageSize.getHeight()
+    const ratio = canvas.width / pdfW
+    const totalH = canvas.height / ratio
+
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfW, totalH)
+    let remaining = totalH - pdfH
+    let page = 1
+    while (remaining > 0) {
+      pdf.addPage()
+      pdf.addImage(imgData, 'PNG', 0, -(pdfH * page), pdfW, totalH)
+      remaining -= pdfH
+      page++
+    }
+
+    pdf.save(`CVitae_${profile?.full_name || 'Candidato'}_${new Date().toISOString().split('T')[0]}.pdf`)
+  }
+
+  const handleCopy = () => {
+    const text = editMode ? editableCV : generatedCV
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-32 gap-4">
+          <div className="w-10 h-10 border-2 border-gold border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted text-sm">Generando tu CV base...</p>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  const canAdapt = mode === 'match' ? !!selectedVacancy : customVacancy.trim().length > 20
+
+  return (
+    <DashboardLayout>
+      <div className="max-w-5xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold text-white mb-1">
+              CV Vivo{' '}
+              <span className="text-gold text-sm font-normal ml-2 tracking-widest uppercase">Híbrido ATS</span>
+            </h1>
+            <p className="text-muted text-sm leading-relaxed max-w-xl">
+              💡 La IA mejora el <strong className="text-white">contenido y las palabras</strong> para pasar filtros ATS. 
+              Elegí una vacante de CVitae o pegá una descripción externa.
+            </p>
+          </div>
+
+          <div className="w-full md:w-80 space-y-3">
+            <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+              <button onClick={() => setMode('match')}
+                className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all ${mode === 'match' ? 'bg-gold text-[#0a0a0a]' : 'text-muted hover:text-white'}`}>
+                Vacantes CVitae
+              </button>
+              <button onClick={() => setMode('custom')}
+                className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all ${mode === 'custom' ? 'bg-gold text-[#0a0a0a]' : 'text-muted hover:text-white'}`}>
+                Pegar vacante
+              </button>
+            </div>
+
+            {mode === 'match' ? (
+                <select
+                  className="w-full bg-background text-white border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-gold/50"
+                  onChange={e => setSelectedVacancy(vacancies.find(v => v.id === e.target.value) || null)}
+                  value={selectedVacancy?.id || ''}
+                >
+                  <option value="" className="bg-background text-white">Seleccioná una vacante...</option>
+                  {vacancies.map(v => (
+                    <option key={v.id} value={v.id} className="bg-background text-white">
+                      {v.titulo} ({v.finalScore}%)
+                    </option>
+                  ))}
+                </select>
+            ) : (
+              <div className="relative">
+                <textarea
+                  value={customVacancy}
+                  onChange={e => setCustomVacancy(e.target.value)}
+                  placeholder="Pegá acá la descripción del empleo (LinkedIn, diario, etc)..."
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-gold/50 min-h-[100px] resize-none"
+                />
+                {customVacancy.trim().length > 0 && customVacancy.trim().length < 20 && (
+                  <p className="text-muted/70 text-xs mt-1">Agregá más detalle para un mejor resultado.</p>
+                )}
+              </div>
+            )}
+
+            <GoldButton onClick={handleAdaptCV} disabled={!canAdapt || adapting} size="sm" className="w-full">
+              {adapting ? <><RefreshCw className="animate-spin" size={16} />Adaptando...</> : <><Briefcase size={16} />Adaptar CV</>}
+            </GoldButton>
+          </div>
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Panel izquierdo */}
+          <div className="lg:col-span-1 space-y-4">
+            <GlassCard>
+              <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                <CheckCircle size={18} className="text-gold" /> Ventajas del CV Vivo
+              </h3>
+              <ul className="space-y-3">
+                {[
+                  { t: 'ATS-Friendly', d: 'Estructura legible por cualquier software de reclutamiento.' },
+                  { t: 'Palabras clave exactas', d: 'La IA usa los términos de la vacante que elegiste.' },
+                  { t: 'Formato Híbrido', d: 'Equilibrio entre diseño premium y funcionalidad.' },
+                  { t: 'Editable', d: 'Modificá el texto antes de descargar.' },
+                ].map((item, i) => (
+                  <li key={i} className="flex gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-gold mt-1.5 shrink-0" />
+                    <div>
+                      <p className="text-white text-sm font-medium">{item.t}</p>
+                      <p className="text-muted/70 text-xs">{item.d}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </GlassCard>
+
+            {generatedCV && (
+              <div className="space-y-3">
+                {fromCache && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-gold/10 border border-gold/20 rounded-xl">
+                    <span className="text-gold text-xs">⚡ Cargado al instante desde caché</span>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button onClick={() => setDarkMode(!darkMode)}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-xs font-medium hover:bg-white/10 transition-all">
+                    {darkMode ? <Sun size={14} /> : <Moon size={14} />}
+                    {darkMode ? 'Modo claro' : 'Modo oscuro'}
+                  </button>
+                  <button onClick={() => { if (!editMode) setEditableCV(generatedCV); setEditMode(!editMode) }}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-xs font-medium hover:bg-white/10 transition-all">
+                    {editMode ? <Eye size={14} /> : <Edit3 size={14} />}
+                    {editMode ? 'Vista previa' : 'Editar'}
+                  </button>
+                </div>
+                <GoldButton onClick={downloadPDF} className="w-full"><Download size={18} />Descargar PDF</GoldButton>
+                <button onClick={handleCopy}
+                  className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-medium hover:bg-white/10 transition-all flex items-center justify-center gap-2">
+                  <Copy size={18} />{copied ? '¡Copiado!' : 'Copiar texto'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* CV Preview */}
+          <div className="lg:col-span-2">
+            <div className={`rounded-2xl border overflow-hidden shadow-2xl transition-colors ${darkMode ? 'bg-[#111111] border-white/5' : 'bg-white border-gray-200'}`}>
+              {editMode ? (
+                <textarea
+                  value={editableCV}
+                  onChange={e => { setEditableCV(e.target.value); setGeneratedCV(e.target.value) }}
+                  className={`w-full p-8 min-h-[800px] font-mono text-sm resize-none focus:outline-none ${darkMode ? 'bg-[#111111] text-white' : 'bg-white text-gray-900'}`}
+                  placeholder="Editá el markdown de tu CV acá..."
+                />
+              ) : (
+                <div ref={cvRef} className={`p-10 min-h-[800px] font-['Inter',sans-serif] ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {generatedCV ? (
+                    <ReactMarkdown
+                      components={{
+                        h1: ({...props}) => <h1 className={`text-3xl font-black mb-2 pb-6 pt-8 -mx-10 px-10 border-b ${darkMode ? 'text-white bg-background border-gold/30' : 'text-gray-900 bg-gray-50 border-gray-300'}`} {...props} />,
+                        h2: ({...props}) => <h2 className={`text-xs font-bold uppercase tracking-[0.2em] mt-10 mb-4 pl-4 border-l-2 border-gold ${darkMode ? 'text-gold' : 'text-[#8a6a1f]'}`} {...props} />,
+                        h3: ({...props}) => <h3 className={`text-base font-bold mt-6 mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`} {...props} />,
+                        p: ({...props}) => {
+                          const isContact = typeof props.children === 'string' && String(props.children).includes('|')
+                          return isContact
+                            ? <p className={`text-xs font-medium tracking-wide mb-8 -mt-2 -mx-10 px-10 pb-4 ${darkMode ? 'text-muted bg-background' : 'text-gray-500 bg-gray-50'}`} {...props} />
+                            : <p className={`text-sm leading-relaxed mb-3 ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`} {...props} />
+                        },
+                        li: ({...props}) => <li className={`text-sm mb-2 list-none relative pl-5 before:content-[''] before:absolute before:left-0 before:top-[0.55em] before:w-1.5 before:h-1.5 before:bg-gold before:rounded-full ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`} {...props} />,
+                        strong: ({...props}) => <strong className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`} {...props} />,
+                      }}
+                    >
+                      {generatedCV}
+                    </ReactMarkdown>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full py-20 text-center opacity-30">
+                      <FileText size={64} className="mb-6" />
+                      <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Tu CV aparecerá acá</h3>
+                      <p className="max-w-xs text-sm">Seleccioná una vacante o pegá una descripción y hacé click en "Adaptar CV"</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
+  )
+}

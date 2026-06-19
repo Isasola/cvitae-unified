@@ -323,7 +323,7 @@ function HistoryPanel({ token, onToggleStar, onCompare }: { token: string; onTog
     <div className="space-y-4">
       {history.length === 0 ? (
         <GlassCard className="text-center py-20">
-          <History size={40} className="text-[#333333] mx-auto mb-4" />
+          <History size={40} className="text-muted/30 mx-auto mb-4" />
           <p className="text-muted/80">No hay análisis guardados aún.</p>
         </GlassCard>
       ) : (
@@ -358,10 +358,10 @@ function HistoryPanel({ token, onToggleStar, onCompare }: { token: string; onTog
                       {new Date(record.created_at).toLocaleDateString()} · {record.file_name}
                     </p>
                   </div>
-                  <button onClick={() => toggleStar(record.id)} className={`p-2 rounded-lg transition-colors ${record.is_starred ? 'text-gold' : 'text-[#333333] hover:text-gold'}`}>
+                  <button onClick={() => toggleStar(record.id)} className={`p-2 rounded-lg transition-colors ${record.is_starred ? 'text-gold' : 'text-muted/30 hover:text-gold'}`}>
                     <Star size={18} fill={record.is_starred ? 'currentColor' : 'none'} />
                   </button>
-                  <button onClick={() => setExpandedId(expandedId === record.id ? null : record.id)} className="p-2 text-[#333333] hover:text-white transition-colors">
+                  <button onClick={() => setExpandedId(expandedId === record.id ? null : record.id)} className="p-2 text-muted/30 hover:text-white transition-colors">
                     {expandedId === record.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                   </button>
                 </div>
