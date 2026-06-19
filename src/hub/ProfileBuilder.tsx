@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { useLocation } from 'wouter'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Save, Plus, X, CheckCircle, ChevronRight, ChevronLeft, Upload } from 'lucide-react'
@@ -6,6 +7,7 @@ import { GlassCard, GoldButton, Badge } from '@/components/cvitae/UI-Elements'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { auth, supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { analytics } from '@/lib/analytics'
 
 const STEPS = ['Datos personales', 'Skills y experiencia', 'Qué buscás', 'Revisión']
 const SKILLS = ['Marketing Digital', 'SEO', 'SEM', 'Google Ads', 'Facebook Ads', 'Content Marketing', 'Email Marketing', 'Analytics', 'Data Analysis', 'Social Media', 'Copywriting', 'Branding', 'JavaScript', 'Python', 'React', 'Node.js', 'SQL', 'Excel Avanzado', 'Gestión de Proyectos', 'Scrum', 'Liderazgo', 'Ventas', 'Negociación', 'Atención al Cliente', 'Logística', 'Contabilidad', 'RRHH', 'Diseño Gráfico', 'Inglés', 'Portugués']
@@ -120,6 +122,7 @@ export default function ProfileBuilder() {
       if (!analyzeRes.ok) throw new Error('Error analizando el CV')
       const extracted = await analyzeRes.json()
 
+      analytics.cvAnalyzed('profile_builder')
       setFormData(prev => ({
         ...prev,
         full_name: extracted.full_name || prev.full_name,
@@ -216,6 +219,11 @@ export default function ProfileBuilder() {
 
   return (
     <DashboardLayout>
+      <Helmet>
+        <title>Completar Perfil | CVitae</title>
+        <meta name="description" content="Completá tu perfil profesional para que la IA encuentre las mejores oportunidades para vos." />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       <div className="max-w-3xl mx-auto">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <div className="flex items-center justify-between mb-8">
