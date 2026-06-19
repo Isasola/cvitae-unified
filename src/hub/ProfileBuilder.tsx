@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { useLocation } from 'wouter'
-import { motion } from 'framer-motion'
-import { ArrowLeft, Save, Plus, X, CheckCircle, ChevronRight, ChevronLeft, Upload } from 'lucide-react'
-import { GlassCard, GoldButton, Badge } from '@/components/cvitae/UI-Elements'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  ArrowLeft, Save, Plus, X, CheckCircle, ChevronRight, ChevronLeft,
+  Upload, Loader2, Brain,
+} from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
+import { GrowthLine } from '@/components/cv/visuals'
 import { auth, supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { analytics } from '@/lib/analytics'
+
+const ease = [0.22, 1, 0.36, 1] as const
 
 const STEPS = ['Datos personales', 'Skills y experiencia', 'Qué buscás', 'Revisión']
 const SKILLS = ['Marketing Digital', 'SEO', 'SEM', 'Google Ads', 'Facebook Ads', 'Content Marketing', 'Email Marketing', 'Analytics', 'Data Analysis', 'Social Media', 'Copywriting', 'Branding', 'JavaScript', 'Python', 'React', 'Node.js', 'SQL', 'Excel Avanzado', 'Gestión de Proyectos', 'Scrum', 'Liderazgo', 'Ventas', 'Negociación', 'Atención al Cliente', 'Logística', 'Contabilidad', 'RRHH', 'Diseño Gráfico', 'Inglés', 'Portugués']
@@ -19,6 +24,18 @@ const SUMMARY_EXAMPLES = [
   'Profesional de Marketing Digital con foco en SEO y campañas de Google Ads. Logré aumentar el tráfico orgánico un 40% en mi último proyecto.',
   'Contador con experiencia en pymes paraguayas, manejo de impuestos SET y facturación electrónica. Busco rol en empresa en crecimiento.',
 ]
+
+function StepDot({ active, done }: { active: boolean; done: boolean }) {
+  return (
+    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-medium transition-all ${
+      done ? 'bg-[#c9a84c] text-[#0a0a0a]'
+      : active ? 'border border-[#c9a84c] bg-[#c9a84c]/10 text-[#c9a84c]'
+      : 'border border-white/15 text-white/30'
+    }`}>
+      {done ? '✓' : null}
+    </span>
+  )
+}
 
 export default function ProfileBuilder() {
   const [, setLocation] = useLocation()
@@ -43,7 +60,6 @@ export default function ProfileBuilder() {
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
 
-  // Auth con loading state — evita pantalla negra
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user || null)
@@ -56,14 +72,10 @@ export default function ProfileBuilder() {
     return () => { subscription?.unsubscribe() }
   }, [])
 
-  // Cargar perfil existente
   useEffect(() => {
     if (!user) return
     supabase
-      .from('user_master_profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle()
+      .from('user_master_profiles').select('*').eq('user_id', user.id).maybeSingle()
       .then(({ data }) => {
         if (data) {
           setExistingProfileId(data.id)
@@ -84,8 +96,7 @@ export default function ProfileBuilder() {
   const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setAnalyzing(true)
-    setAnalyzeError(null)
+    setAnalyzing(true); setAnalyzeError(null)
     try {
       let text = ''
       if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
@@ -96,8 +107,7 @@ export default function ProfileBuilder() {
           reader.readAsDataURL(file)
         })
         const res = await fetch('/.netlify/functions/extract-pdf-text', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pdfBase64: base64 }),
         })
         if (!res.ok) throw new Error('Error extrayendo texto del PDF')
@@ -115,8 +125,7 @@ export default function ProfileBuilder() {
       }
 
       const analyzeRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cvText: text, mode: 'extract' }),
       })
       if (!analyzeRes.ok) throw new Error('Error analizando el CV')
@@ -148,16 +157,13 @@ export default function ProfileBuilder() {
   }
 
   const removeSkill = (skill: string) => setFormData(prev => ({ ...prev, skills: prev.skills.filter(s => s !== skill) }))
-
   const addCurso = () => {
     if (newCurso.trim() && !formData.cursos.includes(newCurso.trim())) {
       setFormData(prev => ({ ...prev, cursos: [...prev.cursos, newCurso.trim()] }))
       setNewCurso('')
     }
   }
-
   const removeCurso = (curso: string) => setFormData(prev => ({ ...prev, cursos: prev.cursos.filter(c => c !== curso) }))
-
   const toggleSkill = (skill: string) => {
     setFormData(prev => ({
       ...prev,
@@ -195,12 +201,11 @@ export default function ProfileBuilder() {
     }
   }
 
-  // Loading state — evita pantalla negra
   if (authLoading) {
     return (
       <DashboardLayout>
         <div className="flex justify-center py-32">
-          <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#c9a84c] border-t-transparent" />
         </div>
       </DashboardLayout>
     )
@@ -209,13 +214,20 @@ export default function ProfileBuilder() {
   if (!user) {
     return (
       <DashboardLayout>
-        <div className="text-center py-12">
-          <p className="text-muted mb-4">Necesitás iniciar sesión para editar tu perfil.</p>
-          <GoldButton onClick={() => setLocation('/')}>Ir al inicio</GoldButton>
+        <div className="py-12 text-center">
+          <p className="mb-4 text-muted-foreground">Necesitás iniciar sesión para editar tu perfil.</p>
+          <button
+            onClick={() => setLocation('/')}
+            className="inline-flex h-10 items-center gap-2 rounded-full bg-[#c9a84c] px-5 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]"
+          >
+            Ir al inicio
+          </button>
         </div>
       </DashboardLayout>
     )
   }
+
+  const inputCls = 'w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/50 transition'
 
   return (
     <DashboardLayout>
@@ -224,267 +236,257 @@ export default function ProfileBuilder() {
         <meta name="description" content="Completá tu perfil profesional para que la IA encuentre las mejores oportunidades para vos." />
         <meta name="robots" content="noindex" />
       </Helmet>
-      <div className="max-w-3xl mx-auto">
+      <div className="mx-auto max-w-3xl">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <div className="flex items-center justify-between mb-8">
-            <button onClick={() => setLocation('/mi-carrera')} className="flex items-center gap-2 text-muted hover:text-white transition-colors">
-              <ArrowLeft size={18} /> Volver
+          {/* Header */}
+          <div className="mb-8 flex items-center justify-between">
+            <button onClick={() => setLocation('/mi-carrera')} className="inline-flex items-center gap-2 text-sm text-muted-foreground transition hover:text-white">
+              <ArrowLeft size={16} /> Volver
             </button>
-            <span className="text-sm text-muted">Paso {step + 1} de {STEPS.length}</span>
+            <div className="flex items-center gap-2">
+              {STEPS.map((label, i) => (
+                <div key={label} className="flex items-center gap-2">
+                  <StepDot active={i === step} done={i < step} />
+                  {i < STEPS.length - 1 && (
+                    <span className="hidden h-px w-6 bg-white/10 sm:block" />
+                  )}
+                </div>
+              ))}
+            </div>
+            <span className="text-sm text-muted-foreground">Paso {step + 1} de {STEPS.length}</span>
           </div>
 
-          <div className="w-full h-1 bg-white/10 rounded-full mb-8">
+          {/* Progress bar */}
+          <div className="relative mb-8 h-1 w-full overflow-hidden rounded-full bg-white/8">
+            <GrowthLine className="absolute -top-6 left-0 right-0 h-14 opacity-30" />
             <motion.div
-              className="h-full bg-gold rounded-full"
+              className="absolute left-0 top-0 h-full rounded-full bg-[#c9a84c]"
               initial={{ width: 0 }}
               animate={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.4, ease }}
             />
           </div>
 
-          <h1 className="text-2xl font-bold text-white mb-6">{STEPS[step]}</h1>
+          <h1 className="mb-6 font-display text-2xl text-white">{STEPS[step]}</h1>
 
-          {/* Upload CV — solo en paso 0 */}
+          {/* CV Upload — solo en paso 0 */}
           {step === 0 && (
             <div className="mb-6">
               <label className={cn(
-                'flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-2xl transition-all cursor-pointer',
-                analyzing ? 'border-gold bg-gold/5' : 'border-gold/30 hover:border-gold hover:bg-gold/5 bg-white/5'
+                'flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed p-8 transition-all',
+                analyzing ? 'border-[#c9a84c] bg-[#c9a84c]/5' : 'border-[#c9a84c]/30 bg-white/5 hover:border-[#c9a84c] hover:bg-[#c9a84c]/5'
               )}>
                 {analyzing ? (
                   <div className="flex flex-col items-center">
-                    <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin mb-3" />
-                    <span className="text-white font-medium">Analizando tu CV con IA...</span>
-                    <span className="text-muted text-xs mt-1">Esto tarda unos segundos</span>
+                    <Brain className="mb-3 h-8 w-8 animate-pulse text-[#c9a84c]" />
+                    <span className="font-medium text-white">Analizando tu CV con IA…</span>
+                    <span className="mt-1 text-xs text-muted-foreground">Esto tarda unos segundos</span>
                   </div>
                 ) : (
                   <>
-                    <Upload className="text-gold mb-3" size={32} />
-                    <span className="text-white font-bold">Subir mi CV y autocompletar</span>
-                    <span className="text-muted text-xs mt-1">PDF o DOCX — la IA completa el formulario por vos</span>
+                    <Upload className="mb-3 h-8 w-8 text-[#c9a84c]" />
+                    <span className="font-display text-base text-white">Subir mi CV y autocompletar</span>
+                    <span className="mt-1 text-xs text-muted-foreground">PDF o DOCX — la IA completa el formulario por vos</span>
                   </>
                 )}
                 <input type="file" className="hidden" accept=".pdf,.docx" onChange={handleCVUpload} disabled={analyzing} />
               </label>
-              {analyzeError && (
-                <p className="text-red-400 text-sm mt-3 text-center">{analyzeError}</p>
-              )}
-              <div className="flex items-center gap-4 my-6">
-                <div className="h-px bg-white/10 flex-1" />
-                <span className="text-[10px] text-muted/70 uppercase tracking-widest">o completá manualmente</span>
-                <div className="h-px bg-white/10 flex-1" />
+              <AnimatePresence>
+                {analyzeError && (
+                  <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                    className="mt-3 text-center text-sm text-red-400">{analyzeError}</motion.p>
+                )}
+              </AnimatePresence>
+              <div className="my-6 flex items-center gap-4">
+                <div className="h-px flex-1 bg-white/8" />
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">o completá manualmente</span>
+                <div className="h-px flex-1 bg-white/8" />
               </div>
             </div>
           )}
 
-          <GlassCard>
-            {step === 0 && (
-              <div className="space-y-4">
-                <input
-                  type="text"
-                  value={formData.full_name}
-                  onChange={e => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
-                  placeholder="Nombre completo — ej: María González"
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555555] focus:outline-none focus:border-gold/50"
-                />
-                <input
-                  type="text"
-                  value={formData.professional_title}
-                  onChange={e => setFormData(prev => ({ ...prev, professional_title: e.target.value }))}
-                  placeholder="Título profesional — ej: Marketing Specialist | Desarrollador Full Stack"
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555555] focus:outline-none focus:border-gold/50"
-                />
-                <div>
-                  <textarea
-                    value={formData.summary}
-                    onChange={e => setFormData(prev => ({ ...prev, summary: e.target.value }))}
-                    placeholder="Breve resumen profesional — contá quién sos, qué hacés y qué buscás..."
-                    rows={4}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555555] focus:outline-none focus:border-gold/50"
-                  />
-                  <div className="mt-3">
-                    <p className="text-xs text-muted/70 mb-2 uppercase tracking-widest">Ejemplos para inspirarte:</p>
-                    <div className="space-y-2">
-                      {SUMMARY_EXAMPLES.map((example, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setFormData(prev => ({ ...prev, summary: example }))}
-                          className="w-full text-left px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-xs text-muted hover:border-gold/30 hover:text-white transition-all"
-                        >
-                          {example}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {step === 1 && (
-              <div className="space-y-6">
-                <div>
-                  <label className="text-sm text-muted mb-3 block">Tus habilidades</label>
-                  <div className="flex flex-wrap gap-2 mb-4 min-h-[40px]">
-                    {formData.skills.map(skill => (
-                      <Badge key={skill} variant="gold" className="gap-2">
-                        {skill} <X size={12} className="cursor-pointer hover:text-red-400" onClick={() => removeSkill(skill)} />
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newSkill}
-                      onChange={e => setNewSkill(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && addSkill()}
-                      placeholder="Agregar habilidad..."
-                      className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-gold/50"
-                    />
-                    <button onClick={addSkill} className="p-2 bg-gold text-[#0a0a0a] rounded-lg hover:bg-[#e8c97a] transition-colors">
-                      <Plus size={20} />
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs text-muted/70 uppercase tracking-widest mb-3 block">Sugerencias populares</label>
-                  <div className="flex flex-wrap gap-2">
-                    {SKILLS.filter(s => !formData.skills.includes(s)).slice(0, 15).map(skill => (
-                      <button
-                        key={skill}
-                        onClick={() => toggleSkill(skill)}
-                        className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-gray-400 hover:border-gold/50 hover:text-white transition-all"
-                      >
-                        + {skill}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="pt-4 border-t border-white/5">
-                  <label className="text-sm text-muted mb-3 block">Cursos y certificaciones</label>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {formData.cursos.map(curso => (
-                      <Badge key={curso} variant="muted" className="gap-2 bg-white/5 text-white">
-                        {curso} <X size={12} className="cursor-pointer hover:text-red-400" onClick={() => removeCurso(curso)} />
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newCurso}
-                      onChange={e => setNewCurso(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && addCurso()}
-                      placeholder="Ej: Certificación Google Ads..."
-                      className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-gold/50"
-                    />
-                    <button onClick={addCurso} className="p-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all">
-                      <Plus size={20} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {step === 2 && (
-              <div className="space-y-6">
-                <div>
-                  <label className="text-sm text-muted mb-3 block">Seniority actual</label>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {SENIORITY.map(s => (
-                      <button
-                        key={s}
-                        onClick={() => setFormData(prev => ({ ...prev, seniority: s }))}
-                        className={cn(
-                          'px-4 py-2 rounded-lg text-sm border transition-all',
-                          formData.seniority === s
-                            ? 'bg-gold/10 border-gold text-gold'
-                            : 'bg-white/5 border-white/10 text-gray-400 hover:border-white/20'
-                        )}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm text-muted mb-3 block">Modalidad preferida</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {MODALITIES.map(m => (
-                      <button
-                        key={m}
-                        onClick={() => setFormData(prev => ({ ...prev, modality: m }))}
-                        className={cn(
-                          'px-4 py-2 rounded-lg text-sm border transition-all',
-                          formData.modality === m
-                            ? 'bg-gold/10 border-gold text-gold'
-                            : 'bg-white/5 border-white/10 text-gray-400 hover:border-white/20'
-                        )}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm text-muted mb-3 block">Ubicación</label>
-                  <input
-                    type="text"
-                    value={formData.location}
-                    onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                    placeholder="Ciudad/País de residencia"
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555555] focus:outline-none focus:border-gold/50"
-                  />
-                </div>
-              </div>
-            )}
-
-            {step === 3 && (
-              <div className="space-y-6">
-                <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
-                  <div className="flex items-start justify-between mb-4">
+          {/* Step content */}
+          <div className="glass-card rounded-3xl p-7">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={step}
+                initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
+                transition={{ duration: 0.3, ease }}
+              >
+                {step === 0 && (
+                  <div className="space-y-4">
+                    <input value={formData.full_name} onChange={e => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
+                      placeholder="Nombre completo — ej: María González" className={inputCls} />
+                    <input value={formData.professional_title} onChange={e => setFormData(prev => ({ ...prev, professional_title: e.target.value }))}
+                      placeholder="Título profesional — ej: Marketing Specialist" className={inputCls} />
                     <div>
-                      <h3 className="text-xl font-bold text-white">{formData.full_name || 'Sin nombre'}</h3>
-                      <p className="text-gold text-sm font-medium">{formData.professional_title || 'Sin título'}</p>
+                      <textarea value={formData.summary} onChange={e => setFormData(prev => ({ ...prev, summary: e.target.value }))}
+                        placeholder="Breve resumen profesional…" rows={4}
+                        className={inputCls + ' resize-none'} />
+                      <div className="mt-3">
+                        <p className="mb-2 text-[10px] uppercase tracking-widest text-muted-foreground">Ejemplos para inspirarte:</p>
+                        <div className="space-y-2">
+                          {SUMMARY_EXAMPLES.map((example, i) => (
+                            <button key={i} onClick={() => setFormData(prev => ({ ...prev, summary: example }))}
+                              className="w-full rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2 text-left text-xs text-muted-foreground transition hover:border-[#c9a84c]/30 hover:text-white">
+                              {example}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    <Badge variant="gold">{formData.seniority}</Badge>
                   </div>
-                  <p className="text-muted text-sm leading-relaxed mb-6">{formData.summary || 'Sin resumen'}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.skills.map(s => <Badge key={s} variant="muted" className="text-[10px]">{s}</Badge>)}
-                  </div>
-                </div>
-                <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                  <p className="text-blue-200 text-xs flex items-center gap-2">
-                    <CheckCircle size={14} />
-                    Al guardar, usaremos esta información para encontrarte las mejores oportunidades en Paraguay.
-                  </p>
-                </div>
-              </div>
-            )}
+                )}
 
-            <div className="flex items-center justify-between mt-8 pt-6 border-t border-white/5">
+                {step === 1 && (
+                  <div className="space-y-6">
+                    <div>
+                      <label className="mb-3 block text-sm text-muted-foreground">Tus habilidades</label>
+                      <div className="mb-4 flex min-h-[40px] flex-wrap gap-2">
+                        {formData.skills.map(skill => (
+                          <span key={skill} className="inline-flex items-center gap-2 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1 text-xs text-[#c9a84c]">
+                            {skill}
+                            <X size={12} className="cursor-pointer transition hover:text-red-400" onClick={() => removeSkill(skill)} />
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <input value={newSkill} onChange={e => setNewSkill(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSkill()}
+                          placeholder="Agregar habilidad…"
+                          className="flex-1 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2 text-sm text-white outline-none focus:border-[#c9a84c]/50 transition" />
+                        <button onClick={addSkill} className="rounded-xl bg-[#c9a84c] p-2 text-[#0a0a0a] transition hover:bg-[#e6cf8a]">
+                          <Plus size={20} />
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-3 block text-[10px] uppercase tracking-widest text-muted-foreground">Sugerencias populares</label>
+                      <div className="flex flex-wrap gap-2">
+                        {SKILLS.filter(s => !formData.skills.includes(s)).slice(0, 15).map(skill => (
+                          <button key={skill} onClick={() => toggleSkill(skill)}
+                            className="rounded-full border border-white/10 bg-white/[0.02] px-3 py-1.5 text-xs text-muted-foreground transition hover:border-[#c9a84c]/50 hover:text-white">
+                            + {skill}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="border-t border-white/5 pt-4">
+                      <label className="mb-3 block text-sm text-muted-foreground">Cursos y certificaciones</label>
+                      <div className="mb-4 flex flex-wrap gap-2">
+                        {formData.cursos.map(curso => (
+                          <span key={curso} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-white/70">
+                            {curso}
+                            <X size={12} className="cursor-pointer transition hover:text-red-400" onClick={() => removeCurso(curso)} />
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <input value={newCurso} onChange={e => setNewCurso(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCurso()}
+                          placeholder="Ej: Certificación Google Ads…"
+                          className="flex-1 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2 text-sm text-white outline-none focus:border-[#c9a84c]/50 transition" />
+                        <button onClick={addCurso} className="rounded-xl border border-white/10 bg-white/[0.03] p-2 text-white transition hover:bg-white/10">
+                          <Plus size={20} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {step === 2 && (
+                  <div className="space-y-6">
+                    <div>
+                      <label className="mb-3 block text-sm text-muted-foreground">Seniority actual</label>
+                      <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                        {SENIORITY.map(s => (
+                          <button key={s} onClick={() => setFormData(prev => ({ ...prev, seniority: s }))}
+                            className={cn('rounded-xl border px-4 py-2 text-sm transition',
+                              formData.seniority === s ? 'border-[#c9a84c] bg-[#c9a84c]/10 text-[#c9a84c]' : 'border-white/10 bg-white/[0.02] text-muted-foreground hover:border-white/20 hover:text-white'
+                            )}>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-3 block text-sm text-muted-foreground">Modalidad preferida</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {MODALITIES.map(m => (
+                          <button key={m} onClick={() => setFormData(prev => ({ ...prev, modality: m }))}
+                            className={cn('rounded-xl border px-4 py-2 text-sm transition',
+                              formData.modality === m ? 'border-[#c9a84c] bg-[#c9a84c]/10 text-[#c9a84c]' : 'border-white/10 bg-white/[0.02] text-muted-foreground hover:border-white/20 hover:text-white'
+                            )}>
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-3 block text-sm text-muted-foreground">Ubicación</label>
+                      <input value={formData.location} onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                        placeholder="Ciudad/País de residencia" className={inputCls} />
+                    </div>
+                  </div>
+                )}
+
+                {step === 3 && (
+                  <div className="space-y-6">
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-6">
+                      <div className="mb-4 flex items-start justify-between">
+                        <div>
+                          <h3 className="text-xl font-bold text-white">{formData.full_name || 'Sin nombre'}</h3>
+                          <p className="text-sm font-medium text-[#c9a84c]">{formData.professional_title || 'Sin título'}</p>
+                        </div>
+                        <span className="rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-0.5 text-xs text-[#c9a84c]">
+                          {formData.seniority}
+                        </span>
+                      </div>
+                      <p className="mb-6 text-sm leading-relaxed text-muted-foreground">{formData.summary || 'Sin resumen'}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {formData.skills.map(s => (
+                          <span key={s} className="rounded-full border border-white/10 bg-white/[0.02] px-2 py-0.5 text-[10px] text-white/60">{s}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+                      <CheckCircle size={16} className="text-emerald-400" />
+                      <p className="text-xs text-emerald-400">Al guardar, usaremos esta información para encontrarte las mejores oportunidades en Paraguay.</p>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Navigation */}
+            <div className="mt-8 flex items-center justify-between border-t border-white/5 pt-6">
               <button
                 onClick={() => setStep(prev => Math.max(0, prev - 1))}
-                className={cn(
-                  'flex items-center gap-2 text-muted hover:text-white transition-colors',
-                  step === 0 && 'invisible'
-                )}
+                className={cn('inline-flex items-center gap-2 text-sm text-muted-foreground transition hover:text-white', step === 0 && 'invisible')}
               >
                 <ChevronLeft size={18} /> Anterior
               </button>
 
               {step < STEPS.length - 1 ? (
-                <GoldButton onClick={() => setStep(prev => prev + 1)}>
+                <button
+                  onClick={() => setStep(prev => prev + 1)}
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[#c9a84c] px-5 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]"
+                >
                   Siguiente <ChevronRight size={18} />
-                </GoldButton>
+                </button>
               ) : (
-                <GoldButton onClick={handleSave} disabled={saving || saved}>
-                  {saving ? 'Guardando...' : saved ? '¡Perfil guardado!' : 'Finalizar y ver matches'}
-                  {!saving && !saved && <Save size={18} />}
-                </GoldButton>
+                <button
+                  onClick={handleSave} disabled={saving || saved}
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[#c9a84c] px-5 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-60"
+                >
+                  {saving
+                    ? <><Loader2 size={16} className="animate-spin" /> Guardando…</>
+                    : saved
+                    ? <><CheckCircle size={16} /> ¡Perfil guardado!</>
+                    : <><Save size={16} /> Finalizar y ver matches</>
+                  }
+                </button>
               )}
             </div>
-          </GlassCard>
+          </div>
         </motion.div>
       </div>
     </DashboardLayout>

@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 
 export function Logo({ className = '' }: { className?: string }) {
   return (
@@ -16,38 +16,88 @@ export function GrowthLine({
   className?: string
   variant?: 'decorative' | 'score'
 }) {
-  const d =
-    'M 8 92 C 70 88, 110 70, 150 75 S 250 95, 310 60 S 420 25, 480 35 S 580 70, 640 28 S 760 8, 792 14'
-  const stroke = variant === 'score' ? 'url(#cv-gold-bright)' : 'url(#cv-gold)'
+  const uid = useId().replace(/[^a-z0-9]/gi, 'u')
+  const d = 'M 8 92 C 70 88, 110 70, 150 75 S 250 95, 310 60 S 420 25, 480 35 S 580 70, 640 28 S 760 8, 792 14'
+  const sw = variant === 'score' ? 2.5 : 1.5
+
   return (
     <svg viewBox="0 0 800 100" preserveAspectRatio="none" className={className} aria-hidden="true">
       <defs>
-        <linearGradient id="cv-gold" x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0%" stopColor="oklch(0.78 0.13 82)" stopOpacity="0" />
-          <stop offset="20%" stopColor="oklch(0.78 0.13 82)" stopOpacity="0.55" />
-          <stop offset="80%" stopColor="oklch(0.86 0.10 86)" stopOpacity="0.9" />
-          <stop offset="100%" stopColor="oklch(0.86 0.10 86)" stopOpacity="0" />
+        <linearGradient id={`cg-${uid}`} x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stopColor="#c9a84c" stopOpacity="0" />
+          <stop offset="20%" stopColor="#c9a84c" stopOpacity={variant === 'score' ? '0.85' : '0.5'} />
+          <stop offset="80%" stopColor="#e6cf8a" stopOpacity={variant === 'score' ? '1' : '0.85'} />
+          <stop offset="100%" stopColor="#e6cf8a" stopOpacity="0" />
         </linearGradient>
-        <linearGradient id="cv-gold-bright" x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0%" stopColor="oklch(0.65 0.12 75)" />
-          <stop offset="100%" stopColor="oklch(0.90 0.13 88)" />
-        </linearGradient>
+        <filter id={`gf-${uid}`} x="-30%" y="-400%" width="160%" height="900%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
       </defs>
+
+      {/* Base path — breathing opacity */}
       <path
         d={d}
         fill="none"
-        stroke={stroke}
-        strokeWidth={variant === 'score' ? 2.5 : 1.5}
+        stroke={`url(#cg-${uid})`}
+        strokeWidth={sw}
         strokeLinecap="round"
         strokeLinejoin="round"
-      />
-      {variant === 'score' && <circle cx="792" cy="14" r="4" fill="oklch(0.90 0.13 88)" />}
+      >
+        <animate
+          attributeName="opacity"
+          values="0.45;0.9;0.45"
+          dur="4s"
+          repeatCount="indefinite"
+        />
+      </path>
+
+      {/* Traveling glow spot */}
+      <path
+        d={d}
+        fill="none"
+        stroke="#e8d080"
+        strokeWidth={variant === 'score' ? 5 : 3.5}
+        strokeLinecap="round"
+        strokeDasharray="150 960"
+        filter={`url(#gf-${uid})`}
+      >
+        <animate
+          attributeName="stroke-dashoffset"
+          from="1110"
+          to="-150"
+          dur="3.5s"
+          repeatCount="indefinite"
+          calcMode="linear"
+        />
+        <animate
+          attributeName="opacity"
+          values="0;0.95;0.95;0"
+          keyTimes="0;0.04;0.96;1"
+          dur="3.5s"
+          repeatCount="indefinite"
+          calcMode="linear"
+        />
+      </path>
+
+      {variant === 'score' && (
+        <circle cx="792" cy="14" r="4" fill="#e6cf8a">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite" />
+          <animate attributeName="r" values="3;5;3" dur="2s" repeatCount="indefinite" />
+        </circle>
+      )}
     </svg>
   )
 }
 
 export function CompatibilityTrace({ score, label = 'Compatibilidad' }: { score: number; label?: string }) {
+  const uid = useId().replace(/[^a-z0-9]/gi, 'u')
   const pct = Math.max(0, Math.min(100, score))
+  const targetW = (pct / 100) * 200
+
   return (
     <div className="w-full">
       <div className="flex items-baseline justify-between">
@@ -59,10 +109,22 @@ export function CompatibilityTrace({ score, label = 'Compatibilidad' }: { score:
       </div>
       <svg viewBox="0 0 200 28" className="mt-1 w-full h-6" aria-hidden="true">
         <defs>
-          <linearGradient id={`trace-${pct}-${label}`} x1="0" x2="1">
+          <linearGradient id={`tr-${uid}`} x1="0" x2="1">
             <stop offset="0%" stopColor="oklch(0.55 0.08 70)" />
             <stop offset="100%" stopColor="oklch(0.86 0.13 86)" />
           </linearGradient>
+          <clipPath id={`cl-${uid}`}>
+            <rect x="0" y="0" height="28" width="0">
+              <animate
+                attributeName="width"
+                from="0"
+                to={`${targetW}`}
+                dur="0.9s"
+                fill="freeze"
+                calcMode="linear"
+              />
+            </rect>
+          </clipPath>
         </defs>
         <path
           d="M 4 22 C 30 18, 50 8, 80 14 S 130 24, 160 10 S 192 4, 196 6"
@@ -71,16 +133,13 @@ export function CompatibilityTrace({ score, label = 'Compatibilidad' }: { score:
           strokeWidth="1.5"
           strokeLinecap="round"
         />
-        <clipPath id={`clip-${pct}-${label}`}>
-          <rect x="0" y="0" width={(pct / 100) * 200} height="28" />
-        </clipPath>
         <path
           d="M 4 22 C 30 18, 50 8, 80 14 S 130 24, 160 10 S 192 4, 196 6"
           fill="none"
-          stroke={`url(#trace-${pct}-${label})`}
+          stroke={`url(#tr-${uid})`}
           strokeWidth="2.25"
           strokeLinecap="round"
-          clipPath={`url(#clip-${pct}-${label})`}
+          clipPath={`url(#cl-${uid})`}
         />
       </svg>
     </div>
@@ -88,27 +147,25 @@ export function CompatibilityTrace({ score, label = 'Compatibilidad' }: { score:
 }
 
 export function ScoreRing({ score, size = 120 }: { score: number; size?: number }) {
+  const uid = useId().replace(/[^a-z0-9]/gi, 'u')
   const pct = Math.max(0, Math.min(100, score))
   const r = 48
   const c = 2 * Math.PI * r
+
   return (
     <div className="relative grid place-items-center" style={{ width: size, height: size }}>
       <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
         <defs>
-          <linearGradient id={`ring-${size}-${pct}`} x1="0" x2="1">
+          <linearGradient id={`ring-${uid}`} x1="0" x2="1">
             <stop offset="0%" stopColor="oklch(0.65 0.12 75)" />
             <stop offset="100%" stopColor="oklch(0.90 0.13 88)" />
           </linearGradient>
         </defs>
         <circle cx="60" cy="60" r={r} fill="none" stroke="oklch(0.95 0.015 85 / 10%)" strokeWidth="6" />
         <circle
-          cx="60"
-          cy="60"
-          r={r}
-          fill="none"
-          stroke={`url(#ring-${size}-${pct})`}
-          strokeWidth="6"
-          strokeLinecap="round"
+          cx="60" cy="60" r={r} fill="none"
+          stroke={`url(#ring-${uid})`}
+          strokeWidth="6" strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={c - (c * pct) / 100}
         />

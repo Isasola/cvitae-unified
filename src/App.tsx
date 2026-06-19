@@ -18,6 +18,7 @@ import Alertas from './hub/Alertas'
 import Configuracion from './hub/Configuracion'
 import Recruiters from './pages/Recruiters'
 import BatchAnalysis from './pages/BatchAnalysis'
+import VacantePage from './pages/VacantePage'
 import NotFound from './pages/NotFound'
 
 export default function App() {
@@ -37,6 +38,7 @@ export default function App() {
       {/* Canonical routes */}
       <Route path="/empresas" component={Recruiters} />
       <Route path="/empresas/masivo" component={BatchAnalysis} />
+      <Route path="/vacante/:slug" component={VacantePage} />
       {/* Legacy redirects — keep for SEO */}
       <Route path="/reclutadores"><Redirect to="/empresas" /></Route>
       <Route path="/reclutadores/batch"><Redirect to="/empresas/masivo" /></Route>

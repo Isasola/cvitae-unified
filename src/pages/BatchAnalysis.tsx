@@ -1,11 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link, useLocation } from 'wouter'
-import { Upload, Sparkles, Users, Crown, ArrowRight, Trash2, FileText, ArrowLeft } from 'lucide-react'
-import { Navbar } from '@/components/cvitae/Navbar'
-import { Footer } from '@/components/cvitae/Footer'
-import { GrowthLine, CompatibilityTrace, Eyebrow } from '@/components/cv/visuals'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Upload, Sparkles, Users, Crown, Trash2, FileText, ArrowLeft,
+  Loader2, CheckCircle2, AlertCircle, Brain, RotateCcw, Building2
+} from 'lucide-react'
 import { analytics } from '@/lib/analytics'
+
+const ease = [0.22, 1, 0.36, 1] as const
 
 interface BatchCandidate {
   id: string
@@ -46,6 +49,30 @@ async function extractTextFromFile(file: File): Promise<string> {
   })
 }
 
+function scoreColor(s: number) {
+  if (s >= 80) return 'oklch(0.75 0.18 145)'
+  if (s >= 60) return 'oklch(0.78 0.13 82)'
+  return 'oklch(0.65 0.22 25)'
+}
+
+function Ambient() {
+  return (
+    <>
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute -top-40 left-1/3 h-[520px] w-[520px] rounded-full bg-[#c9a84c]/[0.07] blur-[160px]" />
+        <div className="absolute bottom-0 right-0 h-[500px] w-[500px] rounded-full bg-white/[0.025] blur-[160px]" />
+      </div>
+      <div
+        className="pointer-events-none fixed inset-0 -z-10 opacity-[0.025]"
+        style={{
+          backgroundImage: 'linear-gradient(rgba(255,255,255,1) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,1) 1px,transparent 1px)',
+          backgroundSize: '64px 64px',
+        }}
+      />
+    </>
+  )
+}
+
 export default function BatchAnalysis() {
   const [, setLocation] = useLocation()
   const [session, setSession] = useState<any>(null)
@@ -55,6 +82,7 @@ export default function BatchAnalysis() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [summary, setSummary] = useState<BatchSummary | null>(null)
   const [error, setError] = useState('')
+  const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -63,15 +91,20 @@ export default function BatchAnalysis() {
     else setSession(JSON.parse(s))
   }, [])
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || [])
-    const newCandidates = files.map(f => ({
+  const handleFiles = (files: File[]) => {
+    const valid = files.filter(f => ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'].includes(f.type))
+    if (candidates.length + valid.length > 30) { setError('Máximo 30 CVs por corrida.'); return }
+    const newCandidates = valid.map(f => ({
       id: Math.random().toString(36).substr(2, 9),
       file: f,
       status: 'pending' as const,
     }))
     setCandidates(prev => [...prev, ...newCandidates])
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFiles(Array.from(e.target.files || []))
   }
 
   const removeCandidate = (id: string) => setCandidates(prev => prev.filter(c => c.id !== id))
@@ -145,8 +178,17 @@ export default function BatchAnalysis() {
     .filter(c => c.status === 'done' && c.result)
     .sort((a, b) => (b.result.fitScore || 0) - (a.result.fitScore || 0))
 
+  const statusLabel = (s: BatchCandidate['status']) => {
+    if (s === 'extracting') return 'Extrayendo texto…'
+    if (s === 'analyzing') return 'Analizando con IA…'
+    if (s === 'done') return 'Listo'
+    if (s === 'error') return 'Error'
+    return 'Pendiente'
+  }
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
+      <Ambient />
       <Helmet>
         <title>Análisis Masivo de CVs | CVitae Empresas</title>
         <meta name="description" content="Analizá hasta 30 CVs en lote con IA. Ranking comparativo, score ATS y recomendación automática." />
@@ -156,174 +198,280 @@ export default function BatchAnalysis() {
         <meta property="og:url" content="https://cvitae.lat/empresas/masivo" />
         <meta property="og:type" content="website" />
       </Helmet>
-      <Navbar />
 
-      <div className="max-w-6xl mx-auto px-6 py-10">
-        <div className="mb-6">
-          <Link href="/empresas" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-cream transition-colors">
-            <ArrowLeft className="h-4 w-4" /> Panel empresas
+      {/* Header */}
+      <header className="border-b border-white/5 px-6 py-5">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-6">
+          <Link href="/empresas" className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/45 transition-colors hover:text-white">
+            <ArrowLeft strokeWidth={1.5} className="h-4 w-4" /> Panel empresas
           </Link>
-        </div>
-
-        <div className="relative">
-          <Eyebrow>Análisis Masivo</Eyebrow>
-          <h1 className="font-display text-4xl sm:text-5xl mt-2 text-cream leading-tight">
-            30 CVs. Un veredicto. <em>Cero filas en Excel.</em>
-          </h1>
-          <p className="text-muted-foreground mt-3 max-w-xl">
-            Configurá el puesto, subí el lote y CVitae te devuelve el orden de entrevista
-            sugerido con justificación por candidato.
-          </p>
-          <div className="flex items-center justify-between mt-2">
-            <p className="text-gold font-display">{session?.company_name || 'Empresa'}</p>
-            <p className="text-xs text-muted-foreground">Créditos: {session?.balance || 0}</p>
-          </div>
-          <GrowthLine className="absolute -bottom-6 left-0 right-0 h-10 opacity-40" />
-        </div>
-
-        {/* Config stage */}
-        {!isProcessing && !summary && (
-          <div className="mt-12 grid lg:grid-cols-2 gap-6">
-            <div className="editorial-panel p-6">
-              <Eyebrow>Puesto</Eyebrow>
-              <label className="block mt-4 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Nombre del puesto</label>
-              <input
-                value={jobTitle}
-                onChange={e => setJobTitle(e.target.value)}
-                placeholder="Ej: Analista de Marketing Digital"
-                className="mt-2 w-full glass-panel px-3 py-2.5 text-sm text-cream placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-gold"
-              />
-              <label className="block mt-4 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Descripción / requisitos</label>
-              <textarea
-                rows={8}
-                value={jobDesc}
-                onChange={e => setJobDesc(e.target.value)}
-                placeholder="Habilidades, experiencia requerida, contexto del puesto…"
-                className="mt-2 w-full glass-panel px-3 py-2.5 text-sm text-cream placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-gold resize-none"
-              />
+          {session && (
+            <div className="flex items-center gap-3">
+              <div className="hidden items-center gap-2 text-xs text-white/50 md:flex">
+                <Building2 strokeWidth={1.25} className="h-3.5 w-3.5 text-white/35" />
+                {session.company_name}
+              </div>
+              <span className="text-white/20">·</span>
+              <span className="text-xs text-white/40">
+                {session.balance} crédito{session.balance !== 1 ? 's' : ''}
+              </span>
             </div>
-            <div className="editorial-panel p-6">
-              <Eyebrow>Cargar CVs (hasta 30)</Eyebrow>
-              <label className="mt-4 block p-10 border border-dashed border-border/60 rounded-md text-center cursor-pointer hover:border-gold/50 transition-colors">
-                <Upload className="h-7 w-7 text-gold mx-auto" />
-                <p className="font-display text-lg text-cream mt-3">Arrastrá hasta 30 CVs aquí</p>
-                <p className="text-xs text-muted-foreground mt-1">PDF, DOC, DOCX</p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept=".pdf,.docx,.doc,.txt"
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
-              </label>
-              {candidates.length > 0 && (
-                <div className="mt-4 space-y-2 max-h-40 overflow-y-auto">
+          )}
+        </div>
+      </header>
+
+      <section className="relative mx-auto max-w-7xl px-6 pt-16 pb-28 md:px-10 md:pt-20">
+        {/* Heading */}
+        <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/40">
+          <span className="h-px w-8 bg-white/20" /> Análisis masivo
+        </div>
+        <h1 className="mt-6 font-display text-4xl leading-[1.05] tracking-[-0.01em] text-white md:text-6xl">
+          30 CVs. Un veredicto. <em className="italic font-normal">Cero filas en Excel.</em>
+        </h1>
+        <p className="mt-5 max-w-xl text-sm font-light leading-relaxed text-white/55 md:text-base">
+          Configurá el puesto, subí el lote y CVitae te devuelve el orden de entrevista sugerido con justificación por candidato.
+        </p>
+
+        <AnimatePresence mode="wait">
+          {/* ── Config stage ─────────────────────────────────────────── */}
+          {!isProcessing && !summary && (
+            <motion.div key="config" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.6, ease }}>
+              <div className="mt-12 grid gap-6 lg:grid-cols-12">
+                {/* Puesto */}
+                <div className="glass-card rounded-3xl p-7 lg:col-span-5">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">01 · El puesto</p>
+                  <label className="mt-6 block text-[11px] uppercase tracking-[0.18em] text-white/40">Nombre del puesto</label>
+                  <input
+                    value={jobTitle}
+                    onChange={e => setJobTitle(e.target.value)}
+                    placeholder="Ej: Analista de Marketing Digital"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm font-light text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition"
+                  />
+                  <label className="mt-5 block text-[11px] uppercase tracking-[0.18em] text-white/40">
+                    Descripción / requisitos <span className="normal-case text-white/25">(opcional)</span>
+                  </label>
+                  <textarea
+                    rows={7}
+                    value={jobDesc}
+                    onChange={e => setJobDesc(e.target.value)}
+                    placeholder="Habilidades, experiencia requerida, contexto del puesto…"
+                    className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm font-light text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition"
+                  />
+                  <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.02] p-4 text-xs font-light leading-relaxed text-white/45">
+                    La descripción mejora el ranking: la IA puede comparar cada CV contra los requisitos exactos del puesto.
+                  </div>
+                </div>
+
+                {/* Upload */}
+                <div className="glass-card rounded-3xl p-7 lg:col-span-7">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">02 · Los CVs</p>
+                    <span className="text-xs font-light text-white/30">{candidates.length}/30 cargados</span>
+                  </div>
+
+                  <div
+                    onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={e => { e.preventDefault(); setIsDragging(false); handleFiles(Array.from(e.dataTransfer.files)) }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`mt-6 flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-10 text-center transition-all duration-300 ${
+                      isDragging ? 'border-[#c9a84c]/60 bg-[#c9a84c]/[0.04]' : 'border-white/12 bg-white/[0.015] hover:border-white/25'
+                    }`}
+                  >
+                    <input ref={fileInputRef} type="file" multiple accept=".pdf,.docx,.doc,.txt" className="hidden" onChange={handleFileSelect} />
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03]">
+                      <Upload strokeWidth={1.25} className="h-5 w-5 text-[#c9a84c]" />
+                    </div>
+                    <p className="mt-3 font-display text-xl text-white/90">Arrastrá hasta 30 CVs aquí</p>
+                    <p className="mt-1 text-xs font-light text-white/45">PDF, DOCX, TXT — o hacé click para seleccionarlos</p>
+                  </div>
+
+                  {/* File list */}
+                  {candidates.length > 0 && (
+                    <div className="mt-5 max-h-48 space-y-2 overflow-y-auto">
+                      {candidates.map(c => (
+                        <div key={c.id} className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                          <FileText strokeWidth={1.25} className="h-4 w-4 shrink-0 text-[#c9a84c]" />
+                          <span className="flex-1 truncate text-sm font-light text-white/80">{c.file.name}</span>
+                          <button onClick={() => removeCandidate(c.id)} className="p-1 text-white/25 transition hover:text-red-400">
+                            <Trash2 strokeWidth={1.5} className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <AnimatePresence>
+                    {error && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                        className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-sm text-red-400">
+                        <AlertCircle strokeWidth={1.5} className="h-4 w-4 shrink-0" /> {error}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <div className="mt-5 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs font-light text-white/35">Mínimo 2 CVs · cada uno consume 1 crédito</p>
+                    <button
+                      onClick={startAnalysis}
+                      disabled={candidates.length < 2 || !jobTitle.trim()}
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-[#c9a84c] px-6 py-3 text-sm font-medium text-[#0a0a0a] transition-all hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.6)] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/30 disabled:shadow-none"
+                    >
+                      <Sparkles strokeWidth={1.5} className="h-4 w-4" /> Iniciar análisis masivo
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── Processing stage ──────────────────────────────────────── */}
+          {isProcessing && (
+            <motion.div key="processing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-16">
+              <div className="glass-card rounded-[2rem] p-10 text-center">
+                <Loader2 strokeWidth={1.5} className="mx-auto h-10 w-10 animate-spin text-[#c9a84c]" />
+                <h2 className="mt-6 font-display text-3xl text-white">Leyendo el pool de candidatos…</h2>
+                <p className="mt-2 text-sm font-light text-white/50">{doneCount} de {candidates.length} CVs analizados</p>
+
+                {/* Progress bar */}
+                <div className="mx-auto mt-8 h-1.5 w-full max-w-md overflow-hidden rounded-full bg-white/[0.07]">
+                  <motion.div
+                    className="h-full rounded-full bg-[#c9a84c]"
+                    animate={{ width: `${progressPct}%` }}
+                    transition={{ ease: 'easeOut' }}
+                  />
+                </div>
+                <p className="mt-2 text-xs font-light text-white/30">{progressPct}%</p>
+
+                {/* Per-file status */}
+                <div className="mx-auto mt-8 max-w-md space-y-2 text-left">
                   {candidates.map(c => (
-                    <div key={c.id} className="flex items-center gap-3 text-xs glass-panel px-3 py-2">
-                      <FileText className="h-3.5 w-3.5 text-gold shrink-0" />
-                      <span className="flex-1 truncate text-cream">{c.file.name}</span>
-                      <button onClick={() => removeCandidate(c.id)} className="text-muted-foreground hover:text-red-400 transition-colors">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                    <div key={c.id} className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] px-4 py-2.5">
+                      {c.status === 'done' ? (
+                        <CheckCircle2 strokeWidth={1.5} className="h-4 w-4 shrink-0 text-emerald-400" />
+                      ) : c.status === 'error' ? (
+                        <AlertCircle strokeWidth={1.5} className="h-4 w-4 shrink-0 text-red-400" />
+                      ) : c.status === 'analyzing' || c.status === 'extracting' ? (
+                        <Loader2 strokeWidth={1.5} className="h-4 w-4 shrink-0 animate-spin text-[#c9a84c]" />
+                      ) : (
+                        <div className="h-4 w-4 shrink-0 rounded-full border border-white/15" />
+                      )}
+                      <span className="flex-1 truncate text-xs font-light text-white/70">{c.file.name}</span>
+                      <span className="shrink-0 text-[10px] text-white/35">{statusLabel(c.status)}</span>
                     </div>
                   ))}
                 </div>
-              )}
-              {candidates.length > 0 && (
-                <p className="text-xs text-muted-foreground mt-3">{candidates.length} archivo{candidates.length !== 1 ? 's' : ''} listo{candidates.length !== 1 ? 's' : ''} para analizar.</p>
-              )}
-              {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
-              <button
-                onClick={startAnalysis}
-                disabled={candidates.length < 2 || !jobTitle.trim()}
-                className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-gold text-ink hover:bg-gold-soft h-11 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
-              >
-                <Sparkles className="h-4 w-4" /> Iniciar análisis masivo
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Processing stage */}
-        {isProcessing && (
-          <div className="mt-12 editorial-panel p-10 text-center">
-            <Eyebrow>Procesando</Eyebrow>
-            <h2 className="font-display text-3xl text-cream mt-2">Leyendo el pool de candidatos…</h2>
-            <p className="text-muted-foreground mt-2">{doneCount} de {candidates.length} CVs analizados</p>
-            <div className="mt-8 relative h-20">
-              <GrowthLine variant="score" className="w-full h-full" />
-            </div>
-            <div className="mt-6 max-w-md mx-auto h-1.5 rounded-full bg-cream/10 overflow-hidden">
-              <div className="h-full bg-gold transition-all" style={{ width: `${progressPct}%` }} />
-            </div>
-          </div>
-        )}
-
-        {/* Results stage */}
-        {summary && !isProcessing && (
-          <div className="mt-12 space-y-6">
-            {/* Veredicto IA */}
-            <div className="gold-panel p-8">
-              <div className="flex items-start gap-4">
-                <Crown className="h-6 w-6 text-gold shrink-0 mt-1" />
-                <div>
-                  <Eyebrow>Veredicto de la IA</Eyebrow>
-                  <h2 className="font-display text-2xl sm:text-3xl text-cream mt-1 leading-snug">
-                    <em>{summary.interviewOrder?.slice(0, 3).length || 3} candidatos sólidos</em> para entrevistar esta semana.
-                  </h2>
-                  <p className="text-sm text-muted-foreground mt-3 max-w-2xl leading-relaxed">
-                    {summary.finalRecommendation || summary.hiringInsight}
-                  </p>
-                </div>
               </div>
-            </div>
+            </motion.div>
+          )}
 
-            {/* Ranking */}
-            <div className="space-y-3">
-              <div className="flex items-baseline justify-between">
-                <h3 className="font-display text-2xl text-cream">Orden de entrevista <em>sugerido</em></h3>
-                <span className="text-xs text-muted-foreground">{rankedCandidates.length} candidatos analizados</span>
-              </div>
-              {rankedCandidates.map((c, i) => (
-                <article key={c.id} className={i < 3 ? 'gold-panel p-5' : 'glass-panel p-5'}>
-                  <div className="flex items-start gap-5 flex-wrap">
-                    <div className="font-display text-3xl text-gold w-10 text-center">{i + 1}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-display text-lg text-cream">{c.result.candidateName || c.file.name}</p>
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {c.result.keyMatches?.slice(0, 3).map((m: string) => (
-                          <span key={m} className="text-[11px] border border-gold/30 text-cream/90 px-2 py-0.5 rounded-full">{m}</span>
-                        ))}
-                      </div>
+          {/* ── Results stage ─────────────────────────────────────────── */}
+          {summary && !isProcessing && (
+            <motion.div key="results" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-16 space-y-6">
+              {/* Veredicto IA */}
+              <div className="relative">
+                <div className="absolute -inset-3 -z-10 rounded-[2rem] bg-gradient-to-br from-[#c9a84c]/15 via-transparent to-transparent blur-2xl" />
+                <div className="glass-card rounded-[2rem] p-10">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#c9a84c]/30 bg-[#c9a84c]/10 mt-1">
+                      <Crown strokeWidth={1.25} className="h-5 w-5 text-[#c9a84c]" />
                     </div>
-                    <div className="w-56">
-                      <CompatibilityTrace score={c.result.fitScore || c.result.atsScore || 0} label="Fit score" />
+                    <div>
+                      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/40">
+                        <span className="h-px w-8 bg-[#c9a84c]/50" /> Veredicto de la IA
+                      </div>
+                      <h2 className="mt-3 font-display text-3xl leading-snug text-white md:text-4xl">
+                        <em className="italic font-normal">{summary.interviewOrder?.slice(0, 3).length || 3} candidatos</em> para entrevistar esta semana.
+                      </h2>
+                      <p className="mt-4 max-w-3xl text-sm font-light leading-relaxed text-white/55 md:text-base">
+                        {summary.finalRecommendation || summary.hiringInsight}
+                      </p>
                     </div>
                   </div>
-                </article>
-              ))}
-            </div>
+                </div>
+              </div>
 
-            {/* Círculo virtuoso */}
-            <div className="glass-panel p-5 flex items-start gap-3">
-              <Users className="h-5 w-5 text-gold shrink-0 mt-0.5" />
-              <p className="text-sm text-muted-foreground">
-                Cada CV recibido por tu link de vacante también se suma al banco general de CVitae,
-                ayudando a que más empresas y candidatos del ecosistema se encuentren.
-              </p>
-            </div>
+              {/* Ranking */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-display text-2xl text-white">
+                    Orden de entrevista <em className="italic font-normal">sugerido</em>
+                  </h3>
+                  <span className="text-xs font-light text-white/40">{rankedCandidates.length} candidatos analizados</span>
+                </div>
 
-            <button
-              onClick={() => { setCandidates([]); setSummary(null); setJobTitle(''); setJobDesc('') }}
-              className="inline-flex items-center gap-2 border border-border text-cream hover:bg-cream/5 h-9 px-4 rounded-md text-sm transition-colors"
-            >
-              Nuevo análisis
-            </button>
-          </div>
-        )}
-      </div>
-      <Footer />
+                <ol className="space-y-3">
+                  {rankedCandidates.map((c, i) => {
+                    const score = c.result.fitScore || c.result.atsScore || 0
+                    return (
+                      <motion.li
+                        key={c.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: i * 0.06, ease }}
+                        className={`glass-card flex items-center gap-5 rounded-2xl p-5 transition-all ${i < 3 ? 'border-[#c9a84c]/20 bg-[#c9a84c]/[0.02]' : ''}`}
+                      >
+                        <span className="font-display text-3xl text-white/25 w-10 text-center leading-none">{String(i + 1).padStart(2, '0')}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate text-sm text-white">{c.result.candidateName || c.file.name}</p>
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {c.result.keyMatches?.slice(0, 3).map((m: string) => (
+                              <span key={m} className="rounded-full border border-white/10 bg-white/[0.02] px-2 py-0.5 text-[10px] text-white/55">{m}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="font-display text-2xl" style={{ color: scoreColor(score) }}>
+                            {score}<span className="text-sm text-white/30">/100</span>
+                          </p>
+                          <div className="mt-1.5 hidden w-28 sm:block">
+                            <div className="h-1 w-full overflow-hidden rounded-full bg-white/8">
+                              <motion.div
+                                initial={{ width: 0 }} whileInView={{ width: `${score}%` }} viewport={{ once: true }}
+                                transition={{ duration: 1, delay: 0.2 + i * 0.05, ease: [0.22, 1, 0.36, 1] }}
+                                className="h-full rounded-full"
+                                style={{ backgroundColor: scoreColor(score) }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </motion.li>
+                    )
+                  })}
+                </ol>
+              </div>
+
+              {/* Círculo virtuoso */}
+              <div className="flex items-start gap-4 rounded-2xl border border-white/8 bg-white/[0.02] p-5">
+                <Users strokeWidth={1.25} className="h-5 w-5 shrink-0 text-[#c9a84c] mt-0.5" />
+                <p className="text-sm font-light text-white/55">
+                  Cada CV recibido por tu link de vacante también se suma al banco general de CVitae,
+                  ayudando a que más empresas y candidatos del ecosistema se encuentren.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => { setCandidates([]); setSummary(null); setJobTitle(''); setJobDesc('') }}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/10 px-5 py-2.5 text-sm text-white/60 transition hover:border-white/25 hover:text-white"
+                >
+                  <RotateCcw strokeWidth={1.5} className="h-4 w-4" /> Nuevo análisis
+                </button>
+                <Link href="/empresas" className="inline-flex items-center gap-2 rounded-full border border-white/10 px-5 py-2.5 text-sm text-white/60 transition hover:border-white/25 hover:text-white">
+                  <Brain strokeWidth={1.5} className="h-4 w-4" /> Análisis individual
+                </Link>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </section>
+
+      <footer className="border-t border-white/5 px-6 py-10 text-xs text-white/30">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
+          <span className="font-display text-base text-white/60">CVitae</span>
+          <span>Análisis masivo · {session?.company_name || ''}</span>
+        </div>
+      </footer>
     </div>
   )
 }

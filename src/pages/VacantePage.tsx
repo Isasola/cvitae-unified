@@ -1,0 +1,323 @@
+import { useRef, useState, type DragEvent, type ChangeEvent, type FormEvent } from 'react'
+import { Helmet } from 'react-helmet-async'
+import { Link, useParams } from 'wouter'
+import { motion } from 'framer-motion'
+import {
+  ArrowLeft, Upload, FileText, X, MapPin, Clock, Briefcase,
+  Check, Sparkles, ArrowRight, Loader2, AlertCircle
+} from 'lucide-react'
+
+const ease = [0.22, 1, 0.36, 1] as const
+
+function Ambient() {
+  return (
+    <>
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute -top-40 left-1/3 h-[520px] w-[520px] rounded-full bg-[#c9a84c]/[0.07] blur-[160px]" />
+        <div className="absolute bottom-0 right-0 h-[500px] w-[500px] rounded-full bg-white/[0.025] blur-[160px]" />
+      </div>
+      <div
+        className="pointer-events-none fixed inset-0 -z-10 opacity-[0.025]"
+        style={{
+          backgroundImage: 'linear-gradient(rgba(255,255,255,1) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,1) 1px,transparent 1px)',
+          backgroundSize: '64px 64px',
+        }}
+      />
+    </>
+  )
+}
+
+function Meta({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <li className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[13px] text-white/70">
+      <span className="text-white/45">{icon}</span>
+      {children}
+    </li>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-white/45">{label}</span>
+      <div className="rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 transition focus-within:border-[#c9a84c]/40 focus-within:bg-white/[0.04]">
+        {children}
+      </div>
+    </label>
+  )
+}
+
+function SuccessState({ name, title, company }: { name: string; title: string; company: string }) {
+  const first = name.split(' ')[0] || 'Hola'
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.8, ease }}
+      className="glass-card relative mt-10 overflow-hidden rounded-3xl p-10 sm:p-14"
+    >
+      <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-[#c9a84c]/[0.12] blur-[120px]" />
+
+      <motion.div
+        initial={{ scale: 0.6, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.6, ease, delay: 0.1 }}
+        className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-[#c9a84c]/40 bg-[#c9a84c]/10"
+      >
+        <Check strokeWidth={1.5} className="h-7 w-7 text-[#c9a84c]" />
+      </motion.div>
+
+      <h2 className="mt-8 text-center font-display text-4xl leading-tight text-white sm:text-5xl">
+        Postulación recibida, <em className="not-italic text-white/70">{first}</em>.
+      </h2>
+      <p className="mx-auto mt-4 max-w-md text-center text-sm font-light leading-relaxed text-white/55">
+        {company} ya tiene tu CV para la búsqueda de <span className="text-white">{title}</span>.
+        Te van a contactar si avanzás en el proceso.
+      </p>
+
+      <div className="mx-auto mt-10 max-w-md rounded-2xl border border-white/8 bg-white/[0.025] p-5 text-left">
+        <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Tu perfil en CVitae</p>
+        <p className="mt-2 text-sm font-light leading-relaxed text-white/60">
+          Tu CV quedó guardado en la base de talento. Completá tu perfil para que otras empresas también puedan encontrarte.
+        </p>
+      </div>
+
+      <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <Link
+          href="/mi-carrera/perfil"
+          className="group inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-[#0a0a0a] transition hover:bg-white/90"
+        >
+          Completar mi perfil
+          <ArrowRight strokeWidth={1.75} className="h-4 w-4 transition group-hover:translate-x-0.5" />
+        </Link>
+        <Link
+          href="/oportunidades"
+          className="inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-6 py-3 text-sm text-white/70 transition hover:border-white/30 hover:text-white"
+        >
+          Ver otras oportunidades
+        </Link>
+      </div>
+    </motion.div>
+  )
+}
+
+export default function VacantePage() {
+  const params = useParams<{ slug: string }>()
+  const slug = params.slug || ''
+
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [dragOver, setDragOver] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const title = slug && slug.length > 2
+    ? slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+    : 'Vacante'
+  const company = 'CVitae'
+
+  function pickFiles(list: FileList | null) {
+    if (!list || !list[0]) return
+    const f = list[0]
+    if (f.type !== 'application/pdf') { setError('Solo se aceptan archivos PDF.'); return }
+    if (f.size > 10 * 1024 * 1024) { setError('El archivo no puede superar 10 MB.'); return }
+    setFile(f); setError('')
+  }
+
+  function onDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault(); setDragOver(false)
+    pickFiles(e.dataTransfer.files)
+  }
+
+  function onChange(e: ChangeEvent<HTMLInputElement>) {
+    pickFiles(e.target.files)
+    e.target.value = ''
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (!name || !email || !file) return
+    setSubmitting(true); setError('')
+
+    try {
+      const reader = new FileReader()
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = ev => {
+          const ab = ev.target?.result as ArrayBuffer
+          resolve(btoa(new Uint8Array(ab).reduce((d, b) => d + String.fromCharCode(b), '')))
+        }
+        reader.onerror = reject
+        reader.readAsArrayBuffer(file)
+      })
+
+      const res = await fetch('/.netlify/functions/submit-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name, email,
+          company_name: '', phone: '', message: '',
+          source: `vacante:${slug}`,
+          cv_base64: base64,
+          cv_file_name: file.name,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error || 'Error al enviar la postulación')
+      }
+      setSubmitted(true)
+    } catch (err: any) {
+      setError(err.message || 'Error de conexión. Intentá de nuevo.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <main className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
+      <Ambient />
+      <Helmet>
+        <title>{title} · CVitae</title>
+        <meta name="description" content={`Postulá a ${title}. Tu perfil queda guardado en CVitae para futuras búsquedas.`} />
+      </Helmet>
+
+      {/* Top bar */}
+      <header className="relative z-10 border-b border-white/5 px-6 py-5">
+        <div className="mx-auto flex max-w-3xl items-center justify-between">
+          <Link href="/" className="group inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/50 transition hover:text-white">
+            <ArrowLeft strokeWidth={1.5} className="h-3.5 w-3.5 transition group-hover:-translate-x-0.5" />
+            CVitae
+          </Link>
+          <span className="text-xs uppercase tracking-[0.18em] text-white/35">Postulación</span>
+        </div>
+      </header>
+
+      <section className="relative z-10 mx-auto max-w-3xl px-6 pb-32 pt-16">
+        {!submitted ? (
+          <>
+            {/* Vacancy header */}
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease }}>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/60">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#c9a84c]" />
+                Vacante abierta
+              </div>
+              <h1 className="mt-6 font-display text-5xl leading-[1.05] tracking-tight text-white sm:text-6xl md:text-7xl">{title}</h1>
+              <p className="mt-4 text-base text-white/55">en <span className="text-white">{company}</span></p>
+              <ul className="mt-8 flex flex-wrap gap-2">
+                <Meta icon={<MapPin strokeWidth={1.5} className="h-3.5 w-3.5" />}>Asunción, Paraguay</Meta>
+                <Meta icon={<Briefcase strokeWidth={1.5} className="h-3.5 w-3.5" />}>Híbrido</Meta>
+                <Meta icon={<Clock strokeWidth={1.5} className="h-3.5 w-3.5" />}>Tiempo completo</Meta>
+              </ul>
+            </motion.div>
+
+            {/* Double-value note */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.08, ease }}
+              className="glass-card mt-12 flex items-start gap-4 rounded-2xl p-5"
+            >
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/10">
+                <Sparkles strokeWidth={1.5} className="h-4 w-4 text-[#c9a84c]" />
+              </div>
+              <p className="text-sm font-light leading-relaxed text-white/70">
+                Al postular, no solo aplicás a esta búsqueda. Tu perfil queda guardado en
+                <span className="text-white"> CVitae</span> y otras empresas podrán encontrarte
+                para oportunidades parecidas, sin que tengas que volver a cargar tu CV.
+              </p>
+            </motion.div>
+
+            {/* Form */}
+            <motion.form
+              onSubmit={onSubmit}
+              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.14, ease }}
+              className="glass-card mt-6 rounded-3xl p-7 sm:p-9"
+            >
+              <h2 className="font-display text-2xl italic text-white">Postulación rápida</h2>
+              <p className="mt-1 text-sm font-light text-white/50">Tres campos. Menos de un minuto.</p>
+
+              <div className="mt-8 grid gap-5 sm:grid-cols-2">
+                <Field label="Nombre completo">
+                  <input
+                    type="text" required value={name} onChange={e => setName(e.target.value)}
+                    placeholder="María Fernández"
+                    className="w-full bg-transparent text-[15px] text-white placeholder:text-white/25 focus:outline-none"
+                  />
+                </Field>
+                <Field label="Correo electrónico">
+                  <input
+                    type="email" required value={email} onChange={e => setEmail(e.target.value)}
+                    placeholder="maria@ejemplo.com"
+                    className="w-full bg-transparent text-[15px] text-white placeholder:text-white/25 focus:outline-none"
+                  />
+                </Field>
+              </div>
+
+              {/* Drag & drop */}
+              <div className="mt-6">
+                <label className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-white/45">Tu CV (PDF)</label>
+                <div
+                  onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={onDrop}
+                  onClick={() => inputRef.current?.click()}
+                  className={`cursor-pointer rounded-2xl border border-dashed px-6 py-10 text-center transition ${
+                    dragOver ? 'border-[#c9a84c]/60 bg-[#c9a84c]/[0.04]' : 'border-white/12 hover:border-white/25 hover:bg-white/[0.02]'
+                  }`}
+                >
+                  <input ref={inputRef} type="file" accept="application/pdf" onChange={onChange} className="hidden" />
+                  {file ? (
+                    <div className="flex items-center justify-center gap-3 text-sm text-white">
+                      <FileText strokeWidth={1.5} className="h-4 w-4 text-[#c9a84c]" />
+                      <span className="truncate">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); setFile(null) }}
+                        className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/10 text-white/50 transition hover:border-white/30 hover:text-white"
+                        aria-label="Quitar archivo"
+                      >
+                        <X strokeWidth={1.5} className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3 text-white/50">
+                      <Upload strokeWidth={1.5} className="h-5 w-5" />
+                      <p className="text-sm font-light">Arrastrá tu CV acá o <span className="text-white underline underline-offset-4">elegí un archivo</span></p>
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/30">PDF · hasta 10 MB</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {error && (
+                <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-sm text-red-400">
+                  <AlertCircle strokeWidth={1.5} className="h-4 w-4 shrink-0" /> {error}
+                </div>
+              )}
+
+              <div className="mt-8 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-white/30">Nunca compartimos tu CV sin tu permiso.</p>
+                <button
+                  type="submit"
+                  disabled={!name || !email || !file || submitting}
+                  className="group inline-flex items-center justify-center gap-2 rounded-full bg-[#c9a84c] px-6 py-3 text-sm font-medium text-[#0a0a0a] transition-all hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.6)] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40 disabled:shadow-none"
+                >
+                  {submitting ? (
+                    <><Loader2 strokeWidth={1.5} className="h-4 w-4 animate-spin" /> Enviando…</>
+                  ) : (
+                    <>Enviar postulación <ArrowRight strokeWidth={1.75} className="h-4 w-4 transition group-hover:translate-x-0.5" /></>
+                  )}
+                </button>
+              </div>
+            </motion.form>
+          </>
+        ) : (
+          <SuccessState name={name} title={title} company={company} />
+        )}
+      </section>
+    </main>
+  )
+}

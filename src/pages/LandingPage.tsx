@@ -1,28 +1,31 @@
 import { useState, useRef } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link } from 'wouter'
+import { motion } from 'framer-motion'
 import {
   Upload, Mail, Sparkles, Brain, Building2, Check, ArrowRight,
-  FileText, Loader2, Users,
+  FileText, Loader2, Users, ChevronRight,
 } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { GrowthLine, CompatibilityTrace, Eyebrow } from '@/components/cv/visuals'
 import { supabase } from '@/lib/supabase'
 import { analytics } from '@/lib/analytics'
 
+const ease = [0.22, 1, 0.36, 1] as const
+
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
 function Hero() {
   return (
     <section className="relative overflow-hidden">
-      <div className="max-w-6xl mx-auto px-6 pt-16 pb-10 sm:pt-24 sm:pb-16">
+      <div className="mx-auto max-w-6xl px-6 pb-10 pt-16 sm:pb-16 sm:pt-24">
         <Eyebrow>Talento con IA · Paraguay &amp; LATAM</Eyebrow>
-        <h1 className="font-display text-4xl sm:text-6xl mt-3 text-cream leading-[1.05] max-w-3xl">
+        <h1 className="font-display mt-3 max-w-3xl text-4xl leading-[1.05] text-cream sm:text-6xl">
           Las oportunidades están <em>dispersas</em>.
           <br />Tu CV no pasa los <em>filtros</em>.
           <br />CVitae resuelve las dos cosas.
         </h1>
-        <p className="text-muted-foreground mt-6 max-w-xl text-base sm:text-lg leading-relaxed">
+        <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
           Becas, diplomados, concursos y empleos llegan desperdigados por mil grupos.
           Y los CVs buenos quedan afuera por un filtro automático. CVitae junta todo
           y te ayuda a llegar.
@@ -30,16 +33,16 @@ function Hero() {
         <div className="relative mt-10 max-w-2xl">
           <GrowthLine className="absolute -top-6 left-0 right-0 h-20 opacity-50" />
         </div>
-        <div className="flex flex-wrap gap-3 mt-10">
+        <div className="mt-10 flex flex-wrap gap-3">
           <a
             href="#registro"
-            className="inline-flex items-center gap-2 bg-gold text-ink hover:bg-gold-soft transition-colors font-medium h-11 px-6 rounded-md text-sm"
+            className="inline-flex h-11 items-center gap-2 rounded-full bg-[#c9a84c] px-6 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)]"
           >
             <Upload className="h-4 w-4" /> Subir mi CV
           </a>
           <a
             href="#analizador"
-            className="inline-flex items-center gap-2 text-cream hover:bg-cream/5 transition-colors h-11 px-6 rounded-md text-sm"
+            className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 px-6 text-sm text-cream transition hover:border-white/25"
           >
             Probar el analizador <ArrowRight className="h-4 w-4" />
           </a>
@@ -49,7 +52,7 @@ function Hero() {
   )
 }
 
-// ─── RegistroBlock — real Supabase magic link auth + sessionStorage CV ────────
+// ─── RegistroBlock ────────────────────────────────────────────────────────────
 
 function RegistroBlock() {
   const [email, setEmail] = useState('')
@@ -65,8 +68,7 @@ function RegistroBlock() {
 
   const handleSubmit = async () => {
     if (!email.trim() || !file) return
-    setStep('loading')
-    setErrorMsg('')
+    setStep('loading'); setErrorMsg('')
     try {
       const { error: authError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
@@ -91,93 +93,91 @@ function RegistroBlock() {
 
   if (step === 'sent') {
     return (
-      <section id="registro" className="max-w-6xl mx-auto px-6 py-16">
-        <div className="gold-panel p-8 sm:p-12 max-w-lg mx-auto text-center">
-          <div className="text-5xl mb-4">🎉</div>
-          <h2 className="font-display text-2xl text-cream">¡Revisá tu correo!</h2>
-          <p className="text-muted-foreground mt-3 text-sm">
-            Te enviamos un enlace mágico a <strong>{email}</strong>.
+      <section id="registro" className="mx-auto max-w-6xl px-6 py-16">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
+          className="mx-auto max-w-lg rounded-3xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.05] p-8 text-center sm:p-12"
+        >
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-[#c9a84c]/40 bg-[#c9a84c]/10">
+            <Check className="h-7 w-7 text-[#c9a84c]" />
+          </div>
+          <h2 className="font-display mt-6 text-2xl text-cream">¡Revisá tu correo!</h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Te enviamos un enlace mágico a <strong className="text-white">{email}</strong>.
             Tu CV queda guardado para cuando ingreses.
           </p>
-        </div>
+        </motion.div>
       </section>
     )
   }
 
   return (
-    <section id="registro" className="max-w-6xl mx-auto px-6 py-16">
-      <div className="gold-panel p-8 sm:p-12 relative overflow-hidden">
+    <section id="registro" className="mx-auto max-w-6xl px-6 py-16">
+      <div className="relative overflow-hidden rounded-3xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.03] p-8 sm:p-12">
+        <div className="absolute -inset-2 -z-10 bg-gradient-to-br from-[#c9a84c]/10 via-transparent to-transparent blur-3xl" />
         <GrowthLine className="absolute -top-2 left-0 right-0 h-24 opacity-60" />
-        <div className="relative grid lg:grid-cols-[1.2fr_1fr] gap-10 items-center">
+        <div className="relative grid items-center gap-10 lg:grid-cols-[1.2fr_1fr]">
           <div>
             <Eyebrow>Registro en un solo paso</Eyebrow>
-            <h2 className="font-display text-3xl sm:text-4xl mt-2 text-cream leading-tight">
+            <h2 className="font-display mt-2 text-3xl leading-tight text-cream sm:text-4xl">
               Subís tu CV y tu correo.
               <br />La IA <em>arma tu perfil</em> al instante.
             </h2>
-            <p className="text-muted-foreground mt-4 max-w-md">
+            <p className="mt-4 max-w-md text-muted-foreground">
               Sin formularios de 5 pasos. La IA lee tu PDF, extrae nombre, título,
               habilidades, experiencia y cursos, y deja tu perfil listo para recibir matches.
               Después, si querés, ajustás los detalles.
             </p>
             <ul className="mt-6 space-y-2 text-sm text-cream/90">
-              {['Extracción automática del CV', 'Score de empleabilidad inicial', 'Primeros matches en menos de 1 minuto'].map((i) => (
-                <li key={i} className="flex items-center gap-2"><Check className="h-4 w-4 text-gold" /> {i}</li>
+              {['Extracción automática del CV', 'Score de empleabilidad inicial', 'Primeros matches en menos de 1 minuto'].map((item) => (
+                <li key={item} className="flex items-center gap-2">
+                  <Check className="h-4 w-4 shrink-0 text-[#c9a84c]" /> {item}
+                </li>
               ))}
             </ul>
           </div>
           <div className="space-y-3">
             <label
-              className="glass-panel block p-6 cursor-pointer hover:border-gold/40 transition-colors text-center"
+              className="glass-card block cursor-pointer rounded-2xl p-6 text-center transition hover:border-[#c9a84c]/40"
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
             >
               {file ? (
                 <>
-                  <FileText className="h-6 w-6 text-gold mx-auto" />
-                  <p className="font-display text-base text-cream mt-3 truncate">{file.name}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{(file.size / 1024).toFixed(0)} KB · listo</p>
-                  <button
-                    onClick={(e) => { e.preventDefault(); setFile(null) }}
-                    className="text-xs text-muted-foreground hover:text-cream mt-1 underline"
-                  >cambiar</button>
+                  <FileText className="mx-auto h-6 w-6 text-[#c9a84c]" />
+                  <p className="font-display mt-3 truncate text-base text-cream">{file.name}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB · listo</p>
+                  <button onClick={(e) => { e.preventDefault(); setFile(null) }} className="mt-1 text-xs text-muted-foreground underline hover:text-cream">cambiar</button>
                 </>
               ) : (
                 <>
-                  <Upload className="h-6 w-6 text-gold mx-auto" />
-                  <p className="font-display text-lg text-cream mt-3">Arrastrá tu CV aquí</p>
-                  <p className="text-xs text-muted-foreground mt-1">PDF · hasta 5 MB</p>
+                  <Upload className="mx-auto h-6 w-6 text-[#c9a84c]" />
+                  <p className="font-display mt-3 text-lg text-cream">Arrastrá tu CV aquí</p>
+                  <p className="mt-1 text-xs text-muted-foreground">PDF · hasta 5 MB</p>
                 </>
               )}
-              <input
-                ref={fileRef}
-                type="file"
-                accept="application/pdf,.docx,.txt"
-                className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
-              />
+              <input ref={fileRef} type="file" accept="application/pdf,.docx,.txt" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
             </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 placeholder="tu@correo.com"
-                className="w-full glass-panel pl-10 pr-3 py-3 text-sm text-cream placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-gold"
+                className="w-full rounded-xl border border-white/10 bg-white/[0.02] pl-10 pr-3 py-3 text-sm text-cream placeholder:text-muted-foreground outline-none focus:border-[#c9a84c]/50 transition"
               />
             </div>
-            {errorMsg && <p className="text-red-400 text-xs">{errorMsg}</p>}
+            {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}
             <button
               onClick={handleSubmit}
               disabled={!email.trim() || !file || step === 'loading'}
-              className="w-full inline-flex items-center justify-center gap-2 bg-gold text-ink hover:bg-gold-soft h-11 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex w-full h-11 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
             >
               {step === 'loading'
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</>
                 : <>Crear mi perfil con IA <ArrowRight className="h-4 w-4" /></>}
             </button>
-            <p className="text-[11px] text-muted-foreground text-center">Sin contraseña. Te enviamos un enlace mágico.</p>
+            <p className="text-center text-[11px] text-muted-foreground">Sin contraseña. Te enviamos un enlace mágico.</p>
           </div>
         </div>
       </div>
@@ -195,20 +195,25 @@ function ComoFunciona() {
     { n: '04', t: 'Alertas personalizadas', d: 'Recibís solo lo que encaja con tu próximo paso.' },
   ]
   return (
-    <section className="max-w-6xl mx-auto px-6 py-20">
+    <section className="mx-auto max-w-6xl px-6 py-20">
       <Eyebrow>Cómo funciona</Eyebrow>
-      <h2 className="font-display text-3xl sm:text-4xl mt-2 text-cream max-w-xl">
+      <h2 className="font-display mt-2 max-w-xl text-3xl text-cream sm:text-4xl">
         Cuatro pasos. <em>Cero ruido.</em>
       </h2>
       <div className="relative mt-12">
-        <GrowthLine className="absolute -top-6 left-0 right-0 h-16 opacity-40 hidden md:block" />
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {steps.map((s) => (
-            <div key={s.n} className="glass-panel p-6">
-              <span className="font-display italic text-gold">{s.n}</span>
-              <h3 className="font-display text-xl text-cream mt-2">{s.t}</h3>
-              <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{s.d}</p>
-            </div>
+        <GrowthLine className="absolute -top-6 left-0 right-0 hidden h-16 opacity-40 md:block" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {steps.map((s, i) => (
+            <motion.div
+              key={s.n}
+              initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: i * 0.07, ease }}
+              className="glass-panel p-6"
+            >
+              <span className="font-display italic text-[#c9a84c]">{s.n}</span>
+              <h3 className="font-display mt-2 text-xl text-cream">{s.t}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.d}</p>
+            </motion.div>
           ))}
         </div>
       </div>
@@ -225,22 +230,27 @@ function IATech() {
     { Icon: FileText, t: 'Optimización dinámica del perfil', d: 'Tu CV se adapta a cada vacante para pasar filtros ATS sin perder tu voz.' },
   ]
   return (
-    <section className="max-w-6xl mx-auto px-6 py-20 border-t border-border/40">
+    <section className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
       <Eyebrow>IA que entiende tu carrera</Eyebrow>
-      <h2 className="font-display text-3xl sm:text-4xl mt-2 text-cream max-w-2xl">
+      <h2 className="font-display mt-2 max-w-2xl text-3xl text-cream sm:text-4xl">
         No es <em>palabra clave</em>. Es contexto.
       </h2>
-      <p className="text-muted-foreground mt-3 max-w-xl">
+      <p className="mt-3 max-w-xl text-muted-foreground">
         Entrenada con miles de CVs y vacantes paraguayas. Lee tu trayectoria como
         una persona técnica, no como un buscador de texto.
       </p>
-      <div className="grid md:grid-cols-3 gap-4 mt-10">
-        {items.map(({ Icon, t, d }) => (
-          <div key={t} className="editorial-panel p-6">
-            <Icon className="h-5 w-5 text-gold" />
-            <h3 className="font-display text-xl text-cream mt-3">{t}</h3>
-            <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{d}</p>
-          </div>
+      <div className="mt-10 grid gap-4 md:grid-cols-3">
+        {items.map(({ Icon, t, d }, i) => (
+          <motion.div
+            key={t}
+            initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: i * 0.08, ease }}
+            className="editorial-panel p-6"
+          >
+            <Icon className="h-5 w-5 text-[#c9a84c]" />
+            <h3 className="font-display mt-3 text-xl text-cream">{t}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{d}</p>
+          </motion.div>
         ))}
       </div>
     </section>
@@ -253,24 +263,24 @@ function Analizador() {
   const [cv, setCv] = useState<File | null>(null)
   const [analyzed, setAnalyzed] = useState(false)
   return (
-    <section id="analizador" className="max-w-6xl mx-auto px-6 py-20 border-t border-border/40">
+    <section id="analizador" className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
       <Eyebrow>Probalo antes de registrarte</Eyebrow>
-      <h2 className="font-display text-3xl sm:text-4xl mt-2 text-cream max-w-2xl">
+      <h2 className="font-display mt-2 max-w-2xl text-3xl text-cream sm:text-4xl">
         Analizador de CV <em>gratis</em>.
       </h2>
-      <p className="text-muted-foreground mt-3 max-w-xl">
+      <p className="mt-3 max-w-xl text-muted-foreground">
         Subí tu CV y mirá en segundos qué tan ATS-friendly es y dónde mejorar.
       </p>
-      <div className="mt-10 grid lg:grid-cols-[1fr_1fr] gap-6">
+      <div className="mt-10 grid gap-6 lg:grid-cols-2">
         <div className="editorial-panel p-8">
-          <label className="block p-10 border border-dashed border-border/60 rounded-md text-center cursor-pointer hover:border-gold/50 transition-colors">
-            <Upload className="h-6 w-6 text-gold mx-auto" />
-            <p className="font-display text-lg text-cream mt-3">{cv?.name ?? 'Subí tu CV en PDF'}</p>
-            <p className="text-xs text-muted-foreground mt-1">Procesado en tu navegador, sin guardar nada.</p>
+          <label className="block cursor-pointer rounded-2xl border border-dashed border-white/15 p-10 text-center transition hover:border-[#c9a84c]/50">
+            <Upload className="mx-auto h-6 w-6 text-[#c9a84c]" />
+            <p className="font-display mt-3 text-lg text-cream">{cv?.name ?? 'Subí tu CV en PDF'}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Procesado en tu navegador, sin guardar nada.</p>
             <input type="file" accept="application/pdf" className="hidden" onChange={(e) => setCv(e.target.files?.[0] ?? null)} />
           </label>
           <button
-            className="mt-4 w-full inline-flex items-center justify-center bg-gold text-ink hover:bg-gold-soft h-11 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-4 inline-flex w-full h-11 items-center justify-center rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => setAnalyzed(true)}
             disabled={!cv}
           >
@@ -282,18 +292,18 @@ function Analizador() {
             <>
               <CompatibilityTrace score={72} label="Score ATS estimado" />
               <div className="mt-5 space-y-3 text-sm">
-                <p className="text-cream"><span className="font-display italic text-gold mr-2">+</span>Estructura clara y experiencia cuantificada.</p>
-                <p className="text-cream"><span className="font-display italic text-gold mr-2">!</span>Faltan 3 keywords críticas del rubro.</p>
-                <p className="text-cream"><span className="font-display italic text-gold mr-2">!</span>Diseño con tablas: 40% de ATS no lo leen.</p>
+                <p className="text-cream"><span className="mr-2 font-display italic text-[#c9a84c]">+</span>Estructura clara y experiencia cuantificada.</p>
+                <p className="text-cream"><span className="mr-2 font-display italic text-[#c9a84c]">!</span>Faltan 3 keywords críticas del rubro.</p>
+                <p className="text-cream"><span className="mr-2 font-display italic text-[#c9a84c]">!</span>Diseño con tablas: 40% de ATS no lo leen.</p>
               </div>
-              <p className="text-xs text-muted-foreground mt-5">¿Querés el análisis completo y un CV optimizado por vacante? Creá tu perfil.</p>
+              <p className="mt-5 text-xs text-muted-foreground">¿Querés el análisis completo y un CV optimizado por vacante? Creá tu perfil.</p>
             </>
           ) : (
-            <div className="grid place-items-center h-full min-h-[280px] text-center">
+            <div className="grid min-h-[280px] place-items-center text-center">
               <div>
-                <Sparkles className="h-6 w-6 text-gold mx-auto" />
-                <p className="font-display text-lg text-cream mt-3">Tu análisis aparecerá aquí</p>
-                <p className="text-xs text-muted-foreground mt-1">Score ATS, fortalezas y mejoras críticas.</p>
+                <Sparkles className="mx-auto h-6 w-6 text-[#c9a84c]" />
+                <p className="font-display mt-3 text-lg text-cream">Tu análisis aparecerá aquí</p>
+                <p className="mt-1 text-xs text-muted-foreground">Score ATS, fortalezas y mejoras críticas.</p>
               </div>
             </div>
           )}
@@ -319,43 +329,48 @@ function Pricing() {
     },
   ]
   return (
-    <section className="max-w-6xl mx-auto px-6 py-20 border-t border-border/40">
+    <section className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
       <Eyebrow>Para candidatos</Eyebrow>
-      <h2 className="font-display text-3xl sm:text-4xl mt-2 text-cream">
+      <h2 className="font-display mt-2 text-3xl text-cream sm:text-4xl">
         Empezá <em>gratis</em>. Subí cuando lo necesites.
       </h2>
-      <div className="grid md:grid-cols-2 gap-4 mt-10 max-w-3xl">
-        {tiers.map((t) => (
-          <div key={t.name} className={t.featured ? 'gold-panel p-8' : 'glass-panel p-8'}>
+      <div className="mt-10 grid max-w-3xl gap-4 md:grid-cols-2">
+        {tiers.map((t, i) => (
+          <motion.div
+            key={t.name}
+            initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: i * 0.08, ease }}
+            className={t.featured ? 'rounded-3xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.04] p-8' : 'glass-panel rounded-3xl p-8'}
+          >
             <div className="flex items-baseline justify-between">
               <h3 className="font-display text-2xl text-cream">{t.name}</h3>
               {t.featured && (
-                <span className="text-[10px] uppercase tracking-wider border border-gold/30 text-gold px-2 py-0.5 rounded-full">
+                <span className="rounded-full border border-[#c9a84c]/30 px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#c9a84c]">
                   Recomendado
                 </span>
               )}
             </div>
-            <p className="font-display text-4xl text-cream mt-4">
-              {t.price}<span className="text-sm text-muted-foreground ml-1">{t.per}</span>
+            <p className="font-display mt-4 text-4xl text-cream">
+              {t.price}<span className="ml-1 text-sm text-muted-foreground">{t.per}</span>
             </p>
             <ul className="mt-6 space-y-2 text-sm">
               {t.features.map((f) => (
                 <li key={f} className="flex items-start gap-2 text-cream/90">
-                  <Check className="h-4 w-4 text-gold mt-0.5 shrink-0" /> {f}
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#c9a84c]" /> {f}
                 </li>
               ))}
             </ul>
             <a
               href="#registro"
-              className={`mt-8 w-full inline-flex items-center justify-center h-10 rounded-md text-sm font-medium transition-colors ${
+              className={`mt-8 inline-flex w-full h-10 items-center justify-center rounded-full text-sm font-medium transition ${
                 t.featured
-                  ? 'bg-gold text-ink hover:bg-gold-soft'
-                  : 'border border-border text-cream hover:bg-cream/5'
+                  ? 'bg-[#c9a84c] text-[#0a0a0a] hover:bg-[#e6cf8a]'
+                  : 'border border-white/10 text-cream hover:border-white/25'
               }`}
             >
               {t.cta}
             </a>
-          </div>
+          </motion.div>
         ))}
       </div>
     </section>
@@ -392,80 +407,86 @@ function ParaEmpresas() {
   }
 
   return (
-    <section className="max-w-6xl mx-auto px-6 py-20 border-t border-border/40">
-      <div className="grid lg:grid-cols-[1.1fr_1fr] gap-10">
+    <section className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
+      <div className="grid gap-10 lg:grid-cols-[1.1fr_1fr]">
         <div>
           <Eyebrow>Para empresas</Eyebrow>
-          <h2 className="font-display text-3xl sm:text-4xl mt-2 text-cream max-w-xl">
+          <h2 className="font-display mt-2 max-w-xl text-3xl text-cream sm:text-4xl">
             Subí un <em>lote de CVs</em>. Recibí el Top 3 listo para entrevistar.
           </h2>
-          <p className="text-muted-foreground mt-4 max-w-lg">
+          <p className="mt-4 max-w-lg text-muted-foreground">
             La IA lee, clasifica con criterio ATS, compara entre sí y te entrega
             un ranking con justificación. Cero horas filtrando PDFs.
           </p>
           <ul className="mt-6 space-y-2 text-sm text-cream/90">
             {['Análisis masivo ilimitado', 'Ranking comparativo con score y matches clave', 'Banco de talento acumulado por la empresa', 'Link de postulación propio'].map((f) => (
-              <li key={f} className="flex items-start gap-2"><Check className="h-4 w-4 text-gold mt-0.5" /> {f}</li>
+              <li key={f} className="flex items-start gap-2">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#c9a84c]" /> {f}
+              </li>
             ))}
           </ul>
-          <div className="gold-panel p-6 mt-8 max-w-md">
+
+          {/* Price card */}
+          <div className="relative mt-8 max-w-md overflow-hidden rounded-3xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.04] p-6">
+            <div className="absolute -inset-1 -z-10 rounded-[2rem] bg-gradient-to-br from-[#c9a84c]/10 via-transparent to-transparent blur-2xl" />
             <div className="flex items-baseline justify-between">
               <h3 className="font-display text-xl text-cream">Plan Empresa</h3>
-              <Building2 className="h-4 w-4 text-gold" />
+              <Building2 className="h-4 w-4 text-[#c9a84c]" />
             </div>
-            <p className="font-display text-3xl text-cream mt-3">USD 79<span className="text-sm text-muted-foreground ml-1">/ mes</span></p>
+            <p className="font-display mt-3 text-3xl text-cream">
+              USD 79<span className="ml-1 text-sm text-muted-foreground">/ mes</span>
+            </p>
             <p className="text-xs text-muted-foreground">o Gs. 500.000 / mes</p>
             <Link
               href="/empresas"
-              className="mt-5 inline-flex items-center gap-2 text-sm text-gold hover:text-gold-soft transition-colors"
+              className="mt-5 inline-flex items-center gap-2 text-sm text-[#c9a84c] transition hover:text-[#e6cf8a]"
             >
-              Acceder al panel <ArrowRight className="h-4 w-4" />
+              Acceder al panel <ChevronRight className="h-4 w-4" />
             </Link>
           </div>
         </div>
-        <div className="editorial-panel p-8">
+
+        {/* Lead form */}
+        <div className="glass-card rounded-3xl p-8">
           {sent ? (
-            <div className="text-center py-8">
-              <div className="text-4xl mb-4">🎉</div>
-              <h3 className="font-display text-xl text-cream">¡Estás en la lista!</h3>
-              <p className="text-muted-foreground text-sm mt-3">
-                Te contactamos a <strong>{correo}</strong> para coordinar el acceso a la Beta.
+            <div className="py-8 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#c9a84c]/40 bg-[#c9a84c]/10">
+                <Check className="h-6 w-6 text-[#c9a84c]" />
+              </div>
+              <h3 className="font-display mt-6 text-xl text-cream">¡Estás en la lista!</h3>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Te contactamos a <strong className="text-white">{correo}</strong> para coordinar el acceso a la Beta.
               </p>
             </div>
           ) : (
             <>
               <Eyebrow>Acceso a la Beta</Eyebrow>
-              <h3 className="font-display text-2xl text-cream mt-2">Probá CVitae para tu equipo de RRHH.</h3>
+              <h3 className="font-display mt-2 text-2xl text-cream">Probá CVitae para tu equipo de RRHH.</h3>
               <div className="mt-6 space-y-3">
                 <input
-                  placeholder="Nombre (opcional)"
-                  value={nombre}
+                  placeholder="Nombre (opcional)" value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
-                  className="w-full glass-panel px-3 py-2.5 text-sm text-cream placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-gold"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-cream placeholder:text-muted-foreground outline-none focus:border-[#c9a84c]/50 transition"
                 />
                 <input
-                  type="email"
-                  placeholder="Correo corporativo"
-                  value={correo}
+                  type="email" placeholder="Correo corporativo" value={correo}
                   onChange={(e) => setCorreo(e.target.value)}
-                  className="w-full glass-panel px-3 py-2.5 text-sm text-cream placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-gold"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-cream placeholder:text-muted-foreground outline-none focus:border-[#c9a84c]/50 transition"
                 />
                 <input
-                  placeholder="Empresa"
-                  value={empresa}
+                  placeholder="Empresa" value={empresa}
                   onChange={(e) => setEmpresa(e.target.value)}
-                  className="w-full glass-panel px-3 py-2.5 text-sm text-cream placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-gold"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-cream placeholder:text-muted-foreground outline-none focus:border-[#c9a84c]/50 transition"
                 />
-                {error && <p className="text-red-400 text-xs">{error}</p>}
+                {error && <p className="text-xs text-red-400">{error}</p>}
                 <button
-                  onClick={handleSubmit}
-                  disabled={sending}
-                  className="w-full inline-flex items-center justify-center bg-gold text-ink hover:bg-gold-soft h-11 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+                  onClick={handleSubmit} disabled={sending}
+                  className="inline-flex w-full h-11 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)] disabled:opacity-50"
                 >
                   {sending ? 'Enviando…' : 'Solicitar acceso'}
                 </button>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-4 text-center">
+              <p className="mt-4 text-center text-[11px] text-muted-foreground">
                 Gratis durante el período de prueba. Sin tarjeta requerida.
               </p>
             </>
