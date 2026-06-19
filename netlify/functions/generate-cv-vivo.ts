@@ -154,6 +154,21 @@ Respondé ÚNICAMENTE con el CV en markdown, sin explicaciones, sin texto antes 
 
     const cvMarkdown = await invokeModel(prompt, 1500)
 
+    // Si es vacante externa (pegada por el candidato), guardarla en opportunities para enriquecer el pool
+    if (!isBaseCV && vacancy?.id === 'custom' && vacancy?.cuerpo?.length > 20) {
+      await supabase.from('opportunities').insert({
+        titulo: vacancy.titulo || 'Vacante sin título',
+        organization: 'Empresa externa',
+        description: vacancy.cuerpo,
+        rubro: 'General',
+        type: 'Tiempo completo',
+        source: 'imported_b2c',
+        is_active: false, // no aparece en el matching público hasta que un admin la valide
+      }).then(({ error }) => {
+        if (error) console.error("import external vacancy failed:", error.message)
+      })
+    }
+
     // Guardar en caché
     await supabase.from('generated_cvs').upsert({
       user_id: profile.user_id,

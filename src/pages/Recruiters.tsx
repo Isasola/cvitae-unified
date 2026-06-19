@@ -842,10 +842,12 @@ interface VacancyRecord {
   created_at: string
 }
 
+const RUBROS = ['Tecnología', 'Administración', 'Contabilidad / Finanzas', 'Marketing / Ventas', 'Recursos Humanos', 'Logística / Operaciones', 'Producción / Manufactura', 'Salud', 'Educación', 'Gastronomía / Turismo', 'Construcción / Inmobiliaria', 'Legal', 'Otro']
+
 function VacancyPanel({ token, onAnalyzeApplicant }: { token: string; onAnalyzeApplicant: (cvText: string, name: string) => void }) {
   const [form, setForm] = useState({
     title: '', description: '', requirements: '',
-    location: '', modality: 'Presencial', salary_range: '', company_name: '',
+    location: '', modality: 'Presencial', salary_range: '', company_name: '', rubro: '',
   })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -883,7 +885,7 @@ function VacancyPanel({ token, onAnalyzeApplicant }: { token: string; onAnalyzeA
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error al crear la vacante')
       setCreatedUrl(data.url)
-      setForm({ title: '', description: '', requirements: '', location: '', modality: 'Presencial', salary_range: '', company_name: '' })
+      setForm({ title: '', description: '', requirements: '', location: '', modality: 'Presencial', salary_range: '', company_name: '', rubro: '' })
       loadVacancies()
     } catch (err: any) {
       setSaveError(err.message)
@@ -945,6 +947,15 @@ function VacancyPanel({ token, onAnalyzeApplicant }: { token: string; onAnalyzeA
               <option value="Presencial">Presencial</option>
               <option value="Remoto">Remoto</option>
               <option value="Híbrido">Híbrido</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Rubro / Área</label>
+            <select required value={form.rubro} onChange={set('rubro')}
+              className="w-full rounded-xl border border-white/10 bg-[#111] px-4 py-3 text-sm text-white focus:border-[#c9a84c]/50 focus:outline-none transition">
+              <option value="">Seleccioná el área…</option>
+              {RUBROS.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
 

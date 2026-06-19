@@ -24,7 +24,7 @@ const handler: Handler = async (event) => {
   }
 
   try {
-    const { token, title, description, requirements, location, modality, salary_range, company_name } = JSON.parse(event.body || "{}")
+    const { token, title, description, requirements, location, modality, salary_range, company_name, rubro, tags } = JSON.parse(event.body || "{}")
 
     // Validate required fields
     if (!token?.trim()) {
@@ -73,6 +73,24 @@ const handler: Handler = async (event) => {
       console.error("create-vacancy insert error:", insertError.message)
       return { statusCode: 500, body: JSON.stringify({ error: "Error al crear la vacante: " + insertError.message }) }
     }
+
+    // Mirror to opportunities table so B2C candidates can find it in matching + Alertas
+    await supabase.from("opportunities").insert({
+      titulo: title.trim(),
+      organization: company_name.trim(),
+      description: description.trim(),
+      location: location.trim(),
+      modality: modality || "Presencial",
+      type: modality || "Presencial",
+      rubro: rubro?.trim() || "General",
+      tags: tags || [],
+      application_url: `${process.env.SITE_URL || "https://cvitae.lat"}/vacante/${vacancy.slug}`,
+      recruiter_vacancy_id: vacancy.id,
+      source: "recruiter_b2b",
+      is_active: true,
+    }).then(({ error }) => {
+      if (error) console.error("mirror to opportunities failed:", error.message)
+    })
 
     const vacancyUrl = `${process.env.SITE_URL || "https://cvitae.lat"}/vacante/${vacancy.slug}`
 

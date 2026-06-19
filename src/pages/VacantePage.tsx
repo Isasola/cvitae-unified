@@ -93,6 +93,9 @@ function SuccessState({ name }: { name: string }) {
           <p className="mt-1 text-sm font-light leading-relaxed text-white/60">
             Asunto: <span className="text-white">"Tu acceso a CVitae está listo ✦"</span>
           </p>
+          <p className="mt-2 text-xs text-white/35">
+            ¿No lo ves? Revisá la carpeta de <span className="text-white/55">Spam</span> o <span className="text-white/55">Promociones</span>. El email sale desde <span className="font-mono text-white/55">noreply@cvitae.lat</span>.
+          </p>
         </div>
       </div>
 
