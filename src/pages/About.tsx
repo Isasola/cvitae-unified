@@ -1,9 +1,10 @@
 import { Helmet } from 'react-helmet-async'
+import { Link } from 'wouter'
 import { motion } from 'framer-motion'
 import { Navbar } from '@/components/cvitae/Navbar'
 import { Footer } from '@/components/cvitae/Footer'
 import { GlassCard } from '@/components/cvitae/UI-Elements'
-import { Brain, Target, Users, Sparkles } from 'lucide-react'
+import { Brain, Target, Users, Sparkles, ArrowLeft } from 'lucide-react'
 
 export default function About() {
   return (
@@ -14,6 +15,11 @@ export default function About() {
       </Helmet>
       <Navbar />
       <div className="pt-32 pb-20 px-4 max-w-4xl mx-auto">
+        <div className="mb-8">
+          <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-cream transition-colors">
+            <ArrowLeft className="h-4 w-4" /> Inicio
+          </Link>
+        </div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-16">
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-6">Nuestra Misión</h1>
           <p className="text-xl text-muted leading-relaxed">

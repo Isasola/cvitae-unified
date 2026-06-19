@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { useLocation } from 'wouter'
-import { Upload, Sparkles, Users, Crown, ArrowRight, Trash2, FileText } from 'lucide-react'
+import { Link, useLocation } from 'wouter'
+import { Upload, Sparkles, Users, Crown, ArrowRight, Trash2, FileText, ArrowLeft } from 'lucide-react'
 import { Navbar } from '@/components/cvitae/Navbar'
 import { Footer } from '@/components/cvitae/Footer'
 import { GrowthLine, CompatibilityTrace, Eyebrow } from '@/components/cv/visuals'
@@ -154,6 +154,12 @@ export default function BatchAnalysis() {
       <Navbar />
 
       <div className="max-w-6xl mx-auto px-6 py-10">
+        <div className="mb-6">
+          <Link href="/empresas" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-cream transition-colors">
+            <ArrowLeft className="h-4 w-4" /> Panel empresas
+          </Link>
+        </div>
+
         <div className="relative">
           <Eyebrow>Análisis Masivo</Eyebrow>
           <h1 className="font-display text-4xl sm:text-5xl mt-2 text-cream leading-tight">

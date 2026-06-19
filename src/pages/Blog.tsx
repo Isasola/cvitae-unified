@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link, useLocation } from 'wouter'
+import { ArrowLeft } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { GrowthLine, Eyebrow } from '@/components/cv/visuals'
 import { supabase } from '@/lib/supabase'
@@ -46,6 +47,11 @@ export default function Blog() {
       </Helmet>
       <SiteShell>
         <div className="max-w-5xl mx-auto px-6 py-12">
+          <div className="mb-6">
+            <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-cream transition-colors">
+              <ArrowLeft className="h-4 w-4" /> Inicio
+            </Link>
+          </div>
           <div className="relative">
             <Eyebrow>Blog</Eyebrow>
             <h1 className="font-display text-4xl sm:text-5xl mt-2 text-cream">

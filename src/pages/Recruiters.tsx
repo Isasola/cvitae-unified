@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
+import { Link } from 'wouter'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Building2, Key, Upload, FileText, CheckCircle2, XCircle, Check,
   AlertCircle, ChevronRight, RotateCcw, Brain, Coins,
   Star, LogOut, Loader2, History, Sparkles,
-  ChevronDown, ChevronUp, Users
+  ChevronDown, ChevronUp, Users, ArrowLeft
 } from 'lucide-react'
 import { Navbar } from '@/components/cvitae/Navbar'
 import { Footer } from '@/components/cvitae/Footer'
@@ -140,6 +141,11 @@ function TokenLogin({ onSuccess }: { onSuccess: (session: RecruiterSession) => v
       </Helmet>
       <Navbar />
       <div className="max-w-5xl mx-auto px-6 py-16">
+        <div className="mb-8">
+          <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-cream transition-colors">
+            <ArrowLeft className="h-4 w-4" /> Inicio
+          </Link>
+        </div>
         <div className="grid lg:grid-cols-[1.1fr_1fr] gap-10 items-start">
           <div className="relative">
             <p className="text-[11px] uppercase tracking-[0.22em] text-gold">Panel de Empresas</p>
