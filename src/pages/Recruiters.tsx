@@ -2,10 +2,10 @@ import { useState, useRef, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Building2, Key, Upload, FileText, CheckCircle2, XCircle,
-  AlertCircle, ChevronRight, RotateCcw, Coins, Brain,
-  TrendingUp, TrendingDown, Star, LogOut, Loader2, History,
-  Filter, ChevronDown, ChevronUp, Users
+  Building2, Key, Upload, FileText, CheckCircle2, XCircle, Check,
+  AlertCircle, ChevronRight, RotateCcw, Brain, Coins,
+  Star, LogOut, Loader2, History, Sparkles,
+  ChevronDown, ChevronUp, Users
 } from 'lucide-react'
 import { Navbar } from '@/components/cvitae/Navbar'
 import { Footer } from '@/components/cvitae/Footer'
@@ -125,53 +125,92 @@ function TokenLogin({ onSuccess }: { onSuccess: (session: RecruiterSession) => v
     }
   }
 
+  const features = [
+    'Analizá un CV o un lote de hasta 30 en una corrida',
+    'Ranking comparativo con score, fortalezas y red flags',
+    'Banco de talento histórico, acumulado por tu empresa',
+    'Link de postulación propio que alimenta tu base',
+  ]
+
   return (
-    <section className="relative min-h-screen flex items-center justify-center px-4">
-      <DotGrid />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gold/5 rounded-full blur-[100px] pointer-events-none" />
-      <motion.div className="relative z-10 w-full max-w-md" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gold/10 border border-gold/20 mb-6">
-            <Building2 className="text-gold" size={32} />
+    <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>Para Empresas · CVitae</title>
+        <meta name="description" content="Acceso al panel de empresas. Analizá CVs con IA y encontrá al candidato ideal en segundos." />
+      </Helmet>
+      <Navbar />
+      <div className="max-w-5xl mx-auto px-6 py-16">
+        <div className="grid lg:grid-cols-[1.1fr_1fr] gap-10 items-start">
+          <div className="relative">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-gold">Panel de Empresas</p>
+            <h1 className="font-display text-4xl sm:text-5xl mt-2 text-cream leading-tight">
+              Encontrá al candidato ideal en <em>segundos</em>.
+            </h1>
+            <p className="text-muted-foreground mt-4 max-w-md leading-relaxed">
+              CVitae lee los CVs por vos, los compara con criterio ATS y te entrega un
+              ranking listo para entrevistar. Cero horas filtrando PDFs.
+            </p>
+            <svg viewBox="0 0 800 100" preserveAspectRatio="none" className="absolute -bottom-2 left-0 right-0 h-12 opacity-40" aria-hidden="true">
+              <defs>
+                <linearGradient id="gl-login" x1="0" x2="1" y1="0" y2="0">
+                  <stop offset="0%" stopColor="oklch(0.78 0.13 82)" stopOpacity="0" />
+                  <stop offset="50%" stopColor="oklch(0.78 0.13 82)" stopOpacity="0.7" />
+                  <stop offset="100%" stopColor="oklch(0.86 0.10 86)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path d="M 8 92 C 70 88, 110 70, 150 75 S 250 95, 310 60 S 420 25, 480 35 S 580 70, 640 28 S 760 8, 792 14" fill="none" stroke="url(#gl-login)" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <ul className="mt-10 space-y-3">
+              {features.map((f) => (
+                <li key={f} className="flex items-start gap-3 text-sm text-cream/90">
+                  <Check className="h-4 w-4 text-gold mt-0.5 shrink-0" /> {f}
+                </li>
+              ))}
+            </ul>
           </div>
-          <Badge variant="gold" className="mb-4"><Star className="w-3 h-3 fill-current" />Panel Empresas · Beta</Badge>
-          <h1 className="text-3xl font-bold text-white mb-3" style={{ fontFamily: 'Playfair Display, serif' }}>Panel de Reclutadores</h1>
-          <p className="text-muted leading-relaxed">Analizá CVs con IA, guardá el historial y encontrá al candidato ideal en segundos.</p>
-        </div>
-        <GlassCard className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-white/70 mb-2">Token de acceso</label>
-            <div className="relative">
-              <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-muted/70" size={16} />
-              <input
-                type="text"
-                value={token}
-                onChange={e => setToken(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleValidate()}
-                placeholder="REC-XXXXX-2026"
-                className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-[#555555] focus:outline-none focus:border-gold/50 transition-all font-mono text-sm"
-              />
+
+          <div className="editorial-panel p-8">
+            <div className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-gold" />
+              <p className="text-[11px] uppercase tracking-[0.22em] text-gold">Acceso con token</p>
+            </div>
+            <h2 className="font-display text-2xl text-cream mt-2">Ingresá tu token de empresa.</h2>
+            <p className="text-xs text-muted-foreground mt-1">Formato: REC-XXXXX-2026</p>
+            <div className="mt-6 space-y-3">
+              <div className="relative">
+                <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={token}
+                  onChange={e => setToken(e.target.value.toUpperCase())}
+                  onKeyDown={e => e.key === 'Enter' && handleValidate()}
+                  placeholder="REC-A1B2C-2026"
+                  className="w-full glass-panel pl-10 pr-3 py-3 text-sm text-cream placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-gold font-mono tracking-wider"
+                />
+              </div>
+              {error && (
+                <p className="text-red-400 text-sm flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+                </p>
+              )}
+              <button
+                onClick={handleValidate}
+                disabled={loading || !token.trim()}
+                className="w-full inline-flex items-center justify-center gap-2 bg-gold text-ink hover:bg-gold-soft h-11 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {loading ? <><Loader2 className="animate-spin h-4 w-4" />Verificando…</> : <>Entrar al panel <ChevronRight className="h-4 w-4" /></>}
+              </button>
+            </div>
+            <div className="mt-8 pt-6 border-t border-border/40 text-center">
+              <p className="text-xs text-muted-foreground">¿Todavía no tenés token?</p>
+              <a href="/#registro" className="text-sm text-gold hover:text-gold-soft mt-1 inline-flex items-center gap-1 transition-colors">
+                Solicitar acceso a la Beta <ChevronRight className="h-3.5 w-3.5" />
+              </a>
             </div>
           </div>
-          <AnimatePresence>
-            {error && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                className="flex items-start gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
-                <AlertCircle className="text-red-400 shrink-0 mt-0.5" size={16} />
-                <p className="text-red-400 text-sm">{error}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <GoldButton onClick={handleValidate} disabled={loading || !token.trim()} className="w-full" size="lg">
-            {loading ? <><Loader2 className="animate-spin" size={16} />Verificando...</> : <>Acceder al panel<ChevronRight size={18} /></>}
-          </GoldButton>
-          <p className="text-center text-xs text-muted/60">
-            ¿No tenés token?{' '}
-            <a href="/#empresas" className="text-gold hover:underline">Solicitá acceso a la Beta</a>
-          </p>
-        </GlassCard>
-      </motion.div>
-    </section>
+        </div>
+      </div>
+    </div>
   )
 }
 
