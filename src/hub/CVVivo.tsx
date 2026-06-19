@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import { Download, Copy, RefreshCw, Briefcase, FileText, CheckCircle, Sun, Moon, Edit3, Eye, Zap, AlertCircle } from 'lucide-react'
@@ -159,6 +160,11 @@ export default function CVVivo() {
 
   return (
     <DashboardLayout>
+      <Helmet>
+        <title>CV Vivo | CVitae</title>
+        <meta name="description" content="Generá un CV adaptado por IA a cada vacante que te interesa. Descargalo en PDF en segundos." />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       <div className="max-w-5xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">

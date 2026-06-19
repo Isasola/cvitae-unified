@@ -150,6 +150,11 @@ export default function BatchAnalysis() {
       <Helmet>
         <title>Análisis Masivo de CVs | CVitae Empresas</title>
         <meta name="description" content="Analizá hasta 30 CVs en lote con IA. Ranking comparativo, score ATS y recomendación automática." />
+        <link rel="canonical" href="https://cvitae.lat/empresas/masivo" />
+        <meta property="og:title" content="Análisis Masivo de CVs con IA | CVitae Empresas" />
+        <meta property="og:description" content="Analizá hasta 30 CVs en lote. Ranking comparativo, score ATS y recomendación de entrevista automática." />
+        <meta property="og:url" content="https://cvitae.lat/empresas/masivo" />
+        <meta property="og:type" content="website" />
       </Helmet>
       <Navbar />
 

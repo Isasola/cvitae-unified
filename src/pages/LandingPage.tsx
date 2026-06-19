@@ -484,8 +484,11 @@ export default function LandingPage() {
       <Helmet>
         <title>CVitae — Tu carrera, con intención</title>
         <meta name="description" content="Ecosistema de gestión de talento con IA para Paraguay. Subí tu CV y tu correo: la IA arma tu perfil y te conecta con las oportunidades reales." />
+        <link rel="canonical" href="https://cvitae.lat" />
         <meta property="og:title" content="CVitae — Tu carrera, con intención" />
         <meta property="og:description" content="Subí tu CV + tu correo. La IA arma tu perfil al instante y te matchea con empleos, becas y diplomados reales en Paraguay y Latinoamérica." />
+        <meta property="og:url" content="https://cvitae.lat" />
+        <meta property="og:type" content="website" />
       </Helmet>
       <SiteShell>
         <Hero />

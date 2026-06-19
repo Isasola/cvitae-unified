@@ -136,8 +136,13 @@ function TokenLogin({ onSuccess }: { onSuccess: (session: RecruiterSession) => v
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>Para Empresas · CVitae</title>
+        <title>Para Empresas | CVitae — Análisis de CVs con IA</title>
         <meta name="description" content="Acceso al panel de empresas. Analizá CVs con IA y encontrá al candidato ideal en segundos." />
+        <link rel="canonical" href="https://cvitae.lat/empresas" />
+        <meta property="og:title" content="Para Empresas | CVitae — Análisis de CVs con IA" />
+        <meta property="og:description" content="Analizá lotes de CVs, obtené un ranking comparativo y encontrá al candidato ideal. IA para reclutamiento en Paraguay." />
+        <meta property="og:url" content="https://cvitae.lat/empresas" />
+        <meta property="og:type" content="website" />
       </Helmet>
       <Navbar />
       <div className="max-w-5xl mx-auto px-6 py-16">

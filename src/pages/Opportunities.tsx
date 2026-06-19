@@ -45,6 +45,11 @@ export default function Opportunities() {
       <Helmet>
         <title>Oportunidades Laborales Paraguay | CVitae</title>
         <meta name="description" content="Becas, empleos, foros y eventos seleccionados para profesionales paraguayos y latinoamericanos." />
+        <link rel="canonical" href="https://cvitae.lat/oportunidades" />
+        <meta property="og:title" content="Oportunidades Laborales Paraguay | CVitae" />
+        <meta property="og:description" content="Becas, empleos, foros y eventos curados para profesionales paraguayos y latinoamericanos." />
+        <meta property="og:url" content="https://cvitae.lat/oportunidades" />
+        <meta property="og:type" content="website" />
       </Helmet>
       <SiteShell>
         <div className="max-w-5xl mx-auto px-6 py-12">

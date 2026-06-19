@@ -44,6 +44,11 @@ export default function Blog() {
       <Helmet>
         <title>Blog | Consejos de Carrera y Mercado Laboral — CVitae</title>
         <meta name="description" content="Ideas, guías y datos sobre carrera, IA y mercado laboral en Paraguay." />
+        <link rel="canonical" href="https://cvitae.lat/blog" />
+        <meta property="og:title" content="Blog | Consejos de Carrera — CVitae" />
+        <meta property="og:description" content="Ideas, guías y datos sobre carrera, IA y mercado laboral en Paraguay." />
+        <meta property="og:url" content="https://cvitae.lat/blog" />
+        <meta property="og:type" content="website" />
       </Helmet>
       <SiteShell>
         <div className="max-w-5xl mx-auto px-6 py-12">
