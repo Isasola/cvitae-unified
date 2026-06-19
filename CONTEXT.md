@@ -277,6 +277,67 @@ El footer en `SiteShell.tsx` ya tiene buena estructura (Logo, descripción, 3 co
 
 ---
 
+---
+
+## Lambda deployment
+
+### Compatibilidad Netlify → Lambda
+
+Las funciones en `netlify/functions/*.ts` usan la interface `Handler` de `@netlify/functions`, que recibe `{ httpMethod, body, headers, queryStringParameters, path }`. El shape de `event` es idéntico al del APIGateway Payload Format 1.0 de Lambda, lo que hace la migración casi transparente.
+
+El script `scripts/deploy-lambda.sh` agrega automáticamente un adaptador al bundle que convierte el evento Lambda a la forma Netlify esperada:
+
+```js
+// Adapter injected at build time
+exports.handler = async (event, context) => {
+  const netlifyEvent = {
+    httpMethod: event.httpMethod || event.requestContext?.http?.method,
+    body: event.body,
+    headers: event.headers,
+    ...
+  }
+  return await netlifyHandler(netlifyEvent, context)
+}
+```
+
+### Funciones prioritarias para Lambda (timeout risk)
+
+| Función | Timeout Netlify | Riesgo | Acción |
+|---|---|---|---|
+| `analyze-recruiters-batch` | 26s | Alto (loop secuencial 30 CVs) | Lambda 5 min + parallelizar con `Promise.all` |
+| `generate-cv-vivo` | 30s | Medio (stream Bedrock) | Lambda 3 min |
+| `analyze-cv-candidate` | 30s | Bajo | Lambda 1 min |
+| `compare-candidates` | 30s | Bajo | Lambda 1 min |
+
+### Pasos para desplegar a Lambda
+
+1. Crear las funciones Lambda en AWS console con nombre `cvitae-<nombre-función>` (Node.js 20.x, arquitectura x86_64).
+2. Asignar rol IAM con permisos: `bedrock:InvokeModel`, `bedrock:InvokeModelWithResponseStream`.
+3. Configurar variables de entorno en cada función (ver sección Variables de entorno arriba).
+4. Configurar API Gateway HTTP API apuntando a cada Lambda.
+5. Ejecutar el script de despliegue:
+
+```bash
+# Desplegar todas las funciones
+chmod +x scripts/deploy-lambda.sh
+./scripts/deploy-lambda.sh
+
+# Desplegar solo una función
+./scripts/deploy-lambda.sh analyze-cv-candidate
+```
+
+6. Actualizar las URLs en el frontend: buscar `/.netlify/functions/` y reemplazar por la URL del API Gateway.
+
+### Paralelizar `analyze-recruiters-batch`
+
+El `for/await` actual procesa CVs de forma secuencial. Para Lambda, cambiar a:
+```ts
+const results = await Promise.all(cvList.map(cv => analyzeSingleCV(cv)))
+```
+Esto reduce el tiempo total de ~90s (30 CVs × 3s) a ~3s (todos en paralelo), eliminando el riesgo de timeout.
+
+---
+
 ## Pendientes concretos (próxima sesión)
 
 ### Alta prioridad

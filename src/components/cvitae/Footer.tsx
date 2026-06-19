@@ -16,12 +16,12 @@ export function Footer() {
       ],
     },
     {
-      title: 'Empresa',
+      title: 'Para empresas',
       links: [
-        { label: 'Sobre nosotros', href: '/about' },
-        { label: 'Contacto', href: 'mailto:contacto@cvitae.lat' },
-        { label: 'Prensa', onClick: () => alert('Próximamente') },
-        { label: 'Carreras', onClick: () => alert('Próximamente') },
+        { label: 'Portal empresas', href: '/empresas' },
+        { label: 'Análisis masivo', href: '/empresas/masivo' },
+        { label: 'Publicar vacante', href: '/empresas' },
+        { label: 'Contacto B2B', href: 'mailto:contacto@cvitae.lat' },
       ],
     },
     {
@@ -30,6 +30,7 @@ export function Footer() {
         { label: 'Privacidad', href: '/privacy' },
         { label: 'Términos', href: '/terminos' },
         { label: 'Cookies', href: '/cookies' },
+        { label: 'Sobre nosotros', href: '/about' },
       ],
     },
   ]
@@ -57,14 +58,14 @@ export function Footer() {
               <ul className="space-y-4">
                 {section.links.map((link) => (
                   <li key={link.label}>
-                    {link.href ? (
+                    {link.href.startsWith('mailto:') || link.href.startsWith('http') ? (
+                      <a href={link.href} className="text-muted hover:text-white transition-colors text-sm">
+                        {link.label}
+                      </a>
+                    ) : (
                       <Link href={link.href} className="text-muted hover:text-white transition-colors text-sm">
                         {link.label}
                       </Link>
-                    ) : (
-                      <button onClick={link.onClick} className="text-muted hover:text-white transition-colors text-sm text-left">
-                        {link.label}
-                      </button>
                     )}
                   </li>
                 ))}

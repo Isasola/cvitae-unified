@@ -22,7 +22,7 @@
 
 :root {
   --radius: 0.5rem;
-  --background: oklch(0.16 0.012 60);
+  --background: oklch(0.10 0.008 60); /* ≈ #0a0a0a — matches B2B pages */
   --foreground: oklch(0.95 0.015 85);
   --card: oklch(0.20 0.012 60);
   --card-foreground: oklch(0.95 0.015 85);
