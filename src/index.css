@@ -26,27 +26,36 @@
   }
 }
 
-@layer components {
-  /* Secondary surfaces only */
-  .glass-panel {
-    @apply bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl;
-  }
-  /* Primary content surfaces */
-  .editorial-panel {
-    background-color: oklch(0.20 0.010 60);
-    @apply border border-white/8 rounded-2xl;
-  }
-  /* Decision / CTA surfaces */
-  .gold-panel {
-    background-color: oklch(0.78 0.13 82 / 0.08);
-    border: 1px solid oklch(0.78 0.13 82 / 0.35);
-    @apply rounded-2xl;
-  }
-  /* Legacy aliases (keep for components not yet migrated) */
-  .glass-card {
-    @apply glass-panel p-6;
-  }
-  .gold-text {
-    color: var(--color-gold);
-  }
+@utility glass-panel {
+  background-color: rgb(255 255 255 / 0.03);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgb(255 255 255 / 0.10);
+  border-radius: var(--radius-2xl, 1rem);
+}
+
+@utility editorial-panel {
+  background-color: oklch(0.20 0.010 60);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: var(--radius-2xl, 1rem);
+}
+
+@utility gold-panel {
+  background-color: oklch(0.78 0.13 82 / 0.08);
+  border: 1px solid oklch(0.78 0.13 82 / 0.35);
+  border-radius: var(--radius-2xl, 1rem);
+}
+
+/* glass-card: glass-panel styles + padding (avoid @apply of another @utility) */
+@utility glass-card {
+  background-color: rgb(255 255 255 / 0.03);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgb(255 255 255 / 0.10);
+  border-radius: var(--radius-2xl, 1rem);
+  padding: 1.5rem;
+}
+
+@utility gold-text {
+  color: var(--color-gold);
 }
