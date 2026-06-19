@@ -1,30 +1,30 @@
 import { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link, useLocation } from 'wouter'
-import { motion } from 'framer-motion'
-import { Search, MapPin, Calendar, Briefcase, ArrowRight, ArrowLeft } from 'lucide-react'
-import { GlassCard, GoldButton, Badge } from '@/components/cvitae/UI-Elements'
-import { Navbar } from '@/components/cvitae/Navbar'
-import { Footer } from '@/components/cvitae/Footer'
+import { MapPin, Calendar, ArrowRight } from 'lucide-react'
+import { SiteShell } from '@/components/cv/SiteShell'
+import { GrowthLine, Eyebrow } from '@/components/cv/visuals'
 import { supabase } from '@/lib/supabase'
 
 interface Opportunity {
   id: string
   titulo: string
   slug: string
-  cuerpo: string
   categoria: string
   tipo: string
   ubicacion: string
   fecha_vencimiento: string
   is_active: boolean
-  metadata?: { application_url?: string; organization?: string; source?: string }
+  metadata?: { application_url?: string; organization?: string }
 }
+
+const cats = ['Todas', 'Becas', 'Foros'] as const
+type Cat = (typeof cats)[number]
 
 export default function Opportunities() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'todas' | 'beca' | 'foro'>('todas')
+  const [cat, setCat] = useState<Cat>('Todas')
 
   useEffect(() => {
     supabase
@@ -36,65 +36,79 @@ export default function Opportunities() {
       .then(({ data }) => { setOpportunities(data || []); setLoading(false) })
   }, [])
 
-  const filtered = filter === 'todas' ? opportunities : opportunities.filter(o => o.tipo === filter)
+  const filtered = opportunities.filter((o) =>
+    cat === 'Todas' ? true : cat === 'Becas' ? o.tipo === 'beca' : o.tipo === 'foro'
+  )
 
   return (
-    <div className="min-h-screen bg-background">
+    <>
       <Helmet>
         <title>Oportunidades Laborales Paraguay | CVitae</title>
-        <meta name="description" content="Becas, empleos, foros y eventos seleccionados para profesionales paraguayos y latinoamericanos. Matching automático con tu perfil." />
+        <meta name="description" content="Becas, empleos, foros y eventos seleccionados para profesionales paraguayos y latinoamericanos." />
       </Helmet>
-      <Navbar />
-      <div className="pt-32 pb-20 px-4 max-w-6xl mx-auto">
-        <div className="mb-8">
-          <Link href="/" className="text-gold flex items-center gap-2 hover:underline text-sm">
-            <ArrowLeft size={16} /> Volver al inicio
-          </Link>
-        </div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-white mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>Oportunidades</h1>
-          <p className="text-muted">Becas, foros y eventos seleccionados para tu crecimiento profesional</p>
-        </motion.div>
+      <SiteShell>
+        <div className="max-w-5xl mx-auto px-6 py-12">
+          <div className="relative">
+            <Eyebrow>Oportunidades</Eyebrow>
+            <h1 className="font-display text-4xl sm:text-5xl mt-2 text-cream">
+              Lo que pasa en <em>tu carrera</em> esta semana.
+            </h1>
+            <p className="text-muted-foreground mt-3 max-w-xl">
+              Becas, foros y empleos curados a mano y validados por la IA. Todo lo que
+              normalmente se pierde en grupos de WhatsApp, acá en un solo lugar.
+            </p>
+            <GrowthLine className="absolute -bottom-6 left-0 right-0 h-10 opacity-40" />
+          </div>
 
-        <div className="flex items-center justify-center gap-2 mb-8">
-          {[{ id: 'todas', label: 'Todas' }, { id: 'beca', label: 'Becas' }, { id: 'foro', label: 'Foros' }].map((tab) => (
-            <button key={tab.id} onClick={() => setFilter(tab.id as any)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${filter === tab.id ? 'bg-gold text-[#0a0a0a]' : 'bg-white/5 text-muted hover:bg-white/10'}`}>
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="text-center py-12"><div className="w-8 h-8 border-4 border-gold border-t-transparent rounded-full animate-spin mx-auto" /></div>
-        ) : filtered.length === 0 ? (
-          <p className="text-center text-muted py-12">No hay oportunidades en esta categoría todavía.</p>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((opp) => (
-              <GlassCard
-                key={opp.id}
-                className="h-full cursor-pointer group"
-                onClick={() => {
-                  const appUrl = opp.metadata?.application_url;
-                  if (appUrl) window.open(appUrl, '_blank', 'noopener,noreferrer');
-                }}
+          <div className="mt-10 flex gap-1 p-1 glass-panel w-fit">
+            {cats.map((c) => (
+              <button
+                key={c}
+                onClick={() => setCat(c)}
+                className={`px-4 py-1.5 text-xs rounded-md transition-colors ${
+                  cat === c ? 'bg-gold text-ink' : 'text-muted-foreground hover:text-cream'
+                }`}
               >
-                <Badge variant={opp.tipo === 'beca' ? 'gold' : 'muted'} className="mb-3">{opp.tipo === 'beca' ? 'Beca' : 'Foro'}</Badge>
-                <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-gold transition-colors">{opp.titulo}</h3>
-                <div className="space-y-2 text-xs text-muted">
-                  <span className="flex items-center gap-1"><MapPin size={12} /> {opp.ubicacion}</span>
-                  <span className="flex items-center gap-1"><Calendar size={12} /> Vence: {new Date(opp.fecha_vencimiento).toLocaleDateString()}</span>
-                </div>
-                <div className="mt-4 flex items-center gap-1 text-sm text-gold group-hover:underline">
-                  Ver detalle <ArrowRight size={14} />
-                </div>
-              </GlassCard>
+                {c}
+              </button>
             ))}
           </div>
-        )}
-      </div>
-      <Footer />
-    </div>
+
+          {loading ? (
+            <div className="mt-10 flex justify-center">
+              <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="mt-10 text-center text-muted-foreground">No hay oportunidades en esta categoría todavía.</p>
+          ) : (
+            <div className="mt-6 space-y-3">
+              {filtered.map((o) => (
+                <Link
+                  key={o.id}
+                  href={`/oportunidades/${o.slug}`}
+                  className="glass-panel p-6 flex flex-wrap items-center gap-4 hover:border-gold/40 transition-colors block"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase tracking-wider border border-gold/30 text-gold px-2 py-0.5 rounded-full">
+                        {o.tipo === 'beca' ? 'Beca' : 'Foro'}
+                      </span>
+                    </div>
+                    <h3 className="font-display text-xl text-cream mt-2 truncate">{o.titulo}</h3>
+                    <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {o.ubicacion}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Calendar className="h-3 w-3" /> Vence {new Date(o.fecha_vencimiento).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </SiteShell>
+    </>
   )
 }

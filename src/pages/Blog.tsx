@@ -1,11 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link, useLocation } from 'wouter'
-import { motion } from 'framer-motion'
-import { ArrowLeft, Calendar } from 'lucide-react'
-import { GlassCard, Badge } from '@/components/cvitae/UI-Elements'
-import { Navbar } from '@/components/cvitae/Navbar'
-import { Footer } from '@/components/cvitae/Footer'
+import { SiteShell } from '@/components/cv/SiteShell'
+import { GrowthLine, Eyebrow } from '@/components/cv/visuals'
 import { supabase } from '@/lib/supabase'
 
 interface BlogPost {
@@ -34,53 +31,76 @@ export default function Blog() {
       .then(({ data }) => { setPosts(data || []); setLoading(false) })
   }, [])
 
+  // Gradient palette for posts without images
+  const gradients = [
+    'linear-gradient(135deg, oklch(0.22 0.04 75), oklch(0.16 0.012 60))',
+    'linear-gradient(135deg, oklch(0.20 0.05 80), oklch(0.16 0.012 60))',
+    'linear-gradient(135deg, oklch(0.24 0.06 70), oklch(0.16 0.012 60))',
+  ]
+
   return (
-    <div className="min-h-screen bg-background">
+    <>
       <Helmet>
         <title>Blog | Consejos de Carrera y Mercado Laboral — CVitae</title>
-        <meta name="description" content="Artículos sobre mercado laboral paraguayo, consejos para mejorar tu CV, entrevistas y tendencias de empleo en Latinoamérica." />
+        <meta name="description" content="Ideas, guías y datos sobre carrera, IA y mercado laboral en Paraguay." />
       </Helmet>
-      <Navbar />
-      <div className="pt-32 pb-20 px-4 max-w-4xl mx-auto">
-        <div className="mb-8">
-          <Link href="/" className="text-gold flex items-center gap-2 hover:underline text-sm">
-            <ArrowLeft size={16} /> Volver al inicio
-          </Link>
-        </div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-4xl font-bold text-white mb-8">Blog</h1>
-        </motion.div>
-
-        {loading ? (
-          <div className="text-center py-12"><div className="w-8 h-8 border-4 border-gold border-t-transparent rounded-full animate-spin mx-auto" /></div>
-        ) : posts.length === 0 ? (
-          <p className="text-muted text-center py-12">No hay artículos publicados.</p>
-        ) : (
-          <div className="space-y-6">
-            {posts.map((post) => (
-              <GlassCard key={post.id} className="cursor-pointer group overflow-hidden" onClick={() => setLocation(`/blog/${post.slug}`)}>
-                {post.imagen_url && (
-                  <div className="aspect-video w-full mb-4 rounded-xl overflow-hidden border border-white/5">
-                    <img src={post.imagen_url} alt={post.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  </div>
-                )}
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="gold">{post.categoria}</Badge>
-                  <span className="text-xs text-muted flex items-center gap-1">
-                    <Calendar size={12} />
-                    {new Date(post.fecha_vencimiento).toLocaleDateString()}
-                  </span>
-                </div>
-                <h2 className="text-xl font-bold text-white mb-2 group-hover:text-gold transition-colors">{post.titulo}</h2>
-                <p className="text-muted text-sm line-clamp-2">
-                  {post.cuerpo?.replace(/[#*`>]/g, '').substring(0, 150)}...
-                </p>
-              </GlassCard>
-            ))}
+      <SiteShell>
+        <div className="max-w-5xl mx-auto px-6 py-12">
+          <div className="relative">
+            <Eyebrow>Blog</Eyebrow>
+            <h1 className="font-display text-4xl sm:text-5xl mt-2 text-cream">
+              Ideas para <em>crecer</em> con intención.
+            </h1>
+            <p className="text-muted-foreground mt-3 max-w-xl">
+              Guías prácticas, análisis del mercado y conversaciones sobre carrera, IA y trabajo en Paraguay.
+            </p>
+            <GrowthLine className="absolute -bottom-6 left-0 right-0 h-10 opacity-40" />
           </div>
-        )}
-      </div>
-      <Footer />
-    </div>
+
+          {loading ? (
+            <div className="mt-12 flex justify-center">
+              <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : posts.length === 0 ? (
+            <p className="mt-12 text-center text-muted-foreground">No hay artículos publicados todavía.</p>
+          ) : (
+            <div className="mt-12 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {posts.map((p, i) => (
+                <div
+                  key={p.id}
+                  onClick={() => setLocation(`/blog/${p.slug}`)}
+                  className="group glass-panel overflow-hidden hover:border-gold/40 transition-colors cursor-pointer"
+                >
+                  <div
+                    className="aspect-[16/10] relative"
+                    style={{ background: p.imagen_url ? undefined : gradients[i % gradients.length] }}
+                  >
+                    {p.imagen_url ? (
+                      <img src={p.imagen_url} alt={p.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <div className="absolute inset-0 grid place-items-center">
+                        <span className="font-display italic text-gold text-2xl opacity-40">CVitae</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-5">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="text-[10px] uppercase tracking-wider border border-gold/30 text-gold px-2 py-0.5 rounded-full">
+                        {p.categoria}
+                      </span>
+                      <span>{new Date(p.fecha_vencimiento).toLocaleDateString()}</span>
+                    </div>
+                    <h2 className="font-display text-xl text-cream mt-3 group-hover:text-gold transition-colors">{p.titulo}</h2>
+                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed line-clamp-3">
+                      {p.cuerpo?.replace(/[#*`>]/g, '').substring(0, 150)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </SiteShell>
+    </>
   )
 }
