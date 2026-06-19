@@ -9,9 +9,6 @@ const handler: Handler = async (event) => {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ""
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
 
-  console.log("SUPABASE_URL:", supabaseUrl ? "OK" : "MISSING")
-  console.log("SUPABASE_SERVICE_ROLE_KEY:", supabaseKey ? "OK" : "MISSING")
-
   if (!supabaseUrl || !supabaseKey) {
     return { statusCode: 500, body: JSON.stringify({ valid: false, error: "Missing Supabase credentials" }) }
   }
@@ -26,8 +23,6 @@ const handler: Handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ valid: false, error: "Token requerido" }) }
     }
 
-    console.log("Looking up token:", token.trim())
-
     // Buscar token
     const { data, error } = await supabase
       .from("recruiter_tokens")
@@ -35,8 +30,6 @@ const handler: Handler = async (event) => {
       .eq("access_token", token.trim())
       .eq("is_active", true)
       .single()
-
-    console.log("Token lookup result — data:", JSON.stringify(data), "error:", error?.message)
 
     if (error || !data) {
       return { statusCode: 200, body: JSON.stringify({ valid: false, error: "Token inválido o inactivo" }) }
