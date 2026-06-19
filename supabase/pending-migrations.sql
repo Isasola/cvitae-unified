@@ -20,12 +20,32 @@ ALTER TABLE public.opportunities
 ALTER TABLE public.opportunities
   ADD COLUMN IF NOT EXISTS source text DEFAULT 'scraper';
 
--- Índice para filtrar por fuente
-CREATE INDEX IF NOT EXISTS opportunities_source_idx ON public.opportunities(source);
+-- 5. UNIQUE constraint en application_url para que los scrapers hagan upsert correcto
+--    (sin esto el ?on_conflict=application_url ignora duplicados en vez de actualizarlos)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'opportunities_application_url_key'
+      AND conrelid = 'public.opportunities'::regclass
+  ) THEN
+    ALTER TABLE public.opportunities
+      ADD CONSTRAINT opportunities_application_url_key UNIQUE (application_url);
+  END IF;
+END$$;
 
--- Verificación
-SELECT column_name, data_type
+-- 6. Índices de performance para búsquedas frecuentes
+CREATE INDEX IF NOT EXISTS opportunities_source_idx      ON public.opportunities(source);
+CREATE INDEX IF NOT EXISTS opportunities_is_active_idx   ON public.opportunities(is_active);
+CREATE INDEX IF NOT EXISTS opportunities_rubro_idx       ON public.opportunities(rubro);
+CREATE INDEX IF NOT EXISTS opportunities_type_idx        ON public.opportunities(type);
+
+-- Verificación final
+SELECT
+  column_name,
+  data_type,
+  column_default
 FROM information_schema.columns
 WHERE table_schema = 'public'
-  AND table_name = 'opportunities'
+  AND table_name   = 'opportunities'
 ORDER BY ordinal_position;

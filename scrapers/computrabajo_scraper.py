@@ -1,0 +1,178 @@
+import requests
+from bs4 import BeautifulSoup
+import time
+import os
+import re
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+TABLE_URL = f"{SUPABASE_URL}/rest/v1/opportunities"
+HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json",
+    "Prefer": "resolution=merge-duplicates",
+}
+
+BASE_URL = "https://py.computrabajo.com"
+
+# Categories to scrape — covers the main job sectors in Paraguay
+CATEGORIES = [
+    ("administracion", "Administración"),
+    ("ventas", "Ventas y Comercial"),
+    ("tecnologia", "Tecnología"),
+    ("marketing", "Marketing"),
+    ("contabilidad", "Banca y Finanzas"),
+    ("recursos-humanos", "Recursos Humanos"),
+    ("logistica", "Logística y Transporte"),
+    ("salud", "Salud y Medicina"),
+    ("educacion", "Educación"),
+    ("ingenieria", "Ingeniería"),
+    ("gastronomia", "Gastronomía y Hotelería"),
+    ("comercio-exterior", "Comercio Exterior"),
+    ("atencion-al-cliente", "Atención al Cliente"),
+]
+
+FETCH_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept-Language": "es-PY,es;q=0.9",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+}
+
+RUBRO_MAP = {
+    "administracion": "Administración",
+    "ventas": "Ventas y Comercial",
+    "tecnologia": "Tecnología e IT",
+    "marketing": "Marketing y Publicidad",
+    "contabilidad": "Banca y Finanzas",
+    "recursos-humanos": "Recursos Humanos",
+    "logistica": "Logística y Transporte",
+    "salud": "Salud y Medicina",
+    "educacion": "Educación",
+    "ingenieria": "Ingeniería",
+    "gastronomia": "Gastronomía y Hotelería",
+    "comercio-exterior": "Comercio Exterior",
+    "atencion-al-cliente": "Atención al Cliente",
+}
+
+
+def fetch(url):
+    try:
+        r = requests.get(url, headers=FETCH_HEADERS, timeout=30)
+        return r.text if r.status_code == 200 else ""
+    except Exception as e:
+        print(f"  fetch error {url}: {e}")
+        return ""
+
+
+def insert_job(job):
+    try:
+        r = requests.post(
+            TABLE_URL + "?on_conflict=application_url",
+            headers={
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates",
+            },
+            json=job,
+        )
+        return r.status_code
+    except Exception as e:
+        print(f"  insert error: {e}")
+        return "error"
+
+
+def scrape_category(slug, rubro, max_pages=3):
+    jobs = []
+    for page in range(1, max_pages + 1):
+        url = f"{BASE_URL}/trabajo-de-{slug}"
+        if page > 1:
+            url += f"?p={page}"
+
+        html = fetch(url)
+        if not html:
+            break
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Computrabajo uses article.box_offer for each listing
+        cards = soup.select("article.box_offer, article[data-ga-label]")
+        if not cards:
+            # Fallback: try any article with an h2 heading
+            cards = soup.select("article")
+
+        page_jobs = []
+        for card in cards:
+            title_el = card.select_one("h2 a, h2, .it_title a, [class*='title'] a")
+            if not title_el:
+                continue
+            title = title_el.get_text(strip=True)
+            if not title:
+                continue
+
+            link = title_el.get("href", "") if title_el.name == "a" else ""
+            if not link:
+                link_el = card.select_one("a[href]")
+                link = link_el.get("href", "") if link_el else ""
+            if not link:
+                continue
+
+            # Strip tracking fragment and make absolute
+            link = re.sub(r'#.*$', '', link)
+            full_url = link if link.startswith("http") else BASE_URL + link
+
+            company_el = card.select_one("a.it_co, [class*='company'] a, [class*='empresa']")
+            company = company_el.get_text(strip=True) if company_el else ""
+
+            location_el = card.select_one("span.it_location, [class*='location'], [class*='ciudad']")
+            location = location_el.get_text(strip=True) if location_el else "Paraguay"
+
+            salary_el = card.select_one("[class*='salary'], [class*='salario']")
+            description = salary_el.get_text(strip=True) if salary_el else ""
+
+            page_jobs.append({
+                "titulo": title,
+                "organization": company,
+                "location": location,
+                "rubro": rubro,
+                "type": "Tiempo completo",
+                "description": description,
+                "application_url": full_url,
+                "source": "computrabajo",
+                "is_active": True,
+                "tags": [slug.replace("-", " ")],
+            })
+
+        if not page_jobs:
+            break
+
+        jobs.extend(page_jobs)
+        print(f"  [{slug}] página {page}: {len(page_jobs)} ofertas")
+        time.sleep(1.5)
+
+    return jobs
+
+
+def main():
+    total_found = 0
+    total_inserted = 0
+
+    for slug, rubro in CATEGORIES:
+        print(f"\nRastreando: {slug} ({rubro})")
+        jobs = scrape_category(slug, rubro, max_pages=3)
+        total_found += len(jobs)
+
+        for job in jobs:
+            status = insert_job(job)
+            if status in (200, 201, 409):
+                total_inserted += 1
+            print(f"  [{job['organization'] or 'N/A'}] {job['titulo'][:50]} -> {status}")
+
+        time.sleep(2)
+
+    print(f"\n=== Computrabajo: {total_inserted}/{total_found} insertadas/actualizadas ===")
+
+
+if __name__ == "__main__":
+    main()

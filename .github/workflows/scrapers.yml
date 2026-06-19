@@ -2,19 +2,19 @@ name: CVitae Scrapers
 
 on:
   schedule:
-    # Run at 6:00 AM Paraguay time (UTC-4), every day
+    # Corre a las 06:00 hora Paraguay (UTC-4) todos los días
     - cron: '0 10 * * *'
   workflow_dispatch:
     inputs:
       scraper:
-        description: 'Scraper to run (all | oya | buscojobs | abc | fundacion | multi)'
+        description: 'Scraper a correr: all | computrabajo | buscojobs | oya | opportunitydesk | remotive | abc | fundacion | multi'
         required: false
         default: 'all'
 
 jobs:
   run-scrapers:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -30,32 +30,52 @@ jobs:
           cache: 'pip'
           cache-dependency-path: scrapers/requirements.txt
 
-      - name: Install dependencies
-        run: |
-          pip install -r scrapers/requirements.txt
-          playwright install chromium --with-deps
+      - name: Install Python dependencies
+        run: pip install -r scrapers/requirements.txt
 
-      - name: Run OYA scraper
-        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'oya' || github.event_name == 'schedule' }}
-        run: python scrapers/oya_scraper.py
+      - name: Install Playwright browsers
+        run: playwright install chromium --with-deps
+
+      # ── HTTP-only scrapers (rápidos, sin navegador) ──────────────────────
+
+      - name: Computrabajo Paraguay
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'computrabajo' || github.event_name == 'schedule' }}
+        run: python scrapers/computrabajo_scraper.py
         continue-on-error: true
 
-      - name: Run BuscoJobs scraper
+      - name: BuscoJobs (todas las categorías)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'buscojobs' || github.event_name == 'schedule' }}
         run: python scrapers/buscojobs_scraper.py
         continue-on-error: true
 
-      - name: Run multi-site scraper (clasipar, mtess, tigo, personal, itau, copaco)
+      - name: OYA Opportunities (becas, empleos, conferencias internacionales)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'oya' || github.event_name == 'schedule' }}
+        run: python scrapers/oya_scraper.py
+        continue-on-error: true
+
+      - name: OpportunityDesk (becas, capital semilla, cursos, fellowships)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'opportunitydesk' || github.event_name == 'schedule' }}
+        run: python scrapers/opportunitydesk_scraper.py
+        continue-on-error: true
+
+      - name: Remotive (empleos remotos para latinos)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'remotive' || github.event_name == 'schedule' }}
+        run: python scrapers/remotive_scraper.py
+        continue-on-error: true
+
+      - name: Multi-site Paraguay (clasipar, mtess, tigo, personal, itau, copaco)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'multi' || github.event_name == 'schedule' }}
         run: python scrapers/scrapper.py
         continue-on-error: true
 
-      - name: Run ABC Color scraper (Playwright)
+      # ── Playwright scrapers (requieren navegador headless) ───────────────
+
+      - name: ABC Color Empleos (Playwright)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'abc' || github.event_name == 'schedule' }}
         run: python scrapers/abc_scrapper.py
         continue-on-error: true
 
-      - name: Run Fundación Paraguaya scraper (Playwright)
+      - name: Fundación Paraguaya (Playwright)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'fundacion' || github.event_name == 'schedule' }}
         run: python scrapers/fundacion_scraper.py
         continue-on-error: true
