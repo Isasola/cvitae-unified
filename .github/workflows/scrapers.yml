@@ -2,19 +2,19 @@ name: CVitae Scrapers
 
 on:
   schedule:
-    # Corre a las 06:00 hora Paraguay (UTC-4) todos los días
+    # 06:00 hora Paraguay (UTC-4) todos los días
     - cron: '0 10 * * *'
   workflow_dispatch:
     inputs:
       scraper:
-        description: 'Scraper a correr: all | computrabajo | buscojobs | oya | opportunitydesk | remotive | abc | fundacion | multi'
+        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi'
         required: false
         default: 'all'
 
 jobs:
   run-scrapers:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -36,46 +36,65 @@ jobs:
       - name: Install Playwright browsers
         run: playwright install chromium --with-deps
 
-      # ── HTTP-only scrapers (rápidos, sin navegador) ──────────────────────
+      # ── Paraguay — bolsas de empleo principales ──────────────────────────
 
-      - name: Computrabajo Paraguay
+      - name: Computrabajo Paraguay (~650 ofertas)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'computrabajo' || github.event_name == 'schedule' }}
         run: python scrapers/computrabajo_scraper.py
         continue-on-error: true
 
-      - name: BuscoJobs (todas las categorías)
+      - name: BuscoJobs Paraguay (~320 ofertas, 16 categorías)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'buscojobs' || github.event_name == 'schedule' }}
         run: python scrapers/buscojobs_scraper.py
         continue-on-error: true
 
-      - name: OYA Opportunities (becas, empleos, conferencias internacionales)
-        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'oya' || github.event_name == 'schedule' }}
-        run: python scrapers/oya_scraper.py
-        continue-on-error: true
-
-      - name: OpportunityDesk (becas, capital semilla, cursos, fellowships)
-        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'opportunitydesk' || github.event_name == 'schedule' }}
-        run: python scrapers/opportunitydesk_scraper.py
-        continue-on-error: true
-
-      - name: Remotive (empleos remotos para latinos)
-        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'remotive' || github.event_name == 'schedule' }}
-        run: python scrapers/remotive_scraper.py
-        continue-on-error: true
-
-      - name: Multi-site Paraguay (clasipar, mtess, tigo, personal, itau, copaco)
+      - name: Multi-site PY — clasipar, mtess, tigo, personal, itau, copaco
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'multi' || github.event_name == 'schedule' }}
         run: python scrapers/scrapper.py
         continue-on-error: true
-
-      # ── Playwright scrapers (requieren navegador headless) ───────────────
 
       - name: ABC Color Empleos (Playwright)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'abc' || github.event_name == 'schedule' }}
         run: python scrapers/abc_scrapper.py
         continue-on-error: true
 
-      - name: Fundación Paraguaya (Playwright)
+      - name: Fundación Paraguaya Portal Empleo (Playwright)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'fundacion' || github.event_name == 'schedule' }}
         run: python scrapers/fundacion_scraper.py
+        continue-on-error: true
+
+      # ── Internacional — empleos remotos para latinos ─────────────────────
+
+      - name: Remotive — empleos remotos (~88)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'remotive' || github.event_name == 'schedule' }}
+        run: python scrapers/remotive_scraper.py
+        continue-on-error: true
+
+      # ── Becas, fellowships, capital semilla ──────────────────────────────
+
+      - name: OYA Opportunities (~96 oportunidades internacionales)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'oya' || github.event_name == 'schedule' }}
+        run: python scrapers/oya_scraper.py
+        continue-on-error: true
+
+      - name: OpportunityDesk — becas, cursos, grants (~300)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'opportunitydesk' || github.event_name == 'schedule' }}
+        run: python scrapers/opportunitydesk_scraper.py
+        continue-on-error: true
+
+      - name: BECAL — becas gobierno paraguayo
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'becal' || github.event_name == 'schedule' }}
+        run: python scrapers/becal_scraper.py
+        continue-on-error: true
+
+      - name: Fundación Carolina — becas posgrado en España
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'carolina' || github.event_name == 'schedule' }}
+        run: python scrapers/fundacion_carolina_scraper.py
+        continue-on-error: true
+
+      # ── Organismos internacionales ────────────────────────────────────────
+
+      - name: UNJobs — ONU, UNDP, UNICEF, BID (PY + LatAm)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'unjobs' || github.event_name == 'schedule' }}
+        run: python scrapers/unjobs_scraper.py
         continue-on-error: true
