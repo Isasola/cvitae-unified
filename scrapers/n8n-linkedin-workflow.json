@@ -1,0 +1,292 @@
+{
+  "name": "CVitae - LinkedIn Auto Poster",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Cada 1 hora",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/opportunities",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $vars.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $vars.SUPABASE_KEY }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,titulo,organization,location,rubro,type,application_url,source"
+            },
+            {
+              "name": "is_active",
+              "value": "eq.true"
+            },
+            {
+              "name": "created_at",
+              "value": "=gte.{{ new Date(Date.now() - 2*60*60*1000).toISOString() }}"
+            },
+            {
+              "name": "order",
+              "value": "created_at.desc"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000002",
+      "name": "Oportunidades nuevas (últimas 2h)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/linkedin_posts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $vars.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $vars.SUPABASE_KEY }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "opportunity_id"
+            },
+            {
+              "name": "order",
+              "value": "created_at.desc"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000003",
+      "name": "Ya publicados (dedup)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SOURCE_PRIORITY = [\n  'computrabajo', 'buscojobs', 'abc_color', 'clasipar',\n  'oyaop', 'opportunitydesk', 'becal', 'fundacion_carolina',\n  'unjobs', 'remotive', 'arbeitnow', 'weworkremotely', 'himalayas', 'jobicy'\n];\n\nconst TYPE_EMOJIS = {\n  'Beca': '🎓', 'Fellowship': '🌐', 'Capital Semilla': '💡',\n  'Pasantía': '📋', 'Concurso': '🏆', 'Curso': '📚',\n  'Remoto': '💻', 'Tiempo completo': '💼',\n};\n\nconst opps = $('Oportunidades nuevas (últimas 2h)').all().map(i => i.json);\nconst posted = new Set($('Ya publicados (dedup)').all().map(i => i.json.opportunity_id));\n\nconst unseen = opps.filter(o => !posted.has(o.id));\n\nif (!unseen.length) {\n  return [{ json: { skip: true, reason: 'Sin oportunidades nuevas' } }];\n}\n\nunseen.sort((a, b) => {\n  const ai = SOURCE_PRIORITY.indexOf(a.source);\n  const bi = SOURCE_PRIORITY.indexOf(b.source);\n  return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);\n});\n\nconst top = unseen.slice(0, 3);\n\nreturn top.map(opp => {\n  const emoji = TYPE_EMOJIS[opp.type] || '🔔';\n  const tags = [];\n  if ((opp.location + opp.source).toLowerCase().includes('paraguay')) {\n    tags.push('#Paraguay', '#EmpleosParaguay');\n  }\n  if (opp.rubro) tags.push('#' + opp.rubro.replace(/\\s+/g, ''));\n  if ((opp.type || '').toLowerCase().includes('beca')) tags.push('#Becas', '#Oportunidades');\n  if ((opp.type || '').toLowerCase().includes('remot')) tags.push('#TrabajoRemoto');\n  tags.push('#CVitae');\n\n  const lines = [\n    `${emoji} ${opp.type || 'Oportunidad'} — ${opp.titulo}`,\n    '',\n    opp.organization ? `🏢 ${opp.organization}` : '',\n    opp.location ? `📍 ${opp.location}` : '',\n    '',\n    `👉 Postulá y adaptá tu CV con IA: ${opp.application_url}`,\n    '',\n    '🤖 CVitae genera tu CV adaptado para esta oferta — gratis en beta.',\n    'Registrate en cvitae.lat',\n    '',\n    tags.slice(0, 6).join(' '),\n  ].filter(l => l !== null);\n\n  return {\n    json: {\n      opportunity_id: opp.id,\n      post_text: lines.join('\\n'),\n      titulo: opp.titulo,\n    }\n  };\n});\n"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000004",
+      "name": "Seleccionar y formatear top 3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 380]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip-check",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000005",
+      "name": "¿Hay algo para postear?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [920, 380]
+    },
+    {
+      "parameters": {
+        "resource": "post",
+        "operation": "create",
+        "person": "urn:li:organization:112507011",
+        "text": "={{ $json.post_text }}"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000006",
+      "name": "Publicar en LinkedIn (CVitae.lat)",
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [1140, 300],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "name": "LinkedIn CVitae"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/linkedin_posts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $vars.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $vars.SUPABASE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "opportunity_id",
+              "value": "={{ $('Seleccionar y formatear top 3').item.json.opportunity_id }}"
+            },
+            {
+              "name": "linkedin_post_id",
+              "value": "={{ $json.id || '' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000007",
+      "name": "Registrar post en Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1360, 300]
+    }
+  ],
+  "connections": {
+    "Cada 1 hora": {
+      "main": [
+        [
+          {
+            "node": "Oportunidades nuevas (últimas 2h)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ya publicados (dedup)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Oportunidades nuevas (últimas 2h)": {
+      "main": [
+        [
+          {
+            "node": "Seleccionar y formatear top 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ya publicados (dedup)": {
+      "main": [
+        [
+          {
+            "node": "Seleccionar y formatear top 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seleccionar y formatear top 3": {
+      "main": [
+        [
+          {
+            "node": "¿Hay algo para postear?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay algo para postear?": {
+      "main": [
+        [
+          {
+            "node": "Publicar en LinkedIn (CVitae.lat)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Publicar en LinkedIn (CVitae.lat)": {
+      "main": [
+        [
+          {
+            "node": "Registrar post en Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["cvitae", "linkedin", "automatizacion"]
+}

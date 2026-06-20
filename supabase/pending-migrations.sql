@@ -60,7 +60,7 @@ END$$;
 -- 5. Tabla para rastrear posts de LinkedIn (evitar repeticiones)
 CREATE TABLE IF NOT EXISTS public.linkedin_posts (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  opportunity_id uuid REFERENCES public.opportunities(id) ON DELETE CASCADE,
+  opportunity_id text REFERENCES public.opportunities(id) ON DELETE CASCADE,
   linkedin_post_id text,
   created_at  timestamptz DEFAULT now()
 );

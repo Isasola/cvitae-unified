@@ -1,6 +1,6 @@
 # Contexto completo del proyecto CVitae
 
-> Última actualización: 2026-06-19 · Rama activa: `feature/aws-migration`
+> Última actualización: 2026-06-20 · Rama activa: `feature/aws-migration`
 
 ---
 
@@ -338,10 +338,83 @@ Esto reduce el tiempo total de ~90s (30 CVs × 3s) a ~3s (todos en paralelo), el
 
 ---
 
+## Sistema de Scrapers (rama feature/aws-migration)
+
+### Scrapers activos (carpeta `scrapers/`)
+
+| Archivo | Fuente | Tipo | Estado |
+|---|---|---|---|
+| `scrapper.py` | Clasipar, MTESS, Tigo, Personal, Itaú, Copaco | Paraguay | ✅ listo |
+| `abc_scrapper.py` | ABC Color empleos | Paraguay (Playwright) | ✅ listo |
+| `fundacion_scraper.py` | Fundación Paraguaya | Paraguay (Playwright) | ✅ listo |
+| `buscojobs_scraper.py` | BuscoJobs Paraguay — 16 categorías | Paraguay | ✅ listo |
+| `computrabajo_scraper.py` | Computrabajo Paraguay — 13 categorías × 3 páginas | Paraguay | ✅ listo (~650/run) |
+| `oya_scraper.py` | OYA Opportunities | Internacional/Becas | ✅ confirmado vivo |
+| `opportunitydesk_scraper.py` | OpportunityDesk — becas, grants, cursos | Internacional/Becas | ✅ listo (~300/run) |
+| `becal_scraper.py` | BECAL Paraguay — WordPress API + HTML | Becas PY | ✅ listo |
+| `fundacion_carolina_scraper.py` | Fundación Carolina España — becas LatAm | Becas intl | ✅ listo |
+| `unjobs_scraper.py` | UNJobs — ONU, UNDP, UNICEF, BID (PY + LatAm) | Organismos | ✅ listo |
+| `remotive_scraper.py` | Remotive API — 11 categorías | Remoto | ✅ listo |
+| `arbeitnow_scraper.py` | Arbeitnow API — hasta 1000 empleos/run | Remoto global | ✅ listo |
+| `himalayas_scraper.py` | Himalayas API — hasta 2000 empleos/run | Remoto global | ✅ listo |
+| `jobicy_scraper.py` | Jobicy API — 12 industrias × 50 | Remoto global | ✅ listo |
+| `weworkremotely_scraper.py` | WeWorkRemotely RSS — 14 feeds | Remoto global | ✅ listo |
+
+### GitHub Actions cron
+
+- **`.github/workflows/scrapers.yml`** — cron diario 10:00 UTC (06:00 PY). Incluye los 15 scrapers con `continue-on-error: true`.
+- **`.github/workflows/linkedin_poster.yml`** — cada hora 12:00-02:00 UTC (08:00-22:00 PY).
+- **PENDIENTE PUSH**: el PAT de GitHub necesita scope `workflow` para hacer push de archivos en `.github/workflows/`. Ir a `github.com/settings/tokens`, editar el token, activar scope `workflow`, luego: `git push origin feature/aws-migration`.
+
+### Schema de `opportunities` (tabla Supabase)
+
+```
+id, titulo, organization, location, rubro, type, description,
+application_url (UNIQUE — crítico para upserts),
+source, is_active, tags[], recruiter_vacancy_id, created_at
+```
+
+**Migración ya aplicada en Supabase** (ejecutada en SQL Editor el 2026-06-20):
+- Columnas `description`, `source`, `is_active`, `location`, `tags` agregadas
+- UNIQUE constraint en `application_url` creada
+- Tabla `linkedin_posts` creada (sin FK — `opportunity_id text` sin REFERENCES para evitar incompatibilidad de tipos: `id` en opportunities es `text` no `uuid`)
+
+### Estado real de la BD (al 2026-06-19)
+
+Antes de correr scrapers de Paraguay: ~1,385 oportunidades (solo remotos internacionales).
+Los scrapers de Paraguay (computrabajo, buscojobs, etc.) devolvían HTTP 400 porque faltaba la UNIQUE constraint. **Ahora que la migración fue aplicada, el próximo cron va a poblar correctamente.**
+
+### LinkedIn Bot
+
+- **`scrapers/linkedin_poster.py`** — bot Python para GitHub Actions (alternativa de backup)
+- **`scrapers/n8n-linkedin-workflow.json`** — workflow n8n listo para importar (opción principal)
+- **`scrapers/get_linkedin_token.py`** — script one-shot para obtener OAuth token vía browser
+
+**Estado LinkedIn API:**
+- LinkedIn Developer App "CVitae-Bot" (Client ID: `77jb4u04hs2916`) — para perfil personal
+- LinkedIn Developer App nueva (Client ID: `77az9mk9lw0ygi`) — para página empresa
+- Scope `w_organization_social` requiere producto **"Community Management API"** pero LinkedIn no lo permite si hay otros productos en la app (error: "must be the only product")
+- **Solución elegida**: usar **n8n self-hosted con Docker** — n8n tiene integración LinkedIn aprobada, evita toda la burocracia de la API
+- **PENDIENTE**: levantar Docker Desktop (se congeló la PC) y correr: `docker run -d --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n n8nio/n8n`
+- Página empresa CVitae.lat: `urn:li:organization:112507011`
+
+### Resend / Emails
+
+- DNS records en estado **pendiente de verificación**:
+  - DKIM (`resend._domainkey`) — presente pero no verificado aún
+  - MX record (`send`) — falta agregar
+  - SPF (`send`) — falta agregar
+- Hasta que se verifiquen, los emails de leads B2B no se envían
+
+---
+
 ## Pendientes concretos (próxima sesión)
 
 ### Alta prioridad
 
+- [ ] **Hacer push a GitHub**: actualizar PAT con scope `workflow` en `github.com/settings/tokens`, luego `git push origin feature/aws-migration`
+- [ ] **Levantar n8n con Docker** (después del reinicio): `docker run -d --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n n8nio/n8n` → importar `scrapers/n8n-linkedin-workflow.json` → conectar LinkedIn OAuth desde UI de n8n
+- [ ] **Verificar DNS de Resend**: agregar MX y SPF records en el panel DNS del dominio
 - [ ] **Conectar `/vacante/:slug` al backend**: crear `submit-candidate.ts` o modificar `submit-lead.ts`. Ver sección "Respuestas → pregunta 1" arriba.
 - [ ] **Unificar background token**: `--background: oklch(0.10 0.008 60)` en `index.css` para que coincida con `#0a0a0a`.
 
