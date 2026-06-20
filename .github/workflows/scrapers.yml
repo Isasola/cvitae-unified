@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       scraper:
-        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi'
+        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi | arbeitnow | himalayas | jobicy | weworkremotely'
         required: false
         default: 'all'
 
@@ -90,6 +90,28 @@ jobs:
       - name: Fundación Carolina — becas posgrado en España
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'carolina' || github.event_name == 'schedule' }}
         run: python scrapers/fundacion_carolina_scraper.py
+        continue-on-error: true
+
+      # ── Internacional — remotos globales ─────────────────────────────────
+
+      - name: Arbeitnow — tech/remote global (hasta 1000)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'arbeitnow' || github.event_name == 'schedule' }}
+        run: python scrapers/arbeitnow_scraper.py
+        continue-on-error: true
+
+      - name: Himalayas — 86k empleos remote-first (hasta 2000)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'himalayas' || github.event_name == 'schedule' }}
+        run: python scrapers/himalayas_scraper.py
+        continue-on-error: true
+
+      - name: Jobicy — remotos por industria (50×12 = 600)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'jobicy' || github.event_name == 'schedule' }}
+        run: python scrapers/jobicy_scraper.py
+        continue-on-error: true
+
+      - name: WeWorkRemotely — RSS 14 categorías (~400)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'weworkremotely' || github.event_name == 'schedule' }}
+        run: python scrapers/weworkremotely_scraper.py
         continue-on-error: true
 
       # ── Organismos internacionales ────────────────────────────────────────
