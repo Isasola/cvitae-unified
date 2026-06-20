@@ -16,17 +16,16 @@ HEADERS = {
 
 BASE_URL = "https://opportunitydesk.org"
 
-# Categories — mix of jobs, scholarships, fellowships, grants
+# Categories — URLs verified live against the actual site structure
 CATEGORIES = [
-    ("/category/scholarships-and-fellowships/", "Beca"),
-    ("/category/grants-and-funding/", "Capital Semilla"),
-    ("/category/fellowships/", "Fellowship"),
-    ("/category/internships/", "Pasantía"),
-    ("/category/competitions-and-awards/", "Concurso"),
-    ("/category/online-courses-and-trainings/", "Curso"),
-    ("/category/jobs/", "Empleo"),
-    ("/category/volunteer-programs/", "Voluntariado"),
-    ("/category/conferences/", "Conferencia"),
+    ("/category/fellowships-and-scholarships/",              "Beca"),
+    ("/category/fellowships-and-scholarships/study-abroad/study-in-america/", "Beca"),
+    ("/category/fellowships-and-scholarships/online-courses/", "Curso"),
+    ("/category/fellowships-and-scholarships/short-courses/",  "Curso"),
+    ("/category/awards-and-grants/",                         "Capital Semilla"),
+    ("/category/contests/",                                  "Concurso"),
+    ("/category/fellowships/",                               "Fellowship"),
+    ("/category/blog/od-live/",                              "Oportunidad"),
 ]
 
 FETCH_HEADERS = {

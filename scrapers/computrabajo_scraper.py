@@ -104,32 +104,45 @@ def scrape_category(slug, rubro, max_pages=3):
 
         page_jobs = []
         for card in cards:
-            title_el = card.select_one("h2 a, h2, .it_title a, [class*='title'] a")
+            # Confirmed selectors from live DOM inspection
+            title_el = card.select_one("h2 a.js-o-link")
+            if not title_el:
+                title_el = card.select_one("h2 a")
             if not title_el:
                 continue
             title = title_el.get_text(strip=True)
             if not title:
                 continue
 
-            link = title_el.get("href", "") if title_el.name == "a" else ""
-            if not link:
-                link_el = card.select_one("a[href]")
-                link = link_el.get("href", "") if link_el else ""
+            link = title_el.get("href", "")
             if not link:
                 continue
-
-            # Strip tracking fragment and make absolute
+            # Strip tracking fragment (#lc=...) and make absolute
             link = re.sub(r'#.*$', '', link)
             full_url = link if link.startswith("http") else BASE_URL + link
 
-            company_el = card.select_one("a.it_co, [class*='company'] a, [class*='empresa']")
+            # Company: <a> inside second <p> tag
+            company_el = card.select_one("p a[href*='/empresas/']")
             company = company_el.get_text(strip=True) if company_el else ""
 
-            location_el = card.select_one("span.it_location, [class*='location'], [class*='ciudad']")
-            location = location_el.get_text(strip=True) if location_el else "Paraguay"
+            # Location: plain <span> inside third <p> (no special class)
+            location_spans = card.select("p span")
+            location = ""
+            for span in location_spans:
+                text = span.get_text(strip=True)
+                if text and not text.startswith("i_") and len(text) > 2:
+                    location = text
+                    break
+            if not location:
+                location = "Paraguay"
 
-            salary_el = card.select_one("[class*='salary'], [class*='salario']")
-            description = salary_el.get_text(strip=True) if salary_el else ""
+            # Salary: inside .fs13 div
+            salary_el = card.select_one("div.fs13 span:last-child, div.fs13")
+            description = ""
+            if salary_el:
+                sal_text = salary_el.get_text(strip=True)
+                if "$" in sal_text or "G." in sal_text:
+                    description = sal_text
 
             page_jobs.append({
                 "titulo": title,
