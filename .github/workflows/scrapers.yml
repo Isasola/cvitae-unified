@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       scraper:
-        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi | arbeitnow | himalayas | jobicy | weworkremotely'
+        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi | arbeitnow | himalayas | jobicy | weworkremotely | sicca | ministerios | bancos | cooperativas | callcenters | seguros | universidades | constructoras | vierci | cartes | hospitales | foros | supermercados | ongs | tech_local'
         required: false
         default: 'all'
 
@@ -119,4 +119,101 @@ jobs:
       - name: UNJobs — ONU, UNDP, UNICEF, BID (PY + LatAm)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'unjobs' || github.event_name == 'schedule' }}
         run: python scrapers/unjobs_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — sector público y gobierno ─────────────────────────────
+
+      - name: SICCA / SFP — Concursos sector público
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'sicca' || github.event_name == 'schedule' }}
+        run: python scrapers/sicca_scraper.py
+        continue-on-error: true
+
+      - name: Ministerios del Paraguay
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'ministerios' || github.event_name == 'schedule' }}
+        run: python scrapers/ministerios_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — sector financiero ──────────────────────────────────────
+
+      - name: Bancos paraguayos (BNF, Continental, Sudameris, GNB, etc.)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'bancos' || github.event_name == 'schedule' }}
+        run: python scrapers/bancos_scraper.py
+        continue-on-error: true
+
+      - name: Cooperativas paraguayas (Universitaria, Medalla Milagrosa, etc.)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'cooperativas' || github.event_name == 'schedule' }}
+        run: python scrapers/cooperativas_scraper.py
+        continue-on-error: true
+
+      - name: Aseguradoras paraguayas
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'seguros' || github.event_name == 'schedule' }}
+        run: python scrapers/seguros_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — servicios y BPO ────────────────────────────────────────
+
+      - name: Call Centers — Atento, Teleperformance, Konecta, etc.
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'callcenters' || github.event_name == 'schedule' }}
+        run: python scrapers/callcenters_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — educación ──────────────────────────────────────────────
+
+      - name: Universidades paraguayas (UNA, UCN, UAP, etc.)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'universidades' || github.event_name == 'schedule' }}
+        run: python scrapers/universidades_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — construcción e ingeniería ─────────────────────────────
+
+      - name: Constructoras paraguayas (Itaipú, Yacyretá, MOPC, etc.)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'constructoras' || github.event_name == 'schedule' }}
+        run: python scrapers/constructoras_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — grandes grupos empresariales ───────────────────────────
+
+      - name: Grupo Vierci (La Nación, GEN, MegaSuper)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'vierci' || github.event_name == 'schedule' }}
+        run: python scrapers/grupovierci_scraper.py
+        continue-on-error: true
+
+      - name: Grupo Cartes (Tabacalera, Frigomerc, RPC, Canal 9)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'cartes' || github.event_name == 'schedule' }}
+        run: python scrapers/grupocarteshs_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — salud ──────────────────────────────────────────────────
+
+      - name: Hospitales y clínicas paraguayas
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'hospitales' || github.event_name == 'schedule' }}
+        run: python scrapers/hospitales_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — retail y comercio ──────────────────────────────────────
+
+      - name: Supermercados y retail paraguayo
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'supermercados' || github.event_name == 'schedule' }}
+        run: python scrapers/supermercados_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — ONGs y cooperación internacional ───────────────────────
+
+      - name: ONGs, fundaciones y organismos de cooperación
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'ongs' || github.event_name == 'schedule' }}
+        run: python scrapers/ongs_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — tecnología local ───────────────────────────────────────
+
+      - name: Empresas tech locales (SODEP, LSD, Roshka, etc.)
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'tech_local' || github.event_name == 'schedule' }}
+        run: python scrapers/tech_local_scraper.py
+        continue-on-error: true
+
+      # ── Foros y comunidades ───────────────────────────────────────────────
+
+      - name: Foros — Reddit r/Paraguay + comunidades PY
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'foros' || github.event_name == 'schedule' }}
+        run: python scrapers/foros_scraper.py
         continue-on-error: true
