@@ -1,6 +1,6 @@
 # Contexto completo del proyecto CVitae
 
-> Última actualización: 2026-06-20 · Rama activa: `feature/aws-migration`
+> Última actualización: 2026-06-22 · Rama activa: `feature/aws-migration`
 
 ---
 
@@ -47,11 +47,12 @@
 
 ### ✅ Fase 4 — SEO + Analytics (completo)
 
-- GA4 (`G-BZ16ZLP8ZZ`) en `index.html`.
+- GA4 (`G-BZ16ZLP8ZZ`) en `index.html` — ver datos en [analytics.google.com](https://analytics.google.com) con esa propiedad.
 - `react-helmet-async` con `<HelmetProvider>` en `main.tsx`.
 - Meta tags únicos (title, description, og:*, canonical) en todas las páginas públicas.
 - `<meta name="robots" content="noindex" />` en todas las páginas del hub `/mi-carrera/*`.
 - `src/lib/analytics.ts`: eventos `cvAnalyzed`, `b2bLeadSent`, `batchStarted` wired.
+- **Pendiente revisar**: confirmar que los eventos custom llegan correctamente a GA4 (hacer prueba real desde `/` y verificar en GA4 → Tiempo real → Eventos).
 
 ### ✅ Fase 5 — Rediseño frontend (completo)
 
@@ -63,6 +64,17 @@ Páginas rediseñadas con el sistema visual unificado:
 - `src/hub/Dashboard.tsx`
 - `src/hub/ProfileBuilder.tsx`
 - `src/hub/CVVivo.tsx`
+
+### ✅ Ruta de carrera + cursos contextuales (sesión 2026-06-22)
+
+Commit: `eee048f4`
+
+- **`ProfileBuilder.tsx`** — Paso 2 ahora incluye selector "¿Hacia dónde querés crecer?" con 6 rutas:
+  `empleo-local` · `remoto` · `beca-posgrado` · `organismos` · `emprendimiento` · `cambio-area`
+  Se guarda en `profile_data.career_route` en Supabase.
+- **`ROUTE_GAPS`**: por cada ruta se detectan automáticamente brechas de habilidades (ej: remoto → Inglés obligatorio).
+- **`gemini-courses.ts`**: acepta `careerRoute`, inyecta contexto al prompt de Gemini ("el objetivo del usuario es conseguir trabajo remoto…"). Fallback Haiku también usa la ruta.
+- **`Dashboard.tsx`**: `loadGeminiCourses` pasa la ruta, el panel de cursos muestra la etiqueta de objetivo actual.
 
 ### ✅ GrowthLine animada (`src/components/cv/visuals.tsx`)
 
@@ -342,29 +354,73 @@ Esto reduce el tiempo total de ~90s (30 CVs × 3s) a ~3s (todos en paralelo), el
 
 ### Scrapers activos (carpeta `scrapers/`)
 
-| Archivo | Fuente | Tipo | Estado |
-|---|---|---|---|
-| `scrapper.py` | Clasipar, MTESS, Tigo, Personal, Itaú, Copaco | Paraguay | ✅ listo |
-| `abc_scrapper.py` | ABC Color empleos | Paraguay (Playwright) | ✅ listo |
-| `fundacion_scraper.py` | Fundación Paraguaya | Paraguay (Playwright) | ✅ listo |
-| `buscojobs_scraper.py` | BuscoJobs Paraguay — 16 categorías | Paraguay | ✅ listo |
-| `computrabajo_scraper.py` | Computrabajo Paraguay — 13 categorías × 3 páginas | Paraguay | ✅ listo (~650/run) |
-| `oya_scraper.py` | OYA Opportunities | Internacional/Becas | ✅ confirmado vivo |
-| `opportunitydesk_scraper.py` | OpportunityDesk — becas, grants, cursos | Internacional/Becas | ✅ listo (~300/run) |
-| `becal_scraper.py` | BECAL Paraguay — WordPress API + HTML | Becas PY | ✅ listo |
-| `fundacion_carolina_scraper.py` | Fundación Carolina España — becas LatAm | Becas intl | ✅ listo |
-| `unjobs_scraper.py` | UNJobs — ONU, UNDP, UNICEF, BID (PY + LatAm) | Organismos | ✅ listo |
-| `remotive_scraper.py` | Remotive API — 11 categorías | Remoto | ✅ listo |
-| `arbeitnow_scraper.py` | Arbeitnow API — hasta 1000 empleos/run | Remoto global | ✅ listo |
-| `himalayas_scraper.py` | Himalayas API — hasta 2000 empleos/run | Remoto global | ✅ listo |
-| `jobicy_scraper.py` | Jobicy API — 12 industrias × 50 | Remoto global | ✅ listo |
-| `weworkremotely_scraper.py` | WeWorkRemotely RSS — 14 feeds | Remoto global | ✅ listo |
+#### Paraguay — bolsas de empleo
+| Archivo | Fuente | Estado |
+|---|---|---|
+| `scrapper.py` | Clasipar, MTESS, Tigo, Personal, Itaú, Copaco | ✅ listo |
+| `abc_scrapper.py` | ABC Color empleos (Playwright) | ✅ listo |
+| `fundacion_scraper.py` | Fundación Paraguaya (Playwright) | ✅ listo |
+| `buscojobs_scraper.py` | BuscoJobs Paraguay — 16 categorías | ✅ listo |
+| `computrabajo_scraper.py` | Computrabajo Paraguay — 13 categorías × 3 páginas | ✅ listo (~650/run) |
+
+#### Paraguay — sector público (agregados 2026-06-22)
+| Archivo | Fuente | Estado |
+|---|---|---|
+| `sicca_scraper.py` | SICCA / SFP — concursos del sector público | ✅ listo |
+| `ministerios_scraper.py` | 15 ministerios (MEC, MSP, MOPC, Hacienda, MAG…) | ✅ listo |
+
+#### Paraguay — sector financiero (agregados 2026-06-22)
+| Archivo | Fuente | Estado |
+|---|---|---|
+| `bancos_scraper.py` | BNF, Continental, Sudameris, GNB, Vision, Atlas, BASA, Regional… | ✅ listo |
+| `cooperativas_scraper.py` | Universitaria, Medalla Milagrosa, San Cristóbal, Capiibary… | ✅ listo |
+| `seguros_scraper.py` | Aseguradora del Este, Sancor, IPS, MAPFRE, Allianz… | ✅ listo |
+
+#### Paraguay — servicios (agregados 2026-06-22)
+| Archivo | Fuente | Estado |
+|---|---|---|
+| `callcenters_scraper.py` | Atento, Teleperformance, Konecta, Visionary, Skytel… | ✅ listo |
+| `universidades_scraper.py` | UNA, UCN, UAP, UCOM, UCSA, FPUNE, Uninorte… | ✅ listo |
+| `constructoras_scraper.py` | Itaipú, Yacyretá, MOPC, CPI, Parcon, Tecnoedil… | ✅ listo |
+| `hospitales_scraper.py` | Bautista, Italiano, Francés, INERAM, HPF, Sanatorio Italiano… | ✅ listo |
+| `supermercados_scraper.py` | Stock, SuperSeis, Biggie, Paris, DIA, Shopping del Sol… | ✅ listo |
+
+#### Paraguay — grupos empresariales (agregados 2026-06-22)
+| Archivo | Fuente | Estado |
+|---|---|---|
+| `grupovierci_scraper.py` | La Nación, GEN TV, MegaSuper, Nación Media | ✅ listo |
+| `grupocarteshs_scraper.py` | Tabacalera, Frigomerc, RPC, Canal 9, BEPSA | ✅ listo |
+
+#### Paraguay — tech, ONGs y foros (agregados 2026-06-22)
+| Archivo | Fuente | Estado |
+|---|---|---|
+| `tech_local_scraper.py` | SODEP, LSD, Roshka, Codedge, Nubisis, Avantica… | ✅ listo |
+| `ongs_scraper.py` | PNUD, UNICEF, BID, Cruz Roja, CARE, Plan, GIZ, OEA… | ✅ listo |
+| `foros_scraper.py` | Reddit r/Paraguay, r/trabajoparaguay, foros locales | ✅ listo |
+
+#### Internacional — becas y organismos
+| Archivo | Fuente | Estado |
+|---|---|---|
+| `oya_scraper.py` | OYA Opportunities | ✅ vivo |
+| `opportunitydesk_scraper.py` | OpportunityDesk — becas, grants, cursos | ✅ listo (~300/run) |
+| `becal_scraper.py` | BECAL Paraguay | ✅ listo |
+| `fundacion_carolina_scraper.py` | Fundación Carolina España | ✅ listo |
+| `unjobs_scraper.py` | UNJobs — ONU, UNDP, UNICEF, BID | ✅ listo |
+
+#### Internacional — remotos
+| Archivo | Fuente | Estado |
+|---|---|---|
+| `remotive_scraper.py` | Remotive API — 11 categorías | ✅ listo |
+| `arbeitnow_scraper.py` | Arbeitnow API — hasta 1000/run | ✅ listo |
+| `himalayas_scraper.py` | Himalayas API — hasta 2000/run | ✅ listo |
+| `jobicy_scraper.py` | Jobicy API — 12 industrias × 50 | ✅ listo |
+| `weworkremotely_scraper.py` | WeWorkRemotely RSS — 14 feeds | ✅ listo |
 
 ### GitHub Actions cron
 
-- **`.github/workflows/scrapers.yml`** — cron diario 10:00 UTC (06:00 PY). Incluye los 15 scrapers con `continue-on-error: true`.
+- **`.github/workflows/scrapers.yml`** — cron diario 10:00 UTC (06:00 PY). Incluye los **30 scrapers** totales con `continue-on-error: true`.
 - **`.github/workflows/linkedin_poster.yml`** — cada hora 12:00-02:00 UTC (08:00-22:00 PY).
-- **PENDIENTE PUSH**: el PAT de GitHub necesita scope `workflow` para hacer push de archivos en `.github/workflows/`. Ir a `github.com/settings/tokens`, editar el token, activar scope `workflow`, luego: `git push origin feature/aws-migration`.
+- Los scrapers nuevos se agregaron en commit `8d1c4b23` (2026-06-22) y ya fueron pusheados.
 
 ### Schema de `opportunities` (tabla Supabase)
 
@@ -400,36 +456,51 @@ Los scrapers de Paraguay (computrabajo, buscojobs, etc.) devolvían HTTP 400 por
 
 ### Resend / Emails
 
-- DNS records en estado **pendiente de verificación**:
+- DNS records en estado **pendiente de verificación** (sin cambios al 2026-06-22):
   - DKIM (`resend._domainkey`) — presente pero no verificado aún
-  - MX record (`send`) — falta agregar
-  - SPF (`send`) — falta agregar
+  - MX record (`send.cvitae.lat`) — **FALTA AGREGAR** en el panel DNS del dominio
+  - SPF (`send.cvitae.lat`) — **FALTA AGREGAR** en el panel DNS del dominio
 - Hasta que se verifiquen, los emails de leads B2B no se envían
+- **Qué agregar exactamente** (obtener los valores exactos en resend.com → Domains → cvitae.lat):
+  - `TXT` en `send.cvitae.lat` → `"v=spf1 include:spf.resend.com ~all"`
+  - `MX` en `send.cvitae.lat` → `feedback-smtp.us-east-1.amazonses.com` (priority 10)
+  - Verificar en panel Resend tras agregar (puede tardar hasta 24h en propagar)
 
 ---
 
 ## Pendientes concretos (próxima sesión)
 
-### Alta prioridad
+### Alta prioridad — pendiente real
 
-- [ ] **Hacer push a GitHub**: actualizar PAT con scope `workflow` en `github.com/settings/tokens`, luego `git push origin feature/aws-migration`
-- [ ] **Levantar n8n con Docker** (después del reinicio): `docker run -d --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n n8nio/n8n` → importar `scrapers/n8n-linkedin-workflow.json` → conectar LinkedIn OAuth desde UI de n8n
-- [ ] **Verificar DNS de Resend**: agregar MX y SPF records en el panel DNS del dominio
-- [ ] **Conectar `/vacante/:slug` al backend**: crear `submit-candidate.ts` o modificar `submit-lead.ts`. Ver sección "Respuestas → pregunta 1" arriba.
-- [ ] **Unificar background token**: `--background: oklch(0.10 0.008 60)` en `index.css` para que coincida con `#0a0a0a`.
+- [ ] **DNS Resend — MX + SPF**: agregar los dos records en el panel de DNS del dominio `cvitae.lat`. Ver sección "Resend / Emails" arriba para los valores exactos. Sin esto, los emails de leads B2B y magic links no se entregan.
+- [ ] **LinkedIn n8n OAuth**: Docker está corriendo. Faltan las credenciales OAuth en la UI de n8n (`localhost:5678`). Necesitás: Client ID `77az9mk9lw0ygi` + Client Secret (obtenelo en linkedin.com/developers → app → Auth tab). Solo postear como empresa `urn:li:organization:112507011` — **nunca perfil personal**.
+- [ ] **Sidebar + footer — texto invisible**: links inactivos del menú usan `text-muted` que es casi negro. Cambiar a `text-white/60` en:
+  - `src/components/cvitae/DashboardLayout.tsx` (links del sidebar, ~línea 82)
+  - `src/layouts/CareerLayout.tsx` (~línea 99)
+  - `src/components/cvitae/Footer.tsx` (mismo problema con links)
+- [ ] **Analytics — verificar eventos**: GA4 está wired (`G-BZ16ZLP8ZZ`) pero nunca se confirmó que los eventos custom lleguen. Verificar en GA4 → Tiempo real → Eventos navegando desde `/`, `/empresas` y haciendo análisis.
 
 ### Media prioridad
 
-- [ ] **Mejorar footer**: agregar columna "Para empresas", quitar links placeholder, agregar GrowthLine.
-- [ ] **Resolver rutas B2B**: `App.tsx` ya tiene `/empresas` y `/empresas/masivo`. Confirmar que los redirects legacy (`/reclutadores`, `/reclutadores/batch`) siguen activos — ya están en `App.tsx` con `<Redirect>`.
-- [ ] **Batch paralelo**: cambiar `for/await` en `BatchAnalysis.tsx` por `Promise.all` para procesar los CVs en paralelo y reducir tiempo total.
+- [ ] **Blog — texto "nuestras bases de datos"**: en algún post existente en Supabase (tabla `content_hub`) hay texto que dice "nuestras bases de datos". Cambiar a "las empresas con más presencia en el país". Revisar también `scrapers/insert_blog_post.py`.
+- [ ] **Mejorar footer**: agregar columna "Para empresas", quitar links `#` placeholder, GrowthLine decorativa, campo de newsletter.
+- [ ] **Unificar background token**: `--background: oklch(0.10 0.008 60)` en `index.css` para que coincida con `#0a0a0a`.
+- [ ] **Batch paralelo**: cambiar `for/await` en `BatchAnalysis.tsx` por `Promise.all` — reduce tiempo total de ~90s a ~3s.
 
 ### Baja prioridad (post-pruebas)
 
 - [ ] **Fase 2 (S3)**: reemplazar base64 en BatchAnalysis y ProfileBuilder por presigned URL upload.
-- [ ] **Fase 3 (Lambda)**: mover funciones pesadas a Lambda para superar el límite de 26s de Netlify.
+- [ ] **Fase 3 (Lambda)**: mover funciones pesadas a Lambda para superar límite 26s de Netlify.
 - [ ] **Merge a `main`**: cuando las pruebas en Netlify preview sean satisfactorias.
 - [ ] **Eliminar `ANTHROPIC_API_KEY` de Netlify**: ya no se usa desde la migración a Bedrock.
+
+### Completado en sesión 2026-06-22
+
+- [x] **Ruta de carrera en ProfileBuilder**: selector "hacia dónde querés crecer" con 6 opciones + detección automática de brechas (commit `eee048f4`)
+- [x] **Cursos contextuales por ruta**: `gemini-courses.ts` + `Dashboard.tsx` usan `careerRoute` para personalizar recomendaciones (commit `eee048f4`)
+- [x] **15 scrapers nuevos**: SICCA, ministerios, bancos, cooperativas, seguros, call centers, universidades, constructoras, Grupo Vierci, Grupo Cartes, hospitales, supermercados, ONGs, tech local, foros (commit `8d1c4b23`)
+- [x] **`scrapers.yml` actualizado**: 30 scrapers totales en cron diario 06:00 PY
+- [x] **`submit-lead.ts`**: ya tenía el fix correcto (flujo `isVacancyApplication` separado), no requirió cambios
 
 ---
 
