@@ -19,6 +19,25 @@ const SKILLS = ['Marketing Digital', 'SEO', 'SEM', 'Google Ads', 'Facebook Ads',
 const SENIORITY = ['Junior', 'Semi-Senior', 'Senior', 'Lead', 'Director']
 const MODALITIES = ['Presencial', 'Híbrido', 'Remoto']
 
+const CAREER_ROUTES = [
+  { id: 'empleo-local',  label: 'Empleo en Paraguay',          icon: '💼', desc: 'Empresas locales, presencial o híbrido' },
+  { id: 'remoto',        label: 'Trabajo remoto',               icon: '💻', desc: 'Empresas internacionales desde Paraguay' },
+  { id: 'beca-posgrado', label: 'Beca o posgrado',              icon: '🎓', desc: 'Especializarte o estudiar en el exterior' },
+  { id: 'organismos',    label: 'Organismos internacionales',   icon: '🌐', desc: 'ONU, BID, OEA, PNUD y similares' },
+  { id: 'emprendimiento',label: 'Emprendimiento',               icon: '🚀', desc: 'Capital semilla, aceleradoras, grants' },
+  { id: 'cambio-area',   label: 'Cambio de área',               icon: '🔄', desc: 'Reconversión o pivot profesional' },
+]
+
+// Skills mínimas por ruta para detectar brechas
+const ROUTE_GAPS: Record<string, { skill: string; sugerencia: string }[]> = {
+  'remoto':         [{ skill: 'Inglés', sugerencia: 'El 90% de las empresas remotas exigen inglés escrito fluido.' }],
+  'organismos':     [{ skill: 'Inglés', sugerencia: 'Todos los organismos internacionales trabajan en inglés.' }, { skill: 'Redacción de proyectos', sugerencia: 'La postulación requiere cartas de motivación y propuestas formales.' }],
+  'beca-posgrado':  [{ skill: 'Inglés', sugerencia: 'La mayoría de las becas exigen prueba de idioma (IELTS/TOEFL).' }],
+  'emprendimiento': [{ skill: 'Gestión de Proyectos', sugerencia: 'Los jurados de aceleradoras evalúan ejecución y planificación.' }],
+  'empleo-local':   [],
+  'cambio-area':    [],
+}
+
 const SUMMARY_EXAMPLES = [
   'Desarrollador Full Stack con 3 años de experiencia en React y Node.js. Especializado en aplicaciones web escalables y trabajo en equipo ágil.',
   'Profesional de Marketing Digital con foco en SEO y campañas de Google Ads. Logré aumentar el tráfico orgánico un 40% en mi último proyecto.',
@@ -54,6 +73,7 @@ export default function ProfileBuilder() {
     modality: '',
     skills: [] as string[],
     cursos: [] as string[],
+    career_route: '' as string,
   })
   const [newCurso, setNewCurso] = useState('')
   const [newSkill, setNewSkill] = useState('')
@@ -88,6 +108,7 @@ export default function ProfileBuilder() {
             modality: data.profile_data?.modality || '',
             skills: data.profile_data?.habilidades || [],
             cursos: data.profile_data?.cursos || [],
+            career_route: data.profile_data?.career_route || '',
           })
         }
       })
@@ -186,6 +207,7 @@ export default function ProfileBuilder() {
           seniority: formData.seniority,
           location: formData.location,
           modality: formData.modality,
+          career_route: formData.career_route,
         },
       }
       const { error } = existingProfileId
@@ -394,36 +416,86 @@ export default function ProfileBuilder() {
 
                 {step === 2 && (
                   <div className="space-y-6">
+                    {/* Ruta de carrera */}
                     <div>
-                      <label className="mb-3 block text-sm text-muted-foreground">Seniority actual</label>
-                      <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-                        {SENIORITY.map(s => (
-                          <button key={s} onClick={() => setFormData(prev => ({ ...prev, seniority: s }))}
-                            className={cn('rounded-xl border px-4 py-2 text-sm transition',
-                              formData.seniority === s ? 'border-[#c9a84c] bg-[#c9a84c]/10 text-[#c9a84c]' : 'border-white/10 bg-white/[0.02] text-muted-foreground hover:border-white/20 hover:text-white'
-                            )}>
-                            {s}
+                      <label className="mb-1 block text-sm text-white">¿Hacia dónde querés crecer?</label>
+                      <p className="mb-4 text-xs text-muted-foreground">Elegí la dirección principal — las recomendaciones de la IA se van a enfocar en eso.</p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {CAREER_ROUTES.map(route => (
+                          <button
+                            key={route.id}
+                            onClick={() => setFormData(prev => ({ ...prev, career_route: route.id }))}
+                            className={cn(
+                              'flex items-start gap-3 rounded-xl border p-4 text-left transition',
+                              formData.career_route === route.id
+                                ? 'border-[#c9a84c] bg-[#c9a84c]/10'
+                                : 'border-white/10 bg-white/[0.02] hover:border-white/20'
+                            )}
+                          >
+                            <span className="text-xl leading-none">{route.icon}</span>
+                            <div>
+                              <p className={cn('text-sm font-medium', formData.career_route === route.id ? 'text-[#c9a84c]' : 'text-white')}>{route.label}</p>
+                              <p className="mt-0.5 text-[11px] text-muted-foreground">{route.desc}</p>
+                            </div>
                           </button>
                         ))}
                       </div>
                     </div>
-                    <div>
-                      <label className="mb-3 block text-sm text-muted-foreground">Modalidad preferida</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {MODALITIES.map(m => (
-                          <button key={m} onClick={() => setFormData(prev => ({ ...prev, modality: m }))}
-                            className={cn('rounded-xl border px-4 py-2 text-sm transition',
-                              formData.modality === m ? 'border-[#c9a84c] bg-[#c9a84c]/10 text-[#c9a84c]' : 'border-white/10 bg-white/[0.02] text-muted-foreground hover:border-white/20 hover:text-white'
-                            )}>
-                            {m}
-                          </button>
-                        ))}
+
+                    {/* Brechas detectadas según ruta */}
+                    {formData.career_route && (() => {
+                      const gaps = (ROUTE_GAPS[formData.career_route] || []).filter(
+                        g => !formData.skills.some(s => s.toLowerCase().includes(g.skill.toLowerCase()))
+                      )
+                      return gaps.length > 0 ? (
+                        <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 space-y-3">
+                          <p className="text-xs font-medium text-amber-400 uppercase tracking-widest">Brechas detectadas para esta ruta</p>
+                          {gaps.map(g => (
+                            <div key={g.skill} className="flex items-start gap-3">
+                              <span className="mt-0.5 text-amber-400">⚠</span>
+                              <div>
+                                <p className="text-sm text-white font-medium">{g.skill}</p>
+                                <p className="text-xs text-muted-foreground">{g.sugerencia}</p>
+                              </div>
+                            </div>
+                          ))}
+                          <p className="text-[11px] text-muted-foreground pt-1">CVitae va a priorizar estas habilidades en tus recomendaciones de cursos.</p>
+                        </div>
+                      ) : null
+                    })()}
+
+                    <div className="border-t border-white/5 pt-4 space-y-4">
+                      <div>
+                        <label className="mb-3 block text-sm text-muted-foreground">Seniority actual</label>
+                        <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                          {SENIORITY.map(s => (
+                            <button key={s} onClick={() => setFormData(prev => ({ ...prev, seniority: s }))}
+                              className={cn('rounded-xl border px-4 py-2 text-sm transition',
+                                formData.seniority === s ? 'border-[#c9a84c] bg-[#c9a84c]/10 text-[#c9a84c]' : 'border-white/10 bg-white/[0.02] text-muted-foreground hover:border-white/20 hover:text-white'
+                              )}>
+                              {s}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <label className="mb-3 block text-sm text-muted-foreground">Ubicación</label>
-                      <input value={formData.location} onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                        placeholder="Ciudad/País de residencia" className={inputCls} />
+                      <div>
+                        <label className="mb-3 block text-sm text-muted-foreground">Modalidad preferida</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {MODALITIES.map(m => (
+                            <button key={m} onClick={() => setFormData(prev => ({ ...prev, modality: m }))}
+                              className={cn('rounded-xl border px-4 py-2 text-sm transition',
+                                formData.modality === m ? 'border-[#c9a84c] bg-[#c9a84c]/10 text-[#c9a84c]' : 'border-white/10 bg-white/[0.02] text-muted-foreground hover:border-white/20 hover:text-white'
+                              )}>
+                              {m}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-3 block text-sm text-muted-foreground">Ubicación</label>
+                        <input value={formData.location} onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                          placeholder="Ciudad/País de residencia" className={inputCls} />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -441,6 +513,12 @@ export default function ProfileBuilder() {
                         </span>
                       </div>
                       <p className="mb-6 text-sm leading-relaxed text-muted-foreground">{formData.summary || 'Sin resumen'}</p>
+                      {formData.career_route && (
+                        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1 text-xs text-[#c9a84c]">
+                          {CAREER_ROUTES.find(r => r.id === formData.career_route)?.icon}{' '}
+                          Ruta: {CAREER_ROUTES.find(r => r.id === formData.career_route)?.label}
+                        </div>
+                      )}
                       <div className="flex flex-wrap gap-2">
                         {formData.skills.map(s => (
                           <span key={s} className="rounded-full border border-white/10 bg-white/[0.02] px-2 py-0.5 text-[10px] text-white/60">{s}</span>

@@ -362,13 +362,13 @@ export default function Dashboard() {
       const { data: prof } = await supabase.from('user_master_profiles')
         .select('professional_title, profile_data').eq('user_id', user.id).maybeSingle()
       setProfile(prof)
-      if (data.profileSkills?.length > 0) loadGeminiCourses(data.profileSkills, data.matches || [], token)
+      if (data.profileSkills?.length > 0) loadGeminiCourses(data.profileSkills, data.matches || [], token, prof?.profile_data?.career_route || '')
     } catch { /* silencioso */ } finally {
       setLoadingMatches(false)
     }
   }
 
-  const loadGeminiCourses = async (skills: string[], allMatches: any[], token: string) => {
+  const loadGeminiCourses = async (skills: string[], allMatches: any[], token: string, careerRoute = '') => {
     setLoadingCourses(true)
     try {
       const allVacancySkills: string[] = []
@@ -384,7 +384,13 @@ export default function Dashboard() {
       const res = await fetch('/.netlify/functions/gemini-courses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ profileSkills: skills, missingSkills, profileTitle: profile?.professional_title || '' }),
+        body: JSON.stringify({
+          profileSkills: skills,
+          missingSkills,
+          profileTitle: profile?.professional_title || '',
+          profileSeniority: profile?.profile_data?.seniority || '',
+          careerRoute,
+        }),
       })
       if (!res.ok) return
       const data = await res.json()
@@ -509,6 +515,20 @@ export default function Dashboard() {
                       <h4 className="font-display text-lg text-cream">Cursos recomendados</h4>
                       <span className="rounded-full border border-[#c9a84c]/30 px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#c9a84c]">IA</span>
                     </div>
+                    {profile?.profile_data?.career_route && (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Enfocado en tu ruta: <span className="text-[#c9a84c]">
+                          {{
+                            'empleo-local': '💼 Empleo en Paraguay',
+                            'remoto': '💻 Trabajo remoto',
+                            'beca-posgrado': '🎓 Beca / posgrado',
+                            'organismos': '🌐 Organismos internacionales',
+                            'emprendimiento': '🚀 Emprendimiento',
+                            'cambio-area': '🔄 Cambio de área',
+                          }[profile.profile_data.career_route] || profile.profile_data.career_route}
+                        </span>
+                      </p>
+                    )}
                     {loadingCourses ? (
                       <div className="mt-4 space-y-2">
                         {[1, 2, 3].map(i => <div key={i} className="h-10 animate-pulse rounded-md bg-cream/5" />)}

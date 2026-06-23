@@ -9,8 +9,20 @@ export const handler = async (event: any) => {
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method not allowed' }) }
 
   try {
-    const { profileSkills, missingSkills, profileTitle, profileSeniority } = JSON.parse(event.body || '{}')
+    const { profileSkills, missingSkills, profileTitle, profileSeniority, careerRoute } = JSON.parse(event.body || '{}')
     if (!missingSkills?.length) return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ courses: [] }) }
+
+    const ROUTE_LABELS: Record<string, string> = {
+      'empleo-local':   'conseguir empleo en empresas locales en Paraguay',
+      'remoto':         'conseguir trabajo remoto con empresas internacionales',
+      'beca-posgrado':  'acceder a una beca de posgrado o especialización en el exterior',
+      'organismos':     'trabajar en organismos internacionales (ONU, BID, OEA, PNUD)',
+      'emprendimiento': 'lanzar un emprendimiento y acceder a capital semilla o aceleradoras',
+      'cambio-area':    'hacer un cambio de área o reconversión profesional',
+    }
+    const routeContext = careerRoute && ROUTE_LABELS[careerRoute]
+      ? `El objetivo principal del usuario es: ${ROUTE_LABELS[careerRoute]}.`
+      : 'El objetivo del usuario no está definido — recomendá habilidades de alto impacto laboral general.'
 
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) throw new Error('GEMINI_API_KEY no configurada')
@@ -23,12 +35,17 @@ PERFIL DEL USUARIO:
 - Habilidades actuales: ${profileSkills?.join(', ') || 'No especificadas'}
 - Habilidades que le faltan según el mercado: ${missingSkills.join(', ')}
 
+OBJETIVO DE CARRERA:
+${routeContext}
+
 Tu tarea: Recomendá ${Math.min(missingSkills.length, 4)} recursos de aprendizaje (cursos, certificaciones o recursos) — uno por habilidad faltante prioritaria.
 
+Cada recomendación DEBE estar alineada con el objetivo de carrera del usuario. No recomendés cursos genéricos — explicá concretamente cómo esa habilidad lleva al usuario más cerca de su objetivo.
+
 Para cada recomendación considerá:
-1. Qué está demandando el mercado paraguayo y latinoamericano HOY
+1. Qué demanda el mercado objetivo HOY (local, remoto, organismos, etc. según el objetivo)
 2. Cómo esa habilidad complementa lo que el usuario YA sabe
-3. El impacto concreto en sus chances laborales (estimá un % de mejora realista)
+3. El impacto concreto en sus chances de lograr el objetivo (estimá un % de mejora realista)
 4. Que sea accesible (gratuito o económico, en español preferentemente)
 
 Respondé ÚNICAMENTE con este JSON válido, sin texto extra ni markdown:
@@ -41,7 +58,7 @@ Respondé ÚNICAMENTE con este JSON válido, sin texto extra ni markdown:
     "level": "Básico|Intermedio|Avanzado",
     "duration": "estimación: ej. 8 horas, 4 semanas",
     "impact": "Dominar [skill] puede aumentar tus chances de conseguir empleo en un X% porque [razón específica basada en el mercado paraguayo]",
-    "why": "Con tu experiencia en [habilidades actuales], agregar [skill] te permite [beneficio concreto] — muy buscado en empresas paraguayas y regionales como [tipo de empresa]"
+    "why": "Con tu objetivo de [objetivo de carrera] y tu experiencia en [habilidades actuales], agregar [skill] te permite [beneficio concreto y específico para ese objetivo]"
   }
 ]`
 
@@ -64,7 +81,7 @@ Respondé ÚNICAMENTE con este JSON válido, sin texto extra ni markdown:
       const errBody = await response.text()
       // Fallback a Haiku si Gemini falla
       console.error(`Gemini error ${response.status}: ${errBody}`)
-      return useFallbackHaiku(profileSkills, missingSkills, profileTitle, profileSeniority, corsHeaders)
+      return useFallbackHaiku(profileSkills, missingSkills, profileTitle, profileSeniority, careerRoute, corsHeaders)
     }
 
     const data = await response.json()
@@ -74,7 +91,7 @@ Respondé ÚNICAMENTE con este JSON válido, sin texto extra ni markdown:
     try {
       courses = JSON.parse(clean)
     } catch {
-      return useFallbackHaiku(profileSkills, missingSkills, profileTitle, profileSeniority, corsHeaders)
+      return useFallbackHaiku(profileSkills, missingSkills, profileTitle, profileSeniority, careerRoute, corsHeaders)
     }
 
     return {
@@ -97,12 +114,15 @@ async function useFallbackHaiku(
   missingSkills: string[],
   profileTitle: string,
   profileSeniority: string,
+  careerRoute: string,
   corsHeaders: any
 ) {
   try {
     const anthropicKey = process.env.ANTHROPIC_API_KEY
     if (!anthropicKey) throw new Error('Sin API key de fallback')
-    
+
+    const routeHint = careerRoute ? ` Su objetivo es: ${careerRoute}.` : ''
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -115,7 +135,7 @@ async function useFallbackHaiku(
         max_tokens: 1000,
         messages: [{
           role: 'user',
-          content: `Sos asesor de carrera para Paraguay. El usuario es ${profileTitle || 'profesional'} ${profileSeniority || ''} con skills: ${profileSkills?.join(', ')}. Le faltan: ${missingSkills.join(', ')}. Recomendá ${Math.min(missingSkills.length, 4)} cursos online accesibles. Respondé SOLO con JSON array: [{"skill":"...","course":"...","platform":"Udemy|Coursera|YouTube","url":"URL de búsqueda real","level":"Básico|Intermedio","duration":"X horas","impact":"Puede mejorar tus chances un X%","why":"Con tu experiencia en..."}]`
+          content: `Sos asesor de carrera para Paraguay. El usuario es ${profileTitle || 'profesional'} ${profileSeniority || ''} con skills: ${profileSkills?.join(', ')}.${routeHint} Le faltan: ${missingSkills.join(', ')}. Recomendá ${Math.min(missingSkills.length, 4)} cursos online accesibles alineados con su objetivo. Respondé SOLO con JSON array: [{"skill":"...","course":"...","platform":"Udemy|Coursera|YouTube","url":"URL de búsqueda real","level":"Básico|Intermedio","duration":"X horas","impact":"Puede mejorar tus chances un X%","why":"Con tu objetivo de... y tu experiencia en..."}]`
         }],
       }),
     })

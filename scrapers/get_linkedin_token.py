@@ -38,13 +38,13 @@ class CallbackHandler(http.server.BaseHTTPRequestHandler):
         if error:
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(b"<h2>Error: acceso denegado. Cerrá esta ventana.</h2>")
+            self.wfile.write(b"<h2>Error: acceso denegado. Cerra esta ventana.</h2>")
             print(f"\nError de LinkedIn: {error}")
         elif code:
             captured_code[0] = code
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(b"<h2>Autorizado! Ya pods cerrar esta ventana y volver a la consola.</h2>")
+            self.wfile.write(b"<h2>Autorizado! Ya podes cerrar esta ventana y volver a la consola.</h2>")
         else:
             self.send_response(400)
             self.end_headers()
