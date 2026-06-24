@@ -4,7 +4,7 @@ import { auth } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, User, Briefcase, FileText, Bell, BookOpen, Settings,
-  Menu, X, LogOut, ChevronRight, ArrowLeft,
+  Menu, X, LogOut, ChevronRight, ArrowLeft, Award,
 } from 'lucide-react'
 import { Logo } from './Logo'
 import { cn } from '@/lib/utils'
@@ -77,7 +77,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   'flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
                   isActive
                     ? 'bg-gold/10 text-gold border border-gold/20'
-                    : 'text-muted hover:text-white hover:bg-white/5'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
                 )}
               >
                 <link.icon className={cn('w-5 h-5', isActive && 'text-gold')} />
@@ -93,12 +93,34 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           })}
         </nav>
 
+        {/* Verificate CTA — optional, at the bottom of the nav */}
+        <div className="px-4 pb-2">
+          <Link
+            href="/mi-carrera/verificate"
+            onClick={() => setSidebarOpen(false)}
+            className={cn(
+              'flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
+              location === '/mi-carrera/verificate'
+                ? 'bg-gold/10 text-gold border border-gold/20'
+                : 'text-white/60 hover:text-white hover:bg-white/5'
+            )}
+          >
+            <Award className={cn('w-5 h-5', location === '/mi-carrera/verificate' && 'text-gold')} />
+            <span className="font-medium">Verificate</span>
+            {location !== '/mi-carrera/verificate' && (
+              <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#c9a84c]/20 text-[#c9a84c] border border-[#c9a84c]/30">
+                NUEVO
+              </span>
+            )}
+          </Link>
+        </div>
+
         <div className="p-4 border-t border-white/5 space-y-1">
           {bottomLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl text-muted hover:text-white hover:bg-white/5 transition-all duration-200"
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-white/60 hover:text-white hover:bg-white/5 transition-all duration-200"
             >
               <link.icon className="w-5 h-5" />
               <span className="font-medium">{link.label}</span>

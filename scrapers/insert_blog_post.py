@@ -26,7 +26,7 @@ Cada vacante busca algo específico. Un programa de becas en España no quiere e
 CVitae tiene una función llamada **CV Vivo** que hace exactamente esto:
 
 1. **Subís tu CV o completás tu perfil** — una sola vez
-2. **Elegís la vacante o convocatoria** — podés pegar el texto directamente si la oportunidad no está en nuestra base
+2. **Elegís la vacante o convocatoria** — podés pegar el texto directamente si la oportunidad no está en el listado
 3. **La IA genera tu CV adaptado** — reescribe tu resumen, reordena tus habilidades y usa las palabras clave exactas de la oferta
 4. **Descargás o copiás el resultado** — listo para postular
 
@@ -45,7 +45,7 @@ Después de la beta, el CV Vivo y las alertas avanzadas pasarán a ser funciones
 
 ## Paso a paso: cómo usar CV Vivo hoy
 
-### Opción A — Para oportunidades de nuestra base (becas, empleos locales, empleos remotos)
+### Opción A — Para oportunidades del listado (becas, empleos locales, empleos remotos)
 
 1. Entrá a [cvitae.lat](https://cvitae.lat) y creá tu cuenta (solo necesitás tu email)
 2. En el dashboard, completá tu perfil o subí tu CV en PDF
@@ -62,7 +62,7 @@ Después de la beta, el CV Vivo y las alertas avanzadas pasarán a ser funciones
 
 ## Qué tipos de oportunidades podés encontrar en CVitae
 
-Nuestra base se actualiza todos los días con:
+El listado se actualiza todos los días con oportunidades de las empresas, organismos e instituciones con más presencia en Paraguay y la región:
 
 - **Empleos en Paraguay** — Computrabajo, BuscoJobs, empresas directas
 - **Empleos remotos para latinos** — Remotive (software, diseño, marketing, datos)

@@ -257,6 +257,36 @@ function IATech() {
   )
 }
 
+// ─── Stats bar ───────────────────────────────────────────────────────────────
+
+const STATS = [
+  { value: '4.500+', label: 'oportunidades activas' },
+  { value: 'Diario', label: 'se actualiza el listado' },
+  { value: 'PY · remoto · becas', label: 'Paraguay, LatAm e internacionales' },
+]
+
+function StatsBar() {
+  return (
+    <section className="border-y border-white/8 bg-white/[0.015] py-8">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="grid grid-cols-3 divide-x divide-white/8">
+          {STATS.map(({ value, label }, i) => (
+            <motion.div
+              key={value}
+              initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: i * 0.08, ease }}
+              className="flex flex-col items-center px-4 text-center"
+            >
+              <span className="font-display text-2xl font-bold text-[#c9a84c] sm:text-3xl">{value}</span>
+              <span className="mt-1 text-xs text-white/50 sm:text-sm">{label}</span>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 // ─── Analizador ───────────────────────────────────────────────────────────────
 
 function Analizador() {
@@ -516,6 +546,7 @@ export default function LandingPage() {
         <RegistroBlock />
         <ComoFunciona />
         <IATech />
+        <StatsBar />
         <Analizador />
         <Pricing />
         <ParaEmpresas />

@@ -16,9 +16,11 @@ import JobMatcher from './hub/JobMatcher'
 import CVVivo from './hub/CVVivo'
 import Alertas from './hub/Alertas'
 import Configuracion from './hub/Configuracion'
+import Assessments from './hub/Assessments'
 import Recruiters from './pages/Recruiters'
 import BatchAnalysis from './pages/BatchAnalysis'
 import VacantePage from './pages/VacantePage'
+import Demo from './pages/Demo'
 import NotFound from './pages/NotFound'
 
 export default function App() {
@@ -35,6 +37,7 @@ export default function App() {
       <Route path="/terminos" component={Terms} />
       <Route path="/cookies" component={Cookies} />
       <Route path="/admin" component={Admin} />
+      <Route path="/demo" component={Demo} />
       {/* Canonical routes */}
       <Route path="/empresas" component={Recruiters} />
       <Route path="/empresas/masivo" component={BatchAnalysis} />
@@ -49,6 +52,7 @@ export default function App() {
       <Route path="/mi-carrera/alertas" component={Alertas} />
       <Route path="/mi-carrera/oportunidades" component={Dashboard} />
       <Route path="/mi-carrera/configuracion" component={Configuracion} />
+      <Route path="/mi-carrera/verificate" component={Assessments} />
       <Route component={NotFound} />
     </Switch>
   )

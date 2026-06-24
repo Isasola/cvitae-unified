@@ -96,7 +96,7 @@ export function CareerLayout({ children }: CareerLayoutProps) {
                   'flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
                   isActive
                     ? 'bg-gold/10 text-gold border border-gold/20'
-                    : 'text-muted hover:text-white hover:bg-white/5'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
                 )}
               >
                 <link.icon className={cn('w-5 h-5', isActive && 'text-gold')} />
@@ -117,7 +117,7 @@ export function CareerLayout({ children }: CareerLayoutProps) {
             <Link
               key={link.href}
               href={link.href}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl text-muted hover:text-white hover:bg-white/5 transition-all duration-200"
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-white/60 hover:text-white hover:bg-white/5 transition-all duration-200"
             >
               <link.icon className="w-5 h-5" />
               <span className="font-medium">{link.label}</span>

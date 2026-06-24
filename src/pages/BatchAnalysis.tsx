@@ -418,6 +418,11 @@ export default function BatchAnalysis() {
                             {c.result.keyMatches?.slice(0, 3).map((m: string) => (
                               <span key={m} className="rounded-full border border-white/10 bg-white/[0.02] px-2 py-0.5 text-[10px] text-white/55">{m}</span>
                             ))}
+                            {c.result.badges?.map((b: { area: string; score: number }) => (
+                              <span key={b.area} className="rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/10 px-2 py-0.5 text-[10px] text-[#c9a84c] font-medium">
+                                ✓ Verificado en {b.area}
+                              </span>
+                            ))}
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
