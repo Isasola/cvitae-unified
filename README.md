@@ -190,6 +190,7 @@ Para que los emails transaccionales lleguen desde `@cvitae.lat`:
 
 | Tarea | Prioridad | Descripción |
 |---|---|---|
+| Link a /demo desde la landing | Alta | La página existe y funciona pero ningún lugar del sitio lleva a ella — agregar enlace en navbar (SiteShell) o en la sección Hero/ComoFunciona |
 | LinkedIn n8n OAuth | Media | Setup en localhost:5678, Client ID: `77az9mk9lw0ygi` |
 | Badge en flujo vacante | Media | Incluir `profile_data.badges` en payload a reclutador cuando candidato tiene perfil vinculado (`VacantePage.tsx` + `submit-lead.ts`) |
 | Test e2e `/vacante/:slug` | Alta | Verificar flujo completo: postulación → email magic link → dashboard B2C |
