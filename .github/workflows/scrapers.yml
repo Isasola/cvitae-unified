@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       scraper:
-        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi | arbeitnow | himalayas | jobicy | weworkremotely | sicca | ministerios | bancos | cooperativas | callcenters | seguros | universidades | constructoras | vierci | cartes | hospitales | foros | supermercados | ongs | tech_local'
+        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi | arbeitnow | himalayas | jobicy | weworkremotely | sicca | ministerios | bancos | cooperativas | callcenters | seguros | universidades | constructoras | vierci | cartes | hospitales | foros | supermercados | ongs | tech_local | jooble | talentcom'
         required: false
         default: 'all'
 
@@ -19,6 +19,7 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -217,3 +218,16 @@ jobs:
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'foros' || github.event_name == 'schedule' }}
         run: python scrapers/foros_scraper.py
         continue-on-error: true
+
+      # ── Agregadores y sector humanitario global ───────────────────────────
+
+      - name: Jooble — agregador global con foco en Paraguay/LatAm
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'jooble' || github.event_name == 'schedule' }}
+        run: python scrapers/jooble_scraper.py
+        continue-on-error: true
+
+      - name: Talent.com — agregador global con foco Paraguay/LatAm
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'talentcom' || github.event_name == 'schedule' }}
+        run: python scrapers/talentcom_scraper.py
+        continue-on-error: true
+
