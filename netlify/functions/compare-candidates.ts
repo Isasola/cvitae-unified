@@ -81,15 +81,48 @@ Respondé ÚNICAMENTE con JSON:
 
     // ── Modo head_to_head: compara 2 candidatos específicos contra requisitos de la vacante
     if (mode === 'head_to_head' && body.application_ids?.length === 2) {
+      if (!token?.trim()) {
+        return { statusCode: 401, body: JSON.stringify({ error: "Token requerido" }) }
+      }
+
       const supabase = makeSupabaseAdmin()
 
+      // Validate token
+      const { data: tokenData } = await supabase
+        .from("recruiter_tokens")
+        .select("id")
+        .eq("access_token", token.trim())
+        .eq("is_active", true)
+        .single()
+
+      if (!tokenData) {
+        return { statusCode: 403, body: JSON.stringify({ error: "Token inválido" }) }
+      }
+
+      // Fetch applications and verify they belong to this recruiter's vacancies
       const { data: apps } = await supabase
         .from("vacancy_applications")
-        .select("id, name, fit_score, ats_score, strengths, key_matches, key_gaps, ai_summary, recommendation")
+        .select("id, name, fit_score, ats_score, strengths, key_matches, key_gaps, ai_summary, recommendation, vacancy_id")
         .in("id", body.application_ids)
 
       if (!apps || apps.length < 2) {
         return { statusCode: 400, body: JSON.stringify({ error: "No se encontraron los dos candidatos" }) }
+      }
+
+      // Verify ownership: both vacancy_ids must belong to this recruiter token
+      const vacancyIds = [...new Set(apps.map((a: any) => a.vacancy_id).filter(Boolean))]
+      if (vacancyIds.length > 0) {
+        const { data: ownedVacancies } = await supabase
+          .from("recruiter_vacancies")
+          .select("id")
+          .in("id", vacancyIds)
+          .eq("recruiter_token_id", tokenData.id)
+
+        const ownedIds = new Set((ownedVacancies || []).map((v: any) => v.id))
+        const allOwned = apps.every((a: any) => !a.vacancy_id || ownedIds.has(a.vacancy_id))
+        if (!allOwned) {
+          return { statusCode: 403, body: JSON.stringify({ error: "Sin acceso a una o más postulaciones" }) }
+        }
       }
 
       let vacancyContext = ""
@@ -98,6 +131,7 @@ Respondé ÚNICAMENTE con JSON:
           .from("recruiter_vacancies")
           .select("title, description, requirements, company")
           .eq("id", body.vacancy_id)
+          .eq("recruiter_token_id", tokenData.id)
           .single()
         if (vac) {
           vacancyContext = `\nPUESTO: ${vac.title} en ${vac.company}\nDESCRIPCIÓN: ${vac.description}\nREQUISITOS: ${vac.requirements}`
