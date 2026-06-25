@@ -331,7 +331,7 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
                   )}
                 </div>
                 <p className="mt-0.5 text-xs font-light text-white/35">
-                  {new Date(record.created_at).toLocaleDateString()} · {record.file_name}
+                  {new Date(record.created_at).toLocaleDateString('es-PY')} · {record.file_name}
                 </p>
               </div>
               <button onClick={() => toggleStar(record.id)} className={`p-2 transition-colors ${record.is_starred ? 'text-[#c9a84c]' : 'text-white/20 hover:text-[#c9a84c]'}`}>
@@ -442,6 +442,9 @@ interface Applicant {
   key_matches: string[]
   key_gaps: string[]
   analyzed_at: string | null
+  recruiter_action: string | null
+  recruiter_notes: string | null
+  badges: string[]
   applied_at: string
 }
 
@@ -464,6 +467,22 @@ function fitColor(s: number) {
   return 'oklch(0.65 0.22 25)'
 }
 
+function actionColor(a: string | null) {
+  if (a === 'hired') return 'text-emerald-400 border-emerald-500/30 bg-emerald-500/[0.06]'
+  if (a === 'interviewing') return 'text-[#c9a84c] border-[#c9a84c]/30 bg-[#c9a84c]/[0.06]'
+  if (a === 'contacted') return 'text-sky-400 border-sky-500/30 bg-sky-500/[0.06]'
+  if (a === 'rejected') return 'text-red-400 border-red-500/30 bg-red-500/[0.06]'
+  return 'text-white/30 border-white/10 bg-white/[0.02]'
+}
+
+const ACTION_LABELS: Record<string, string> = {
+  pending: 'Pendiente',
+  contacted: 'Contactado',
+  interviewing: 'Entrevistando',
+  hired: 'Contratado',
+  rejected: 'Descartado',
+}
+
 function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSingle }: {
   token: string
   vacancyId: string
@@ -479,6 +498,19 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'Llamar' | 'Considerar' | 'No llamar'>('all')
   const [rankError, setRankError] = useState('')
+  const [updatingAction, setUpdatingAction] = useState<string | null>(null)
+
+  const handleActionUpdate = async (applicationId: string, action: string, notes?: string) => {
+    setUpdatingAction(applicationId)
+    try {
+      await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action: 'update_application_status', application_id: applicationId, recruiter_action: action, recruiter_notes: notes }),
+      })
+      setApplicants(prev => prev.map(a => a.id === applicationId ? { ...a, recruiter_action: action } : a))
+    } catch { /* silencioso */ }
+    finally { setUpdatingAction(null) }
+  }
 
   const loadApplicants = () => {
     setLoading(true)
@@ -606,9 +638,8 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
         {aiSummary && (
           <motion.div
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            className="relative glass-card rounded-3xl p-7 overflow-hidden"
+            className="relative rounded-2xl p-7 overflow-hidden border border-white/5 bg-[#0d0d0d]"
           >
-            <div className="pointer-events-none absolute -top-20 right-0 h-60 w-60 rounded-full bg-[#c9a84c]/[0.08] blur-[80px]" />
             <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/40 mb-5">
               <span className="h-px w-8 bg-[#c9a84c]/40" /> Decisión de la IA
             </div>
@@ -679,7 +710,15 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: i * 0.03, ease }}
-                className={`glass-card rounded-2xl overflow-hidden transition-colors ${a.recommendation === 'Llamar' ? 'hover:border-emerald-500/20' : ''}`}
+                className={`rounded-2xl overflow-hidden transition-colors border border-white/8 bg-white/[0.02] border-l-[3px] ${
+                  a.recommendation === 'Llamar'
+                    ? 'border-l-emerald-500/60'
+                    : a.recommendation === 'No llamar'
+                    ? 'border-l-red-500/40'
+                    : a.analyzed_at
+                    ? 'border-l-sky-500/30'
+                    : 'border-l-white/10'
+                } hover:border-white/15`}
               >
                 <div
                   className="flex items-center gap-4 px-5 py-4 cursor-pointer"
@@ -704,7 +743,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                       )}
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 text-[11px] text-white/35 flex-wrap">
-                      <span className="flex items-center gap-1"><Mail strokeWidth={1.5} className="h-3 w-3" />{a.email}</span>
+                      <span className="flex items-center gap-1"><Mail strokeWidth={1.5} className="h-3 w-3" /><a href={`mailto:${a.email}`} className="hover:text-[#c9a84c] transition-colors">{a.email}</a></span>
                       <span className="flex items-center gap-1">
                         <Calendar strokeWidth={1.5} className="h-3 w-3" />
                         {new Date(a.applied_at).toLocaleDateString('es-PY')}
@@ -717,9 +756,9 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
 
                   <div className="flex items-center gap-4 shrink-0">
                     {a.fit_score !== null && (
-                      <div className="text-right">
-                        <p className="font-display text-2xl" style={{ color: fitColor(a.fit_score) }}>{a.fit_score}</p>
-                        <p className="text-[9px] uppercase tracking-[0.15em] text-white/30">fit</p>
+                      <div className="text-right leading-none">
+                        <span className="font-display text-4xl tabular-nums" style={{ color: fitColor(a.fit_score) }}>{a.fit_score}</span>
+                        <span className="text-sm text-white/25 ml-0.5">/100</span>
                       </div>
                     )}
                     {expandedId === a.id
@@ -796,6 +835,20 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                           </div>
                         )}
 
+                        {/* B2C Badges */}
+                        {a.badges?.length > 0 && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-[0.18em] text-white/30 mb-2">Perfil CVitae</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {a.badges.map((badge: string) => (
+                                <span key={badge} className="inline-flex items-center rounded-full border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] px-2.5 py-0.5 text-[11px] text-[#c9a84c]/80">
+                                  {badge}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Cover letter */}
                         {a.cover_letter && (
                           <div>
@@ -804,18 +857,35 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                           </div>
                         )}
 
-                        {/* Actions */}
-                        <div className="flex items-center gap-3 pt-1">
+                        {/* Estado y acciones del reclutador */}
+                        <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-white/5 mt-2">
+                          <span className="text-[10px] uppercase tracking-[0.15em] text-white/30">Estado</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(['pending', 'contacted', 'interviewing', 'hired', 'rejected'] as const).map(act => (
+                              <button
+                                key={act}
+                                disabled={updatingAction === a.id}
+                                onClick={() => handleActionUpdate(a.id, act)}
+                                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.12em] transition-all ${
+                                  a.recruiter_action === act
+                                    ? actionColor(act)
+                                    : 'text-white/25 border-white/8 bg-transparent hover:border-white/20 hover:text-white/50'
+                                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                              >
+                                {ACTION_LABELS[act]}
+                              </button>
+                            ))}
+                          </div>
                           {a.cv_text && (
                             <button
                               onClick={() => onAnalyzeSingle(a.cv_text!, a.name)}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                              className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
                             >
                               <Brain strokeWidth={1.5} className="h-3.5 w-3.5" /> Análisis individual
                             </button>
                           )}
                           {!a.cv_text && (
-                            <p className="text-xs text-white/25 italic">Sin texto extraíble (imagen o PDF protegido)</p>
+                            <p className="text-xs text-white/25 italic ml-auto">Sin texto extraíble</p>
                           )}
                         </div>
                       </div>
@@ -840,14 +910,15 @@ interface VacancyRecord {
   location: string
   modality: string
   created_at: string
+  vacancy_applications: { count: number }[]
 }
 
 const RUBROS = ['Tecnología', 'Administración', 'Contabilidad / Finanzas', 'Marketing / Ventas', 'Recursos Humanos', 'Logística / Operaciones', 'Producción / Manufactura', 'Salud', 'Educación', 'Gastronomía / Turismo', 'Construcción / Inmobiliaria', 'Legal', 'Otro']
 
-function VacancyPanel({ token, onAnalyzeApplicant }: { token: string; onAnalyzeApplicant: (cvText: string, name: string) => void }) {
+function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: string; companyName: string; onAnalyzeApplicant: (cvText: string, name: string) => void }) {
   const [form, setForm] = useState({
     title: '', description: '', requirements: '',
-    location: '', modality: 'Presencial', salary_range: '', company_name: '', rubro: '',
+    location: '', modality: 'Presencial', salary_range: '', company_name: companyName, rubro: '',
   })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -1022,37 +1093,52 @@ function VacancyPanel({ token, onAnalyzeApplicant }: { token: string; onAnalyzeA
             <p className="text-sm font-light text-white/40">Todavía no creaste ninguna vacante.</p>
           </div>
         ) : (
-          <ol className="space-y-3">
-            {vacancies.map((v) => {
-              const url = `https://cvitae.lat/vacante/${v.slug}`
-              return (
-                <li key={v.id} className="glass-card rounded-2xl px-5 py-4">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-sm text-white font-medium">{v.title}</p>
-                      <p className="mt-0.5 text-xs font-light text-white/35">
-                        {v.location} · {v.modality} · {new Date(v.created_at).toLocaleDateString()}
-                      </p>
-                      <p className="mt-0.5 truncate text-xs text-[#c9a84c]/70 font-mono">{url}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => setSelectedVacancy(v)}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
-                      >
-                        <UserCheck strokeWidth={1.5} className="h-3.5 w-3.5" /> Postulantes
-                      </button>
-                      <button onClick={() => copyToClipboard(url, v.id)}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/50 transition hover:border-[#c9a84c]/40 hover:text-[#c9a84c]">
-                        {copied === v.id ? <CheckIcon strokeWidth={2} className="h-3.5 w-3.5" /> : <Copy strokeWidth={1.5} className="h-3.5 w-3.5" />}
-                        {copied === v.id ? 'Copiado' : 'Link'}
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              )
-            })}
-          </ol>
+          <div className="rounded-xl overflow-hidden border border-white/8">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-white/8 bg-white/[0.02]">
+                  <th className="text-left px-4 py-2.5 text-[10px] uppercase tracking-[0.18em] text-white/30 font-medium">Puesto</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] uppercase tracking-[0.18em] text-white/30 font-medium hidden sm:table-cell">Lugar</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] uppercase tracking-[0.18em] text-white/30 font-medium hidden md:table-cell">Modalidad</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] uppercase tracking-[0.18em] text-white/30 font-medium">CVs</th>
+                  <th className="px-4 py-2.5"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {vacancies.map((v) => {
+                  const url = `https://cvitae.lat/vacante/${v.slug}`
+                  const count = v.vacancy_applications?.[0]?.count ?? 0
+                  return (
+                    <tr key={v.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors">
+                      <td className="px-4 py-3">
+                        <p className="text-sm text-white font-medium truncate max-w-[180px]">{v.title}</p>
+                        <p className="text-[10px] text-white/30 mt-0.5">{new Date(v.created_at).toLocaleDateString('es-PY')}</p>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-white/50 hidden sm:table-cell">{v.location}</td>
+                      <td className="px-4 py-3 text-xs text-white/50 hidden md:table-cell">{v.modality}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={`font-display text-lg ${count > 0 ? 'text-[#c9a84c]' : 'text-white/20'}`}>{count}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setSelectedVacancy(v)}
+                            className="inline-flex items-center gap-1 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-2.5 py-1 text-[11px] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                          >
+                            <UserCheck strokeWidth={1.5} className="h-3 w-3" /> Ver →
+                          </button>
+                          <button onClick={() => copyToClipboard(url, v.id)}
+                            className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/40 transition hover:border-[#c9a84c]/40 hover:text-[#c9a84c]">
+                            {copied === v.id ? <CheckIcon strokeWidth={2} className="h-3 w-3" /> : <Copy strokeWidth={1.5} className="h-3 w-3" />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
@@ -1159,7 +1245,6 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
-      <Ambient />
       <Helmet>
         <title>Panel Empresas | CVitae</title>
         <meta name="robots" content="noindex" />
@@ -1357,7 +1442,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
               </motion.div>
             ) : (
               <motion.div key="vacancies" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <VacancyPanel token={session.token} onAnalyzeApplicant={handleAnalyzeApplicant} />
+                <VacancyPanel token={session.token} companyName={session.company_name} onAnalyzeApplicant={handleAnalyzeApplicant} />
               </motion.div>
             )}
           </AnimatePresence>

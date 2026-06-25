@@ -19,7 +19,7 @@ const handler: Handler = async (event) => {
     // Buscar token
     const { data, error } = await supabase
       .from("recruiter_tokens")
-      .select("id, email, access_token, token_balance, plan_type, is_active, created_at")
+      .select("id, email, company_name, access_token, token_balance, plan_type, is_active, created_at")
       .eq("access_token", token.trim())
       .eq("is_active", true)
       .single()
@@ -121,9 +121,31 @@ const handler: Handler = async (event) => {
         .order("applied_at", { ascending: false })
         .limit(100)
 
+      // Enrich with B2C badges
+      const emails = (applicants || []).map((a: any) => a.email).filter(Boolean)
+      let badgesByEmail: Record<string, string[]> = {}
+
+      if (emails.length > 0) {
+        const { data: profiles } = await supabase
+          .from("user_master_profiles")
+          .select("email, profile_data")
+          .in("email", emails)
+
+        if (profiles) {
+          for (const p of profiles) {
+            badgesByEmail[p.email] = p.profile_data?.badges || []
+          }
+        }
+      }
+
+      const enrichedApplicants = (applicants || []).map((a: any) => ({
+        ...a,
+        badges: badgesByEmail[a.email] || [],
+      }))
+
       return {
         statusCode: 200,
-        body: JSON.stringify({ applicants: applicants || [] }),
+        body: JSON.stringify({ applicants: enrichedApplicants }),
       }
     }
 
@@ -131,7 +153,7 @@ const handler: Handler = async (event) => {
     if (action === "get_vacancies") {
       const { data: vacancies } = await supabase
         .from("recruiter_vacancies")
-        .select("id, title, slug, location, modality, is_active, created_at")
+        .select("id, title, slug, location, modality, is_active, created_at, vacancy_applications(count)")
         .eq("recruiter_token_id", data.id)
         .eq("is_active", true)
         .order("created_at", { ascending: false })
@@ -143,13 +165,57 @@ const handler: Handler = async (event) => {
       }
     }
 
+    // ─── Acción: Actualizar estado de postulante ───
+    if (action === "update_application_status" && body.application_id) {
+      const validActions = ['pending', 'contacted', 'interviewing', 'hired', 'rejected']
+      if (!validActions.includes(body.recruiter_action)) {
+        return { statusCode: 400, body: JSON.stringify({ error: "Estado inválido. Valores permitidos: pending, contacted, interviewing, hired, rejected" }) }
+      }
+
+      // Verificar que la aplicación pertenece a una vacante de este token
+      const { data: app } = await supabase
+        .from("vacancy_applications")
+        .select("id, vacancy_id")
+        .eq("id", body.application_id)
+        .single()
+
+      if (!app) {
+        return { statusCode: 404, body: JSON.stringify({ error: "Postulación no encontrada" }) }
+      }
+
+      const { data: vac } = await supabase
+        .from("recruiter_vacancies")
+        .select("id")
+        .eq("id", app.vacancy_id)
+        .eq("recruiter_token_id", data.id)
+        .single()
+
+      if (!vac) {
+        return { statusCode: 403, body: JSON.stringify({ error: "Sin acceso a esta postulación" }) }
+      }
+
+      const updatePayload: Record<string, any> = { recruiter_action: body.recruiter_action }
+      if (body.recruiter_notes !== undefined) updatePayload.recruiter_notes = body.recruiter_notes
+
+      const { error: updateError } = await supabase
+        .from("vacancy_applications")
+        .update(updatePayload)
+        .eq("id", body.application_id)
+
+      if (updateError) {
+        return { statusCode: 500, body: JSON.stringify({ error: updateError.message }) }
+      }
+
+      return { statusCode: 200, body: JSON.stringify({ ok: true, recruiter_action: body.recruiter_action }) }
+    }
+
     // ─── Validación simple / inicio de sesión ───
     return {
       statusCode: 200,
       body: JSON.stringify({
         valid: true,
         balance: data.token_balance,
-        company_name: "Empresa",
+        company_name: data.company_name || "Sin nombre",
         token_id: data.id,
       }),
     }

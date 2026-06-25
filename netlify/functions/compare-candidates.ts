@@ -79,6 +79,76 @@ Respondé ÚNICAMENTE con JSON:
       return { statusCode: 200, body: JSON.stringify(extractJSON(responseText)) }
     }
 
+    // ── Modo head_to_head: compara 2 candidatos específicos contra requisitos de la vacante
+    if (mode === 'head_to_head' && body.application_ids?.length === 2) {
+      const supabase = makeSupabaseAdmin()
+
+      const { data: apps } = await supabase
+        .from("vacancy_applications")
+        .select("id, name, fit_score, ats_score, strengths, key_matches, key_gaps, ai_summary, recommendation")
+        .in("id", body.application_ids)
+
+      if (!apps || apps.length < 2) {
+        return { statusCode: 400, body: JSON.stringify({ error: "No se encontraron los dos candidatos" }) }
+      }
+
+      let vacancyContext = ""
+      if (body.vacancy_id) {
+        const { data: vac } = await supabase
+          .from("recruiter_vacancies")
+          .select("title, description, requirements, company")
+          .eq("id", body.vacancy_id)
+          .single()
+        if (vac) {
+          vacancyContext = `\nPUESTO: ${vac.title} en ${vac.company}\nDESCRIPCIÓN: ${vac.description}\nREQUISITOS: ${vac.requirements}`
+        }
+      }
+
+      const [a, b] = apps
+      const prompt = `Comparación directa entre dos candidatos${vacancyContext ? ` para el puesto:${vacancyContext}` : ""}.
+
+CANDIDATO A — ${a.name}:
+- Fit: ${a.fit_score ?? 'sin analizar'}/100 | ATS: ${a.ats_score ?? 'sin analizar'}/100
+- Decisión previa: ${a.recommendation ?? 'sin análisis'}
+- Fortalezas: ${(a.strengths as string[] | null)?.join(', ') || '—'}
+- Skills que encajan: ${(a.key_matches as string[] | null)?.join(', ') || '—'}
+- Skills que faltan: ${(a.key_gaps as string[] | null)?.join(', ') || '—'}
+- Resumen: ${a.ai_summary || '—'}
+
+CANDIDATO B — ${b.name}:
+- Fit: ${b.fit_score ?? 'sin analizar'}/100 | ATS: ${b.ats_score ?? 'sin analizar'}/100
+- Decisión previa: ${b.recommendation ?? 'sin análisis'}
+- Fortalezas: ${(b.strengths as string[] | null)?.join(', ') || '—'}
+- Skills que encajan: ${(b.key_matches as string[] | null)?.join(', ') || '—'}
+- Skills que faltan: ${(b.key_gaps as string[] | null)?.join(', ') || '—'}
+- Resumen: ${b.ai_summary || '—'}
+
+Respondé ÚNICAMENTE con JSON válido:
+{
+  "winner": "${a.name}" | "${b.name}" | "empate",
+  "verdict": "2-3 oraciones directas sobre quién gana y por qué",
+  "a": {
+    "name": "${a.name}",
+    "advantage": "qué tiene A que B no tiene",
+    "weakness": "qué le falta a A comparado con B"
+  },
+  "b": {
+    "name": "${b.name}",
+    "advantage": "qué tiene B que A no tiene",
+    "weakness": "qué le falta a B comparado con A"
+  },
+  "hire_recommendation": "recomendación concreta de 1-2 oraciones sobre a quién contratar"
+}`
+
+      const responseText = await invokeModel(
+        "Sos un director de RRHH experto. Respondés ÚNICAMENTE con JSON válido, sin texto adicional ni markdown.",
+        prompt,
+        1200
+      )
+
+      return { statusCode: 200, body: JSON.stringify({ mode: 'head_to_head', ...extractJSON(responseText) }) }
+    }
+
     // ── Modo legacy: comparar por IDs del historial
     if (!ids || !Array.isArray(ids) || ids.length < 2) {
       return { statusCode: 400, body: JSON.stringify({ error: "Se necesitan al menos 2 CVs para comparar" }) }

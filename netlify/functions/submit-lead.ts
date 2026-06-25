@@ -139,7 +139,7 @@ const handler: Handler = async (event) => {
     // 2. Look up vacancy id
     const { data: vacancyRow } = await supabase
       .from("recruiter_vacancies")
-      .select("id")
+      .select("id, title, recruiter_token_id")
       .eq("slug", vacancySlug)
       .single()
 
@@ -158,6 +158,60 @@ const handler: Handler = async (event) => {
 
     if (appError) {
       console.error("insert vacancy_applications:", appError.message)
+    }
+
+    // Notify recruiter when a new application arrives
+    if (vacancyRow?.recruiter_token_id && !appError) {
+      try {
+        const { data: tokenRow } = await supabase
+          .from("recruiter_tokens")
+          .select("email, company_name")
+          .eq("id", vacancyRow.recruiter_token_id)
+          .single()
+
+        if (tokenRow?.email) {
+          await sendResendEmail(
+            tokenRow.email,
+            `Nueva postulación: ${name || "Candidato"} — ${vacancyRow.title || vacancySlug}`,
+            `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><title>Nueva postulación</title></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;color:#f5f4f0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#111110;border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;">
+        <tr><td style="padding:28px 36px 20px;border-bottom:1px solid rgba(255,255,255,0.06);">
+          <p style="margin:0;font-size:20px;font-weight:900;letter-spacing:-0.02em;color:#c9a84c;">CV<em style="font-weight:400;font-style:italic;">itae</em></p>
+        </td></tr>
+        <tr><td style="padding:32px 36px;">
+          <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.16em;color:rgba(255,255,255,0.35);">Nueva postulación recibida</p>
+          <h1 style="margin:0 0 18px;font-size:22px;font-weight:700;line-height:1.25;color:#f5f4f0;">
+            ${name || "Un candidato"} se postuló a<br><em style="font-style:italic;font-weight:400;">${vacancyRow.title || vacancySlug}</em>
+          </h1>
+          <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:rgba(255,255,255,0.5);">
+            Ingresá al panel para ver el CV y analizar al candidato.
+          </p>
+          <table cellpadding="0" cellspacing="0">
+            <tr><td style="background:#c9a84c;border-radius:50px;">
+              <a href="${SITE_URL}/empresas" style="display:inline-block;padding:12px 28px;font-size:13px;font-weight:600;color:#0a0a0a;text-decoration:none;">
+                Ver postulante →
+              </a>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="padding:18px 36px;border-top:1px solid rgba(255,255,255,0.06);">
+          <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2);">CVitae · cvitae.lat · Asunción, Paraguay</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+          )
+        }
+      } catch (e: any) {
+        console.error("recruiter notification email failed:", e.message)
+      }
     }
 
     // 4. Upsert candidate into user_master_profiles

@@ -59,11 +59,11 @@ export function Footer() {
                 {section.links.map((link) => (
                   <li key={link.label}>
                     {link.href.startsWith('mailto:') || link.href.startsWith('http') ? (
-                      <a href={link.href} className="text-muted hover:text-white transition-colors text-sm">
+                      <a href={link.href} className="text-white/60 hover:text-white transition-colors text-sm">
                         {link.label}
                       </a>
                     ) : (
-                      <Link href={link.href} className="text-muted hover:text-white transition-colors text-sm">
+                      <Link href={link.href} className="text-white/60 hover:text-white transition-colors text-sm">
                         {link.label}
                       </Link>
                     )}

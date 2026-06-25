@@ -470,37 +470,161 @@ Los scrapers de Paraguay (computrabajo, buscojobs, etc.) devolvían HTTP 400 por
 
 ## Pendientes concretos (próxima sesión)
 
-### Alta prioridad — pendiente real
+### COMMIT BATCH A — Fixes quirúrgicos frontend B2B (`src/pages/Recruiters.tsx`)
 
-- [ ] **DNS Resend — MX + SPF**: agregar los dos records en el panel de DNS del dominio `cvitae.lat`. Ver sección "Resend / Emails" arriba para los valores exactos. Sin esto, los emails de leads B2B y magic links no se entregan.
-- [ ] **LinkedIn n8n OAuth**: Docker está corriendo. Faltan las credenciales OAuth en la UI de n8n (`localhost:5678`). Necesitás: Client ID `77az9mk9lw0ygi` + Client Secret (obtenelo en linkedin.com/developers → app → Auth tab). Solo postear como empresa `urn:li:organization:112507011` — **nunca perfil personal**.
-- [ ] **Sidebar + footer — texto invisible**: links inactivos del menú usan `text-muted` que es casi negro. Cambiar a `text-white/60` en:
-  - `src/components/cvitae/DashboardLayout.tsx` (links del sidebar, ~línea 82)
-  - `src/layouts/CareerLayout.tsx` (~línea 99)
-  - `src/components/cvitae/Footer.tsx` (mismo problema con links)
-- [ ] **Analytics — verificar eventos**: GA4 está wired (`G-BZ16ZLP8ZZ`) pero nunca se confirmó que los eventos custom lleguen. Verificar en GA4 → Tiempo real → Eventos navegando desde `/`, `/empresas` y haciendo análisis.
+- [ ] **A1. Email clickeable en ApplicantsPanel** — línea ~707: envolver email en `<a href="mailto:...">` con hover gold
+- [ ] **A2. company_name prefill en VacancyPanel** — pasar `companyName` como prop desde `RecruiterPanel`, usarlo como valor inicial del form
+- [ ] **A3. Date locale en HistoryPanel** — cambiar `toLocaleDateString()` → `toLocaleDateString('es-PY')` (1 carácter)
+- [ ] **A4. Conteo de postulantes en lista de vacantes** — backend: `validate-recruiter-token.ts` línea ~134, agregar `vacancy_applications(count)` al select; frontend: mostrar badge en cada vacante
+
+### COMMIT BATCH B — Bug y email backend
+
+- [ ] **B1. Fix bug company_name** — `validate-recruiter-token.ts` línea 22: agregar `company_name` al select; línea 152: devolver `data.company_name || "Sin nombre"` en lugar del hardcodeado `"Empresa"`
+- [ ] **B2. Email al reclutador cuando llega postulación** — `submit-lead.ts` después del insert de `vacancy_applications`: buscar email del token por `recruiter_token_id` y enviar notificación Resend. Cambiar línea ~140 a `.select("id, title, recruiter_token_id")`
+
+### COMMIT BATCH C — Estado de postulación (SQL ya ejecutado en Supabase 2026-06-25)
+
+> SQL ✅ ejecutado: `recruiter_action text DEFAULT 'pending'` + `recruiter_notes text` + índice en `vacancy_applications`
+
+- [ ] **C1. Endpoint `update_application_status`** — `validate-recruiter-token.ts`: nueva acción que actualiza `recruiter_action` + `recruiter_notes`, verifica que la app pertenezca al token vía join con `recruiter_vacancies`
+- [ ] **C2. UI de estado por candidato** — `ApplicantsPanel` en `Recruiters.tsx`: dropdown/botones en el card expandido, dot coloreado + label (verde=hired, rojo=rejected, amber=interviewing)
+
+### COMMIT BATCH D — Comparación head-to-head (`compare-candidates.ts`)
+
+- [ ] **D1. Modo `head_to_head`** — nuevo modo que recibe `application_ids: [id1, id2]` + `vacancy_id`, compara los dos candidatos contra los requisitos de la vacante y devuelve `{ winner, verdict, a: { advantage, weakness }, b: { ... }, hire_recommendation }`
+
+### COMMIT BATCH E — Badges B2C visibles al reclutador
+
+> SQL ✅ índices email ejecutados en `user_master_profiles` y `vacancy_applications` (2026-06-25)
+
+- [ ] **E1. Enriquecer `get_applicants`** — `validate-recruiter-token.ts`: después de traer aplicantes, hacer lookup en `user_master_profiles` por email y adjuntar `badges` al payload
+- [ ] **E2. Mostrar badges en ApplicantsPanel** — chips en el card expandido del candidato
+
+### COMMIT BATCH F — Rediseño visual B2B (anti-IA genérico)
+
+Ver sección "Dirección de diseño B2B" más abajo para el sistema completo.
+
+- [ ] **F1. Candidate cards como dossier** — layout asimétrico, score como elemento tipográfico dominante, left-edge accent en lugar de glass-card homogéneo
+- [ ] **F2. Reducir blobs ambient** — menos decoración genérica, más estructura editorial
+- [ ] **F3. Tercer tono funcional** — slate azulado `#2a3a4a` para estado "revisado/analizado", distinguible de gold (acción pendiente) y blanco (neutro)
+- [ ] **F4. Vacancy list como tabla operativa** — dejar de usar cards para las vacantes, usar una tabla densa con bordes finos estilo herramienta interna
+
+### Alta prioridad preexistente
+
+- [ ] **LinkedIn n8n OAuth**: Docker está corriendo. Client ID `77az9mk9lw0ygi` + Client Secret en `localhost:5678`. Solo empresa `urn:li:organization:112507011`.
+- [ ] **Sidebar + footer — texto invisible**: `text-muted` → `text-white/60` en `DashboardLayout.tsx` (~línea 82), `CareerLayout.tsx` (~línea 99), `Footer.tsx`
+- [ ] **Analytics — verificar eventos**: confirmar que `cvAnalyzed`, `b2bLeadSent`, `batchStarted` llegan a GA4 → Tiempo real → Eventos
 
 ### Media prioridad
 
-- [ ] **Blog — texto "nuestras bases de datos"**: en algún post existente en Supabase (tabla `content_hub`) hay texto que dice "nuestras bases de datos". Cambiar a "las empresas con más presencia en el país". Revisar también `scrapers/insert_blog_post.py`.
-- [ ] **Mejorar footer**: agregar columna "Para empresas", quitar links `#` placeholder, GrowthLine decorativa, campo de newsletter.
-- [ ] **Unificar background token**: `--background: oklch(0.10 0.008 60)` en `index.css` para que coincida con `#0a0a0a`.
-- [ ] **Batch paralelo**: cambiar `for/await` en `BatchAnalysis.tsx` por `Promise.all` — reduce tiempo total de ~90s a ~3s.
+- [ ] **Blog — texto "nuestras bases de datos"**: cambiar en Supabase tabla `content_hub` → "las empresas con más presencia en el país"
+- [ ] **Mejorar footer**: columna "Para empresas", quitar links `#`, GrowthLine decorativa, campo newsletter
+- [ ] **Unificar background token**: `--background: oklch(0.10 0.008 60)` en `index.css`
+- [ ] **Batch paralelo**: `for/await` → `Promise.all` en `BatchAnalysis.tsx`
+- [ ] **Link a /demo desde navbar**: agregar en `SiteShell.tsx`
 
 ### Baja prioridad (post-pruebas)
 
-- [ ] **Fase 2 (S3)**: reemplazar base64 en BatchAnalysis y ProfileBuilder por presigned URL upload.
-- [ ] **Fase 3 (Lambda)**: mover funciones pesadas a Lambda para superar límite 26s de Netlify.
-- [ ] **Merge a `main`**: cuando las pruebas en Netlify preview sean satisfactorias.
-- [ ] **Eliminar `ANTHROPIC_API_KEY` de Netlify**: ya no se usa desde la migración a Bedrock.
+- [ ] **Fase 2 (S3)**: reemplazar base64 por presigned URL en BatchAnalysis y ProfileBuilder
+- [ ] **Fase 3 (Lambda)**: mover funciones pesadas para superar límite 26s de Netlify
+- [ ] **Merge a `main`**: cuando pruebas en Netlify preview sean satisfactorias
+- [ ] **Eliminar `ANTHROPIC_API_KEY` de Netlify**: ya no se usa desde Bedrock
 
 ### Completado en sesión 2026-06-22
 
-- [x] **Ruta de carrera en ProfileBuilder**: selector "hacia dónde querés crecer" con 6 opciones + detección automática de brechas (commit `eee048f4`)
-- [x] **Cursos contextuales por ruta**: `gemini-courses.ts` + `Dashboard.tsx` usan `careerRoute` para personalizar recomendaciones (commit `eee048f4`)
-- [x] **15 scrapers nuevos**: SICCA, ministerios, bancos, cooperativas, seguros, call centers, universidades, constructoras, Grupo Vierci, Grupo Cartes, hospitales, supermercados, ONGs, tech local, foros (commit `8d1c4b23`)
-- [x] **`scrapers.yml` actualizado**: 30 scrapers totales en cron diario 06:00 PY
-- [x] **`submit-lead.ts`**: ya tenía el fix correcto (flujo `isVacancyApplication` separado), no requirió cambios
+- [x] Ruta de carrera en ProfileBuilder (commit `eee048f4`)
+- [x] Cursos contextuales por ruta (`gemini-courses.ts` + `Dashboard.tsx`)
+- [x] 15 scrapers nuevos + `scrapers.yml` con 30 scrapers totales (commit `8d1c4b23`)
+- [x] `submit-lead.ts` flujo vacante separado funcionando
+
+### Completado en sesión 2026-06-25 (sin commit aún)
+
+- [x] pgvector habilitado, columna `embedding vector(384)` en `opportunities` y `user_master_profiles`
+- [x] Función RPC `match_opportunities` en Supabase
+- [x] Edge functions: `generate-embedding`, `embed-opportunities`, `match-batch`
+- [x] Embeddings generados para todas las oportunidades activas
+- [x] Matching B2C mejorado: pgvector + keyword hybrid
+- [x] DNS Resend verificado — dominio cvitae.lat activo
+- [x] CLAUDE.md reescrito + 3 agentes creados (frontend/backend/supabase)
+- [x] SQL: `recruiter_action` + `recruiter_notes` en `vacancy_applications`
+- [x] SQL: índices email en `vacancy_applications` y `user_master_profiles`
+- [x] SQL: columna `company_name` en `recruiter_tokens` verificada
+
+---
+
+## Dirección de diseño B2B (para Commit Batch F)
+
+El panel B2B actual tiene el problema de sentirse "dark SaaS template": glass-cards homogéneos, ambient blobs decorativos repetidos, uppercase tracking en todo, números 01/02 en secciones que no son secuencias. Pulido, pero intercambiable con cualquier otro producto AI.
+
+### El problema de fondo
+
+El reclutador usa el panel como herramienta de decisión de contratación — una decisión con consecuencias reales. La interfaz debería sentirse como un **dossier de candidatos**, no como un dashboard de startup. La diferencia: un dossier es denso, informativo, sin decoración gratuita. Un dashboard de startup tiene gradientes, blobs y cartas flotantes.
+
+### Tokens nuevos (solo B2B)
+
+Estos se suman al sistema base (gold, cream, ink). No reemplazan nada existente.
+
+```
+--slate:      oklch(0.28 0.04 230)   /* ≈ #1e2d3d — fondo de estado analizado */
+--slate-edge: oklch(0.38 0.06 230)   /* ≈ #2a3a4a — borde izquierdo accent */
+--ink-mid:    oklch(0.18 0.010 60)   /* ≈ #111110 — superficie de tabla */
+```
+
+### Candidate card → formato dossier
+
+```
+ANTES (glass-card simétrico):
+┌─────────────────────────────────────────┐
+│ [01]  Nombre         [badge] [score]    │
+│       email · fecha                     │
+│       resumen IA...                     │
+└─────────────────────────────────────────┘
+
+DESPUÉS (dossier asimétrico):
+│ ▌ Nombre                    87          │
+│   email · fecha aplicó       FIT        │
+│   "resumen IA en cursiva"               │
+│   [Llamar] [matches] [gaps]             │
+```
+
+El `▌` es un `border-left: 3px solid` en color según estado:
+- gold `#c9a84c` → pendiente de revisar
+- `--slate-edge` → analizado
+- `oklch(0.75 0.18 145)` verde → Llamar
+- `oklch(0.65 0.22 25)` rojo → No llamar
+
+El score **no** va en un cuadro con label. Va tipográfico: número grande (`font-display text-5xl`) con `/100` chico al lado, sin borde, sin background.
+
+### Vacancy list → tabla operativa
+
+```
+ANTES (cards con shadow):
+┌──────────────────────────────────────────┐
+│ Desarrollador Frontend React             │
+│ Asunción · Presencial · 12/06/2026       │
+│ link...                    [Postulantes] │
+└──────────────────────────────────────────┘
+
+DESPUÉS (tabla con bordes hairline):
+──────────────────────────────────────────────
+ Título                  Lugar     CVs   Acción
+──────────────────────────────────────────────
+ Desarrollador Frontend  Asunción   4     Ver →
+ Analista Contable       Remoto     0     Ver →
+──────────────────────────────────────────────
+```
+
+Tabla con `border-collapse`, `border-color: rgba(255,255,255,0.08)`, sin rounded corners, sin hover shadow — hover solo cambia el background de la fila.
+
+### Lo que se elimina
+
+- Ambient blobs (`<div className="absolute ... blur-[160px]">`) — sacar de `RecruiterPanel`, dejar solo en `TokenLogin` donde cumple función de orientar al visitante nuevo
+- Grid decorativo (líneas de fondo) — solo en `TokenLogin`
+- `text-[11px] uppercase tracking-[0.2em]` como label de TODAS las secciones — reservar solo para labels de datos (score, fecha, estado), no para encabezados de panel
+
+### El riesgo de diseño (la apuesta)
+
+El panel de postulantes después del análisis muestra un **resumen ejecutivo de la IA**. En el diseño actual es un card más, con blobs y glass. La apuesta: convertirlo en el elemento más austero de la pantalla — fondo completamente negro `#0a0a0a`, sin bordes, sin glass, solo tipografía grande Playfair Display en `text-white/85`, con la recomendación principal en una sola línea grande al centro. Todo lo demás (callList, redFlag) en texto pequeño debajo. La austeridad le da más peso que cualquier card decorado.
 
 ---
 

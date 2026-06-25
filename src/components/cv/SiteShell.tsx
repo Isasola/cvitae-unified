@@ -6,6 +6,7 @@ import { Logo, GrowthLine } from './visuals'
 const navLinks = [
   { href: '/oportunidades', label: 'Oportunidades' },
   { href: '/mi-carrera', label: 'Mi carrera' },
+  { href: '/demo', label: 'Demo' },
   { href: '/blog', label: 'Blog' },
   { href: '/empresas', label: 'Para empresas' },
 ]

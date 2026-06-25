@@ -118,8 +118,7 @@ export default function BatchAnalysis() {
     analytics.batchStarted(candidates.length)
     const updated = [...candidates]
     try {
-      for (let i = 0; i < updated.length; i++) {
-        const c = updated[i]
+      await Promise.all(updated.map(async (c, i) => {
         setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'extracting' } : x))
         const text = await extractTextFromFile(c.file)
         setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'analyzing', text } : x))
@@ -148,7 +147,7 @@ export default function BatchAnalysis() {
         })
         setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'done', result } : x))
         updated[i] = { ...updated[i], status: 'done', result }
-      }
+      }))
       const processedCandidates = updated.filter(c => c.status === 'done').map(c => ({
         name: c.result.candidateName || c.file.name,
         fitScore: c.result.fitScore,
