@@ -1,7 +1,8 @@
 import { Handler } from "@netlify/functions"
 import { makeSupabaseAdmin } from "./_supabase"
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "cvitae2026admin"
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
+if (!ADMIN_PASSWORD) throw new Error("ADMIN_PASSWORD env var not configured")
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }

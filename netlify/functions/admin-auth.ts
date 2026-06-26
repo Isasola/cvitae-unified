@@ -3,7 +3,8 @@ import { Handler } from "@netlify/functions"
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
 
-  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "cvitae2026admin"
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
+  if (!ADMIN_PASSWORD) return { statusCode: 500, body: JSON.stringify({ error: "Server misconfigured" }) }
   const { password } = JSON.parse(event.body || "{}")
 
   if (password === ADMIN_PASSWORD) {

@@ -6,3 +6,16 @@ dist/
 
 # Local Netlify folder
 .netlify
+
+# IDE / tooling
+.claude/
+.superpowers/
+
+# Lockfiles alternativos (usamos pnpm)
+package-lock.json
+deno.lock
+
+# Archivos locales de dev
+start.bat
+scrapers/_test_count.py
+VITE_SUPABASE_URL=*.txt

@@ -6,8 +6,15 @@ const handler: Handler = async (event) => {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
   }
 
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
+  if (!ADMIN_PASSWORD) return { statusCode: 500, body: JSON.stringify({ error: "Server misconfigured" }) }
+
   try {
-    const { email, token_balance, plan_type } = JSON.parse(event.body || "{}")
+    const { password, email, token_balance, plan_type } = JSON.parse(event.body || "{}")
+
+    if (password !== ADMIN_PASSWORD) {
+      return { statusCode: 401, body: JSON.stringify({ error: "No autorizado" }) }
+    }
 
     if (!email) {
       return { statusCode: 400, body: JSON.stringify({ error: "Email is required" }) }

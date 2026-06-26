@@ -4,13 +4,16 @@ Plataforma de inteligencia de carrera con IA para Paraguay y LatAm. Conecta cand
 
 **Stack:** React 19 + Vite 7 + Wouter · Tailwind CSS v4 · Supabase (Postgres + Auth) · Netlify Functions · AWS Bedrock (Claude Sonnet 4.6) · Resend
 
+**Rama de producción:** `feature/aws-migration` (Netlify apunta aquí, no a `main`)
+
 ---
 
 ## Estrategia de negocio
 
-- **B2C:** Gratuito durante beta — objetivo: construir base de candidatos y generar tráfico
-- **B2B:** USD 79/mes — concentración de ingresos; acceso a pool de talento enriquecido con badges de competencias
-- **Pricing UI:** Sin cambios hasta ~julio 2026 (pendiente intel competitivo Moonshot Paraguay)
+- **B2C:** Beta cerrada — formulario en landing → `beta_waitlist` → admin aprueba manualmente
+- **B2B:** USD por token — acceso con código `REC-XXXXX-2026` creado desde el admin
+- **Pro B2C:** USD 9/mes via WhatsApp (`595992954169`) — activa límites de matching y CV Vivo ilimitados
+- **Pricing UI:** Sin cambios hasta ~julio 2026
 
 ---
 
@@ -34,206 +37,78 @@ Candidato sube CV → Score ATS + matching de vacantes
 
 ## B2C — Candidatos (`/mi-carrera/*`)
 
-| Feature | Ruta | Estado |
-|---|---|---|
-| Score de empleabilidad ATS (0–100) | `/mi-carrera/analisis` | ✅ |
-| Matching con oportunidades (embeddings) | `/mi-carrera/oportunidades` | ✅ |
-| CV Vivo — adaptado por IA a cada vacante | `/mi-carrera/cv` | ✅ |
-| CV Vivo — modo custom (pegar vacante externa) | `/mi-carrera/cv` | ✅ (guarda en opportunities con `source=imported_b2c`) |
-| Alertas de empleo por keyword matching | `/mi-carrera/alertas` | ✅ |
-| Toggle de alertas por email semanal | `/mi-carrera/alertas` | ✅ (requiere `is_subscribed` en `user_master_profiles`) |
-| Perfil B2C con habilidades, experiencia, etc. | `/mi-carrera/perfil` | ✅ |
-| Tests de competencias opcionales (Verificate) | `/mi-carrera/verificate` | ✅ (Atención al Cliente · Ventas · badge en `profile_data.badges`) |
+| Feature | Estado |
+|---|---|
+| Score de empleabilidad ATS (0–100) | ✅ |
+| Matching con oportunidades — 1/día free, ilimitado Pro | ✅ |
+| CV Vivo adaptado por IA — 1/día free, ilimitado Pro | ✅ |
+| Ruta de carrera (6 opciones) + cursos contextuales | ✅ |
+| Alertas de empleo por keyword | ✅ |
+| Tests de competencias (Verificate) + badges | ✅ |
 
 ---
 
 ## B2B — Empresas (`/empresas/*`)
 
-| Feature | Ruta | Estado |
-|---|---|---|
-| Acceso con token (REC-XXXXX-2026) | `/empresas` | ✅ |
-| Análisis individual de CV (ATS score) | `/empresas` → tab Analizar | ✅ |
-| Análisis masivo de hasta 30 CVs | `/empresas/masivo` | ✅ (Promise.allSettled — ~3s paralelo) |
-| Historial de análisis con estrellas | `/empresas` → tab Historial | ✅ |
-| Comparación Top 3 entre candidatos | `/empresas` → Historial | ✅ |
-| Crear vacante con link de postulación propio | `/empresas` → tab Mis Vacantes | ✅ |
-| Vacante B2B también aparece en matching B2C | automático al crear | ✅ |
-| Lista de postulantes por vacante | `/empresas` → Mis Vacantes → Postulantes | ✅ |
-| Análisis automático de todos los postulantes | `/empresas` → Postulantes → "Analizar con IA" | ✅ |
-| Ranking con fit score (0–100) + recomendación | idem | ✅ (Llamar / Considerar / No llamar) |
-| Resumen ejecutivo de la IA (top pick, red flags) | idem | ✅ |
-| Filtro por recomendación | idem | ✅ |
-| Ver skills que encajan / skills que faltan | idem | ✅ |
-| Badges de competencias verificadas del candidato | `/empresas/masivo` + postulantes | ✅ (render listo; se llena cuando candidato tiene perfil vinculado) |
-
----
-
-## Demo pública
-
-`/demo` — Página educativa sin conexión a BD, con dos tabs:
-- **Candidato:** perfil de Gabriela Romero, score 71/100, 4 matcheos, 2 cursos recomendados
-- **Empresa:** ranking de 5 CVs para "Ejecutivo/a de Ventas — Tigo Paraguay", accordeon con fortalezas/gaps, resumen ejecutivo IA, badges
-
----
-
-## Flujo de postulación via vacante B2B
-
-1. Empresa crea vacante en panel → genera `/vacante/:slug`
-2. Comparte el link (WhatsApp, email, redes)
-3. Candidato abre la página, completa nombre + email + sube PDF + carta opcional
-4. Al enviar:
-   - CV se extrae a texto plano (pdf-parse)
-   - Se guarda en `vacancy_applications` con cv_text
-   - Se hace upsert en `user_master_profiles` (candidato queda en la base B2C)
-   - Se genera magic link via Supabase Admin API
-   - Resend envía email con asunto "Tu acceso a CVitae está listo ✦"
-5. Empresa hace click en "Analizar X CVs con IA" → todos se procesan en paralelo via Bedrock
-
----
-
-## Verificate — Sistema de badges de competencias
-
-Tests opcionales para candidatos B2C. Completamente desacoplado del flujo de creación de perfil.
-
-- **Áreas disponibles:** Atención al Cliente · Ventas
-- **Formato:** 15 preguntas (situacionales + aptitud + autoconocimiento), ~25 min
-- **Aprobación:** score ≥ 70/100
-- **Almacenamiento:** `user_master_profiles.profile_data.badges[]` — array con `{ area, score, passed_at }`
-- **Visibilidad:** badge aparece en perfil B2C y en panel B2B cuando el candidato tiene perfil vinculado
-- **Constraint crítico:** el flujo de 4 pasos de ProfileBuilder no cambia
-
----
-
-## Funciones serverless (`netlify/functions/`)
-
-| Función | Descripción |
+| Feature | Estado |
 |---|---|
-| `analyze-cv-candidate.ts` | Análisis individual (modo `analyze`) y batch por vacante (modo `batch_analyze`) |
-| `analyze-vacancy-applicants.ts` | Analiza todos los postulantes de una vacante en paralelo + genera resumen ejecutivo |
-| `compare-candidates.ts` | Comparación Top 3 desde historial (modo legacy) + batch_summary |
-| `create-vacancy.ts` | Crea vacante en `recruiter_vacancies` y la espeja en `opportunities` |
-| `extract-pdf-text.ts` | Extrae texto de PDF (base64 → pdf-parse) |
-| `generate-cv-vivo.ts` | Genera CV adaptado por IA; guarda vacantes externas en `opportunities` |
-| `submit-lead.ts` | Dos flujos: lead B2B y postulación via vacante (guarda en `vacancy_applications`, envía magic link) |
-| `validate-recruiter-token.ts` | Valida token, guarda análisis, historial, toggle estrella, lista vacantes, lista postulantes |
-| `analyze-recruiters-batch.ts` | Análisis masivo de lote desde `/empresas/masivo` — Promise.allSettled paralelo |
-| `gemini-courses.ts` | Recomendación de cursos para candidatos según perfil y ruta de carrera |
+| Acceso con token REC-XXXXX-2026 | ✅ |
+| Análisis individual + masivo (hasta 30 CVs) | ✅ |
+| Vacante con link de postulación propio | ✅ |
+| Ranking IA de postulantes + fit score | ✅ |
+| Historial + comparación Top 3 | ✅ |
 
 ---
 
-## Base de datos (Supabase)
+## Admin OPS Console (`/admin`)
 
-### Tablas principales
+Panel Briefing Room con autenticación por `ADMIN_PASSWORD`. Todas las operaciones usan service role key via `admin-data.ts` (no anon key — RLS no aplica).
 
-| Tabla | Descripción |
-|---|---|
-| `user_master_profiles` | Perfiles B2C. Columnas clave: `user_id`, `email`, `full_name`, `profile_data` (jsonb — incluye `habilidades`, `experiencia`, `badges[]`), `is_subscribed` |
-| `opportunities` | Pool de oportunidades. Fuentes: `scraper` (Python), `recruiter_b2b` (panel empresa), `imported_b2c` (vacante externa pegada en CV Vivo). `is_active=false` para importadas pendientes de validación |
-| `recruiter_tokens` | Tokens de acceso B2B. Columnas: `access_token`, `token_balance`, `plan_type`, `is_active` |
-| `recruiter_vacancies` | Vacantes publicadas por empresas. Columnas: `title`, `company`, `slug`, `recruiter_token_id`, `description`, `requirements`, `location`, `modality`, `rubro` |
-| `vacancy_applications` | Postulantes por vacante. Columnas: `vacancy_id`, `name`, `email`, `cv_text`, `cv_file_name`, `cover_letter`, `ats_score`, `fit_score`, `recommendation`, `ai_summary`, `strengths`, `key_matches`, `key_gaps`, `analyzed_at` |
-| `recruiter_analyses` | Historial de análisis individuales del panel B2B |
-| `generated_cvs` | Caché de CVs generados (7 días) por `user_id` + `vacancy_id` |
-| `content_hub` | Blog y artículos (tipo `blog`) |
-| `newsletter_subscribers` | Suscriptores del newsletter |
-
-### Migraciones pendientes
-
-Ver `supabase/pending-migrations.sql`:
-- `ALTER TABLE user_master_profiles ADD COLUMN IF NOT EXISTS is_subscribed`
-- `ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS description`
-- `ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS recruiter_vacancy_id`
-- `ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS source`
+Tabs: **Brief** (métricas del día) · **Usuarios** (toggle PRO/FREE, TEST/REAL) · **Beta/Leads** (gestión lista de espera) · **Contenido** · **Tokens B2B** · **Skills IA**
 
 ---
 
-## Variables de entorno
+## Levantar localmente (Windows)
 
-### Frontend (`VITE_*`)
+Dos terminales separadas — NO usar `netlify dev` solo (causa EBUSY en Windows):
+
+```bash
+# Terminal 1
+npm run dev          # → http://localhost:5173
+
+# Terminal 2
+netlify functions:serve   # → http://localhost:9999/.netlify/functions/*
 ```
+
+---
+
+## Variables de entorno requeridas
+
+```
+# Frontend
 VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
-VITE_EMAILJS_SERVICE_ID
-VITE_EMAILJS_TEMPLATE_ID
-VITE_EMAILJS_PUBLIC_KEY
-```
 
-### Backend (Netlify / Lambda)
-```
-ANTHROPIC_API_KEY          # fallback directo (no usado si Bedrock está activo)
-CVITAE_AWS_ACCESS_KEY_ID   # credenciales IAM para Bedrock (usuario: cvitae-dev)
-CVITAE_AWS_SECRET_ACCESS_KEY
-CVITAE_AWS_REGION          # us-east-1
+# Backend (Netlify)
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
-RESEND_API_KEY             # envío de emails transaccionales
-SITE_URL                   # https://cvitae.lat
+CVITAE_AWS_ACCESS_KEY_ID     # NO usar AWS_ACCESS_KEY_ID — reservada por Netlify
+CVITAE_AWS_SECRET_ACCESS_KEY
+CVITAE_AWS_REGION=us-east-1
+ADMIN_PASSWORD
+RESEND_API_KEY
+GEMINI_API_KEY
+
+# GitHub Actions (scrapers)
+JOOBLE_API_KEY
 ```
 
-> **Nota Netlify:** `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY` son reservadas por Netlify. Se usan `CVITAE_AWS_*`.
-
 ---
 
-## DNS — Resend (`send.cvitae.lat`)
+## Scrapers
 
-Para que los emails transaccionales lleguen desde `@cvitae.lat`:
+Pool de ~34 scrapers Python en `scrapers/`, cron diario 10:00 UTC via GitHub Actions.
 
-| Tipo | Host | Valor |
-|---|---|---|
-| MX | `send` | `feedback-smtp.us-east-1.amazonses.com` (priority 10) |
-| TXT (SPF) | `send` | `v=spf1 include:amazonses.com ~all` |
-| CNAME (DKIM) | ya configurado | — |
+Fuentes principales: Computrabajo, BuscoJobs, Jooble, Talent.com, UNJobs, Remotive, Himalayas, Arbeitnow, Jobicy, WeWorkRemotely + sector público/financiero/salud/educación Paraguay.
 
----
-
-## Pendientes técnicos
-
-| Tarea | Prioridad | Descripción |
-|---|---|---|
-| Link a /demo desde la landing | Alta | La página existe y funciona pero ningún lugar del sitio lleva a ella — agregar enlace en navbar (SiteShell) o en la sección Hero/ComoFunciona |
-| LinkedIn n8n OAuth | Media | Setup en localhost:5678, Client ID: `77az9mk9lw0ygi` |
-| Badge en flujo vacante | Media | Incluir `profile_data.badges` en payload a reclutador cuando candidato tiene perfil vinculado (`VacantePage.tsx` + `submit-lead.ts`) |
-| Test e2e `/vacante/:slug` | Alta | Verificar flujo completo: postulación → email magic link → dashboard B2C |
-| Stripe B2C Pro | Baja | No urgente mientras B2C es free |
-| Migración Lambda | Baja | Scripts existen (`scripts/deploy-lambda.sh`), sin testear |
-| SEO completo | Media | react-helmet-async en todas las páginas, GA4, eventos custom |
-
----
-
-## Plan de migración AWS
-
-| Fase | Estado | Descripción |
-|---|---|---|
-| Fase 1 — Bedrock | ✅ | Todas las funciones usan AWS Bedrock |
-| Fase 2 — S3 | ⏳ | Reemplazar base64 por presigned URLs para PDFs |
-| Fase 3 — Lambda | ⏳ | Mover funciones pesadas (batch analysis) a Lambda |
-| Fase 4 — SEO | ⏳ | Helmet, GA4, sitemap dinámico |
-| Fase 5 — Rediseño | ✅ Parcial | Sistema de diseño aplicado a B2B y B2C |
-
----
-
-## Scraping (Python)
-
-El pool de oportunidades se alimenta de:
-1. **Scrapers Python** (`source = 'scraper'`) — bolsas de empleo locales, LinkedIn, clasificados
-2. **Vacantes B2B** (`source = 'recruiter_b2b'`) — creadas desde el panel empresa, visibles en B2C inmediatamente
-3. **Vacantes externas B2C** (`source = 'imported_b2c'`, `is_active = false`) — pegadas en CV Vivo, cola para validación
-
-Campos mínimos para insertar: `titulo`, `organization`, `rubro`, `tags`, `application_url`, `is_active = true`, `source = 'scraper'`.
-
----
-
-## Comandos
-
-```bash
-pnpm dev       # Dev server en http://localhost:3000
-pnpm build     # Build de producción
-pnpm preview   # Preview local del build
-```
-
-Post-build (Netlify CI):
-```bash
-node scripts/prerender.mjs         # Pre-render blog y vacantes para SEO
-node scripts/generate-sitemap.mjs  # Genera sitemap.xml
-node scripts/generate-robots.mjs   # Genera robots.txt
-```
+Ver `.github/workflows/scrapers.yml` para la lista completa.

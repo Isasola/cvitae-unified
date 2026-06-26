@@ -293,7 +293,7 @@ export default function Admin() {
       const response = await fetch('/.netlify/functions/generate-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: tokenEmail, token_balance: tokenBalance, plan_type: tokenPlan }),
+        body: JSON.stringify({ password: adminPasswordRef.current, email: tokenEmail, token_balance: tokenBalance, plan_type: tokenPlan }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Error generando token')
