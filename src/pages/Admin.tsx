@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle, AlertCircle, X, Eye, EyeOff, Edit, Trash2, Save, Plus } from 'lucide-react'
@@ -52,15 +52,16 @@ function SignalLines() {
     <svg
       className="absolute inset-0 w-full h-full pointer-events-none"
       aria-hidden="true"
+      viewBox="0 0 800 400"
       preserveAspectRatio="none"
     >
       <defs>
-        <linearGradient id="sl1" x1="0" x2="1">
+        <linearGradient id="sl1" x1="0" x2="1" y1="0" y2="0">
           <stop offset="0%" stopColor="#c9a84c" stopOpacity="0" />
           <stop offset="40%" stopColor="#c9a84c" stopOpacity="0.18" />
           <stop offset="100%" stopColor="#c9a84c" stopOpacity="0" />
         </linearGradient>
-        <linearGradient id="sl2" x1="0" x2="1">
+        <linearGradient id="sl2" x1="0" x2="1" y1="0" y2="0">
           <stop offset="0%" stopColor="#c9a84c" stopOpacity="0" />
           <stop offset="60%" stopColor="#c9a84c" stopOpacity="0.08" />
           <stop offset="100%" stopColor="#c9a84c" stopOpacity="0" />
@@ -73,9 +74,9 @@ function SignalLines() {
           </feMerge>
         </filter>
       </defs>
-      {/* Line 1 — fast, brighter */}
+      {/* Line 1 — fast, brighter — y≈25% of 400 = 100 */}
       <path
-        d="M -50 25% C 15% 20%, 30% 35%, 50% 28% S 75% 18%, 110% 22%"
+        d="M -50 100 C 120 80, 240 140, 400 112 S 600 72, 880 88"
         fill="none"
         stroke="url(#sl1)"
         strokeWidth="1"
@@ -84,23 +85,23 @@ function SignalLines() {
         <animate attributeName="opacity" values="0.6;1;0.6" dur="3.2s" repeatCount="indefinite" />
         <animate
           attributeName="d"
-          values="M -50 25% C 15% 20%, 30% 35%, 50% 28% S 75% 18%, 110% 22%;M -50 28% C 15% 24%, 30% 30%, 50% 32% S 75% 22%, 110% 25%;M -50 25% C 15% 20%, 30% 35%, 50% 28% S 75% 18%, 110% 22%"
+          values="M -50 100 C 120 80, 240 140, 400 112 S 600 72, 880 88;M -50 112 C 120 96, 240 120, 400 128 S 600 88, 880 100;M -50 100 C 120 80, 240 140, 400 112 S 600 72, 880 88"
           dur="8s"
           repeatCount="indefinite"
         />
       </path>
-      {/* Line 2 — slower, dimmer */}
+      {/* Line 2 — slower, dimmer — y≈55% of 400 = 220 */}
       <path
-        d="M -50 55% C 20% 50%, 40% 62%, 60% 55% S 85% 48%, 110% 52%"
+        d="M -50 220 C 160 200, 320 248, 480 220 S 680 192, 880 208"
         fill="none"
         stroke="url(#sl2)"
         strokeWidth="1"
       >
         <animate attributeName="opacity" values="0.3;0.7;0.3" dur="5.5s" repeatCount="indefinite" />
       </path>
-      {/* Line 3 — very slow, near-invisible baseline */}
+      {/* Line 3 — very slow, near-invisible — y≈75% of 400 = 300 */}
       <path
-        d="M -50 75% C 25% 72%, 50% 80%, 75% 74% S 95% 70%, 110% 73%"
+        d="M -50 300 C 200 288, 400 320, 600 296 S 760 280, 880 292"
         fill="none"
         stroke="#c9a84c"
         strokeWidth="0.5"
@@ -115,6 +116,7 @@ function SignalLines() {
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState('')
+  const adminPasswordRef = useRef('')
   const [activeTab, setActiveTab] = useState<'brief' | 'usuarios' | 'beta' | 'contenido' | 'tokens' | 'skills'>('brief')
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -167,11 +169,12 @@ export default function Admin() {
   }
 
   const loadSubscribers = async () => {
-    const { data } = await supabase
-      .from('user_master_profiles')
-      .select('id, email, full_name, professional_title, skills, seniority, is_subscribed, created_at, user_id, is_test, user_type')
-      .order('created_at', { ascending: false })
-    if (data) setSubscribers(data as Subscriber[])
+    try {
+      const json = await adminFetch('list_users')
+      setSubscribers(json.data as Subscriber[])
+    } catch (err: any) {
+      setNotification({ type: 'error', message: `Error cargando usuarios: ${err.message}` })
+    }
   }
 
   const loadSkillCandidates = async () => {
@@ -180,17 +183,12 @@ export default function Admin() {
   }
 
   const loadMetrics = async () => {
-    const [usersRes, oppsRes, subsRes] = await Promise.all([
-      supabase.from('user_master_profiles').select('id', { count: 'exact', head: true }),
-      supabase.from('content_hub').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('tipo', 'oportunidad'),
-      supabase.from('user_master_profiles').select('id', { count: 'exact', head: true }).eq('is_subscribed', true)
-    ])
-    setMetrics({
-      usuarios: usersRes.count || 0,
-      matches: 0,
-      oportunidades: oppsRes.count || 0,
-      suscriptores: subsRes.count || 0
-    })
+    try {
+      const json = await adminFetch('metrics')
+      setMetrics({ usuarios: json.usuarios, matches: 0, oportunidades: json.oportunidades, suscriptores: json.suscriptores })
+    } catch {
+      // metrics failure is non-fatal, keep defaults
+    }
   }
 
   const loadTokens = async () => {
@@ -199,10 +197,24 @@ export default function Admin() {
   }
 
   const loadBeta = async () => {
-    const { data: bw } = await supabase.from('beta_waitlist').select('*').order('created_at', { ascending: false })
-    setBetaList(bw || [])
-    const { data: rl } = await supabase.from('recruiter_leads').select('*').order('created_at', { ascending: false })
-    setLeads(rl || [])
+    try {
+      const json = await adminFetch('list_beta')
+      setBetaList(json.betaList)
+      setLeads(json.leads)
+    } catch {
+      // beta load failure non-fatal
+    }
+  }
+
+  const adminFetch = async (action: string, payload?: any) => {
+    const res = await fetch('/.netlify/functions/admin-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: adminPasswordRef.current, action, payload }),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error || 'Error del servidor')
+    return json
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -216,6 +228,7 @@ export default function Admin() {
       })
       const data = await response.json()
       if (response.ok && data.authenticated) {
+        adminPasswordRef.current = password
         setIsAuthenticated(true)
         setNotification({ type: 'success', message: 'Bienvenido al OPS Console' })
       } else {
@@ -243,14 +256,22 @@ export default function Admin() {
   }
 
   const toggleSubscription = async (userId: string, currentValue: boolean) => {
-    await supabase.from('user_master_profiles').update({ is_subscribed: !currentValue }).eq('user_id', userId)
-    loadSubscribers()
-    setNotification({ type: 'success', message: `Plan ${!currentValue ? 'PRO activado' : 'revertido a FREE'}` })
+    try {
+      await adminFetch('toggle_subscribed', { userId, value: !currentValue })
+      loadSubscribers()
+      setNotification({ type: 'success', message: `Plan ${!currentValue ? 'PRO activado' : 'revertido a FREE'}` })
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message })
+    }
   }
 
   const toggleTestFlag = async (userId: string, currentValue: boolean) => {
-    await supabase.from('user_master_profiles').update({ is_test: !currentValue }).eq('user_id', userId)
-    loadSubscribers()
+    try {
+      await adminFetch('toggle_test', { userId, value: !currentValue })
+      loadSubscribers()
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message })
+    }
   }
 
   const approveSkill = async (id: number) => {
@@ -313,9 +334,13 @@ export default function Admin() {
   }
 
   const markBetaInvited = async (id: string) => {
-    await supabase.from('beta_waitlist').update({ status: 'invited', invited_at: new Date().toISOString() }).eq('id', id)
-    loadBeta()
-    setNotification({ type: 'success', message: 'Marcado como invitado' })
+    try {
+      await adminFetch('mark_beta_invited', { id })
+      loadBeta()
+      setNotification({ type: 'success', message: 'Marcado como invitado' })
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message })
+    }
   }
 
   // ── LOGIN SCREEN ──────────────────────────────────────────────────────────
