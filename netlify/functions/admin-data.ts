@@ -52,6 +52,7 @@ const handler: Handler = async (event) => {
     // ── WRITES ───────────────────────────────────────────────────────────────
 
     if (action === "toggle_subscribed") {
+      if (!payload?.userId) return { statusCode: 400, body: JSON.stringify({ error: "userId requerido" }) }
       const { userId, value } = payload
       const { error } = await supabase
         .from("user_master_profiles")
@@ -62,6 +63,7 @@ const handler: Handler = async (event) => {
     }
 
     if (action === "toggle_test") {
+      if (!payload?.userId) return { statusCode: 400, body: JSON.stringify({ error: "userId requerido" }) }
       const { userId, value } = payload
       const { error } = await supabase
         .from("user_master_profiles")
@@ -72,6 +74,7 @@ const handler: Handler = async (event) => {
     }
 
     if (action === "mark_beta_invited") {
+      if (!payload?.id) return { statusCode: 400, body: JSON.stringify({ error: "id requerido" }) }
       const { id } = payload
       const { error } = await supabase
         .from("beta_waitlist")

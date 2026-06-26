@@ -143,6 +143,11 @@ export default function Admin() {
   const [betaList, setBetaList] = useState<any[]>([])
   const [leads, setLeads] = useState<any[]>([])
 
+  // Beta suggestion box state
+  const [suggestionMsg, setSuggestionMsg] = useState('')
+  const [suggestionType, setSuggestionType] = useState<'feedback' | 'bug' | 'idea'>('feedback')
+  const [sendingSuggestion, setSendingSuggestion] = useState(false)
+
   const NAV_ITEMS = [
     { id: 'brief', label: 'Brief del día', dotColor: 'bg-emerald-400', badge: null },
     { id: 'usuarios', label: 'Usuarios', dotColor: 'bg-[#c9a84c]', badge: metrics.usuarios.toString() },
@@ -171,7 +176,7 @@ export default function Admin() {
   const loadSubscribers = async () => {
     try {
       const json = await adminFetch('list_users')
-      setSubscribers(json.data as Subscriber[])
+      setSubscribers((json.data ?? []) as Subscriber[])
     } catch (err: any) {
       setNotification({ type: 'error', message: `Error cargando usuarios: ${err.message}` })
     }
@@ -199,21 +204,31 @@ export default function Admin() {
   const loadBeta = async () => {
     try {
       const json = await adminFetch('list_beta')
-      setBetaList(json.betaList)
-      setLeads(json.leads)
+      setBetaList(json.betaList ?? [])
+      setLeads(json.leads ?? [])
     } catch {
       // beta load failure non-fatal
     }
   }
 
   const adminFetch = async (action: string, payload?: any) => {
-    const res = await fetch('/.netlify/functions/admin-data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: adminPasswordRef.current, action, payload }),
-    })
-    const json = await res.json()
-    if (!res.ok) throw new Error(json.error || 'Error del servidor')
+    let res: Response
+    try {
+      res = await fetch('/.netlify/functions/admin-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPasswordRef.current, action, payload: payload ?? null }),
+      })
+    } catch {
+      throw new Error('Sin conexión con el servidor')
+    }
+    let json: any
+    try {
+      json = await res.json()
+    } catch {
+      throw new Error(`Error del servidor (${res.status})`)
+    }
+    if (!res.ok) throw new Error(json.error || `Error ${res.status}`)
     return json
   }
 
@@ -340,6 +355,26 @@ export default function Admin() {
       setNotification({ type: 'success', message: 'Marcado como invitado' })
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message })
+    }
+  }
+
+  const sendSuggestion = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!suggestionMsg.trim()) return
+    setSendingSuggestion(true)
+    try {
+      const res = await fetch('/.netlify/functions/submit-suggestion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: suggestionMsg.trim(), type: suggestionType, email: 'admin@cvitae.lat' }),
+      })
+      if (!res.ok) throw new Error('Error al enviar')
+      setSuggestionMsg('')
+      setNotification({ type: 'success', message: 'Sugerencia enviada a contacto@cvitae.lat' })
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message })
+    } finally {
+      setSendingSuggestion(false)
     }
   }
 
@@ -494,6 +529,47 @@ export default function Admin() {
                         <span className="text-emerald-400">◆</span>
                         <span className="text-sm text-[rgba(232,232,224,0.5)]">Sistema operativo · scrapers activos · emails verificados</span>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Beta suggestion box */}
+                  <div className="mt-6 border border-white/[0.07]">
+                    <div className="px-5 py-3 border-b border-white/[0.07] flex items-center justify-between">
+                      <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>BUZÓN BETA</p>
+                      <span style={{ fontFamily: MONO, fontSize: '9px', color: 'rgba(232,232,224,0.2)', letterSpacing: '0.1em' }}>→ contacto@cvitae.lat</span>
+                    </div>
+                    <div className="p-5">
+                      <form onSubmit={sendSuggestion} className="space-y-3">
+                        <div className="flex gap-2">
+                          {(['feedback', 'bug', 'idea'] as const).map(t => (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => setSuggestionType(t)}
+                              className={`text-[10px] px-2.5 py-1 border transition-colors ${suggestionType === t ? 'border-[#c9a84c]/50 text-[#c9a84c]' : 'border-white/[0.07] text-[rgba(232,232,224,0.3)] hover:border-white/20'}`}
+                              style={{ fontFamily: MONO, letterSpacing: '0.1em' }}
+                            >
+                              {t === 'feedback' ? '📝 FEEDBACK' : t === 'bug' ? '🐛 BUG' : '💡 IDEA'}
+                            </button>
+                          ))}
+                        </div>
+                        <textarea
+                          value={suggestionMsg}
+                          onChange={e => setSuggestionMsg(e.target.value)}
+                          placeholder="Escribí tu sugerencia, bug o idea para el beta..."
+                          rows={3}
+                          className={`${inputCls} resize-none`}
+                          style={{ fontFamily: MONO, fontSize: '12px' }}
+                        />
+                        <button
+                          type="submit"
+                          disabled={sendingSuggestion || !suggestionMsg.trim()}
+                          className="text-xs bg-[#c9a84c] text-[#080808] font-semibold px-4 py-2 hover:bg-[#e6cf8a] transition-colors disabled:opacity-40"
+                          style={{ fontFamily: MONO }}
+                        >
+                          {sendingSuggestion ? 'Enviando...' : 'Enviar →'}
+                        </button>
+                      </form>
                     </div>
                   </div>
                 </div>

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       scraper:
-        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi | arbeitnow | himalayas | jobicy | weworkremotely | sicca | ministerios | bancos | cooperativas | callcenters | seguros | universidades | constructoras | vierci | cartes | hospitales | foros | supermercados | ongs | tech_local | jooble | talentcom | googlejobs'
+        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi | arbeitnow | himalayas | jobicy | weworkremotely | sicca | ministerios | bancos | cooperativas | callcenters | seguros | universidades | constructoras | vierci | cartes | hospitales | foros | supermercados | ongs | tech_local | jooble | talentcom | googlejobs | automotriz | farmacias | gastronomia | agroindustria | frigorificos | industria | telecomunicaciones | medios | retail_malls | logistica | energia | puertos | cde_frontera | workday | bolsas_locales'
         required: false
         default: 'all'
 
@@ -241,5 +241,110 @@ jobs:
       - name: Google Jobs v3 — Playwright scraper Paraguay
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'googlejobs' || github.event_name == 'schedule' }}
         run: python scrapers/googlejobs_v3.py
+        continue-on-error: true
+
+      # ── Paraguay — automotriz ──────────────────────────────────────────────
+
+      - name: Automotriz — Toyota, Nissen, Ford, VW, Kia, Hyundai, Honda, BMW, Diesa
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'automotriz' || github.event_name == 'schedule' }}
+        run: python scrapers/automotriz_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — salud / farmacias ──────────────────────────────────────
+
+      - name: Farmacias — Farmacenter, Catedral, Astro, San Roque, Indufar, etc.
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'farmacias' || github.event_name == 'schedule' }}
+        run: python scrapers/farmacias_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — gastronomía y hotelería ───────────────────────────────
+
+      - name: Gastronomía y hoteles — McDonald's, BK, KFC, Bourbon, Granados, NH, Sheraton
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'gastronomia' || github.event_name == 'schedule' }}
+        run: python scrapers/gastronomia_hoteles_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — agroindustria ──────────────────────────────────────────
+
+      - name: Agroindustria — Cargill, Bunge, Lactolanda, Agrofértil, Favero, etc.
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'agroindustria' || github.event_name == 'schedule' }}
+        run: python scrapers/agroindustria_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — frigoríficos e industria cárnica ───────────────────────
+
+      - name: Frigoríficos — COPACAR, Frigo Concepción, Frigo Guaraní, Frigolar, etc.
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'frigorificos' || github.event_name == 'schedule' }}
+        run: python scrapers/frigorificos_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — industria y manufactura ───────────────────────────────
+
+      - name: Industria y manufactura — Cementos, Grupo Casado, Indufar, Mota-Engil, etc.
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'industria' || github.event_name == 'schedule' }}
+        run: python scrapers/industria_manufactura_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — telecomunicaciones ─────────────────────────────────────
+
+      - name: Telecomunicaciones — Tigo, Personal, Claro, Copaco, Pronet
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'telecomunicaciones' || github.event_name == 'schedule' }}
+        run: python scrapers/telecomunicaciones_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — medios de comunicación ────────────────────────────────
+
+      - name: Medios — Última Hora, Telefuturo, SNT, ABC, Monumental, Ñandutí
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'medios' || github.event_name == 'schedule' }}
+        run: python scrapers/medios_comunicacion_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — retail y malls ─────────────────────────────────────────
+
+      - name: Retail y malls — Falabella, Inditex/Zara, Meier, Casa Bahía, Frávega
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'retail_malls' || github.event_name == 'schedule' }}
+        run: python scrapers/retail_malls_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — logística y transporte ────────────────────────────────
+
+      - name: Logística y transporte — DHL, FedEx, UPS, COPA, LATAM, Transchaco
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'logistica' || github.event_name == 'schedule' }}
+        run: python scrapers/logistica_transporte_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — energía y utilities ───────────────────────────────────
+
+      - name: Energía y utilities — ANDE, ESSAP, Petropar, Gas PY, Total Energies
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'energia' || github.event_name == 'schedule' }}
+        run: python scrapers/energia_utilities_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — puertos e importadoras ────────────────────────────────
+
+      - name: Puertos e importadoras — Puerto Asunción, ANNP, Transoceánica, APA
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'puertos' || github.event_name == 'schedule' }}
+        run: python scrapers/puertos_importadoras_scraper.py
+        continue-on-error: true
+
+      # ── Paraguay — Ciudad del Este, frontera y Saltos del Guairá ─────────
+
+      - name: CDE y frontera — Shopping del Este, FOCA, Itaipú, municipios frontera
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'cde_frontera' || github.event_name == 'schedule' }}
+        run: python scrapers/cde_frontera_scraper.py
+        continue-on-error: true
+
+      # ── Multinacionales en Workday (filtradas por Paraguay) ───────────────
+
+      - name: Workday multinacionales — Unilever, Nestlé, P&G, AB InBev, Mondelez, etc.
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'workday' || github.event_name == 'schedule' }}
+        run: python scrapers/workday_multinacionales_scraper.py
+        continue-on-error: true
+
+      # ── Bolsas locales paraguayas ─────────────────────────────────────────
+
+      - name: Bolsas locales — ZonaJobs, Trabajos.com.py, EmpleosPublicos.gov.py, MTESS
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'bolsas_locales' || github.event_name == 'schedule' }}
+        run: python scrapers/bolsas_locales_scraper.py
         continue-on-error: true
 

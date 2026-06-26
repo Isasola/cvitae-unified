@@ -118,7 +118,7 @@ def main():
 
     for code, slug, rubro in CATEGORIES:
         print(f"\nCategoría: {rubro} ({code}/{slug})")
-        for page in range(1, 4):
+        for page in range(1, 6):
             html = fetch_page(code, slug, page)
             if not html:
                 print(f"  página {page}: sin respuesta")

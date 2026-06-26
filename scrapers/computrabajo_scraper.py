@@ -173,7 +173,7 @@ def main():
 
     for slug, rubro in CATEGORIES:
         print(f"\nRastreando: {slug} ({rubro})")
-        jobs = scrape_category(slug, rubro, max_pages=3)
+        jobs = scrape_category(slug, rubro, max_pages=5)
         total_found += len(jobs)
 
         for job in jobs:
