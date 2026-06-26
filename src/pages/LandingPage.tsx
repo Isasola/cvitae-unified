@@ -407,6 +407,112 @@ function Pricing() {
   )
 }
 
+// ─── Beta B2C ─────────────────────────────────────────────────────────────────
+
+function BetaB2CForm() {
+  const [nombre, setNombre] = useState('')
+  const [correo, setCorreo] = useState('')
+  const [sending, setSending] = useState(false)
+  const [status, setStatus] = useState<'idle' | 'success' | 'already' | 'error'>('idle')
+  const [error, setError] = useState('')
+
+  const handleSubmit = async () => {
+    if (!correo.trim()) { setError('El correo es requerido'); return }
+    setSending(true); setError('')
+    try {
+      const res = await fetch('/.netlify/functions/submit-beta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: nombre.trim() || undefined, email: correo.trim(), source: 'landing_b2c' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al enviar')
+      if (data.already) { setStatus('already'); return }
+      setStatus('success')
+    } catch (err: any) {
+      setError(err.message || 'Error al enviar. Intentá de nuevo.')
+      setStatus('error')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <section className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
+      <div className="grid gap-10 lg:grid-cols-[1.1fr_1fr]">
+        <div>
+          <Eyebrow>Beta cerrada — candidatos</Eyebrow>
+          <h2 className="font-display mt-2 max-w-xl text-3xl text-cream sm:text-4xl">
+            Sé de los primeros en usar <em>CVitae</em>.
+          </h2>
+          <p className="mt-4 max-w-lg text-muted-foreground">
+            Plazas limitadas. Te contactamos para coordinar tu acceso.
+          </p>
+          <ul className="mt-6 space-y-2 text-sm text-cream/90">
+            {['Acceso anticipado a todas las funciones', 'Matches con empleos, becas y diplomados', 'CV optimizado por IA para cada vacante'].map((f) => (
+              <li key={f} className="flex items-start gap-2">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#c9a84c]" /> {f}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Beta form */}
+        <div className="glass-card rounded-3xl p-8">
+          {status === 'success' ? (
+            <div className="py-8 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#c9a84c]/40 bg-[#c9a84c]/10">
+                <Check className="h-6 w-6 text-[#c9a84c]" />
+              </div>
+              <h3 className="font-display mt-6 text-xl text-cream">¡Estás en la lista!</h3>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Te escribimos en 48 horas a <strong className="text-white">{correo}</strong>.
+              </p>
+            </div>
+          ) : status === 'already' ? (
+            <div className="py-8 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#c9a84c]/40 bg-[#c9a84c]/10">
+                <Check className="h-6 w-6 text-[#c9a84c]" />
+              </div>
+              <h3 className="font-display mt-6 text-xl text-cream">Ya estás en la lista.</h3>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Te contactamos pronto a <strong className="text-white">{correo}</strong>.
+              </p>
+            </div>
+          ) : (
+            <>
+              <Eyebrow>Solicitar acceso anticipado</Eyebrow>
+              <h3 className="font-display mt-2 text-2xl text-cream">Reservá tu lugar en la Beta.</h3>
+              <div className="mt-6 space-y-3">
+                <input
+                  placeholder="Nombre (opcional)" value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-cream placeholder:text-muted-foreground outline-none focus:border-[#c9a84c]/50 transition"
+                />
+                <input
+                  type="email" placeholder="tu@correo.com" value={correo}
+                  onChange={(e) => setCorreo(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-cream placeholder:text-muted-foreground outline-none focus:border-[#c9a84c]/50 transition"
+                />
+                {error && <p className="text-xs text-red-400">{error}</p>}
+                <button
+                  onClick={handleSubmit} disabled={sending || !correo.trim()}
+                  className="inline-flex w-full h-11 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                >
+                  {sending ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</> : 'Solicitar mi lugar'}
+                </button>
+              </div>
+              <p className="mt-4 text-center text-[11px] text-muted-foreground">
+                Sin compromiso. Te avisamos cuando tu acceso esté listo.
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 // ─── Para Empresas ────────────────────────────────────────────────────────────
 
 function ParaEmpresas() {
@@ -549,6 +655,7 @@ export default function LandingPage() {
         <StatsBar />
         <Analizador />
         <Pricing />
+        <BetaB2CForm />
         <ParaEmpresas />
       </SiteShell>
     </>

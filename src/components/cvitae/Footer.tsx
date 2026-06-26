@@ -41,15 +41,15 @@ export function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-12 mb-16">
           <div className="col-span-2">
             <Link href="/"><Logo size="sm" className="mb-6" /></Link>
-            <p className="text-muted text-sm leading-relaxed max-w-xs mb-6">
+            <p className="text-white/60 text-sm leading-relaxed max-w-xs mb-6">
               Empoderando el talento paraguayo con inteligencia artificial.
               Encontrá tu próximo paso profesional con CVitae.
             </p>
             <div className="flex items-center gap-4">
-              <a href="https://www.linkedin.com/company/cvitae-py/" target="_blank" rel="noopener noreferrer" className="text-muted hover:text-white transition-colors"><Linkedin size={20} /></a>
-              <a href="https://www.facebook.com/profile.php?id=61580756714500" target="_blank" rel="noopener noreferrer" className="text-muted hover:text-white transition-colors"><Facebook size={20} /></a>
-              <a href="https://www.instagram.com/cpdparaguay/" target="_blank" rel="noopener noreferrer" className="text-muted hover:text-white transition-colors"><Instagram size={20} /></a>
-              <a href="https://wa.me/595992954169" target="_blank" rel="noopener noreferrer" className="text-muted hover:text-white transition-colors"><MessageCircle size={20} /></a>
+              <a href="https://www.linkedin.com/company/cvitae-py/" target="_blank" rel="noopener noreferrer" className="text-white/60 hover:text-white transition-colors"><Linkedin size={20} /></a>
+              <a href="https://www.facebook.com/profile.php?id=61580756714500" target="_blank" rel="noopener noreferrer" className="text-white/60 hover:text-white transition-colors"><Facebook size={20} /></a>
+              <a href="https://www.instagram.com/cpdparaguay/" target="_blank" rel="noopener noreferrer" className="text-white/60 hover:text-white transition-colors"><Instagram size={20} /></a>
+              <a href="https://wa.me/595992954169" target="_blank" rel="noopener noreferrer" className="text-white/60 hover:text-white transition-colors"><MessageCircle size={20} /></a>
             </div>
           </div>
           {sections.map((section) => (
@@ -74,7 +74,7 @@ export function Footer() {
           ))}
         </div>
         <div className="border-t border-white/5 pt-8 flex flex-col md:row items-center justify-between gap-6">
-          <div className="flex flex-col md:flex-row items-center gap-4 text-xs text-muted">
+          <div className="flex flex-col md:flex-row items-center gap-4 text-xs text-white/60">
             <p>© {currentYear} CVitae Intelligence Hub. Todos los derechos reservados.</p>
             <span className="hidden md:block">•</span>
             <p className="flex items-center gap-1"><MapPin size={12} /> Asunción, Paraguay</p>
@@ -84,13 +84,13 @@ export function Footer() {
             </a>
             <span className="hidden md:block">•</span>
             <a href="https://wa.me/595992954169" target="_blank" rel="noopener noreferrer"
-              className="text-muted hover:text-gold transition-colors">
+              className="text-white/60 hover:text-gold transition-colors">
               WhatsApp
             </a>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] text-muted uppercase tracking-widest font-medium">Sistemas Operativos</span>
+            <span className="text-[10px] text-white/60 uppercase tracking-widest font-medium">Sistemas Operativos</span>
           </div>
         </div>
       </div>

@@ -302,6 +302,7 @@ export default function Dashboard() {
   const [loadingMatches, setLoadingMatches] = useState(false)
   const [profileSkills, setProfileSkills] = useState<string[]>([])
   const [isSubscribed, setIsSubscribed] = useState(false)
+  const [dailyMatchesUsed, setDailyMatchesUsed] = useState(0)
   const [hasProfile, setHasProfile] = useState<boolean | null>(null)
   const [currentLoaderStep, setCurrentLoaderStep] = useState(0)
   const [courses, setCourses] = useState<CourseRecommendation[]>([])
@@ -362,6 +363,10 @@ export default function Dashboard() {
       const { data: prof } = await supabase.from('user_master_profiles')
         .select('professional_title, profile_data').eq('user_id', user.id).maybeSingle()
       setProfile(prof)
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Asuncion' })
+      const usage = prof?.profile_data?.daily_usage
+      const usedToday = (usage?.date === today) ? (usage?.matches_shown || 0) : 0
+      setDailyMatchesUsed(usedToday)
       if (data.profileSkills?.length > 0) loadGeminiCourses(data.profileSkills, data.matches || [], token, prof?.profile_data?.career_route || '')
     } catch { /* silencioso */ } finally {
       setLoadingMatches(false)
@@ -473,9 +478,27 @@ export default function Dashboard() {
                     <>
                       <OpportunityCard m={matches[0]} featured />
                       <div className="space-y-3">
-                        {matches.slice(1, 5).map((m) => (
+                        {matches.slice(1, isSubscribed ? undefined : 1).map((m) => (
                           <OpportunityCard key={m.id} m={m} />
                         ))}
+                        {!isSubscribed && matches.length > 1 && (
+                          <div className="relative rounded-2xl border border-white/8 overflow-hidden">
+                            <div className="blur-sm pointer-events-none opacity-40 p-5">
+                              <p className="text-cream font-medium">Puesto en {matches[1]?.ubicacion || 'Paraguay'}</p>
+                              <p className="text-sm text-white/40 mt-1">+{matches.length - 1} matches esperándote</p>
+                            </div>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0a0a]/80 p-5 text-center">
+                              <p className="text-cream font-display text-lg">Hay {matches.length - 1} match{matches.length - 1 !== 1 ? 'es' : ''} más hoy.</p>
+                              <p className="mt-1 text-sm text-white/50">Con Pro los ves todos, sin espera.</p>
+                              <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola! Quiero activar CVitae Pro por USD 9/mes.')}`}
+                                target="_blank" rel="noopener noreferrer"
+                                className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-5 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-[#e6cf8a] transition">
+                                Activar Pro — $9/mes
+                              </a>
+                              <p className="mt-2 text-xs text-white/30">o volvé mañana para tu próximo match gratuito</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </>
                   )}
@@ -565,17 +588,17 @@ export default function Dashboard() {
                   </div>
 
                   {/* Premium */}
-                  {!isSubscribed && (
+                  {!isSubscribed && matches.length > 1 && (
                     <div className="rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.04] p-5">
                       <Lock className="h-4 w-4 text-[#c9a84c]" />
-                      <h4 className="font-display mt-2 text-xl text-cream">Llegaste a tu límite diario.</h4>
-                      <p className="mt-1 text-xs text-muted-foreground">Con CVitae Premium ves todos tus matches sin pausa.</p>
+                      <h4 className="font-display mt-2 text-xl text-cream">Hay {matches.length - 1} match{matches.length - 1 !== 1 ? 'es' : ''} más hoy.</h4>
+                      <p className="mt-1 text-xs text-muted-foreground">Con CVitae Pro ves todos tus matches sin límite.</p>
                       <a
-                        href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola! Quiero activar mi suscripción a CVitae Pro por USD 9/mes.')}`}
+                        href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola! Quiero activar CVitae Pro por USD 9/mes.')}`}
                         target="_blank" rel="noopener noreferrer"
                         className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c9a84c] py-2 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]"
                       >
-                        Probar Premium
+                        Activar Pro — $9/mes
                       </a>
                     </div>
                   )}

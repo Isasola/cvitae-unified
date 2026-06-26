@@ -1,6 +1,6 @@
 # Contexto completo del proyecto CVitae
 
-> Última actualización: 2026-06-22 · Rama activa: `feature/aws-migration`
+> Última actualización: 2026-06-25 · Rama activa: `feature/aws-migration`
 
 ---
 
@@ -416,11 +416,18 @@ Esto reduce el tiempo total de ~90s (30 CVs × 3s) a ~3s (todos en paralelo), el
 | `jobicy_scraper.py` | Jobicy API — 12 industrias × 50 | ✅ listo |
 | `weworkremotely_scraper.py` | WeWorkRemotely RSS — 14 feeds | ✅ listo |
 
+#### Agregadores globales con foco LatAm (agregados 2026-06-25)
+| Archivo | Fuente | Estado |
+|---|---|---|
+| `jooble_scraper.py` | Jooble API — 11 búsquedas Paraguay (requiere JOOBLE_API_KEY) | ✅ listo (pendiente secret) |
+| `talentcom_scraper.py` | Talent.com — 14 búsquedas HTML Paraguay, sin key | ✅ listo |
+
 ### GitHub Actions cron
 
 - **`.github/workflows/scrapers.yml`** — cron diario 10:00 UTC (06:00 PY). Incluye los **30 scrapers** totales con `continue-on-error: true`.
 - **`.github/workflows/linkedin_poster.yml`** — cada hora 12:00-02:00 UTC (08:00-22:00 PY).
-- Los scrapers nuevos se agregaron en commit `8d1c4b23` (2026-06-22) y ya fueron pusheados.
+- Los scrapers de Paraguay se agregaron en commit `8d1c4b23` (2026-06-22).
+- Jooble + Talent.com agregados en commit `5ad7e3fa` (2026-06-25). Total: 32 scrapers.
 
 ### Schema de `opportunities` (tabla Supabase)
 
@@ -468,87 +475,65 @@ Los scrapers de Paraguay (computrabajo, buscojobs, etc.) devolvían HTTP 400 por
 
 ---
 
-## Pendientes concretos (próxima sesión)
+## Completado (commits pusheados en feature/aws-migration)
 
-### COMMIT BATCH A — Fixes quirúrgicos frontend B2B (`src/pages/Recruiters.tsx`)
-
-- [ ] **A1. Email clickeable en ApplicantsPanel** — línea ~707: envolver email en `<a href="mailto:...">` con hover gold
-- [ ] **A2. company_name prefill en VacancyPanel** — pasar `companyName` como prop desde `RecruiterPanel`, usarlo como valor inicial del form
-- [ ] **A3. Date locale en HistoryPanel** — cambiar `toLocaleDateString()` → `toLocaleDateString('es-PY')` (1 carácter)
-- [ ] **A4. Conteo de postulantes en lista de vacantes** — backend: `validate-recruiter-token.ts` línea ~134, agregar `vacancy_applications(count)` al select; frontend: mostrar badge en cada vacante
-
-### COMMIT BATCH B — Bug y email backend
-
-- [ ] **B1. Fix bug company_name** — `validate-recruiter-token.ts` línea 22: agregar `company_name` al select; línea 152: devolver `data.company_name || "Sin nombre"` en lugar del hardcodeado `"Empresa"`
-- [ ] **B2. Email al reclutador cuando llega postulación** — `submit-lead.ts` después del insert de `vacancy_applications`: buscar email del token por `recruiter_token_id` y enviar notificación Resend. Cambiar línea ~140 a `.select("id, title, recruiter_token_id")`
-
-### COMMIT BATCH C — Estado de postulación (SQL ya ejecutado en Supabase 2026-06-25)
-
-> SQL ✅ ejecutado: `recruiter_action text DEFAULT 'pending'` + `recruiter_notes text` + índice en `vacancy_applications`
-
-- [ ] **C1. Endpoint `update_application_status`** — `validate-recruiter-token.ts`: nueva acción que actualiza `recruiter_action` + `recruiter_notes`, verifica que la app pertenezca al token vía join con `recruiter_vacancies`
-- [ ] **C2. UI de estado por candidato** — `ApplicantsPanel` en `Recruiters.tsx`: dropdown/botones en el card expandido, dot coloreado + label (verde=hired, rojo=rejected, amber=interviewing)
-
-### COMMIT BATCH D — Comparación head-to-head (`compare-candidates.ts`)
-
-- [ ] **D1. Modo `head_to_head`** — nuevo modo que recibe `application_ids: [id1, id2]` + `vacancy_id`, compara los dos candidatos contra los requisitos de la vacante y devuelve `{ winner, verdict, a: { advantage, weakness }, b: { ... }, hire_recommendation }`
-
-### COMMIT BATCH E — Badges B2C visibles al reclutador
-
-> SQL ✅ índices email ejecutados en `user_master_profiles` y `vacancy_applications` (2026-06-25)
-
-- [ ] **E1. Enriquecer `get_applicants`** — `validate-recruiter-token.ts`: después de traer aplicantes, hacer lookup en `user_master_profiles` por email y adjuntar `badges` al payload
-- [ ] **E2. Mostrar badges en ApplicantsPanel** — chips en el card expandido del candidato
-
-### COMMIT BATCH F — Rediseño visual B2B (anti-IA genérico)
-
-Ver sección "Dirección de diseño B2B" más abajo para el sistema completo.
-
-- [ ] **F1. Candidate cards como dossier** — layout asimétrico, score como elemento tipográfico dominante, left-edge accent en lugar de glass-card homogéneo
-- [ ] **F2. Reducir blobs ambient** — menos decoración genérica, más estructura editorial
-- [ ] **F3. Tercer tono funcional** — slate azulado `#2a3a4a` para estado "revisado/analizado", distinguible de gold (acción pendiente) y blanco (neutro)
-- [ ] **F4. Vacancy list como tabla operativa** — dejar de usar cards para las vacantes, usar una tabla densa con bordes finos estilo herramienta interna
-
-### Alta prioridad preexistente
-
-- [ ] **LinkedIn n8n OAuth**: Docker está corriendo. Client ID `77az9mk9lw0ygi` + Client Secret en `localhost:5678`. Solo empresa `urn:li:organization:112507011`.
-- [ ] **Sidebar + footer — texto invisible**: `text-muted` → `text-white/60` en `DashboardLayout.tsx` (~línea 82), `CareerLayout.tsx` (~línea 99), `Footer.tsx`
-- [ ] **Analytics — verificar eventos**: confirmar que `cvAnalyzed`, `b2bLeadSent`, `batchStarted` llegan a GA4 → Tiempo real → Eventos
-
-### Media prioridad
-
-- [ ] **Blog — texto "nuestras bases de datos"**: cambiar en Supabase tabla `content_hub` → "las empresas con más presencia en el país"
-- [ ] **Mejorar footer**: columna "Para empresas", quitar links `#`, GrowthLine decorativa, campo newsletter
-- [ ] **Unificar background token**: `--background: oklch(0.10 0.008 60)` en `index.css`
-- [ ] **Batch paralelo**: `for/await` → `Promise.all` en `BatchAnalysis.tsx`
-- [ ] **Link a /demo desde navbar**: agregar en `SiteShell.tsx`
-
-### Baja prioridad (post-pruebas)
-
-- [ ] **Fase 2 (S3)**: reemplazar base64 por presigned URL en BatchAnalysis y ProfileBuilder
-- [ ] **Fase 3 (Lambda)**: mover funciones pesadas para superar límite 26s de Netlify
-- [ ] **Merge a `main`**: cuando pruebas en Netlify preview sean satisfactorias
-- [ ] **Eliminar `ANTHROPIC_API_KEY` de Netlify**: ya no se usa desde Bedrock
-
-### Completado en sesión 2026-06-22
-
+### Sesión 2026-06-22
 - [x] Ruta de carrera en ProfileBuilder (commit `eee048f4`)
 - [x] Cursos contextuales por ruta (`gemini-courses.ts` + `Dashboard.tsx`)
 - [x] 15 scrapers nuevos + `scrapers.yml` con 30 scrapers totales (commit `8d1c4b23`)
 - [x] `submit-lead.ts` flujo vacante separado funcionando
 
-### Completado en sesión 2026-06-25 (sin commit aún)
-
+### Sesión 2026-06-25 — SQL ejecutado en Supabase (sin commit)
 - [x] pgvector habilitado, columna `embedding vector(384)` en `opportunities` y `user_master_profiles`
 - [x] Función RPC `match_opportunities` en Supabase
-- [x] Edge functions: `generate-embedding`, `embed-opportunities`, `match-batch`
 - [x] Embeddings generados para todas las oportunidades activas
-- [x] Matching B2C mejorado: pgvector + keyword hybrid
 - [x] DNS Resend verificado — dominio cvitae.lat activo
 - [x] CLAUDE.md reescrito + 3 agentes creados (frontend/backend/supabase)
 - [x] SQL: `recruiter_action` + `recruiter_notes` en `vacancy_applications`
 - [x] SQL: índices email en `vacancy_applications` y `user_master_profiles`
 - [x] SQL: columna `company_name` en `recruiter_tokens` verificada
+
+### Sesión 2026-06-25 — Commits Batches A-F (commit `7f125326` + `42d88b2f`)
+- [x] **A** — email clickeable, company_name prefill, fecha locale es-PY, conteo postulantes
+- [x] **B** — fix company_name desde DB, email al reclutador vía Resend en submit-lead.ts
+- [x] **C** — endpoint `update_application_status` + UI de estado por candidato (5 botones pill)
+- [x] **D** — modo `head_to_head` en compare-candidates.ts con security ownership check
+- [x] **E** — badges B2C en get_applicants + chips en card del candidato
+- [x] **F** — rediseño visual dossier: border-left accent, score tipográfico, tabla hairline vacantes, ambient solo en TokenLogin
+- [x] Sidebar text invisible fix (`text-muted` → `text-white/60`) en Footer.tsx
+- [x] Batch analysis paralelo (`Promise.all` en BatchAnalysis.tsx)
+- [x] Link `/demo` en navbar (SiteShell.tsx)
+
+### Sesión 2026-06-25 — Scrapers nuevos (commit `5ad7e3fa`)
+- [x] `scrapers/jooble_scraper.py` — API REST aggregator Paraguay (requiere secret JOOBLE_API_KEY en GitHub)
+- [x] `scrapers/talentcom_scraper.py` — HTML scraper Paraguay, 14 búsquedas, sin API key
+- [x] workflow `scrapers.yml` actualizado: 32 scrapers totales, JOOBLE_API_KEY env
+
+---
+
+## Pendientes — próximo commit
+
+### Alta prioridad
+- [ ] **Footer mejorado**: columna "Para empresas" (links a /empresas, /empresas/masivo), quitar links `#` placeholder (Prensa, Carreras), campo newsletter (`subscribe-newsletter` ya existe), GrowthLine decorativa en top
+- [ ] **Página /demo**: hay link en navbar pero no existe la ruta — crear o conectar
+- [ ] **Googlejobs**: `scrapers/googlejobs_v2.py` y `googlejobs_v3.py` ya existen, agregarlos al `scrapers.yml`
+- [ ] **Jooble API key**: registrar en jooble.org/api/about (gratuito) → agregar secret `JOOBLE_API_KEY` en GitHub Actions → Settings → Secrets
+
+### Media prioridad
+- [ ] **Analytics GA4**: confirmar que `cvAnalyzed`, `b2bLeadSent`, `batchStarted` llegan → GA4 panel → Tiempo real → Eventos
+- [ ] **Blog text**: en Supabase `content_hub` cambiar "nuestras bases de datos" → "las empresas con más presencia en el país"
+- [ ] **LinkedIn n8n OAuth**: Docker con n8n en `localhost:5678`. Client ID `77az9mk9lw0ygi`, org `urn:li:organization:112507011`
+
+### Baja prioridad (post-beta)
+- [ ] **S3 migration**: reemplazar base64 por presigned URLs en BatchAnalysis.tsx y ProfileBuilder.tsx (límite efectivo actual ~4MB)
+- [ ] **Lambda migration**: `analyze-recruiters-batch` y `generate-cv-vivo` para superar timeouts Netlify
+- [ ] **Merge a `main`**: Netlify ya apunta a `feature/aws-migration` — no urgente
+- [ ] **Eliminar `ANTHROPIC_API_KEY`** de Netlify env vars — ya no se usa
+
+### Beta cerrada (sin código nuevo requerido)
+- Supabase → Auth → Settings → desactivar "Enable email signup" para B2C controlado
+- B2B ya es cerrado por diseño: tokens `REC-XXXXX-2026` se crean manualmente
+- Opcional (1 commit): tabla `beta_waitlist(email, name, created_at)` + formulario en landing
 
 ---
 

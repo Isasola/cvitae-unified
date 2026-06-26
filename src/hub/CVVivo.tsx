@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import {
   Download, Copy, RefreshCw, Briefcase, FileText, CheckCircle,
-  Sun, Moon, Edit3, Eye, Sparkles, AlertCircle, Loader2, ChevronRight,
+  Sun, Moon, Edit3, Eye, Sparkles, AlertCircle, Loader2, ChevronRight, Lock,
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { GrowthLine } from '@/components/cv/visuals'
@@ -27,6 +27,8 @@ export default function CVVivo() {
   const [fromCache, setFromCache] = useState(false)
   const [loading, setLoading] = useState(false)
   const [adapting, setAdapting] = useState(false)
+  const [isSubscribed, setIsSubscribed] = useState(false)
+  const [cvVivoUsedToday, setCvVivoUsedToday] = useState(false)
   const [darkMode, setDarkMode] = useState(true)
   const [editMode, setEditMode] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -46,6 +48,12 @@ export default function CVVivo() {
       const { data: prof } = await supabase
         .from('user_master_profiles').select('*').eq('user_id', user.id).maybeSingle()
       setProfile(prof)
+      const isProUser = prof?.is_subscribed || false
+      setIsSubscribed(isProUser)
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Asuncion' })
+      const usage = prof?.profile_data?.daily_usage
+      const cvVivoToday = (usage?.date === today) ? (usage?.cv_vivo || 0) : 0
+      setCvVivoUsedToday(cvVivoToday >= 1 && !isProUser)
 
       const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(MATCH_BATCH_URL, {
@@ -74,6 +82,10 @@ export default function CVVivo() {
 
   const handleAdaptCV = async () => {
     if (!profile) return
+    if (cvVivoUsedToday && !isSubscribed) {
+      alert('Ya usaste tu CV Vivo del día. Con Pro podés adaptarlo para cada vacante sin límite.\n\nEscribinos por WhatsApp: wa.me/595992954169')
+      return
+    }
     const vacancyToUse = mode === 'match' ? selectedVacancy : { titulo: 'Vacante Personalizada', cuerpo: customVacancy, id: 'custom' }
     if (!vacancyToUse) return
 
@@ -89,6 +101,18 @@ export default function CVVivo() {
         setEditableCV(data.cv)
         setFromCache(data.fromCache || false)
         setEditMode(false)
+        if (!isSubscribed) {
+          const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Asuncion' })
+          const currentUsage = profile?.profile_data?.daily_usage
+          const currentCount = (currentUsage?.date === today) ? (currentUsage?.cv_vivo || 0) : 0
+          await supabase.from('user_master_profiles').update({
+            profile_data: {
+              ...profile.profile_data,
+              daily_usage: { date: today, matches_shown: currentUsage?.matches_shown || 0, cv_vivo: currentCount + 1 }
+            }
+          }).eq('user_id', user.id)
+          setCvVivoUsedToday(true)
+        }
       }
     } catch {
       alert('Error al adaptar el CV. Intentá de nuevo.')
@@ -207,12 +231,33 @@ export default function CVVivo() {
               />
             )}
 
-            <button
-              onClick={handleAdaptCV} disabled={!canAdapt || adapting}
-              className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {adapting ? <><RefreshCw className="animate-spin" size={16} /> Adaptando…</> : <><Briefcase size={16} /> Adaptar CV</>}
-            </button>
+            {cvVivoUsedToday && !isSubscribed ? (
+              <div className="space-y-2">
+                <button
+                  disabled
+                  className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full bg-white/10 text-sm font-medium text-white/40 cursor-not-allowed"
+                >
+                  <Lock size={16} /> Límite diario alcanzado
+                </button>
+                <p className="text-center text-xs text-white/40">
+                  <a href={`https://wa.me/595992954169?text=${encodeURIComponent('Hola! Quiero activar CVitae Pro por USD 9/mes.')}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="text-[#c9a84c] hover:underline">Pro</a> para adaptaciones ilimitadas
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <button
+                  onClick={handleAdaptCV} disabled={!canAdapt || adapting}
+                  className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {adapting ? <><RefreshCw className="animate-spin" size={16} /> Adaptando…</> : <><Briefcase size={16} /> Adaptar CV</>}
+                </button>
+                {!isSubscribed && (
+                  <p className="text-center text-xs text-white/40">1 gratis hoy · <a href={`https://wa.me/595992954169?text=${encodeURIComponent('Hola! Quiero activar CVitae Pro por USD 9/mes.')}`} target="_blank" rel="noopener noreferrer" className="text-[#c9a84c] hover:underline">Pro</a> para más</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

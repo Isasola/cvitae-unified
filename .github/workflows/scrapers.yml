@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       scraper:
-        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi | arbeitnow | himalayas | jobicy | weworkremotely | sicca | ministerios | bancos | cooperativas | callcenters | seguros | universidades | constructoras | vierci | cartes | hospitales | foros | supermercados | ongs | tech_local | jooble | talentcom'
+        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi | arbeitnow | himalayas | jobicy | weworkremotely | sicca | ministerios | bancos | cooperativas | callcenters | seguros | universidades | constructoras | vierci | cartes | hospitales | foros | supermercados | ongs | tech_local | jooble | talentcom | googlejobs'
         required: false
         default: 'all'
 
@@ -229,5 +229,17 @@ jobs:
       - name: Talent.com — agregador global con foco Paraguay/LatAm
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'talentcom' || github.event_name == 'schedule' }}
         run: python scrapers/talentcom_scraper.py
+        continue-on-error: true
+
+      # ── Google Jobs (Playwright) ─────────────────────────────────────────
+
+      - name: Google Jobs v2 — Playwright scraper Paraguay
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'googlejobs' || github.event_name == 'schedule' }}
+        run: python scrapers/googlejobs_v2.py
+        continue-on-error: true
+
+      - name: Google Jobs v3 — Playwright scraper Paraguay
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'googlejobs' || github.event_name == 'schedule' }}
+        run: python scrapers/googlejobs_v3.py
         continue-on-error: true
 

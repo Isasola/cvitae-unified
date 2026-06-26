@@ -1,11 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-  LayoutDashboard, FileText, Users, Zap, Ticket, LogOut, Save, X,
-  Edit, Trash2, Eye, EyeOff, CheckCircle, AlertCircle, Lock, Plus, RefreshCw,
-} from 'lucide-react'
-import { GlassCard, GoldButton, Badge } from '@/components/cvitae/UI-Elements'
+import { CheckCircle, AlertCircle, X, Eye, EyeOff, Edit, Trash2, Save, Plus } from 'lucide-react'
 
 interface ContentItem {
   id?: string
@@ -30,6 +26,8 @@ interface Subscriber {
   is_subscribed: boolean
   created_at: string
   user_id: string
+  is_test?: boolean
+  user_type?: string
 }
 
 interface SkillCandidate {
@@ -44,10 +42,80 @@ interface SkillCandidate {
 
 const CATEGORIES = ['Tecnología', 'Administración', 'Ventas', 'Marketing', 'Salud', 'Educación', 'Logística', 'Otros']
 
+const MONO = "'JetBrains Mono', 'Courier New', monospace"
+
+// Input style shared across forms
+const inputCls = "w-full px-4 py-3 bg-transparent border border-white/[0.07] text-[#e8e8e0] text-sm placeholder-white/20 focus:outline-none focus:border-[#c9a84c]/50 transition-colors"
+
+function SignalLines() {
+  return (
+    <svg
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      aria-hidden="true"
+      preserveAspectRatio="none"
+    >
+      <defs>
+        <linearGradient id="sl1" x1="0" x2="1">
+          <stop offset="0%" stopColor="#c9a84c" stopOpacity="0" />
+          <stop offset="40%" stopColor="#c9a84c" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#c9a84c" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="sl2" x1="0" x2="1">
+          <stop offset="0%" stopColor="#c9a84c" stopOpacity="0" />
+          <stop offset="60%" stopColor="#c9a84c" stopOpacity="0.08" />
+          <stop offset="100%" stopColor="#c9a84c" stopOpacity="0" />
+        </linearGradient>
+        <filter id="sglow">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      {/* Line 1 — fast, brighter */}
+      <path
+        d="M -50 25% C 15% 20%, 30% 35%, 50% 28% S 75% 18%, 110% 22%"
+        fill="none"
+        stroke="url(#sl1)"
+        strokeWidth="1"
+        filter="url(#sglow)"
+      >
+        <animate attributeName="opacity" values="0.6;1;0.6" dur="3.2s" repeatCount="indefinite" />
+        <animate
+          attributeName="d"
+          values="M -50 25% C 15% 20%, 30% 35%, 50% 28% S 75% 18%, 110% 22%;M -50 28% C 15% 24%, 30% 30%, 50% 32% S 75% 22%, 110% 25%;M -50 25% C 15% 20%, 30% 35%, 50% 28% S 75% 18%, 110% 22%"
+          dur="8s"
+          repeatCount="indefinite"
+        />
+      </path>
+      {/* Line 2 — slower, dimmer */}
+      <path
+        d="M -50 55% C 20% 50%, 40% 62%, 60% 55% S 85% 48%, 110% 52%"
+        fill="none"
+        stroke="url(#sl2)"
+        strokeWidth="1"
+      >
+        <animate attributeName="opacity" values="0.3;0.7;0.3" dur="5.5s" repeatCount="indefinite" />
+      </path>
+      {/* Line 3 — very slow, near-invisible baseline */}
+      <path
+        d="M -50 75% C 25% 72%, 50% 80%, 75% 74% S 95% 70%, 110% 73%"
+        fill="none"
+        stroke="#c9a84c"
+        strokeWidth="0.5"
+        strokeOpacity="0.05"
+      >
+        <animate attributeName="opacity" values="0.04;0.12;0.04" dur="9s" repeatCount="indefinite" />
+      </path>
+    </svg>
+  )
+}
+
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState('')
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'contenido' | 'suscriptores' | 'skills' | 'tokens'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'brief' | 'usuarios' | 'beta' | 'contenido' | 'tokens' | 'skills'>('brief')
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -57,7 +125,9 @@ export default function Admin() {
   const [metrics, setMetrics] = useState({ usuarios: 0, matches: 0, oportunidades: 0, suscriptores: 0 })
 
   const [formData, setFormData] = useState<ContentItem>({
-    titulo: '', slug: '', cuerpo: '', categoria: 'Tecnología', imagen_url: '', fecha_vencimiento: new Date().toISOString().split('T')[0], tipo: 'blog', ubicacion: 'Asunción, Paraguay', is_active: true
+    titulo: '', slug: '', cuerpo: '', categoria: 'Tecnología', imagen_url: '',
+    fecha_vencimiento: new Date().toISOString().split('T')[0],
+    tipo: 'blog', ubicacion: 'Asunción, Paraguay', is_active: true
   })
   const [isEditing, setIsEditing] = useState(false)
 
@@ -67,6 +137,19 @@ export default function Admin() {
   const [tokenBalance, setTokenBalance] = useState(10)
   const [tokenPlan, setTokenPlan] = useState('starter')
 
+  // Beta / Leads state
+  const [betaList, setBetaList] = useState<any[]>([])
+  const [leads, setLeads] = useState<any[]>([])
+
+  const NAV_ITEMS = [
+    { id: 'brief', label: 'Brief del día', dotColor: 'bg-emerald-400', badge: null },
+    { id: 'usuarios', label: 'Usuarios', dotColor: 'bg-[#c9a84c]', badge: metrics.usuarios.toString() },
+    { id: 'beta', label: 'Beta / Leads', dotColor: 'bg-sky-400', badge: null },
+    { id: 'contenido', label: 'Contenido', dotColor: 'bg-white/30', badge: null },
+    { id: 'tokens', label: 'Tokens B2B', dotColor: 'bg-white/30', badge: null },
+    { id: 'skills', label: 'Skills IA', dotColor: 'bg-amber-400', badge: null },
+  ]
+
   useEffect(() => {
     if (isAuthenticated) {
       loadContent()
@@ -74,6 +157,7 @@ export default function Admin() {
       loadSkillCandidates()
       loadMetrics()
       loadTokens()
+      loadBeta()
     }
   }, [isAuthenticated, activeTab])
 
@@ -83,7 +167,10 @@ export default function Admin() {
   }
 
   const loadSubscribers = async () => {
-    const { data } = await supabase.from('user_master_profiles').select('*').order('created_at', { ascending: false })
+    const { data } = await supabase
+      .from('user_master_profiles')
+      .select('id, email, full_name, professional_title, skills, seniority, is_subscribed, created_at, user_id, is_test, user_type')
+      .order('created_at', { ascending: false })
     if (data) setSubscribers(data as Subscriber[])
   }
 
@@ -111,6 +198,13 @@ export default function Admin() {
     if (data) setTokens(data)
   }
 
+  const loadBeta = async () => {
+    const { data: bw } = await supabase.from('beta_waitlist').select('*').order('created_at', { ascending: false })
+    setBetaList(bw || [])
+    const { data: rl } = await supabase.from('recruiter_leads').select('*').order('created_at', { ascending: false })
+    setLeads(rl || [])
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -123,7 +217,7 @@ export default function Admin() {
       const data = await response.json()
       if (response.ok && data.authenticated) {
         setIsAuthenticated(true)
-        setNotification({ type: 'success', message: 'Bienvenido al panel de administración' })
+        setNotification({ type: 'success', message: 'Bienvenido al OPS Console' })
       } else {
         setNotification({ type: 'error', message: data.error || 'Contraseña incorrecta' })
       }
@@ -151,7 +245,12 @@ export default function Admin() {
   const toggleSubscription = async (userId: string, currentValue: boolean) => {
     await supabase.from('user_master_profiles').update({ is_subscribed: !currentValue }).eq('user_id', userId)
     loadSubscribers()
-    setNotification({ type: 'success', message: `${!currentValue ? 'activada' : 'desactivada'}` })
+    setNotification({ type: 'success', message: `Plan ${!currentValue ? 'PRO activado' : 'revertido a FREE'}` })
+  }
+
+  const toggleTestFlag = async (userId: string, currentValue: boolean) => {
+    await supabase.from('user_master_profiles').update({ is_test: !currentValue }).eq('user_id', userId)
+    loadSubscribers()
   }
 
   const approveSkill = async (id: number) => {
@@ -173,15 +272,10 @@ export default function Admin() {
       const response = await fetch('/.netlify/functions/generate-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: tokenEmail,
-          token_balance: tokenBalance,
-          plan_type: tokenPlan,
-        }),
+        body: JSON.stringify({ email: tokenEmail, token_balance: tokenBalance, plan_type: tokenPlan }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Error generando token')
-      
       setNotification({ type: 'success', message: 'Token generado con éxito' })
       setTokenEmail('')
       loadTokens()
@@ -204,7 +298,11 @@ export default function Admin() {
   }
 
   const resetForm = () => {
-    setFormData({ titulo: '', slug: '', cuerpo: '', categoria: 'Tecnología', imagen_url: '', fecha_vencimiento: new Date().toISOString().split('T')[0], tipo: 'blog', ubicacion: 'Asunción, Paraguay', is_active: true })
+    setFormData({
+      titulo: '', slug: '', cuerpo: '', categoria: 'Tecnología', imagen_url: '',
+      fecha_vencimiento: new Date().toISOString().split('T')[0],
+      tipo: 'blog', ubicacion: 'Asunción, Paraguay', is_active: true
+    })
     setIsEditing(false)
   }
 
@@ -214,242 +312,652 @@ export default function Admin() {
     setActiveTab('contenido')
   }
 
+  const markBetaInvited = async (id: string) => {
+    await supabase.from('beta_waitlist').update({ status: 'invited', invited_at: new Date().toISOString() }).eq('id', id)
+    loadBeta()
+    setNotification({ type: 'success', message: 'Marcado como invitado' })
+  }
+
+  // ── LOGIN SCREEN ──────────────────────────────────────────────────────────
+
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <GlassCard className="w-full max-w-md">
-          <div className="text-center mb-6">
-            <Lock className="w-12 h-12 text-gold mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-white">Panel de Control</h1>
-            <p className="text-muted text-sm mt-2">Ingresá la contraseña maestra</p>
-          </div>
+      <div className="min-h-screen bg-[#080808] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm border border-white/[0.07] p-8 bg-[#080808]">
+          <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.2em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase', marginBottom: '24px' }}>
+            CVITAE OPS CONSOLE
+          </p>
           <form onSubmit={handleLogin} className="space-y-4">
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Contraseña"
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50" />
-            <GoldButton type="submit" className="w-full" disabled={loading}>{loading ? 'Accediendo...' : 'Acceder'}</GoldButton>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="contraseña"
+              className={inputCls}
+              style={{ fontFamily: MONO }}
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-[#c9a84c] text-[#080808] text-sm font-semibold tracking-wide hover:bg-[#e6cf8a] transition-colors disabled:opacity-50"
+            >
+              {loading ? 'ACCEDIENDO...' : 'ACCEDER →'}
+            </button>
           </form>
           {notification && (
-            <div className={`mt-4 p-3 rounded-xl text-sm ${notification.type === 'success' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+            <div className={`mt-4 p-3 text-sm ${notification.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`} style={{ fontFamily: MONO, fontSize: '12px' }}>
               {notification.message}
             </div>
           )}
-        </GlassCard>
+        </div>
       </div>
     )
   }
 
+  // ── MAIN CONSOLE ──────────────────────────────────────────────────────────
+
   return (
-    <div className="min-h-screen bg-black flex">
-      <div className="w-64 border-r border-white/5 bg-background flex flex-col p-6 fixed h-full">
-        <div className="mb-8">
-          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.5rem', color: '#c9a84c' }}>
-            <span style={{ fontWeight: 900 }}>CV</span><span style={{ fontStyle: 'italic', fontWeight: 400 }}>itae</span>
+    <div className="min-h-screen flex" style={{ backgroundColor: '#080808' }}>
+
+      {/* SIDEBAR */}
+      <aside className="w-52 fixed h-full border-r border-white/[0.07] bg-[#080808] flex flex-col py-6 px-4" style={{ zIndex: 20 }}>
+        {/* Logo */}
+        <div className="mb-8 px-2">
+          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#c9a84c', fontWeight: 900 }}>
+            CV<em style={{ fontStyle: 'italic', fontWeight: 400 }}>itae</em>
           </span>
-          <p className="text-xs text-muted mt-1">Admin Panel</p>
+          <p style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.3)', marginTop: '2px', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+            OPS CONSOLE
+          </p>
         </div>
-        <nav className="flex-grow space-y-2">
-          {[
-            { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-            { id: 'contenido', label: 'Contenido', icon: FileText },
-            { id: 'suscriptores', label: 'Suscriptores', icon: Users },
-            { id: 'skills', label: 'Skills IA', icon: Zap },
-            { id: 'tokens', label: 'Tokens B2B', icon: Ticket },
-          ].map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === tab.id ? 'bg-gold text-black font-bold' : 'text-muted hover:bg-white/5'}`}>
-              <tab.icon size={18} /> {tab.label}
+
+        {/* Live indicator */}
+        <div className="mb-6 px-2 flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span style={{ fontFamily: MONO, fontSize: '11px', color: 'rgba(232,232,224,0.4)' }}>ACTIVO</span>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 space-y-0.5">
+          {NAV_ITEMS.map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as typeof activeTab)}
+              className={`w-full text-left px-2 py-2.5 text-sm transition-colors flex items-center gap-2.5 ${
+                activeTab === item.id
+                  ? 'text-[#e8e8e0] bg-white/[0.05]'
+                  : 'text-[rgba(232,232,224,0.45)] hover:text-[#e8e8e0] hover:bg-white/[0.03]'
+              }`}
+              style={{ borderLeft: activeTab === item.id ? '2px solid #c9a84c' : '2px solid transparent' }}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.dotColor}`} />
+              {item.label}
+              {item.badge ? (
+                <span className="ml-auto text-[#c9a84c]" style={{ fontFamily: MONO, fontSize: '10px' }}>{item.badge}</span>
+              ) : null}
             </button>
           ))}
         </nav>
-        <button onClick={() => setIsAuthenticated(false)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all mt-4">
-          <LogOut size={18} /> Cerrar Sesión
-        </button>
-      </div>
 
-      <div className="flex-grow ml-64 p-8">
-        <AnimatePresence mode="wait">
-          <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+        {/* Timestamp + logout */}
+        <div className="px-2 mt-4">
+          <p style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.2)' }}>
+            {new Date().toLocaleDateString('es-PY')} {new Date().toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })}
+          </p>
+          <button
+            onClick={() => setIsAuthenticated(false)}
+            className="mt-3 text-xs text-red-400/60 hover:text-red-400 transition-colors"
+          >
+            ↩ Salir
+          </button>
+        </div>
+      </aside>
 
-            {activeTab === 'dashboard' && (
-              <div>
-                <h2 className="text-2xl font-bold text-white mb-6">Dashboard</h2>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                  {[
-                    { label: 'Usuarios', value: metrics.usuarios, icon: Users },
-                    { label: 'Suscriptores', value: metrics.suscriptores, icon: Zap },
-                    { label: 'Oportunidades', value: metrics.oportunidades, icon: FileText },
-                    { label: 'Skills Candidatas', value: skillCandidates.filter(s => s.status === 'pending').length, icon: Zap },
-                  ].map((m, i) => (
-                    <GlassCard key={i}>
-                      <m.icon className="w-8 h-8 text-gold mb-3" />
-                      <p className="text-3xl font-bold text-white">{m.value}</p>
-                      <p className="text-sm text-muted">{m.label}</p>
-                    </GlassCard>
-                  ))}
-                </div>
-              </div>
-            )}
+      {/* MAIN CONTENT */}
+      <div className="flex-grow ml-52 relative overflow-hidden" style={{ minHeight: '100vh' }}>
+        <SignalLines />
 
-            {activeTab === 'contenido' && (
-              <div>
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-white">Contenido ({items.length})</h2>
-                  <GoldButton onClick={() => { resetForm(); setActiveTab('contenido') }}><Plus size={18} /> Nuevo</GoldButton>
-                </div>
-                <GlassCard className="mb-8">
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <input name="titulo" value={formData.titulo} onChange={(e) => setFormData(prev => ({ ...prev, titulo: e.target.value, slug: e.target.value.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '') }))} placeholder="Título" required className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50" />
-                      <input name="slug" value={formData.slug} onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))} placeholder="Slug" required className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50" />
+        <div className="relative z-10 p-8">
+          <AnimatePresence mode="wait">
+            <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+
+              {/* ── BRIEF ──────────────────────────────────────────────── */}
+              {activeTab === 'brief' && (
+                <div>
+                  <div className="mb-8">
+                    <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>
+                      BRIEF — {new Date().toLocaleDateString('es-PY', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()}
+                    </p>
+                    <h1 className="mt-1 text-2xl font-semibold text-[#e8e8e0]">Estado del sistema</h1>
+                  </div>
+
+                  {/* Metrics grid */}
+                  <div className="grid grid-cols-4 gap-px bg-white/[0.07] border border-white/[0.07]">
+                    {[
+                      { label: 'USUARIOS TOTALES', value: metrics.usuarios, sub: 'en base de datos' },
+                      { label: 'PRO ACTIVOS', value: metrics.suscriptores, sub: 'is_subscribed = true' },
+                      { label: 'OPORTUNIDADES', value: metrics.oportunidades, sub: 'activas hoy' },
+                      { label: 'INGRESOS REALES', value: '$0', sub: 'este mes · test excluido' },
+                    ].map((m, i) => (
+                      <div key={i} className="bg-[#080808] p-5">
+                        <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase', marginBottom: '8px' }}>{m.label}</p>
+                        <p style={{ fontFamily: MONO, fontSize: '2.5rem', lineHeight: 1, color: '#e8e8e0', fontWeight: 600 }}>{m.value}</p>
+                        <p style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.25)', marginTop: '4px' }}>{m.sub}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Signals */}
+                  <div className="mt-6 border border-white/[0.07]">
+                    <div className="px-5 py-3 border-b border-white/[0.07]">
+                      <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>SEÑALES</p>
                     </div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <select name="tipo" value={formData.tipo} onChange={(e) => setFormData(prev => ({ ...prev, tipo: e.target.value as any }))} className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50">
-                        <option value="blog">Blog</option>
-                        <option value="oportunidad">Oportunidad</option>
-                        <option value="beca">Beca</option>
-                        <option value="foro">Foro</option>
-                      </select>
-                      <select name="categoria" value={formData.categoria} onChange={(e) => setFormData(prev => ({ ...prev, categoria: e.target.value }))} className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50">
-                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      <input name="ubicacion" value={formData.ubicacion} onChange={(e) => setFormData(prev => ({ ...prev, ubicacion: e.target.value }))} placeholder="Ubicación" className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50" />
-                    </div>
-                    <input name="imagen_url" value={formData.imagen_url} onChange={(e) => setFormData(prev => ({ ...prev, imagen_url: e.target.value }))} placeholder="URL de la imagen (opcional)" className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50" />
-                    <textarea name="cuerpo" value={formData.cuerpo} onChange={(e) => setFormData(prev => ({ ...prev, cuerpo: e.target.value }))} placeholder="Contenido (Markdown)" rows={8} required className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50 resize-none" />
-                    <div className="flex justify-end gap-3">
-                      {isEditing && <GoldButton variant="ghost" onClick={resetForm}>Cancelar</GoldButton>}
-                      <GoldButton type="submit" disabled={loading}><Save size={18} /> {isEditing ? 'Actualizar' : 'Publicar'}</GoldButton>
-                    </div>
-                  </form>
-                </GlassCard>
-                <div className="space-y-2">
-                  {items.map((item) => (
-                    <GlassCard key={item.id} className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={item.tipo === 'blog' ? 'gold' : 'muted'}>{item.tipo}</Badge>
-                          <span className="text-white font-medium">{item.titulo}</span>
+                    <div className="divide-y divide-white/[0.05]">
+                      {subscribers.filter(s => !s.is_subscribed).length > 0 && (
+                        <div className="px-5 py-3 flex items-center gap-3">
+                          <span className="text-[#c9a84c]">◆</span>
+                          <span className="text-sm text-[#e8e8e0]">{subscribers.filter(s => !s.is_subscribed).length} usuarios en plan Free — candidatos para convertir</span>
                         </div>
-                        <p className="text-xs text-muted mt-1">/{item.slug}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => toggleStatus(item)} className={`p-2 rounded-lg ${item.is_active ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'}`}>{item.is_active ? <Eye size={16} /> : <EyeOff size={16} />}</button>
-                        <button onClick={() => handleEdit(item)} className="p-2 rounded-lg text-muted hover:text-white hover:bg-white/5"><Edit size={16} /></button>
-                        <button onClick={() => deleteItem(item.id!)} className="p-2 rounded-lg text-muted hover:text-red-400 hover:bg-red-400/10"><Trash2 size={16} /></button>
-                      </div>
-                    </GlassCard>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'suscriptores' && (
-              <div>
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-white">Suscriptores ({subscribers.length})</h2>
-                  <GoldButton variant="ghost" onClick={loadSubscribers}><RefreshCw size={16} /></GoldButton>
-                </div>
-                <div className="space-y-2">
-                  {subscribers.map((sub) => (
-                    <GlassCard key={sub.id} className="flex items-center justify-between">
-                      <div>
-                        <p className="text-white font-medium">{sub.full_name || 'Sin nombre'}</p>
-                        <p className="text-sm text-muted">{sub.email}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          {sub.skills?.slice(0, 3).map(skill => <span key={skill} className="px-2 py-0.5 rounded-md bg-white/5 text-xs text-muted">{skill}</span>)}
+                      )}
+                      {tokens.filter(t => t.token_balance < 5).length > 0 && (
+                        <div className="px-5 py-3 flex items-center gap-3">
+                          <span className="text-red-400">◆</span>
+                          <span className="text-sm text-[#e8e8e0]">{tokens.filter(t => t.token_balance < 5).length} token(s) B2B con balance bajo (&lt;5)</span>
                         </div>
+                      )}
+                      <div className="px-5 py-3 flex items-center gap-3">
+                        <span className="text-emerald-400">◆</span>
+                        <span className="text-sm text-[rgba(232,232,224,0.5)]">Sistema operativo · scrapers activos · emails verificados</span>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm text-muted">{sub.seniority || 'Junior'}</span>
-                        <button onClick={() => toggleSubscription(sub.user_id, sub.is_subscribed)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${sub.is_subscribed ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-white/5 text-muted border border-white/10'}`}>
-                          {sub.is_subscribed ? 'Pro' : 'Free'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── USUARIOS ───────────────────────────────────────────── */}
+              {activeTab === 'usuarios' && (
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>USUARIOS B2C</p>
+                      <h2 className="text-xl text-[#e8e8e0] mt-0.5">{subscribers.length} registros</h2>
+                    </div>
+                    <button
+                      onClick={loadSubscribers}
+                      className="text-xs text-[rgba(232,232,224,0.4)] hover:text-[#e8e8e0] border border-white/[0.07] px-3 py-1.5 transition-colors"
+                      style={{ fontFamily: MONO }}
+                    >
+                      ↻ Actualizar
+                    </button>
+                  </div>
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/[0.07]">
+                        {['NOMBRE', 'EMAIL', 'TIPO', 'PLAN', 'ACCIÓN'].map(h => (
+                          <th key={h} className="text-left py-2.5 px-3 font-normal tracking-widest text-[rgba(232,232,224,0.3)]" style={{ fontFamily: MONO, fontSize: '10px' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.04]">
+                      {subscribers.map(sub => (
+                        <tr key={sub.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3 px-3 text-sm text-[#e8e8e0]">{sub.full_name || '—'}</td>
+                          <td className="py-3 px-3 text-[rgba(232,232,224,0.6)]" style={{ fontFamily: MONO, fontSize: '12px' }}>{sub.email}</td>
+                          <td className="py-3 px-3">
+                            <span
+                              className={`text-[10px] px-2 py-0.5 border ${sub.is_test ? 'border-amber-500/40 text-amber-400' : 'border-white/10 text-[rgba(232,232,224,0.4)]'}`}
+                              style={{ fontFamily: MONO, letterSpacing: '0.1em' }}
+                            >
+                              {sub.is_test ? 'TEST' : 'REAL'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3">
+                            <button
+                              onClick={() => toggleSubscription(sub.user_id, sub.is_subscribed)}
+                              className={`text-[10px] px-2 py-0.5 border transition-colors ${sub.is_subscribed ? 'border-[#c9a84c]/50 text-[#c9a84c]' : 'border-white/10 text-[rgba(232,232,224,0.4)] hover:border-[#c9a84c]/30 hover:text-[#c9a84c]/60'}`}
+                              style={{ fontFamily: MONO, letterSpacing: '0.1em' }}
+                            >
+                              {sub.is_subscribed ? '● PRO' : '○ FREE'}
+                            </button>
+                          </td>
+                          <td className="py-3 px-3">
+                            <button
+                              onClick={() => toggleTestFlag(sub.user_id, sub.is_test ?? false)}
+                              className="text-[10px] text-[rgba(232,232,224,0.3)] hover:text-[rgba(232,232,224,0.6)] transition-colors"
+                              style={{ fontFamily: MONO }}
+                            >
+                              {sub.is_test ? 'marcar real' : 'marcar test'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* ── BETA / LEADS ────────────────────────────────────────── */}
+              {activeTab === 'beta' && (
+                <div>
+                  <div className="mb-8">
+                    <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>PIPELINE</p>
+                    <h2 className="text-xl text-[#e8e8e0] mt-0.5">Beta & Leads</h2>
+                  </div>
+
+                  {/* Beta B2C */}
+                  <div className="border border-white/[0.07] mb-6">
+                    <div className="px-5 py-3 border-b border-white/[0.07] flex items-center justify-between">
+                      <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>
+                        BETA B2C — {betaList.length}
+                      </p>
+                    </div>
+                    {betaList.length === 0 ? (
+                      <div className="px-5 py-4 text-sm text-[rgba(232,232,224,0.3)]">Sin registros.</div>
+                    ) : (
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/[0.05]">
+                            {['EMAIL', 'FECHA', 'STATUS', 'ACCIÓN'].map(h => (
+                              <th key={h} className="text-left py-2.5 px-4 font-normal tracking-widest text-[rgba(232,232,224,0.3)]" style={{ fontFamily: MONO, fontSize: '10px' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.04]">
+                          {betaList.map((entry: any) => (
+                            <tr key={entry.id} className="hover:bg-white/[0.02] transition-colors">
+                              <td className="py-3 px-4 text-[rgba(232,232,224,0.7)]" style={{ fontFamily: MONO, fontSize: '12px' }}>{entry.email}</td>
+                              <td className="py-3 px-4 text-[rgba(232,232,224,0.4)]" style={{ fontFamily: MONO, fontSize: '11px' }}>
+                                {entry.created_at ? new Date(entry.created_at).toLocaleDateString('es-PY') : '—'}
+                              </td>
+                              <td className="py-3 px-4">
+                                <span
+                                  className={`text-[10px] px-2 py-0.5 border ${
+                                    entry.status === 'invited' ? 'border-emerald-500/40 text-emerald-400'
+                                    : entry.status === 'rejected' ? 'border-red-500/40 text-red-400'
+                                    : 'border-white/10 text-[rgba(232,232,224,0.4)]'
+                                  }`}
+                                  style={{ fontFamily: MONO, letterSpacing: '0.1em' }}
+                                >
+                                  {(entry.status || 'pending').toUpperCase()}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4">
+                                {entry.status !== 'invited' && (
+                                  <button
+                                    onClick={() => markBetaInvited(entry.id)}
+                                    className="text-[10px] text-sky-400/60 hover:text-sky-400 transition-colors"
+                                    style={{ fontFamily: MONO }}
+                                  >
+                                    Invitar →
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+
+                  {/* Leads B2B */}
+                  <div className="border border-white/[0.07]">
+                    <div className="px-5 py-3 border-b border-white/[0.07]">
+                      <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>
+                        LEADS B2B — {leads.length}
+                      </p>
+                    </div>
+                    {leads.length === 0 ? (
+                      <div className="px-5 py-4 text-sm text-[rgba(232,232,224,0.3)]">Sin registros.</div>
+                    ) : (
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/[0.05]">
+                            {['EMPRESA', 'EMAIL', 'FECHA', 'ACCIÓN'].map(h => (
+                              <th key={h} className="text-left py-2.5 px-4 font-normal tracking-widest text-[rgba(232,232,224,0.3)]" style={{ fontFamily: MONO, fontSize: '10px' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.04]">
+                          {leads.map((lead: any) => (
+                            <tr key={lead.id} className="hover:bg-white/[0.02] transition-colors">
+                              <td className="py-3 px-4 text-sm text-[#e8e8e0]">{lead.company || lead.empresa || '—'}</td>
+                              <td className="py-3 px-4 text-[rgba(232,232,224,0.6)]" style={{ fontFamily: MONO, fontSize: '12px' }}>{lead.email}</td>
+                              <td className="py-3 px-4 text-[rgba(232,232,224,0.4)]" style={{ fontFamily: MONO, fontSize: '11px' }}>
+                                {lead.created_at ? new Date(lead.created_at).toLocaleDateString('es-PY') : '—'}
+                              </td>
+                              <td className="py-3 px-4">
+                                <button
+                                  onClick={() => { setTokenEmail(lead.email); setActiveTab('tokens') }}
+                                  className="text-[10px] text-[#c9a84c]/60 hover:text-[#c9a84c] transition-colors"
+                                  style={{ fontFamily: MONO }}
+                                >
+                                  Generar token →
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── CONTENIDO ───────────────────────────────────────────── */}
+              {activeTab === 'contenido' && (
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>GESTOR</p>
+                      <h2 className="text-xl text-[#e8e8e0] mt-0.5">Contenido ({items.length})</h2>
+                    </div>
+                    <button
+                      onClick={() => resetForm()}
+                      className="flex items-center gap-1.5 text-xs text-[rgba(232,232,224,0.4)] hover:text-[#e8e8e0] border border-white/[0.07] px-3 py-1.5 transition-colors"
+                      style={{ fontFamily: MONO }}
+                    >
+                      <Plus size={12} /> Nuevo
+                    </button>
+                  </div>
+
+                  {/* Form */}
+                  <div className="border border-white/[0.07] p-5 mb-6">
+                    <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase', marginBottom: '16px' }}>
+                      {isEditing ? 'EDITAR CONTENIDO' : 'NUEVO CONTENIDO'}
+                    </p>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <input
+                          value={formData.titulo}
+                          onChange={e => setFormData(prev => ({ ...prev, titulo: e.target.value, slug: e.target.value.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '') }))}
+                          placeholder="Título"
+                          required
+                          className={inputCls}
+                        />
+                        <input
+                          value={formData.slug}
+                          onChange={e => setFormData(prev => ({ ...prev, slug: e.target.value }))}
+                          placeholder="Slug"
+                          required
+                          className={inputCls}
+                          style={{ fontFamily: MONO }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <select
+                          value={formData.tipo}
+                          onChange={e => setFormData(prev => ({ ...prev, tipo: e.target.value as any }))}
+                          className={inputCls}
+                          style={{ fontFamily: MONO }}
+                        >
+                          <option value="blog">Blog</option>
+                          <option value="oportunidad">Oportunidad</option>
+                          <option value="beca">Beca</option>
+                          <option value="foro">Foro</option>
+                        </select>
+                        <select
+                          value={formData.categoria}
+                          onChange={e => setFormData(prev => ({ ...prev, categoria: e.target.value }))}
+                          className={inputCls}
+                        >
+                          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <input
+                          value={formData.ubicacion}
+                          onChange={e => setFormData(prev => ({ ...prev, ubicacion: e.target.value }))}
+                          placeholder="Ubicación"
+                          className={inputCls}
+                        />
+                      </div>
+                      <input
+                        value={formData.imagen_url}
+                        onChange={e => setFormData(prev => ({ ...prev, imagen_url: e.target.value }))}
+                        placeholder="URL de la imagen (opcional)"
+                        className={inputCls}
+                        style={{ fontFamily: MONO, fontSize: '12px' }}
+                      />
+                      <textarea
+                        value={formData.cuerpo}
+                        onChange={e => setFormData(prev => ({ ...prev, cuerpo: e.target.value }))}
+                        placeholder="Contenido (Markdown)"
+                        rows={8}
+                        required
+                        className={`${inputCls} resize-none`}
+                        style={{ fontFamily: MONO, fontSize: '12px' }}
+                      />
+                      <div className="flex justify-end gap-3">
+                        {isEditing && (
+                          <button
+                            type="button"
+                            onClick={resetForm}
+                            className="text-xs text-[rgba(232,232,224,0.4)] hover:text-[#e8e8e0] border border-white/[0.07] px-4 py-2 transition-colors"
+                            style={{ fontFamily: MONO }}
+                          >
+                            Cancelar
+                          </button>
+                        )}
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="flex items-center gap-1.5 text-xs bg-[#c9a84c] text-[#080808] font-semibold px-4 py-2 hover:bg-[#e6cf8a] transition-colors disabled:opacity-50"
+                          style={{ fontFamily: MONO }}
+                        >
+                          <Save size={12} /> {isEditing ? 'Actualizar' : 'Publicar'}
                         </button>
                       </div>
-                    </GlassCard>
-                  ))}
-                </div>
-              </div>
-            )}
+                    </form>
+                  </div>
 
-            {activeTab === 'skills' && (
-              <div>
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-white">Skills Candidatas</h2>
-                  <Badge variant="gold">{skillCandidates.filter(s => s.status === 'pending').length} pendientes</Badge>
-                </div>
-                <div className="space-y-2">
-                  {skillCandidates.map((skill) => (
-                    <GlassCard key={skill.id} className="flex items-center justify-between">
-                      <div>
-                        <p className="text-white font-medium">{skill.term} → <span className="text-gold">{skill.normalized}</span></p>
-                        <p className="text-xs text-muted">{skill.mention_count} menciones · Desde {new Date(skill.first_seen).toLocaleDateString()}</p>
+                  {/* Items list */}
+                  <div className="border border-white/[0.07] divide-y divide-white/[0.04]">
+                    {items.map(item => (
+                      <div key={item.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-white/[0.02] transition-colors">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-[10px] px-2 py-0.5 border border-white/10 text-[rgba(232,232,224,0.4)]"
+                              style={{ fontFamily: MONO, letterSpacing: '0.1em' }}
+                            >
+                              {item.tipo.toUpperCase()}
+                            </span>
+                            <span className="text-sm text-[#e8e8e0]">{item.titulo}</span>
+                          </div>
+                          <p className="text-[11px] text-[rgba(232,232,224,0.3)] mt-0.5" style={{ fontFamily: MONO }}>/{item.slug}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => toggleStatus(item)}
+                            className={`p-1.5 transition-colors ${item.is_active ? 'text-emerald-400' : 'text-red-400/50 hover:text-red-400'}`}
+                          >
+                            {item.is_active ? <Eye size={14} /> : <EyeOff size={14} />}
+                          </button>
+                          <button onClick={() => handleEdit(item)} className="p-1.5 text-[rgba(232,232,224,0.3)] hover:text-[#e8e8e0] transition-colors">
+                            <Edit size={14} />
+                          </button>
+                          <button onClick={() => deleteItem(item.id!)} className="p-1.5 text-[rgba(232,232,224,0.3)] hover:text-red-400 transition-colors">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={skill.status === 'pending' ? 'warning' : skill.status === 'approved' ? 'gold' : 'muted'}>
-                          {skill.status}
-                        </Badge>
-                        {skill.status === 'pending' && (
-                          <>
-                            <button onClick={() => approveSkill(skill.id)} className="p-2 rounded-lg text-green-400 bg-green-400/10 hover:bg-green-400/20"><CheckCircle size={16} /></button>
-                            <button onClick={() => rejectSkill(skill.id)} className="p-2 rounded-lg text-red-400 bg-red-400/10 hover:bg-red-400/20"><X size={16} /></button>
-                          </>
-                        )}
-                      </div>
-                    </GlassCard>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {activeTab === 'tokens' && (
-              <div>
-                <h2 className="text-2xl font-bold text-white mb-6">Tokens B2B</h2>
-                <GlassCard className="mb-8">
-                  <form onSubmit={generateToken} className="space-y-4">
-                    <div className="grid grid-cols-3 gap-4">
-                      <input type="email" value={tokenEmail} onChange={(e) => setTokenEmail(e.target.value)} placeholder="Email del reclutador" required
-                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50" />
-                      <input type="number" value={tokenBalance} onChange={(e) => setTokenBalance(parseInt(e.target.value))} placeholder="Balance de tokens" required
-                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50" />
-                      <select value={tokenPlan} onChange={(e) => setTokenPlan(e.target.value)}
-                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold/50">
-                        <option value="starter">Starter (10)</option>
-                        <option value="pro">Pro (100)</option>
-                        <option value="enterprise">Enterprise (Inf)</option>
-                      </select>
+              {/* ── TOKENS B2B ──────────────────────────────────────────── */}
+              {activeTab === 'tokens' && (
+                <div>
+                  <div className="mb-6">
+                    <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>ACCESO B2B</p>
+                    <h2 className="text-xl text-[#e8e8e0] mt-0.5">Tokens B2B</h2>
+                  </div>
+
+                  {/* Form */}
+                  <div className="border border-white/[0.07] p-5 mb-6">
+                    <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase', marginBottom: '16px' }}>GENERAR TOKEN</p>
+                    <form onSubmit={generateToken} className="space-y-4">
+                      <div className="grid grid-cols-3 gap-4">
+                        <input
+                          type="email"
+                          value={tokenEmail}
+                          onChange={e => setTokenEmail(e.target.value)}
+                          placeholder="Email del reclutador"
+                          required
+                          className={inputCls}
+                          style={{ fontFamily: MONO, fontSize: '12px' }}
+                        />
+                        <input
+                          type="number"
+                          value={tokenBalance}
+                          onChange={e => setTokenBalance(parseInt(e.target.value))}
+                          placeholder="Balance"
+                          required
+                          className={inputCls}
+                          style={{ fontFamily: MONO }}
+                        />
+                        <select
+                          value={tokenPlan}
+                          onChange={e => setTokenPlan(e.target.value)}
+                          className={inputCls}
+                          style={{ fontFamily: MONO, fontSize: '12px' }}
+                        >
+                          <option value="starter">Starter (10)</option>
+                          <option value="pro">Pro (100)</option>
+                          <option value="enterprise">Enterprise (Inf)</option>
+                        </select>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="text-xs bg-[#c9a84c] text-[#080808] font-semibold px-4 py-2 hover:bg-[#e6cf8a] transition-colors disabled:opacity-50"
+                        style={{ fontFamily: MONO }}
+                      >
+                        Generar token →
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Tokens table */}
+                  <div className="border border-white/[0.07]">
+                    <div className="px-5 py-3 border-b border-white/[0.07]">
+                      <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>TOKENS EMITIDOS — {tokens.length}</p>
                     </div>
-                    <GoldButton type="submit" disabled={loading}>Generar Token</GoldButton>
-                  </form>
-                </GlassCard>
-                <div className="space-y-2">
-                  {tokens.map((token) => (
-                    <GlassCard key={token.id} className="flex items-center justify-between">
-                      <div>
-                        <p className="text-white font-medium">{token.email}</p>
-                        <p className="text-sm text-gold font-mono">{token.access_token}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-white">{token.token_balance} tokens</p>
-                        <p className="text-xs text-muted">{token.plan_type}</p>
-                      </div>
-                    </GlassCard>
-                  ))}
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/[0.05]">
+                          {['EMAIL', 'TOKEN', 'BALANCE', 'PLAN'].map(h => (
+                            <th key={h} className="text-left py-2.5 px-4 font-normal tracking-widest text-[rgba(232,232,224,0.3)]" style={{ fontFamily: MONO, fontSize: '10px' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.04]">
+                        {tokens.map(token => (
+                          <tr key={token.id} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="py-3 px-4 text-sm text-[#e8e8e0]">{token.email}</td>
+                            <td className="py-3 px-4" style={{ fontFamily: MONO, fontSize: '11px', color: '#c9a84c' }}>{token.access_token}</td>
+                            <td className="py-3 px-4 text-[#e8e8e0]" style={{ fontFamily: MONO }}>{token.token_balance}</td>
+                            <td className="py-3 px-4">
+                              <span className="text-[10px] px-2 py-0.5 border border-white/10 text-[rgba(232,232,224,0.4)]" style={{ fontFamily: MONO, letterSpacing: '0.1em' }}>
+                                {(token.plan_type || '').toUpperCase()}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-          </motion.div>
-        </AnimatePresence>
+              {/* ── SKILLS IA ───────────────────────────────────────────── */}
+              {activeTab === 'skills' && (
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>ONTOLOGÍA</p>
+                      <h2 className="text-xl text-[#e8e8e0] mt-0.5">Skills Candidatas</h2>
+                    </div>
+                    <span
+                      className="text-xs border border-[#c9a84c]/30 text-[#c9a84c] px-2.5 py-1"
+                      style={{ fontFamily: MONO, letterSpacing: '0.1em' }}
+                    >
+                      {skillCandidates.filter(s => s.status === 'pending').length} PENDIENTES
+                    </span>
+                  </div>
+
+                  <div className="border border-white/[0.07] divide-y divide-white/[0.04]">
+                    {skillCandidates.map(skill => (
+                      <div key={skill.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-white/[0.02] transition-colors">
+                        <div>
+                          <p className="text-sm text-[#e8e8e0]">
+                            {skill.term}
+                            <span className="mx-2 text-[rgba(232,232,224,0.2)]">→</span>
+                            <span style={{ color: '#c9a84c' }}>{skill.normalized}</span>
+                          </p>
+                          <p className="text-[11px] text-[rgba(232,232,224,0.3)] mt-0.5" style={{ fontFamily: MONO }}>
+                            {skill.mention_count} menciones · desde {new Date(skill.first_seen).toLocaleDateString('es-PY')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`text-[10px] px-2 py-0.5 border ${
+                              skill.status === 'pending' ? 'border-amber-500/40 text-amber-400'
+                              : skill.status === 'approved' ? 'border-[#c9a84c]/40 text-[#c9a84c]'
+                              : 'border-white/10 text-[rgba(232,232,224,0.3)]'
+                            }`}
+                            style={{ fontFamily: MONO, letterSpacing: '0.1em' }}
+                          >
+                            {skill.status.toUpperCase()}
+                          </span>
+                          {skill.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => approveSkill(skill.id)}
+                                className="text-emerald-400/60 hover:text-emerald-400 transition-colors"
+                                title="Aprobar"
+                              >
+                                <CheckCircle size={15} />
+                              </button>
+                              <button
+                                onClick={() => rejectSkill(skill.id)}
+                                className="text-red-400/60 hover:text-red-400 transition-colors"
+                                title="Rechazar"
+                              >
+                                <X size={15} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
 
+      {/* NOTIFICATION TOAST */}
       <AnimatePresence>
         {notification && (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
-            className={`fixed bottom-8 right-8 p-4 rounded-xl flex items-center gap-3 text-sm shadow-2xl z-50 ${notification.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-            {notification.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            className={`fixed bottom-8 right-8 flex items-center gap-3 text-sm shadow-2xl z-50 border px-4 py-3 ${
+              notification.type === 'success'
+                ? 'bg-[#080808] border-emerald-500/30 text-emerald-400'
+                : 'bg-[#080808] border-red-500/30 text-red-400'
+            }`}
+            style={{ fontFamily: MONO, fontSize: '12px' }}
+          >
+            {notification.type === 'success' ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
             {notification.message}
-            <button onClick={() => setNotification(null)}><X size={14} /></button>
+            <button onClick={() => setNotification(null)} className="ml-1 opacity-60 hover:opacity-100">
+              <X size={12} />
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

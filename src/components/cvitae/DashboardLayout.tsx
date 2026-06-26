@@ -134,9 +134,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">{user?.email?.split('@')[0] || 'Usuario'}</p>
-                <p className="text-xs text-muted truncate">{user?.email || 'Plan Free'}</p>
+                <p className="text-xs text-white/60 truncate">{user?.email || 'Plan Free'}</p>
               </div>
-              <button onClick={handleLogout} className="p-1.5 text-muted hover:text-red-400 transition-colors">
+              <button onClick={handleLogout} className="p-1.5 text-white/60 hover:text-red-400 transition-colors">
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
@@ -159,7 +159,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <main className="lg:ml-64 min-h-screen pt-16 lg:pt-0">
         <div className="hidden lg:flex h-20 items-center justify-between px-8 border-b border-white/5 bg-background/50 backdrop-blur-xl sticky top-0 z-20">
           <div className="flex items-center gap-4">
-            <a href="/" className="text-sm text-muted hover:text-white transition-colors flex items-center gap-1">
+            <a href="/" className="text-sm text-white/60 hover:text-white transition-colors flex items-center gap-1">
               <ArrowLeft size={16} />
               Volver al inicio
             </a>
@@ -170,7 +170,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="flex items-center gap-4">
             <Link
               href="/mi-carrera/alertas"
-              className="relative p-2 text-muted hover:text-white transition-colors"
+              className="relative p-2 text-white/60 hover:text-white transition-colors"
             >
               <Bell className="w-5 h-5" />
               <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-gold" />
@@ -183,7 +183,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 CV
               </div>
               <span className="text-sm text-white">{user?.email?.split('@')[0] || 'Usuario'}</span>
-              <ChevronRight className="w-4 h-4 text-muted" />
+              <ChevronRight className="w-4 h-4 text-white/60" />
             </Link>
           </div>
         </div>

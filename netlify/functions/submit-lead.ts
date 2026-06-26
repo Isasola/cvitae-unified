@@ -82,6 +82,61 @@ function buildMagicLinkEmail(name: string, magicLink: string): string {
 </html>`
 }
 
+function buildB2BConfirmationEmail(name: string, company: string): string {
+  const greeting = name ? `Hola ${name}` : `Hola equipo de ${company}`
+  return `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Solicitud recibida - CVitae</title></head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Helvetica Neue',Arial,sans-serif;color:#f5f4f0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0a;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background-color:#111110;border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;">
+        <!-- Header -->
+        <tr><td style="padding:32px 40px 24px;border-bottom:1px solid rgba(255,255,255,0.06);">
+          <p style="margin:0;font-size:22px;font-weight:900;letter-spacing:-0.02em;color:#c9a84c;">CV<em style="font-weight:400;font-style:italic;">itae</em></p>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:36px 40px;">
+          <p style="margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:0.16em;color:rgba(255,255,255,0.35);">Solicitud recibida</p>
+          <h1 style="margin:0 0 20px;font-size:26px;font-weight:700;line-height:1.2;color:#f5f4f0;">
+            ${greeting},<br>recibimos tu solicitud.
+          </h1>
+          <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:rgba(255,255,255,0.55);">
+            Recibimos tu solicitud de acceso al panel B2B de CVitae.
+          </p>
+          <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:rgba(255,255,255,0.55);">
+            En las próximas 24-48 horas te enviamos tu token de acceso y la guía para empezar.
+          </p>
+          <!-- Benefits -->
+          <p style="margin:0 0 16px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.7);">Qué obtendrás:</p>
+          <ul style="margin:0 0 24px;padding:0 0 0 20px;list-style:none;">
+            <li style="margin:0 0 10px;font-size:14px;line-height:1.5;color:rgba(255,255,255,0.55);">✓ Panel para analizar CVs en lote</li>
+            <li style="margin:0 0 10px;font-size:14px;line-height:1.5;color:rgba(255,255,255,0.55);">✓ Vacantes con link de postulación propio</li>
+            <li style="margin:0 0 10px;font-size:14px;line-height:1.5;color:rgba(255,255,255,0.55);">✓ Banco de talento acumulado</li>
+          </ul>
+          <p style="margin:0 0 28px;font-size:14px;line-height:1.6;color:rgba(255,255,255,0.55);">
+            Mientras tanto, podés ver una demo del panel en: <a href="https://cvitae.lat/empresas" style="color:#c9a84c;text-decoration:none;">cvitae.lat/empresas</a>
+          </p>
+          <!-- CTA -->
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+            <tr><td style="background-color:#c9a84c;border-radius:50px;text-align:center;">
+              <a href="https://cvitae.lat/empresas" style="display:inline-block;padding:14px 32px;font-size:14px;font-weight:600;color:#0a0a0a;text-decoration:none;letter-spacing:0.01em;">
+                Ver demo del panel →
+              </a>
+            </td></tr>
+          </table>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding:20px 40px;border-top:1px solid rgba(255,255,255,0.06);">
+          <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2);">CVitae · <a href="https://cvitae.lat" style="color:rgba(255,255,255,0.2);">cvitae.lat</a> · Asunción, Paraguay</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+}
+
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method not allowed" }
 
@@ -125,6 +180,18 @@ const handler: Handler = async (event) => {
          <p><strong>Email:</strong> ${email}</p>
          <p><strong>Empresa:</strong> ${resolvedCompany}</p>`
       )
+
+      // Send confirmation email to B2B lead
+      try {
+        const confirmationHtml = buildB2BConfirmationEmail(name || "", resolvedCompany)
+        await sendResendEmail(
+          email.trim().toLowerCase(),
+          `CVitae recibió tu solicitud, ${resolvedCompany} ✦`,
+          confirmationHtml
+        )
+      } catch (e: any) {
+        console.error("B2B confirmation email failed:", e.message)
+      }
 
       return { statusCode: 200, body: JSON.stringify({ success: true }) }
     }
