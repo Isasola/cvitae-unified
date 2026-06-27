@@ -148,6 +148,15 @@ export default function Admin() {
   const [suggestionType, setSuggestionType] = useState<'feedback' | 'bug' | 'idea'>('feedback')
   const [sendingSuggestion, setSendingSuggestion] = useState(false)
 
+  // Scraper report state
+  const [scraperReport, setScraperReport] = useState<{
+    totalOpportunities: number
+    totalContentHub: number
+    bySource: { source: string; count: number; lastSeen: string }[]
+    newLast24h: number
+    newLast7d: number
+  } | null>(null)
+
   const NAV_ITEMS = [
     { id: 'brief', label: 'Brief del día', dotColor: 'bg-emerald-400', badge: null },
     { id: 'usuarios', label: 'Usuarios', dotColor: 'bg-[#c9a84c]', badge: metrics.usuarios.toString() },
@@ -165,6 +174,7 @@ export default function Admin() {
       loadMetrics()
       loadTokens()
       loadBeta()
+      loadScraperReport()
     }
   }, [isAuthenticated, activeTab])
 
@@ -208,6 +218,15 @@ export default function Admin() {
       setLeads(json.leads ?? [])
     } catch {
       // beta load failure non-fatal
+    }
+  }
+
+  const loadScraperReport = async () => {
+    try {
+      const json = await adminFetch('scraper_report')
+      setScraperReport(json)
+    } catch {
+      // non-fatal
     }
   }
 
@@ -505,6 +524,55 @@ export default function Admin() {
                         <p style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.25)', marginTop: '4px' }}>{m.sub}</p>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Scraper automation report */}
+                  <div className="mt-6 border border-white/[0.07]">
+                    <div className="px-5 py-3 border-b border-white/[0.07] flex items-center justify-between">
+                      <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>AUTOMATIZACIÓN — SCRAPERS</p>
+                      <button
+                        onClick={loadScraperReport}
+                        className="text-[10px] text-[rgba(232,232,224,0.3)] hover:text-[#e8e8e0] border border-white/[0.07] px-2.5 py-1 transition-colors"
+                        style={{ fontFamily: MONO }}
+                      >↻ Actualizar</button>
+                    </div>
+                    {scraperReport ? (
+                      <>
+                        {/* Summary row */}
+                        <div className="grid grid-cols-4 gap-px bg-white/[0.04]">
+                          {[
+                            { label: 'TOTAL OPORTUNIDADES', value: (scraperReport.totalOpportunities + scraperReport.totalContentHub).toLocaleString('es-PY'), sub: 'opportunities + content_hub' },
+                            { label: 'NUEVAS HOY', value: scraperReport.newLast24h.toLocaleString('es-PY'), sub: 'últimas 24h' },
+                            { label: 'NUEVAS 7 DÍAS', value: scraperReport.newLast7d.toLocaleString('es-PY'), sub: 'últimos 7 días' },
+                            { label: 'FUENTES ACTIVAS', value: scraperReport.bySource.length.toString(), sub: `cron: 06:00 PY diario` },
+                          ].map((m, i) => (
+                            <div key={i} className="bg-[#080808] px-4 py-3">
+                              <p style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.25)', textTransform: 'uppercase', marginBottom: '4px' }}>{m.label}</p>
+                              <p style={{ fontFamily: MONO, fontSize: '1.5rem', lineHeight: 1, color: '#c9a84c', fontWeight: 600 }}>{m.value}</p>
+                              <p style={{ fontFamily: MONO, fontSize: '9px', color: 'rgba(232,232,224,0.2)', marginTop: '3px' }}>{m.sub}</p>
+                            </div>
+                          ))}
+                        </div>
+                        {/* By source table */}
+                        <div className="max-h-48 overflow-y-auto divide-y divide-white/[0.03]">
+                          {scraperReport.bySource.map(s => (
+                            <div key={s.source} className="flex items-center justify-between px-5 py-2 hover:bg-white/[0.02]">
+                              <span style={{ fontFamily: MONO, fontSize: '11px', color: 'rgba(232,232,224,0.6)' }}>{s.source}</span>
+                              <div className="flex items-center gap-4">
+                                <span style={{ fontFamily: MONO, fontSize: '11px', color: '#c9a84c' }}>{s.count.toLocaleString('es-PY')}</span>
+                                <span style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.2)' }}>
+                                  {new Date(s.lastSeen).toLocaleDateString('es-PY')}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="px-5 py-4">
+                        <p style={{ fontFamily: MONO, fontSize: '11px', color: 'rgba(232,232,224,0.25)' }}>Cargando reporte...</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Signals */}

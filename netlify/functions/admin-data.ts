@@ -49,6 +49,43 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ betaList: bw || [], leads: rl || [] }) }
     }
 
+    if (action === "scraper_report") {
+      const now = new Date()
+      const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
+      const since7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+      const [totalOppsRes, totalChRes, new24hRes, new7dRes, bySourceRes] = await Promise.all([
+        supabase.from("opportunities").select("id", { count: "exact", head: true }),
+        supabase.from("content_hub").select("id", { count: "exact", head: true }).eq("is_active", true),
+        supabase.from("opportunities").select("id", { count: "exact", head: true }).gte("created_at", since24h),
+        supabase.from("opportunities").select("id", { count: "exact", head: true }).gte("created_at", since7d),
+        supabase.from("opportunities").select("source, created_at").order("created_at", { ascending: false }).limit(2000),
+      ])
+
+      // aggregate by source
+      const sourceMap: Record<string, { count: number; lastSeen: string }> = {}
+      for (const row of (bySourceRes.data || [])) {
+        const src = row.source || "unknown"
+        if (!sourceMap[src]) sourceMap[src] = { count: 0, lastSeen: row.created_at }
+        sourceMap[src].count++
+        if (row.created_at > sourceMap[src].lastSeen) sourceMap[src].lastSeen = row.created_at
+      }
+      const bySource = Object.entries(sourceMap)
+        .map(([source, v]) => ({ source, count: v.count, lastSeen: v.lastSeen }))
+        .sort((a, b) => b.count - a.count)
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          totalOpportunities: totalOppsRes.count || 0,
+          totalContentHub: totalChRes.count || 0,
+          newLast24h: new24hRes.count || 0,
+          newLast7d: new7dRes.count || 0,
+          bySource,
+        }),
+      }
+    }
+
     // ── WRITES ───────────────────────────────────────────────────────────────
 
     if (action === "toggle_subscribed") {
