@@ -681,22 +681,38 @@ export default function Admin() {
                             </span>
                           </td>
                           <td className="py-3 px-3">
-                            <button
-                              onClick={() => toggleSubscription(sub.user_id, sub.is_subscribed)}
-                              className={`text-[10px] px-2 py-0.5 border transition-colors ${sub.is_subscribed ? 'border-[#c9a84c]/50 text-[#c9a84c]' : 'border-white/10 text-[rgba(232,232,224,0.4)] hover:border-[#c9a84c]/30 hover:text-[#c9a84c]/60'}`}
-                              style={{ fontFamily: MONO, letterSpacing: '0.1em' }}
-                            >
-                              {sub.is_subscribed ? '● PRO' : '○ FREE'}
-                            </button>
+                            {sub.user_id ? (
+                              <button
+                                onClick={() => toggleSubscription(sub.user_id, sub.is_subscribed)}
+                                className={`text-[10px] px-2 py-0.5 border transition-colors ${sub.is_subscribed ? 'border-[#c9a84c]/50 text-[#c9a84c]' : 'border-white/10 text-[rgba(232,232,224,0.4)] hover:border-[#c9a84c]/30 hover:text-[#c9a84c]/60'}`}
+                                style={{ fontFamily: MONO, letterSpacing: '0.1em' }}
+                              >
+                                {sub.is_subscribed ? '● PRO' : '○ FREE'}
+                              </button>
+                            ) : (
+                              <span
+                                title="Sin cuenta activa — el usuario aún no hizo login"
+                                className="text-[10px] px-2 py-0.5 border border-white/[0.05] text-[rgba(232,232,224,0.2)] cursor-not-allowed"
+                                style={{ fontFamily: MONO, letterSpacing: '0.1em' }}
+                              >
+                                ○ FREE
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-3">
-                            <button
-                              onClick={() => toggleTestFlag(sub.user_id, sub.is_test ?? false)}
-                              className="text-[10px] text-[rgba(232,232,224,0.3)] hover:text-[rgba(232,232,224,0.6)] transition-colors"
-                              style={{ fontFamily: MONO }}
-                            >
-                              {sub.is_test ? 'marcar real' : 'marcar test'}
-                            </button>
+                            {sub.user_id ? (
+                              <button
+                                onClick={() => toggleTestFlag(sub.user_id, sub.is_test ?? false)}
+                                className="text-[10px] text-[rgba(232,232,224,0.3)] hover:text-[rgba(232,232,224,0.6)] transition-colors"
+                                style={{ fontFamily: MONO }}
+                              >
+                                {sub.is_test ? 'marcar real' : 'marcar test'}
+                              </button>
+                            ) : (
+                              <span style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.15)' }}>
+                                sin login
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}

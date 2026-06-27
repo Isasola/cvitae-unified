@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link, useLocation } from 'wouter'
-import { MapPin, Calendar, ArrowRight, ArrowLeft } from 'lucide-react'
+import { MapPin, Calendar, ArrowRight, ArrowLeft, Sparkles } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { GrowthLine, Eyebrow } from '@/components/cv/visuals'
-import { supabase } from '@/lib/supabase'
+import { supabase, auth } from '@/lib/supabase'
 
 interface Opportunity {
   id: string
@@ -25,6 +25,10 @@ export default function Opportunities() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
   const [loading, setLoading] = useState(true)
   const [cat, setCat] = useState<Cat>('Todas')
+  const [user, setUser] = useState<any>(null)
+  const [ctaEmail, setCtaEmail] = useState('')
+  const [ctaSent, setCtaSent] = useState(false)
+  const [ctaSending, setCtaSending] = useState(false)
 
   useEffect(() => {
     supabase
@@ -34,7 +38,26 @@ export default function Opportunities() {
       .in('tipo', ['beca', 'foro'])
       .order('created_at', { ascending: false })
       .then(({ data }) => { setOpportunities(data || []); setLoading(false) })
+
+    auth.getUser().then(setUser)
+    const sub = auth.onAuthStateChange(setUser)
+    return () => sub.unsubscribe()
   }, [])
+
+  const handleCtaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!ctaEmail.trim()) return
+    setCtaSending(true)
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: ctaEmail.trim().toLowerCase(),
+        options: { emailRedirectTo: 'https://cvitae.lat/mi-carrera/perfil' },
+      })
+      if (!error) setCtaSent(true)
+    } finally {
+      setCtaSending(false)
+    }
+  }
 
   const filtered = opportunities.filter((o) =>
     cat === 'Todas' ? true : cat === 'Becas' ? o.tipo === 'beca' : o.tipo === 'foro'
@@ -83,6 +106,49 @@ export default function Opportunities() {
               </button>
             ))}
           </div>
+
+          {/* CTA — connect with email+CV for personalised matches */}
+          {!user && (
+            <div className="mt-8 glass-panel p-6 border border-gold/20 bg-gradient-to-br from-gold/5 to-transparent">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Sparkles className="h-4 w-4 text-gold" />
+                    <span className="text-xs uppercase tracking-widest text-gold">Oportunidades personalizadas</span>
+                  </div>
+                  <p className="text-cream font-medium">
+                    Conectá tu correo y CV para ver oportunidades que encajan con tu perfil.
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    CVitae analiza tu experiencia y te muestra automáticamente las vacantes, becas y foros más relevantes para vos.
+                  </p>
+                </div>
+                {ctaSent ? (
+                  <div className="shrink-0 text-sm text-emerald-400 font-medium">
+                    ✓ Revisá tu correo para acceder
+                  </div>
+                ) : (
+                  <form onSubmit={handleCtaSubmit} className="shrink-0 flex gap-2">
+                    <input
+                      type="email"
+                      required
+                      value={ctaEmail}
+                      onChange={e => setCtaEmail(e.target.value)}
+                      placeholder="tu@email.com"
+                      className="px-3 py-2 text-sm bg-white/5 border border-white/10 text-cream placeholder-white/30 focus:outline-none focus:border-gold/40 rounded-lg w-48"
+                    />
+                    <button
+                      type="submit"
+                      disabled={ctaSending}
+                      className="px-4 py-2 text-sm bg-gold text-ink font-medium rounded-lg hover:bg-gold/80 transition-colors disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {ctaSending ? '...' : 'Conectar →'}
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <div className="mt-10 flex justify-center">

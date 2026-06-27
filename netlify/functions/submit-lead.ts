@@ -14,7 +14,7 @@ async function sendResendEmail(to: string, subject: string, html: string): Promi
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: "CVitae <noreply@cvitae.lat>", to: [to], subject, html }),
+      body: JSON.stringify({ from: "CVitae <contacto@cvitae.lat>", to: [to], subject, html }),
     })
     if (!res.ok) {
       const body = await res.text()
