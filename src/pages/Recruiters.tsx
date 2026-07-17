@@ -8,7 +8,8 @@ import {
   ChevronDown, ChevronUp, CheckCircle2, XCircle,
   Star, Brain, Users, Trophy, ArrowLeft, Share2, Database,
   FileText, Upload, RotateCcw, X, Link2, Plus, Copy, Check as CheckIcon,
-  UserCheck, Mail, Calendar, ChevronLeft
+  UserCheck, Mail, Calendar, ChevronLeft, Download, Search,
+  BarChart2, TrendingUp,
 } from 'lucide-react'
 
 const ease = [0.22, 1, 0.36, 1] as const
@@ -238,6 +239,8 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [search, setSearch] = useState('')
+  const [scoreFilter, setScoreFilter] = useState<'all' | 'high' | 'mid' | 'low'>('all')
 
   useEffect(() => { loadHistory() }, [])
 
@@ -263,6 +266,31 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
     onToggleStar()
   }
 
+  const exportCSV = () => {
+    const filtered = getFiltered()
+    const header = 'Nombre,Archivo,Score ATS,Puesto,Fecha\n'
+    const rows = filtered.map(r =>
+      [r.candidate_name || '', r.file_name || '', r.ats_score, r.vacancy_label || '', new Date(r.created_at).toLocaleDateString('es-PY')]
+        .map(v => `"${String(v).replace(/"/g, '""')}"`)
+        .join(',')
+    ).join('\n')
+    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'cvitae-historial.csv'; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const getFiltered = () => {
+    return history.filter(r => {
+      const matchesSearch = !search || (r.candidate_name?.toLowerCase().includes(search.toLowerCase()) || r.file_name?.toLowerCase().includes(search.toLowerCase()))
+      const matchesScore = scoreFilter === 'all' ||
+        (scoreFilter === 'high' && r.ats_score >= 80) ||
+        (scoreFilter === 'mid' && r.ats_score >= 60 && r.ats_score < 80) ||
+        (scoreFilter === 'low' && r.ats_score < 60)
+      return matchesSearch && matchesScore
+    })
+  }
+
   if (loading) return (
     <div className="flex justify-center py-20">
       <Loader2 className="animate-spin text-[#c9a84c]" />
@@ -277,13 +305,16 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
     </div>
   )
 
+  const filtered = getFiltered()
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/40">
           <span className="h-px w-8 bg-white/20" /> {history.length} análisis guardados
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           {selectedIds.length >= 2 && (
             <button
               onClick={() => onCompare(selectedIds)}
@@ -292,6 +323,12 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
               <Users strokeWidth={1.5} className="h-3.5 w-3.5" /> Comparar {selectedIds.length}
             </button>
           )}
+          <button
+            onClick={exportCSV}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-2 text-xs text-white/50 transition hover:border-white/25 hover:text-white"
+          >
+            <Download strokeWidth={1.5} className="h-3.5 w-3.5" /> CSV
+          </button>
           <Link
             href="/empresas/masivo"
             className="inline-flex items-center gap-2 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-4 py-2 text-xs uppercase tracking-[0.15em] text-[#c9a84c] transition hover:border-[#c9a84c]/60"
@@ -301,8 +338,31 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
         </div>
       </div>
 
+      {/* Search + score filter */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search strokeWidth={1.5} className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar candidato…"
+            className="w-full rounded-xl border border-white/10 bg-white/[0.02] pl-9 pr-4 py-2 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition"
+          />
+        </div>
+        <div className="flex gap-1">
+          {([['all', 'Todos'], ['high', '80+'], ['mid', '60-79'], ['low', '<60']] as const).map(([val, label]) => (
+            <button key={val} onClick={() => setScoreFilter(val)}
+              className={`rounded-full px-3 py-1.5 text-xs transition ${scoreFilter === val ? 'bg-white/10 text-white' : 'text-white/35 hover:text-white/60'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <ol className="space-y-3">
-        {history.map((record, i) => (
+        {filtered.length === 0 && (
+          <div className="py-10 text-center text-sm text-white/30">Sin resultados para ese filtro.</div>
+        )}
+        {filtered.map((record, i) => (
           <motion.li
             key={record.id}
             initial={{ opacity: 0, y: 10 }}
@@ -1147,6 +1207,13 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
 
 // ─── Panel principal (autenticado) ────────────────────────────────────────────
 
+interface DashboardStats {
+  vacantesActivas: number
+  totalPostulantes: number
+  cvsAnalizados: number
+  paraLlamar: number
+}
+
 function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLogout: () => void }) {
   const [file, setFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -1158,9 +1225,17 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   const [activeTab, setActiveTab] = useState<'analyze' | 'history' | 'vacancies'>('analyze')
   const [historyKey, setHistoryKey] = useState(0)
   const [comparison, setComparison] = useState<ComparisonResult | null>(null)
+  const [stats, setStats] = useState<DashboardStats | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [injectCvText, setInjectCvText] = useState<string | null>(null)
   const [injectCandidateName, setInjectCandidateName] = useState<string>('')
+
+  useEffect(() => {
+    fetch('/.netlify/functions/validate-recruiter-token', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: session.token, action: 'get_dashboard_stats' }),
+    }).then(r => r.json()).then(d => { if (d.stats) setStats(d.stats) }).catch(() => {})
+  }, [])
 
   const handleFile = (f: File) => {
     const ok = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']
@@ -1263,6 +1338,24 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
         <p className="mt-4 max-w-xl text-sm font-light leading-relaxed text-white/55">
           Analizá un CV individual o usá el modo masivo para rankear hasta 30 en una corrida.
         </p>
+
+        {/* KPI row */}
+        {stats && (
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { label: 'Vacantes activas', value: stats.vacantesActivas, Icon: Link2, color: 'text-[#c9a84c]' },
+              { label: 'Postulantes', value: stats.totalPostulantes, Icon: Users, color: 'text-sky-400' },
+              { label: 'CVs analizados', value: stats.cvsAnalizados, Icon: BarChart2, color: 'text-purple-400' },
+              { label: 'Para llamar', value: stats.paraLlamar, Icon: TrendingUp, color: 'text-emerald-400' },
+            ].map(({ label, value, Icon, color }) => (
+              <div key={label} className="glass-card rounded-2xl p-4">
+                <Icon strokeWidth={1.5} className={`h-4 w-4 ${color} mb-2`} />
+                <p className={`font-display text-3xl ${color}`}>{value}</p>
+                <p className="text-[10px] uppercase tracking-[0.15em] text-white/35 mt-1">{label}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Quick links */}
         <div className="mt-8 flex flex-wrap gap-3">
@@ -1462,7 +1555,10 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
 // ─── Token login ──────────────────────────────────────────────────────────────
 
 function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void }) {
-  const [token, setToken] = useState('')
+  const [token, setToken] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('token') || ''
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -1598,8 +1694,8 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
 
             <div className="mt-8 border-t border-white/8 pt-6 text-center">
               <p className="text-xs font-light text-white/35">¿Todavía no tenés token?</p>
-              <a href="/#registro" className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-[#c9a84c] transition hover:text-[#e6cf8a]">
-                Solicitar acceso a la Beta <ChevronRight strokeWidth={1.5} className="h-3.5 w-3.5" />
+              <a href="mailto:contacto@cvitae.lat" className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-[#c9a84c] transition hover:text-[#e6cf8a]">
+                Contactar a CVitae <ChevronRight strokeWidth={1.5} className="h-3.5 w-3.5" />
               </a>
             </div>
           </motion.div>
@@ -1611,8 +1707,26 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 
+const SESSION_KEY = 'cvitae_recruiter_session'
+
 export default function Recruiters() {
-  const [session, setSession] = useState<RecruiterSession | null>(null)
-  if (!session) return <TokenLogin onSuccess={setSession} />
-  return <RecruiterPanel session={session} onLogout={() => setSession(null)} />
+  const [session, setSession] = useState<RecruiterSession | null>(() => {
+    try {
+      const stored = sessionStorage.getItem(SESSION_KEY)
+      return stored ? JSON.parse(stored) : null
+    } catch { return null }
+  })
+
+  const handleLogin = (s: RecruiterSession) => {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(s))
+    setSession(s)
+  }
+
+  const handleLogout = () => {
+    sessionStorage.removeItem(SESSION_KEY)
+    setSession(null)
+  }
+
+  if (!session) return <TokenLogin onSuccess={handleLogin} />
+  return <RecruiterPanel session={session} onLogout={handleLogout} />
 }

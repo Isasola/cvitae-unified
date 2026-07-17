@@ -32,7 +32,8 @@ export default function App() {
       <Route path="/oportunidades/:slug" component={OpportunityDetail} />
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:slug" component={BlogPost} />
-      <Route path="/about" component={About} />
+      <Route path="/sobre-cvitae" component={About} />
+      <Route path="/about"><Redirect to="/sobre-cvitae" /></Route>
       <Route path="/privacy" component={Privacy} />
       <Route path="/terminos" component={Terms} />
       <Route path="/cookies" component={Cookies} />

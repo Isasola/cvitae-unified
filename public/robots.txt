@@ -1,7 +1,24 @@
 User-agent: *
 Allow: /
-
 Disallow: /admin
 Disallow: /.netlify/
+Disallow: /auth/callback
+Disallow: /mi-carrera/configuracion
+
+# AI crawlers — allowed for GEO/citability
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Googlebot
+Crawl-delay: 1
 
 Sitemap: https://cvitae.lat/sitemap.xml

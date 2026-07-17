@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:Inter,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#111111;border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;max-width:560px;">
+
+        <!-- Header with logo -->
+        <tr><td style="padding:32px 40px 24px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:center;">
+          <span style="font-family:Georgia,serif;font-size:1.75rem;font-weight:900;color:#c9a84c;letter-spacing:-0.5px;">CV<em style="font-style:italic;font-weight:400;">itae</em></span>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="padding:40px;">
+          <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:rgba(255,255,255,0.3);">Tu acceso a CVitae</p>
+          <h1 style="margin:0 0 20px;font-size:1.5rem;font-weight:700;color:#ffffff;line-height:1.3;">
+            Aquí está tu enlace mágico de acceso
+          </h1>
+
+          <p style="margin:0 0 28px;font-size:15px;color:rgba(255,255,255,0.6);line-height:1.7;">
+            Hacé clic en el botón para ingresar a tu cuenta de CVitae. Este enlace expira en 60 minutos y es de un solo uso.
+          </p>
+
+          <!-- Magic link button -->
+          <div style="text-align:center;margin:36px 0;">
+            <a href="{{ .ConfirmationURL }}"
+               style="display:inline-block;background:#c9a84c;color:#0a0a0a;text-decoration:none;padding:16px 40px;border-radius:100px;font-weight:700;font-size:15px;letter-spacing:0.02em;">
+              Ingresar a CVitae →
+            </a>
+          </div>
+
+          <p style="margin:0 0 8px;font-size:13px;color:rgba(255,255,255,0.3);">O copiá este enlace en tu navegador:</p>
+          <p style="margin:0 0 24px;font-size:12px;color:rgba(201,168,76,0.6);word-break:break-all;">{{ .ConfirmationURL }}</p>
+
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:16px;margin-top:24px;">
+            <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.3);line-height:1.6;">
+              Si no pediste acceso, podés ignorar este correo con tranquilidad.
+              Nadie más puede usar este enlace.
+            </p>
+          </div>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:24px 40px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+          <p style="margin:0 0 6px;font-size:12px;color:rgba(255,255,255,0.2);">
+            CVitae — Tu agente de carrera inteligente
+          </p>
+          <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.15);">
+            Asunción, Paraguay · <a href="https://cvitae.lat" style="color:rgba(201,168,76,0.4);text-decoration:none;">cvitae.lat</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

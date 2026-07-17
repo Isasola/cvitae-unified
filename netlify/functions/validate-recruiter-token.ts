@@ -209,7 +209,37 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ ok: true, recruiter_action: body.recruiter_action }) }
     }
 
+    // ─── Acción: Dashboard stats ───
+    if (action === "get_dashboard_stats") {
+      const [vacRes, appRes, anaRes, callRes] = await Promise.all([
+        supabase.from("recruiter_vacancies").select("id", { count: "exact", head: true }).eq("recruiter_token_id", data.id).eq("is_active", true),
+        supabase.from("vacancy_applications").select("id", { count: "exact", head: true }).in(
+          "vacancy_id",
+          (await supabase.from("recruiter_vacancies").select("id").eq("recruiter_token_id", data.id)).data?.map((v: any) => v.id) || []
+        ),
+        supabase.from("recruiter_analyses").select("id", { count: "exact", head: true }).eq("token_id", data.id),
+        supabase.from("vacancy_applications").select("id", { count: "exact", head: true }).eq("recommendation", "Llamar").in(
+          "vacancy_id",
+          (await supabase.from("recruiter_vacancies").select("id").eq("recruiter_token_id", data.id)).data?.map((v: any) => v.id) || []
+        ),
+      ])
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          stats: {
+            vacantesActivas: vacRes.count || 0,
+            totalPostulantes: appRes.count || 0,
+            cvsAnalizados: anaRes.count || 0,
+            paraLlamar: callRes.count || 0,
+          },
+        }),
+      }
+    }
+
     // ─── Validación simple / inicio de sesión ───
+    // Auto-activate prospect if was invited
+    supabase.from("b2b_prospects").update({ status: "activated", activated_at: new Date().toISOString() }).eq("status", "invited").ilike("email", data.email).then(() => {})
+
     return {
       statusCode: 200,
       body: JSON.stringify({

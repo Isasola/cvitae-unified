@@ -12,10 +12,10 @@ export default function About() {
       <Helmet>
         <title>Sobre CVitae | Ecosistema de Talento con IA para Paraguay</title>
         <meta name="description" content="Conocé la misión de CVitae: conectar talento paraguayo con las mejores oportunidades usando inteligencia artificial de vanguardia." />
-        <link rel="canonical" href="https://cvitae.lat/about" />
+        <link rel="canonical" href="https://cvitae.lat/sobre-cvitae" />
         <meta property="og:title" content="Sobre CVitae | IA para el Talento Paraguayo" />
         <meta property="og:description" content="Conocé la misión de CVitae: conectar talento paraguayo con las mejores oportunidades usando IA de vanguardia." />
-        <meta property="og:url" content="https://cvitae.lat/about" />
+        <meta property="og:url" content="https://cvitae.lat/sobre-cvitae" />
         <meta property="og:type" content="website" />
       </Helmet>
       <Navbar />

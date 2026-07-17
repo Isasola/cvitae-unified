@@ -28,10 +28,19 @@ const handler: Handler = async (event) => {
     }
 
     if (action === "metrics") {
-      const [usersRes, oppsRes, subsRes] = await Promise.all([
+      const now = new Date()
+      const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
+      const yesterdayStart = new Date(todayStart); yesterdayStart.setDate(yesterdayStart.getDate() - 1)
+      const weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - 7)
+
+      const [usersRes, oppsRes, subsRes, todayRes, yesterdayRes, weekRes, b2bRes] = await Promise.all([
         supabase.from("user_master_profiles").select("id", { count: "exact", head: true }),
         supabase.from("content_hub").select("id", { count: "exact", head: true }).eq("is_active", true).eq("tipo", "oportunidad"),
         supabase.from("user_master_profiles").select("id", { count: "exact", head: true }).eq("is_subscribed", true),
+        supabase.from("user_master_profiles").select("id", { count: "exact", head: true }).gte("created_at", todayStart.toISOString()),
+        supabase.from("user_master_profiles").select("id", { count: "exact", head: true }).gte("created_at", yesterdayStart.toISOString()).lt("created_at", todayStart.toISOString()),
+        supabase.from("user_master_profiles").select("id", { count: "exact", head: true }).gte("created_at", weekStart.toISOString()),
+        supabase.from("recruiter_tokens").select("id", { count: "exact", head: true }).eq("is_active", true),
       ])
       return {
         statusCode: 200,
@@ -39,8 +48,21 @@ const handler: Handler = async (event) => {
           usuarios: usersRes.count || 0,
           oportunidades: oppsRes.count || 0,
           suscriptores: subsRes.count || 0,
+          usuariosHoy: todayRes.count || 0,
+          usuariosAyer: yesterdayRes.count || 0,
+          usuariosEstaSemana: weekRes.count || 0,
+          empresasActivas: b2bRes.count || 0,
         }),
       }
+    }
+
+    if (action === "list_b2b_prospects") {
+      const { data, error } = await supabase
+        .from("b2b_prospects")
+        .select("*")
+        .order("created_at", { ascending: false })
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify({ data: data || [] }) }
     }
 
     if (action === "list_beta") {

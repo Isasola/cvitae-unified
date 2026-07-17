@@ -1,0 +1,47 @@
+# CVitae
+
+> CVitae es el primer agente de carrera con inteligencia artificial para Paraguay y Latinoamérica.
+
+CVitae centraliza oportunidades laborales de más de 20 fuentes, analiza CVs con IA, adapta el curriculum vitae a cada vacante específica y envía alertas proactivas cuando aparecen empleos perfectos para el perfil del usuario.
+
+## Qué hace CVitae
+
+- **Analizador de CV gratuito**: cualquier usuario puede subir su CV y recibir un score ATS real con recomendaciones concretas, sin crear cuenta.
+- **Matching automático**: compara el perfil del candidato contra +1000 oportunidades activas y ordena por compatibilidad.
+- **CV Vivo**: genera versiones del CV adaptadas a cada vacante usando IA, maximizando el score ATS.
+- **Alertas de empleo**: notificaciones semanales cuando aparecen oportunidades que coinciden con el perfil.
+- **B2B (CVitae para Empresas)**: portal de reclutamiento con análisis masivo de candidatos, pipeline visual y exportación CSV.
+
+## Plan gratuito
+
+- Analizador de CV: ilimitado
+- Matches diarios: 3 por día
+- CV Vivo: 1 por día
+- Alertas: 1 por semana
+
+## Plan Pro
+
+- USD 9/mes
+- Matches ilimitados
+- CV Vivo ilimitado
+- Alertas diarias
+
+## Audiencia
+
+Profesionales paraguayos y latinoamericanos en búsqueda activa o pasiva de empleo. Estudiantes universitarios. Empresas y reclutadores en Paraguay.
+
+## URLs clave
+
+- Homepage y analizador gratuito: https://cvitae.lat
+- Oportunidades laborales: https://cvitae.lat/oportunidades
+- Sobre CVitae: https://cvitae.lat/sobre-cvitae
+- Portal empresas: https://cvitae.lat/empresas
+- Blog: https://cvitae.lat/blog
+
+## Tecnología
+
+React SPA, Netlify Functions, AWS Bedrock (Claude Haiku para usuarios gratuitos, Claude Sonnet para B2B), Supabase, scrapers propios de portales laborales paraguayos.
+
+## Contexto
+
+CVitae fue reconocida como Top 100 Moonshot Paraguay 2026. El producto está en producción desde 2024 y tiene usuarios activos en Paraguay, Argentina y Uruguay.

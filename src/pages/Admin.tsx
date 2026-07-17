@@ -117,14 +117,15 @@ export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState('')
   const adminPasswordRef = useRef('')
-  const [activeTab, setActiveTab] = useState<'brief' | 'usuarios' | 'beta' | 'contenido' | 'tokens' | 'skills'>('brief')
+  const [activeTab, setActiveTab] = useState<'brief' | 'usuarios' | 'beta' | 'prospects' | 'contenido' | 'tokens' | 'skills'>('brief')
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const [items, setItems] = useState<ContentItem[]>([])
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [skillCandidates, setSkillCandidates] = useState<SkillCandidate[]>([])
-  const [metrics, setMetrics] = useState({ usuarios: 0, matches: 0, oportunidades: 0, suscriptores: 0 })
+  const [metrics, setMetrics] = useState({ usuarios: 0, matches: 0, oportunidades: 0, suscriptores: 0, usuariosHoy: 0, usuariosAyer: 0, usuariosEstaSemana: 0, empresasActivas: 0 })
+  const [b2bProspects, setB2bProspects] = useState<any[]>([])
 
   const [formData, setFormData] = useState<ContentItem>({
     titulo: '', slug: '', cuerpo: '', categoria: 'Tecnología', imagen_url: '',
@@ -161,6 +162,7 @@ export default function Admin() {
     { id: 'brief', label: 'Brief del día', dotColor: 'bg-emerald-400', badge: null },
     { id: 'usuarios', label: 'Usuarios', dotColor: 'bg-[#c9a84c]', badge: metrics.usuarios.toString() },
     { id: 'beta', label: 'Beta / Leads', dotColor: 'bg-sky-400', badge: null },
+    { id: 'prospects', label: 'B2B Prospects', dotColor: 'bg-purple-400', badge: null },
     { id: 'contenido', label: 'Contenido', dotColor: 'bg-white/30', badge: null },
     { id: 'tokens', label: 'Tokens B2B', dotColor: 'bg-white/30', badge: null },
     { id: 'skills', label: 'Skills IA', dotColor: 'bg-amber-400', badge: null },
@@ -175,6 +177,7 @@ export default function Admin() {
       loadTokens()
       loadBeta()
       loadScraperReport()
+      loadB2bProspects()
     }
   }, [isAuthenticated, activeTab])
 
@@ -200,10 +203,26 @@ export default function Admin() {
   const loadMetrics = async () => {
     try {
       const json = await adminFetch('metrics')
-      setMetrics({ usuarios: json.usuarios, matches: 0, oportunidades: json.oportunidades, suscriptores: json.suscriptores })
+      setMetrics({
+        usuarios: json.usuarios || 0,
+        matches: 0,
+        oportunidades: json.oportunidades || 0,
+        suscriptores: json.suscriptores || 0,
+        usuariosHoy: json.usuariosHoy || 0,
+        usuariosAyer: json.usuariosAyer || 0,
+        usuariosEstaSemana: json.usuariosEstaSemana || 0,
+        empresasActivas: json.empresasActivas || 0,
+      })
     } catch {
-      // metrics failure is non-fatal, keep defaults
+      // metrics failure is non-fatal
     }
+  }
+
+  const loadB2bProspects = async () => {
+    try {
+      const json = await adminFetch('list_b2b_prospects')
+      setB2bProspects(json.data || [])
+    } catch { /* non-fatal */ }
   }
 
   const loadTokens = async () => {
@@ -510,18 +529,38 @@ export default function Admin() {
                     <h1 className="mt-1 text-2xl font-semibold text-[#e8e8e0]">Estado del sistema</h1>
                   </div>
 
-                  {/* Metrics grid */}
+                  {/* Metrics grid — row 1 */}
                   <div className="grid grid-cols-4 gap-px bg-white/[0.07] border border-white/[0.07]">
                     {[
                       { label: 'USUARIOS TOTALES', value: metrics.usuarios, sub: 'en base de datos' },
                       { label: 'PRO ACTIVOS', value: metrics.suscriptores, sub: 'is_subscribed = true' },
                       { label: 'OPORTUNIDADES', value: metrics.oportunidades, sub: 'activas hoy' },
-                      { label: 'INGRESOS REALES', value: '$0', sub: 'este mes · test excluido' },
+                      { label: 'EMPRESAS B2B', value: metrics.empresasActivas, sub: 'tokens activos' },
                     ].map((m, i) => (
                       <div key={i} className="bg-[#080808] p-5">
                         <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase', marginBottom: '8px' }}>{m.label}</p>
                         <p style={{ fontFamily: MONO, fontSize: '2.5rem', lineHeight: 1, color: '#e8e8e0', fontWeight: 600 }}>{m.value}</p>
                         <p style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.25)', marginTop: '4px' }}>{m.sub}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Metrics grid — row 2 (deltas) */}
+                  <div className="mt-px grid grid-cols-3 gap-px bg-white/[0.07]">
+                    {[
+                      { label: 'USUARIOS HOY', value: metrics.usuariosHoy, delta: metrics.usuariosHoy - metrics.usuariosAyer },
+                      { label: 'USUARIOS ESTA SEMANA', value: metrics.usuariosEstaSemana, delta: null },
+                      { label: 'AYER', value: metrics.usuariosAyer, delta: null },
+                    ].map((m, i) => (
+                      <div key={i} className="bg-[#080808] px-5 py-3 flex items-center justify-between">
+                        <div>
+                          <p style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.25)', textTransform: 'uppercase' }}>{m.label}</p>
+                          <p style={{ fontFamily: MONO, fontSize: '1.8rem', lineHeight: 1.1, color: '#c9a84c', marginTop: '4px' }}>{m.value}</p>
+                        </div>
+                        {m.delta !== null && (
+                          <span style={{ fontFamily: MONO, fontSize: '12px', color: m.delta >= 0 ? '#34d399' : '#f87171' }}>
+                            {m.delta >= 0 ? '+' : ''}{m.delta} vs ayer
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -553,19 +592,27 @@ export default function Admin() {
                             </div>
                           ))}
                         </div>
-                        {/* By source table */}
+                        {/* By source table with traffic light */}
                         <div className="max-h-48 overflow-y-auto divide-y divide-white/[0.03]">
-                          {scraperReport.bySource.map(s => (
-                            <div key={s.source} className="flex items-center justify-between px-5 py-2 hover:bg-white/[0.02]">
-                              <span style={{ fontFamily: MONO, fontSize: '11px', color: 'rgba(232,232,224,0.6)' }}>{s.source}</span>
-                              <div className="flex items-center gap-4">
-                                <span style={{ fontFamily: MONO, fontSize: '11px', color: '#c9a84c' }}>{s.count.toLocaleString('es-PY')}</span>
-                                <span style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.2)' }}>
-                                  {new Date(s.lastSeen).toLocaleDateString('es-PY')}
-                                </span>
+                          {scraperReport.bySource.map(s => {
+                            const hoursSince = (Date.now() - new Date(s.lastSeen).getTime()) / 3600000
+                            const light = hoursSince < 24 ? { color: '#34d399', label: 'Activo' } : hoursSince < 168 ? { color: '#c9a84c', label: 'Desfasado' } : { color: '#f87171', label: 'Sin datos' }
+                            return (
+                              <div key={s.source} className="flex items-center justify-between px-5 py-2 hover:bg-white/[0.02]">
+                                <div className="flex items-center gap-2">
+                                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: light.color, display: 'inline-block', flexShrink: 0 }} />
+                                  <span style={{ fontFamily: MONO, fontSize: '11px', color: 'rgba(232,232,224,0.6)' }}>{s.source}</span>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                  <span style={{ fontFamily: MONO, fontSize: '9px', color: light.color, letterSpacing: '0.1em' }}>{light.label.toUpperCase()}</span>
+                                  <span style={{ fontFamily: MONO, fontSize: '11px', color: '#c9a84c' }}>{s.count.toLocaleString('es-PY')}</span>
+                                  <span style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.2)' }}>
+                                    {new Date(s.lastSeen).toLocaleDateString('es-PY')}
+                                  </span>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       </>
                     ) : (
@@ -1051,6 +1098,78 @@ export default function Admin() {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              )}
+
+              {/* ── B2B PROSPECTS ───────────────────────────────────────── */}
+              {activeTab === 'prospects' && (
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>PIPELINE B2B</p>
+                      <h2 className="text-xl text-[#e8e8e0] mt-0.5">B2B Prospects — {b2bProspects.length}</h2>
+                    </div>
+                    <button
+                      onClick={loadB2bProspects}
+                      className="text-xs text-[rgba(232,232,224,0.4)] hover:text-[#e8e8e0] border border-white/[0.07] px-3 py-1.5 transition-colors"
+                      style={{ fontFamily: MONO }}
+                    >
+                      ↻ Actualizar
+                    </button>
+                  </div>
+
+                  {b2bProspects.length === 0 ? (
+                    <div className="border border-white/[0.07] p-8 text-sm text-[rgba(232,232,224,0.3)]">Sin prospects cargados. Insertar manualmente en Supabase tabla b2b_prospects.</div>
+                  ) : (
+                    <div className="border border-white/[0.07]">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/[0.05]">
+                            {['EMPRESA', 'EMAIL', 'CONTACTO', 'STATUS', 'ACCIÓN'].map(h => (
+                              <th key={h} className="text-left py-2.5 px-4 font-normal tracking-widest text-[rgba(232,232,224,0.3)]" style={{ fontFamily: MONO, fontSize: '10px' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.04]">
+                          {b2bProspects.map((p: any) => (
+                            <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
+                              <td className="py-3 px-4 text-sm text-[#e8e8e0]">{p.company_name || '—'}</td>
+                              <td className="py-3 px-4" style={{ fontFamily: MONO, fontSize: '11px', color: 'rgba(232,232,224,0.6)' }}>{p.email}</td>
+                              <td className="py-3 px-4 text-sm text-[rgba(232,232,224,0.5)]">{p.contact_name || '—'}</td>
+                              <td className="py-3 px-4">
+                                <span className={`text-[10px] px-2 py-0.5 border ${
+                                  p.status === 'activated' ? 'border-emerald-500/40 text-emerald-400'
+                                  : p.status === 'invited' ? 'border-[#c9a84c]/40 text-[#c9a84c]'
+                                  : 'border-white/10 text-[rgba(232,232,224,0.4)]'
+                                }`} style={{ fontFamily: MONO, letterSpacing: '0.1em' }}>
+                                  {(p.status || 'pending').toUpperCase()}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4">
+                                {p.status === 'pending' && (
+                                  <button
+                                    onClick={async () => {
+                                      const res = await fetch('/.netlify/functions/send-b2b-invite', {
+                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ password: adminPasswordRef.current, prospect_id: p.id }),
+                                      })
+                                      const data = await res.json()
+                                      if (data.ok) { setNotification({ type: 'success', message: `Invitación enviada a ${p.email}` }); loadB2bProspects() }
+                                      else setNotification({ type: 'error', message: data.error || 'Error' })
+                                    }}
+                                    className="text-[10px] text-sky-400/60 hover:text-sky-400 transition-colors"
+                                    style={{ fontFamily: MONO }}
+                                  >
+                                    Enviar invitación →
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
 
