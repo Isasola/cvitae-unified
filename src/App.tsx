@@ -51,7 +51,7 @@ export default function App() {
       <Route path="/mi-carrera/analizar" component={JobMatcher} />
       <Route path="/mi-carrera/cv" component={CVVivo} />
       <Route path="/mi-carrera/alertas" component={Alertas} />
-      <Route path="/mi-carrera/oportunidades" component={Dashboard} />
+      <Route path="/mi-carrera/oportunidades"><Redirect to="/oportunidades" /></Route>
       <Route path="/mi-carrera/configuracion" component={Configuracion} />
       <Route path="/mi-carrera/verificate" component={Assessments} />
       <Route component={NotFound} />

@@ -482,21 +482,16 @@ export default function Dashboard() {
                           <OpportunityCard key={m.id} m={m} />
                         ))}
                         {!isSubscribed && matches.length > 1 && (
-                          <div className="relative rounded-2xl border border-white/8 overflow-hidden">
-                            <div className="blur-sm pointer-events-none opacity-40 p-5">
-                              <p className="text-cream font-medium">Puesto en {matches[1]?.ubicacion || 'Paraguay'}</p>
-                              <p className="text-sm text-white/40 mt-1">+{matches.length - 1} matches esperándote</p>
-                            </div>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0a0a]/80 p-5 text-center">
-                              <p className="text-cream font-display text-lg">Hay {matches.length - 1} match{matches.length - 1 !== 1 ? 'es' : ''} más hoy.</p>
-                              <p className="mt-1 text-sm text-white/50">Con Pro los ves todos, sin espera.</p>
-                              <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola! Quiero activar CVitae Pro por USD 9/mes.')}`}
-                                target="_blank" rel="noopener noreferrer"
-                                className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-5 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-[#e6cf8a] transition">
-                                Activar Pro — $9/mes
-                              </a>
-                              <p className="mt-2 text-xs text-white/30">o volvé mañana para tu próximo match gratuito</p>
-                            </div>
+                          <div className="rounded-2xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.03] p-6 text-center">
+                            <Lock className="mx-auto h-5 w-5 text-[#c9a84c] mb-3" />
+                            <p className="text-cream font-display text-xl">Hay {matches.length - 1} match{matches.length - 1 !== 1 ? 'es' : ''} más hoy.</p>
+                            <p className="mt-2 text-sm text-white/50 max-w-xs mx-auto">Con CVitae Pro ves todos tus matches sin límite diario.</p>
+                            <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola! Quiero activar CVitae Pro por USD 9/mes.')}`}
+                              target="_blank" rel="noopener noreferrer"
+                              className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-6 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-[#e6cf8a] transition">
+                              Activar Pro — $9/mes
+                            </a>
+                            <p className="mt-3 text-xs text-white/30">o volvé mañana para tu próximo match gratuito</p>
                           </div>
                         )}
                       </div>

@@ -2,7 +2,8 @@
 import { Handler } from "@netlify/functions"
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
 
-const MODEL_ID = "global.anthropic.claude-sonnet-4-6"
+const MODEL_ID_EXTRACT = "us.anthropic.claude-haiku-4-5-20251001"
+const MODEL_ID_ANALYZE = "global.anthropic.claude-sonnet-4-6"
 const bedrockClient = new BedrockRuntimeClient({
   region: process.env.CVITAE_AWS_REGION || "us-east-1",
   credentials: {
@@ -19,9 +20,9 @@ function extractJSON(text: string): any {
   return JSON.parse(text.trim())
 }
 
-async function invokeModel(system: string, userPrompt: string, maxTokens: number): Promise<string> {
+async function invokeModel(system: string, userPrompt: string, maxTokens: number, modelId?: string): Promise<string> {
   const command = new InvokeModelCommand({
-    modelId: MODEL_ID,
+    modelId: modelId || MODEL_ID_ANALYZE,
     contentType: "application/json",
     accept: "application/json",
     body: JSON.stringify({
@@ -103,7 +104,8 @@ ${cvText}`
     const responseText = await invokeModel(
       "Sos un reclutador experto latinoamericano. Respondés ÚNICAMENTE con JSON válido y bien formateado, sin texto adicional, sin markdown.",
       prompt,
-      mode === 'batch_analyze' ? 1500 : 1000
+      mode === 'batch_analyze' ? 1500 : 1000,
+      mode === 'extract' ? MODEL_ID_EXTRACT : MODEL_ID_ANALYZE
     )
     const result = extractJSON(responseText)
     return { statusCode: 200, body: JSON.stringify(result) }

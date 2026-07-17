@@ -27,6 +27,14 @@ interface ProfileData {
   location?: string
 }
 
+function cleanText(text: string): string {
+  return text
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/â€™/g, "'").replace(/â€œ/g, '"').replace(/â€/g, '"').replace(/â€"/g, '–').replace(/â€"/g, '—')
+    .replace(/Ã©/g, 'é').replace(/Ã¡/g, 'á').replace(/Ã­/g, 'í').replace(/Ã³/g, 'ó').replace(/Ãº/g, 'ú')
+    .replace(/[\u{0080}-\u{009F}]/gu, '').trim()
+}
+
 function scoreMatch(opp: any, skills: string[], rubro?: string): { score: number; reasons: string[] } {
   const reasons: string[] = []
   let score = 0
@@ -65,8 +73,8 @@ function OpportunityCard({ opp }: { opp: Opportunity }) {
             </span>
             <span className="text-[10px] text-white/30">{opp.type}</span>
           </div>
-          <h3 className="mt-2 font-display text-lg text-white leading-tight">{opp.title}</h3>
-          <p className="text-sm font-light text-white/55 mt-0.5">{opp.organization}</p>
+          <h3 className="mt-2 font-display text-lg text-white leading-tight">{cleanText(opp.title)}</h3>
+          <p className="text-sm font-light text-white/55 mt-0.5">{cleanText(opp.organization)}</p>
           <div className="flex items-center gap-3 mt-2 text-xs text-white/35">
             <span className="flex items-center gap-1"><MapPin size={11} />{opp.location}</span>
             <span className="flex items-center gap-1"><Briefcase size={11} />{opp.type}</span>

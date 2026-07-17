@@ -18,6 +18,14 @@ interface Opportunity {
   metadata?: { application_url?: string; organization?: string }
 }
 
+function cleanText(text: string): string {
+  return text
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/â€™/g, "'").replace(/â€œ/g, '"').replace(/â€/g, '"').replace(/â€"/g, '–').replace(/â€"/g, '—')
+    .replace(/Ã©/g, 'é').replace(/Ã¡/g, 'á').replace(/Ã­/g, 'í').replace(/Ã³/g, 'ó').replace(/Ãº/g, 'ú')
+    .replace(/[\u{0080}-\u{009F}]/gu, '').trim()
+}
+
 const cats = ['Todas', 'Becas', 'Foros'] as const
 type Cat = (typeof cats)[number]
 
@@ -170,7 +178,7 @@ export default function Opportunities() {
                         {o.tipo === 'beca' ? 'Beca' : 'Foro'}
                       </span>
                     </div>
-                    <h3 className="font-display text-xl text-cream mt-2 truncate">{o.titulo}</h3>
+                    <h3 className="font-display text-xl text-cream mt-2 truncate">{cleanText(o.titulo)}</h3>
                     <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {o.ubicacion}</span>
                       <span className="inline-flex items-center gap-1">

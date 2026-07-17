@@ -51,60 +51,63 @@ export default function Blog() {
         <meta property="og:type" content="website" />
       </Helmet>
       <SiteShell>
-        <div className="max-w-5xl mx-auto px-6 py-12">
-          <div className="mb-6">
+        <div className="max-w-5xl mx-auto px-6 py-16">
+          <div className="mb-8">
             <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-cream transition-colors">
               <ArrowLeft className="h-4 w-4" /> Inicio
             </Link>
           </div>
-          <div className="relative">
+          <div className="relative pb-10">
             <Eyebrow>Blog</Eyebrow>
-            <h1 className="font-display text-4xl sm:text-5xl mt-2 text-cream">
+            <h1 className="font-display text-4xl sm:text-5xl mt-3 text-cream leading-tight">
               Ideas para <em>crecer</em> con intención.
             </h1>
-            <p className="text-muted-foreground mt-3 max-w-xl">
+            <p className="text-muted-foreground mt-4 max-w-xl text-base leading-relaxed">
               Guías prácticas, análisis del mercado y conversaciones sobre carrera, IA y trabajo en Paraguay.
             </p>
-            <GrowthLine className="absolute -bottom-6 left-0 right-0 h-10 opacity-40" />
+            <GrowthLine className="absolute -bottom-2 left-0 right-0 h-10 opacity-40" />
           </div>
 
           {loading ? (
-            <div className="mt-12 flex justify-center">
+            <div className="mt-16 flex justify-center">
               <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin" />
             </div>
           ) : posts.length === 0 ? (
-            <p className="mt-12 text-center text-muted-foreground">No hay artículos publicados todavía.</p>
+            <p className="mt-16 text-center text-muted-foreground">No hay artículos publicados todavía.</p>
           ) : (
-            <div className="mt-12 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="mt-14 grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {posts.map((p, i) => (
                 <div
                   key={p.id}
                   onClick={() => setLocation(`/blog/${p.slug}`)}
-                  className="group glass-panel overflow-hidden hover:border-gold/40 transition-colors cursor-pointer"
+                  className="group glass-panel overflow-hidden hover:border-gold/40 transition-all duration-300 cursor-pointer rounded-2xl"
                 >
                   <div
-                    className="aspect-[16/10] relative"
+                    className="aspect-[16/9] relative overflow-hidden"
                     style={{ background: p.imagen_url ? undefined : gradients[i % gradients.length] }}
                   >
                     {p.imagen_url ? (
                       <img src={p.imagen_url} alt={p.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     ) : (
                       <div className="absolute inset-0 grid place-items-center">
-                        <span className="font-display italic text-gold text-2xl opacity-40">CVitae</span>
+                        <span className="font-display italic text-gold text-3xl opacity-30">CVitae</span>
                       </div>
                     )}
                   </div>
-                  <div className="p-5">
+                  <div className="p-6">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span className="text-[10px] uppercase tracking-wider border border-gold/30 text-gold px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] uppercase tracking-wider border border-gold/30 text-gold px-2.5 py-0.5 rounded-full">
                         {p.categoria}
                       </span>
-                      <span>{new Date(p.fecha_vencimiento).toLocaleDateString()}</span>
+                      <span>{new Date(p.fecha_vencimiento).toLocaleDateString('es-PY', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                     </div>
-                    <h2 className="font-display text-xl text-cream mt-3 group-hover:text-gold transition-colors">{p.titulo}</h2>
-                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed line-clamp-3">
-                      {p.cuerpo?.replace(/[#*`>]/g, '').substring(0, 150)}
+                    <h2 className="font-display text-xl text-cream mt-3 mb-2 leading-snug group-hover:text-gold transition-colors line-clamp-2">{p.titulo}</h2>
+                    <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
+                      {p.cuerpo?.replace(/[#*`_>~\[\]]/g, '').replace(/!\[.*?\]/g, '').substring(0, 160)}…
                     </p>
+                    <div className="mt-4 flex items-center gap-1 text-xs text-gold/70 group-hover:text-gold transition-colors font-medium">
+                      Leer artículo <span className="ml-1">→</span>
+                    </div>
                   </div>
                 </div>
               ))}
