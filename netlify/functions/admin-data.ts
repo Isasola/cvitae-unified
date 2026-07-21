@@ -76,24 +76,50 @@ const handler: Handler = async (event) => {
       const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
       const since7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-      const [totalOppsRes, totalChRes, new24hRes, new7dRes, bySourceRes] = await Promise.all([
+      // today = from midnight local PY time (UTC-4)
+      const todayStart = new Date(now)
+      todayStart.setUTCHours(4, 0, 0, 0) // midnight PY = 04:00 UTC
+      if (now.getUTCHours() < 4) todayStart.setUTCDate(todayStart.getUTCDate() - 1)
+      const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000)
+
+      const [totalOppsRes, totalChRes, new24hRes, new7dRes, bySourceRes, todayRes, yesterdayRes, duplicatesRes] = await Promise.all([
         supabase.from("opportunities").select("id", { count: "exact", head: true }),
         supabase.from("content_hub").select("id", { count: "exact", head: true }).eq("is_active", true),
         supabase.from("opportunities").select("id", { count: "exact", head: true }).gte("created_at", since24h),
         supabase.from("opportunities").select("id", { count: "exact", head: true }).gte("created_at", since7d),
-        supabase.from("opportunities").select("source, created_at").order("created_at", { ascending: false }).limit(2000),
+        // GROUP BY source server-side — no limit, no JS aggregation
+        supabase.rpc("opportunities_by_source"),
+        // new today (since midnight PY)
+        supabase.from("opportunities").select("source, created_at").gte("created_at", todayStart.toISOString()),
+        // new yesterday
+        supabase.from("opportunities")
+          .select("source, created_at")
+          .gte("created_at", yesterdayStart.toISOString())
+          .lt("created_at", todayStart.toISOString()),
+        // duplicate count: same titulo + organization
+        supabase.rpc("count_duplicate_opportunities"),
       ])
 
-      // aggregate by source
-      const sourceMap: Record<string, { count: number; lastSeen: string }> = {}
-      for (const row of (bySourceRes.data || [])) {
-        const src = row.source || "unknown"
-        if (!sourceMap[src]) sourceMap[src] = { count: 0, lastSeen: row.created_at }
-        sourceMap[src].count++
-        if (row.created_at > sourceMap[src].lastSeen) sourceMap[src].lastSeen = row.created_at
+      // build per-source today/yesterday maps
+      const todayMap: Record<string, number> = {}
+      for (const r of (todayRes.data || [])) {
+        const s = r.source || "unknown"
+        todayMap[s] = (todayMap[s] || 0) + 1
       }
-      const bySource = Object.entries(sourceMap)
-        .map(([source, v]) => ({ source, count: v.count, lastSeen: v.lastSeen }))
+      const yesterdayMap: Record<string, number> = {}
+      for (const r of (yesterdayRes.data || [])) {
+        const s = r.source || "unknown"
+        yesterdayMap[s] = (yesterdayMap[s] || 0) + 1
+      }
+
+      const bySource = ((bySourceRes.data || []) as { source: string; total: number; last_seen: string }[])
+        .map(row => ({
+          source: row.source,
+          count: row.total,
+          lastSeen: row.last_seen,
+          newToday: todayMap[row.source] || 0,
+          newYesterday: yesterdayMap[row.source] || 0,
+        }))
         .sort((a, b) => b.count - a.count)
 
       return {
@@ -103,6 +129,7 @@ const handler: Handler = async (event) => {
           totalContentHub: totalChRes.count || 0,
           newLast24h: new24hRes.count || 0,
           newLast7d: new7dRes.count || 0,
+          duplicates: (duplicatesRes.data as any)?.[0]?.duplicate_count || 0,
           bySource,
         }),
       }

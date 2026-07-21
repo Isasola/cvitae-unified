@@ -153,9 +153,10 @@ export default function Admin() {
   const [scraperReport, setScraperReport] = useState<{
     totalOpportunities: number
     totalContentHub: number
-    bySource: { source: string; count: number; lastSeen: string }[]
+    bySource: { source: string; count: number; lastSeen: string; newToday: number; newYesterday: number }[]
     newLast24h: number
     newLast7d: number
+    duplicates: number
   } | null>(null)
 
   const NAV_ITEMS = [
@@ -578,41 +579,60 @@ export default function Admin() {
                     {scraperReport ? (
                       <>
                         {/* Summary row */}
-                        <div className="grid grid-cols-4 gap-px bg-white/[0.04]">
+                        <div className="grid grid-cols-5 gap-px bg-white/[0.04]">
                           {[
-                            { label: 'TOTAL OPORTUNIDADES', value: (scraperReport.totalOpportunities + scraperReport.totalContentHub).toLocaleString('es-PY'), sub: 'opportunities + content_hub' },
-                            { label: 'NUEVAS HOY', value: scraperReport.newLast24h.toLocaleString('es-PY'), sub: 'últimas 24h' },
-                            { label: 'NUEVAS 7 DÍAS', value: scraperReport.newLast7d.toLocaleString('es-PY'), sub: 'últimos 7 días' },
-                            { label: 'FUENTES ACTIVAS', value: scraperReport.bySource.length.toString(), sub: `cron: 06:00 PY diario` },
+                            { label: 'TOTAL BD', value: scraperReport.totalOpportunities.toLocaleString('es-PY'), sub: 'tabla opportunities', color: '#c9a84c' },
+                            { label: 'NUEVAS HOY', value: scraperReport.newLast24h.toLocaleString('es-PY'), sub: 'desde 00:00 PY', color: '#34d399' },
+                            { label: 'NUEVAS 7D', value: scraperReport.newLast7d.toLocaleString('es-PY'), sub: 'últimos 7 días', color: '#c9a84c' },
+                            { label: 'FUENTES', value: scraperReport.bySource.length.toString(), sub: 'cron: 06:00 PY', color: '#c9a84c' },
+                            { label: 'DUPLICADOS', value: scraperReport.duplicates.toLocaleString('es-PY'), sub: 'mismo título+empresa', color: scraperReport.duplicates > 100 ? '#f87171' : 'rgba(232,232,224,0.4)' },
                           ].map((m, i) => (
                             <div key={i} className="bg-[#080808] px-4 py-3">
                               <p style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.25)', textTransform: 'uppercase', marginBottom: '4px' }}>{m.label}</p>
-                              <p style={{ fontFamily: MONO, fontSize: '1.5rem', lineHeight: 1, color: '#c9a84c', fontWeight: 600 }}>{m.value}</p>
+                              <p style={{ fontFamily: MONO, fontSize: '1.5rem', lineHeight: 1, color: m.color, fontWeight: 600 }}>{m.value}</p>
                               <p style={{ fontFamily: MONO, fontSize: '9px', color: 'rgba(232,232,224,0.2)', marginTop: '3px' }}>{m.sub}</p>
                             </div>
                           ))}
                         </div>
-                        {/* By source table with traffic light */}
-                        <div className="max-h-48 overflow-y-auto divide-y divide-white/[0.03]">
-                          {scraperReport.bySource.map(s => {
-                            const hoursSince = (Date.now() - new Date(s.lastSeen).getTime()) / 3600000
-                            const light = hoursSince < 24 ? { color: '#34d399', label: 'Activo' } : hoursSince < 168 ? { color: '#c9a84c', label: 'Desfasado' } : { color: '#f87171', label: 'Sin datos' }
-                            return (
-                              <div key={s.source} className="flex items-center justify-between px-5 py-2 hover:bg-white/[0.02]">
-                                <div className="flex items-center gap-2">
-                                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: light.color, display: 'inline-block', flexShrink: 0 }} />
-                                  <span style={{ fontFamily: MONO, fontSize: '11px', color: 'rgba(232,232,224,0.6)' }}>{s.source}</span>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                  <span style={{ fontFamily: MONO, fontSize: '9px', color: light.color, letterSpacing: '0.1em' }}>{light.label.toUpperCase()}</span>
-                                  <span style={{ fontFamily: MONO, fontSize: '11px', color: '#c9a84c' }}>{s.count.toLocaleString('es-PY')}</span>
-                                  <span style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.2)' }}>
-                                    {new Date(s.lastSeen).toLocaleDateString('es-PY')}
-                                  </span>
-                                </div>
-                              </div>
-                            )
-                          })}
+                        {/* By source table */}
+                        <div className="overflow-x-auto">
+                          <table className="w-full border-collapse">
+                            <thead>
+                              <tr className="border-b border-white/[0.05]">
+                                {['', 'FUENTE', 'TOTAL', 'HOY', 'AYER', 'Δ', 'ÚLTIMA VEZ'].map((h, i) => (
+                                  <th key={i} className={`py-2 px-3 font-normal text-left tracking-widest text-[rgba(232,232,224,0.25)]`} style={{ fontFamily: MONO, fontSize: '9px' }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/[0.03]">
+                              {scraperReport.bySource.map(s => {
+                                const hoursSince = (Date.now() - new Date(s.lastSeen).getTime()) / 3600000
+                                const light = hoursSince < 26 ? { color: '#34d399', label: 'OK' } : hoursSince < 50 ? { color: '#c9a84c', label: '~1d' } : { color: '#f87171', label: 'FALLA' }
+                                const delta = s.newToday - s.newYesterday
+                                return (
+                                  <tr key={s.source} className="hover:bg-white/[0.02] transition-colors">
+                                    <td className="py-2 px-3">
+                                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: light.color, display: 'inline-block' }} title={light.label} />
+                                    </td>
+                                    <td className="py-2 px-3" style={{ fontFamily: MONO, fontSize: '11px', color: 'rgba(232,232,224,0.7)' }}>{s.source}</td>
+                                    <td className="py-2 px-3" style={{ fontFamily: MONO, fontSize: '11px', color: '#c9a84c' }}>{s.count.toLocaleString('es-PY')}</td>
+                                    <td className="py-2 px-3" style={{ fontFamily: MONO, fontSize: '11px', color: s.newToday > 0 ? '#34d399' : 'rgba(232,232,224,0.25)' }}>
+                                      {s.newToday > 0 ? `+${s.newToday}` : '—'}
+                                    </td>
+                                    <td className="py-2 px-3" style={{ fontFamily: MONO, fontSize: '11px', color: 'rgba(232,232,224,0.35)' }}>
+                                      {s.newYesterday > 0 ? `+${s.newYesterday}` : '—'}
+                                    </td>
+                                    <td className="py-2 px-3" style={{ fontFamily: MONO, fontSize: '11px', color: delta > 0 ? '#34d399' : delta < 0 ? '#f87171' : 'rgba(232,232,224,0.2)' }}>
+                                      {delta > 0 ? `+${delta}` : delta < 0 ? delta : '·'}
+                                    </td>
+                                    <td className="py-2 px-3" style={{ fontFamily: MONO, fontSize: '10px', color: light.color }}>
+                                      {new Date(s.lastSeen).toLocaleDateString('es-PY')} {new Date(s.lastSeen).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
                         </div>
                       </>
                     ) : (
