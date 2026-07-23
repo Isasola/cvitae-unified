@@ -63,7 +63,10 @@ export const handler = async (event: any) => {
     }
   } catch (error: any) {
     console.error('extract-pdf-text error:', error?.message || error)
-    const diagnostic = process.env.CONTEXT === 'deploy-preview'
+    const isPreview = process.env.CONTEXT === 'deploy-preview'
+      || process.env.DEPLOY_PRIME_URL?.includes('deploy-preview-')
+      || process.env.DEPLOY_URL?.includes('deploy-preview-')
+    const diagnostic = isPreview
       ? String(error?.message || error).slice(0, 180)
       : undefined
     return {
