@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link, useLocation } from 'wouter'
-import { MapPin, Calendar, ArrowRight, ArrowLeft, Sparkles } from 'lucide-react'
+import { MapPin, Calendar, ArrowRight, ArrowLeft, Sparkles, RefreshCw, AlertCircle } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { GrowthLine, Eyebrow } from '@/components/cv/visuals'
 import { supabase, auth } from '@/lib/supabase'
@@ -32,21 +32,32 @@ type Cat = (typeof cats)[number]
 export default function Opportunities() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [cat, setCat] = useState<Cat>('Todas')
   const [user, setUser] = useState<any>(null)
   const [ctaEmail, setCtaEmail] = useState('')
   const [ctaSent, setCtaSent] = useState(false)
   const [ctaSending, setCtaSending] = useState(false)
 
-  useEffect(() => {
-    supabase
+  const loadOpportunities = async () => {
+    setLoading(true)
+    setLoadError('')
+    const { data, error } = await supabase
       .from('content_hub')
       .select('*')
       .eq('is_active', true)
       .in('tipo', ['beca', 'foro'])
       .order('created_at', { ascending: false })
-      .then(({ data }) => { setOpportunities(data || []); setLoading(false) })
+    if (error) {
+      setLoadError('No pudimos cargar las oportunidades. Revisá tu conexión e intentá nuevamente.')
+    } else {
+      setOpportunities(data || [])
+    }
+    setLoading(false)
+  }
 
+  useEffect(() => {
+    loadOpportunities()
     auth.getUser().then(setUser)
     const sub = auth.onAuthStateChange(setUser)
     return () => sub.unsubscribe()
@@ -159,8 +170,22 @@ export default function Opportunities() {
           )}
 
           {loading ? (
-            <div className="mt-10 flex justify-center">
-              <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin" />
+            <div className="mt-8 grid gap-3" aria-label="Cargando oportunidades" aria-busy="true">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="glass-panel p-6 animate-pulse">
+                  <div className="h-3 w-20 rounded bg-white/10" />
+                  <div className="mt-4 h-6 w-2/3 rounded bg-white/10" />
+                  <div className="mt-3 h-3 w-1/3 rounded bg-white/5" />
+                </div>
+              ))}
+            </div>
+          ) : loadError ? (
+            <div className="mt-8 rounded-2xl border border-red-400/20 bg-red-400/[0.04] p-8 text-center" role="alert">
+              <AlertCircle className="mx-auto h-7 w-7 text-red-300" />
+              <p className="mt-3 text-sm text-cream">{loadError}</p>
+              <button onClick={loadOpportunities} className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm text-cream hover:border-gold/40">
+                <RefreshCw className="h-4 w-4" /> Intentar nuevamente
+              </button>
             </div>
           ) : filtered.length === 0 ? (
             <p className="mt-10 text-center text-muted-foreground">No hay oportunidades en esta categoría todavía.</p>

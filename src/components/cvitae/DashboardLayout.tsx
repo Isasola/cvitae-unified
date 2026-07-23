@@ -133,12 +133,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 CV
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{user?.email?.split('@')[0] || 'Usuario'}</p>
-                <p className="text-xs text-white/60 truncate">{user?.email || 'Plan Free'}</p>
+                <p className="text-sm font-medium text-white truncate">{user?.email?.split('@')[0] || 'Sesión no iniciada'}</p>
+                <p className="text-xs text-white/60 truncate">{user?.email || 'Ingresá para ver tu perfil'}</p>
               </div>
-              <button onClick={handleLogout} className="p-1.5 text-white/60 hover:text-red-400 transition-colors">
-                <LogOut className="w-4 h-4" />
-              </button>
+              {user && (
+                <button onClick={handleLogout} aria-label="Cerrar sesión" className="p-1.5 text-white/60 hover:text-red-400 transition-colors">
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -182,7 +184,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gold to-[#e8c97a] flex items-center justify-center text-xs font-bold text-[#0a0a0a]">
                 CV
               </div>
-              <span className="text-sm text-white">{user?.email?.split('@')[0] || 'Usuario'}</span>
+              <span className="text-sm text-white">{user?.email?.split('@')[0] || 'Sesión'}</span>
               <ChevronRight className="w-4 h-4 text-white/60" />
             </Link>
           </div>

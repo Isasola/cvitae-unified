@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { GrowthLine, CompatibilityTrace, Connector, Eyebrow } from '@/components/cv/visuals'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
+import { SiteShell } from '@/components/cv/SiteShell'
 import { auth, supabase } from '@/lib/supabase'
 
 const MATCH_BATCH_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1/match-batch'
@@ -66,9 +67,9 @@ function EmptyState() {
       <GrowthLine className="absolute -top-4 left-0 right-0 h-32 opacity-60" />
       <div className="relative">
         <Eyebrow>Bienvenida a CVitae</Eyebrow>
-        <h2 className="font-display mt-2 max-w-2xl text-4xl leading-tight text-cream">
+        <h1 className="font-display mt-2 max-w-2xl text-4xl leading-tight text-cream">
           Tu carrera, <em>trazada</em> por una IA que conoce el mercado paraguayo.
-        </h2>
+        </h1>
         <p className="mt-4 max-w-xl text-muted-foreground">
           Subí tu CV y CVitae lo analiza, te da un Score de Empleabilidad, te matchea con
           empleos, becas y diplomados reales, y te traza una ruta concreta para crecer.
@@ -425,6 +426,23 @@ export default function Dashboard() {
     if (matches.length === 0) return { label: 'Explorar oportunidades', detail: 'No encontramos matches aún. Explorá oportunidades manualmente.', href: '/oportunidades' }
     return { label: 'Generá tu CV Vivo', detail: 'Creá un CV adaptado por IA para tu mejor oportunidad actual.', href: '/mi-carrera/cv' }
   }, [hasProfile, missingSkills, matches])
+
+  if (!authLoading && !user) {
+    return (
+      <>
+        <Helmet>
+          <title>Mi Carrera | CVitae</title>
+          <meta name="description" content="Accedé a tu perfil profesional, matches y próximas acciones en CVitae." />
+          <meta name="robots" content="noindex" />
+        </Helmet>
+        <SiteShell>
+          <div className="mx-auto max-w-5xl px-6 py-12 sm:py-20">
+            <EmptyState />
+          </div>
+        </SiteShell>
+      </>
+    )
+  }
 
   return (
     <DashboardLayout>

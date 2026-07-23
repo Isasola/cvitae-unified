@@ -2,7 +2,7 @@ name: CVitae Scrapers
 
 on:
   schedule:
-    # 06:00 hora Paraguay (UTC-4) todos los días
+    # 07:00 hora Paraguay (UTC-3) todos los días; GitHub puede demorar el inicio
     - cron: '0 10 * * *'
   workflow_dispatch:
     inputs:
@@ -62,310 +62,309 @@ jobs:
 
       - name: Computrabajo Paraguay (~650 ofertas)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'computrabajo' || github.event_name == 'schedule' }}
-        run: python scrapers/computrabajo_scraper.py
+        run: python scripts/run_scraper_monitored.py computrabajo_scraper computrabajo_scraper scrapers/computrabajo_scraper.py
         continue-on-error: true
 
       - name: BuscoJobs Paraguay (~320 ofertas, 16 categorías)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'buscojobs' || github.event_name == 'schedule' }}
-        run: python scrapers/buscojobs_scraper.py
+        run: python scripts/run_scraper_monitored.py buscojobs_scraper buscojobs_scraper scrapers/buscojobs_scraper.py
         continue-on-error: true
 
       - name: Multi-site PY — clasipar, mtess, tigo, personal, itau, copaco
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'multi' || github.event_name == 'schedule' }}
-        run: python scrapers/scrapper.py
+        run: python scripts/run_scraper_monitored.py scrapper scrapper scrapers/scrapper.py
         continue-on-error: true
 
       - name: ABC Color Empleos (Playwright)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'abc' || github.event_name == 'schedule' }}
-        run: python scrapers/abc_scrapper.py
+        run: python scripts/run_scraper_monitored.py abc_scrapper abc_scrapper scrapers/abc_scrapper.py
         continue-on-error: true
 
       - name: Fundación Paraguaya Portal Empleo (Playwright)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'fundacion' || github.event_name == 'schedule' }}
-        run: python scrapers/fundacion_scraper.py
+        run: python scripts/run_scraper_monitored.py fundacion_scraper fundacion_scraper scrapers/fundacion_scraper.py
         continue-on-error: true
 
       # ── Internacional — empleos remotos para latinos ─────────────────────
 
       - name: Remotive — empleos remotos (~88)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'remotive' || github.event_name == 'schedule' }}
-        run: python scrapers/remotive_scraper.py
+        run: python scripts/run_scraper_monitored.py remotive_scraper remotive_scraper scrapers/remotive_scraper.py
         continue-on-error: true
 
       # ── Becas, fellowships, capital semilla ──────────────────────────────
 
       - name: OYA Opportunities (~96 oportunidades internacionales)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'oya' || github.event_name == 'schedule' }}
-        run: python scrapers/oya_scraper.py
+        run: python scripts/run_scraper_monitored.py oya_scraper oya_scraper scrapers/oya_scraper.py
         continue-on-error: true
 
       - name: OpportunityDesk — becas, cursos, grants (~300)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'opportunitydesk' || github.event_name == 'schedule' }}
-        run: python scrapers/opportunitydesk_scraper.py
+        run: python scripts/run_scraper_monitored.py opportunitydesk_scraper opportunitydesk_scraper scrapers/opportunitydesk_scraper.py
         continue-on-error: true
 
       - name: BECAL — becas gobierno paraguayo
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'becal' || github.event_name == 'schedule' }}
-        run: python scrapers/becal_scraper.py
+        run: python scripts/run_scraper_monitored.py becal_scraper becal_scraper scrapers/becal_scraper.py
         continue-on-error: true
 
       - name: Fundación Carolina — becas posgrado en España
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'carolina' || github.event_name == 'schedule' }}
-        run: python scrapers/fundacion_carolina_scraper.py
+        run: python scripts/run_scraper_monitored.py fundacion_carolina_scraper fundacion_carolina_scraper scrapers/fundacion_carolina_scraper.py
         continue-on-error: true
 
       # ── Internacional — remotos globales ─────────────────────────────────
 
       - name: Arbeitnow — tech/remote global (hasta 1000)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'arbeitnow' || github.event_name == 'schedule' }}
-        run: python scrapers/arbeitnow_scraper.py
+        run: python scripts/run_scraper_monitored.py arbeitnow_scraper arbeitnow_scraper scrapers/arbeitnow_scraper.py
         continue-on-error: true
 
       - name: Himalayas — 86k empleos remote-first (hasta 2000)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'himalayas' || github.event_name == 'schedule' }}
-        run: python scrapers/himalayas_scraper.py
+        run: python scripts/run_scraper_monitored.py himalayas_scraper himalayas_scraper scrapers/himalayas_scraper.py
         continue-on-error: true
 
       - name: Jobicy — remotos por industria (50×12 = 600)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'jobicy' || github.event_name == 'schedule' }}
-        run: python scrapers/jobicy_scraper.py
+        run: python scripts/run_scraper_monitored.py jobicy_scraper jobicy_scraper scrapers/jobicy_scraper.py
         continue-on-error: true
 
       - name: WeWorkRemotely — RSS 14 categorías (~400)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'weworkremotely' || github.event_name == 'schedule' }}
-        run: python scrapers/weworkremotely_scraper.py
+        run: python scripts/run_scraper_monitored.py weworkremotely_scraper weworkremotely_scraper scrapers/weworkremotely_scraper.py
         continue-on-error: true
 
       # ── Organismos internacionales ────────────────────────────────────────
 
       - name: UNJobs — ONU, UNDP, UNICEF, BID (PY + LatAm)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'unjobs' || github.event_name == 'schedule' }}
-        run: python scrapers/unjobs_scraper.py
+        run: python scripts/run_scraper_monitored.py unjobs_scraper unjobs_scraper scrapers/unjobs_scraper.py
         continue-on-error: true
 
       # ── Paraguay — sector público y gobierno ─────────────────────────────
 
       - name: SICCA / SFP — Concursos sector público
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'sicca' || github.event_name == 'schedule' }}
-        run: python scrapers/sicca_scraper.py
+        run: python scripts/run_scraper_monitored.py sicca_scraper sicca_scraper scrapers/sicca_scraper.py
         continue-on-error: true
 
       - name: Ministerios del Paraguay
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'ministerios' || github.event_name == 'schedule' }}
-        run: python scrapers/ministerios_scraper.py
+        run: python scripts/run_scraper_monitored.py ministerios_scraper ministerios_scraper scrapers/ministerios_scraper.py
         continue-on-error: true
 
       # ── Paraguay — sector financiero ──────────────────────────────────────
 
       - name: Bancos paraguayos (BNF, Continental, Sudameris, GNB, etc.)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'bancos' || github.event_name == 'schedule' }}
-        run: python scrapers/bancos_scraper.py
+        run: python scripts/run_scraper_monitored.py bancos_scraper bancos_scraper scrapers/bancos_scraper.py
         continue-on-error: true
 
       - name: Cooperativas paraguayas (Universitaria, Medalla Milagrosa, etc.)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'cooperativas' || github.event_name == 'schedule' }}
-        run: python scrapers/cooperativas_scraper.py
+        run: python scripts/run_scraper_monitored.py cooperativas_scraper cooperativas_scraper scrapers/cooperativas_scraper.py
         continue-on-error: true
 
       - name: Aseguradoras paraguayas
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'seguros' || github.event_name == 'schedule' }}
-        run: python scrapers/seguros_scraper.py
+        run: python scripts/run_scraper_monitored.py seguros_scraper seguros_scraper scrapers/seguros_scraper.py
         continue-on-error: true
 
       # ── Paraguay — servicios y BPO ────────────────────────────────────────
 
       - name: Call Centers — Atento, Teleperformance, Konecta, etc.
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'callcenters' || github.event_name == 'schedule' }}
-        run: python scrapers/callcenters_scraper.py
+        run: python scripts/run_scraper_monitored.py callcenters_scraper callcenters_scraper scrapers/callcenters_scraper.py
         continue-on-error: true
 
       # ── Paraguay — educación ──────────────────────────────────────────────
 
       - name: Universidades paraguayas (UNA, UCN, UAP, etc.)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'universidades' || github.event_name == 'schedule' }}
-        run: python scrapers/universidades_scraper.py
+        run: python scripts/run_scraper_monitored.py universidades_scraper universidades_scraper scrapers/universidades_scraper.py
         continue-on-error: true
 
       # ── Paraguay — construcción e ingeniería ─────────────────────────────
 
       - name: Constructoras paraguayas (Itaipú, Yacyretá, MOPC, etc.)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'constructoras' || github.event_name == 'schedule' }}
-        run: python scrapers/constructoras_scraper.py
+        run: python scripts/run_scraper_monitored.py constructoras_scraper constructoras_scraper scrapers/constructoras_scraper.py
         continue-on-error: true
 
       # ── Paraguay — grandes grupos empresariales ───────────────────────────
 
       - name: Grupo Vierci (La Nación, GEN, MegaSuper)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'vierci' || github.event_name == 'schedule' }}
-        run: python scrapers/grupovierci_scraper.py
+        run: python scripts/run_scraper_monitored.py grupovierci_scraper grupovierci_scraper scrapers/grupovierci_scraper.py
         continue-on-error: true
 
       - name: Grupo Cartes (Tabacalera, Frigomerc, RPC, Canal 9)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'cartes' || github.event_name == 'schedule' }}
-        run: python scrapers/grupocarteshs_scraper.py
+        run: python scripts/run_scraper_monitored.py grupocarteshs_scraper grupocarteshs_scraper scrapers/grupocarteshs_scraper.py
         continue-on-error: true
 
       # ── Paraguay — salud ──────────────────────────────────────────────────
 
       - name: Hospitales y clínicas paraguayas
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'hospitales' || github.event_name == 'schedule' }}
-        run: python scrapers/hospitales_scraper.py
+        run: python scripts/run_scraper_monitored.py hospitales_scraper hospitales_scraper scrapers/hospitales_scraper.py
         continue-on-error: true
 
       # ── Paraguay — retail y comercio ──────────────────────────────────────
 
       - name: Supermercados y retail paraguayo
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'supermercados' || github.event_name == 'schedule' }}
-        run: python scrapers/supermercados_scraper.py
+        run: python scripts/run_scraper_monitored.py supermercados_scraper supermercados_scraper scrapers/supermercados_scraper.py
         continue-on-error: true
 
       # ── Paraguay — ONGs y cooperación internacional ───────────────────────
 
       - name: ONGs, fundaciones y organismos de cooperación
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'ongs' || github.event_name == 'schedule' }}
-        run: python scrapers/ongs_scraper.py
+        run: python scripts/run_scraper_monitored.py ongs_scraper ongs_scraper scrapers/ongs_scraper.py
         continue-on-error: true
 
       # ── Paraguay — tecnología local ───────────────────────────────────────
 
       - name: Empresas tech locales (SODEP, LSD, Roshka, etc.)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'tech_local' || github.event_name == 'schedule' }}
-        run: python scrapers/tech_local_scraper.py
+        run: python scripts/run_scraper_monitored.py tech_local_scraper tech_local_scraper scrapers/tech_local_scraper.py
         continue-on-error: true
 
       # ── Foros y comunidades ───────────────────────────────────────────────
 
       - name: Foros — Reddit r/Paraguay + comunidades PY
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'foros' || github.event_name == 'schedule' }}
-        run: python scrapers/foros_scraper.py
+        run: python scripts/run_scraper_monitored.py foros_scraper foros_scraper scrapers/foros_scraper.py
         continue-on-error: true
 
       # ── Agregadores y sector humanitario global ───────────────────────────
 
       - name: Jooble — agregador global con foco en Paraguay/LatAm
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'jooble' || github.event_name == 'schedule' }}
-        run: python scrapers/jooble_scraper.py
+        run: python scripts/run_scraper_monitored.py jooble_scraper jooble_scraper scrapers/jooble_scraper.py
         continue-on-error: true
 
       - name: Talent.com — agregador global con foco Paraguay/LatAm
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'talentcom' || github.event_name == 'schedule' }}
-        run: python scrapers/talentcom_scraper.py
+        run: python scripts/run_scraper_monitored.py talentcom_scraper talentcom_scraper scrapers/talentcom_scraper.py
         continue-on-error: true
 
       # ── Google Jobs (Playwright) ─────────────────────────────────────────
 
       - name: Google Jobs v2 — Playwright scraper Paraguay
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'googlejobs' || github.event_name == 'schedule' }}
-        run: python scrapers/googlejobs_v2.py
+        run: python scripts/run_scraper_monitored.py googlejobs_v2 googlejobs_v2 scrapers/googlejobs_v2.py
         continue-on-error: true
 
       - name: Google Jobs v3 — Playwright scraper Paraguay
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'googlejobs' || github.event_name == 'schedule' }}
-        run: python scrapers/googlejobs_v3.py
+        run: python scripts/run_scraper_monitored.py googlejobs_v3 googlejobs_v3 scrapers/googlejobs_v3.py
         continue-on-error: true
 
       # ── Paraguay — automotriz ──────────────────────────────────────────────
 
       - name: Automotriz — Toyota, Nissen, Ford, VW, Kia, Hyundai, Honda, BMW, Diesa
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'automotriz' || github.event_name == 'schedule' }}
-        run: python scrapers/automotriz_scraper.py
+        run: python scripts/run_scraper_monitored.py automotriz_scraper automotriz_scraper scrapers/automotriz_scraper.py
         continue-on-error: true
 
       # ── Paraguay — salud / farmacias ──────────────────────────────────────
 
       - name: Farmacias — Farmacenter, Catedral, Astro, San Roque, Indufar, etc.
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'farmacias' || github.event_name == 'schedule' }}
-        run: python scrapers/farmacias_scraper.py
+        run: python scripts/run_scraper_monitored.py farmacias_scraper farmacias_scraper scrapers/farmacias_scraper.py
         continue-on-error: true
 
       # ── Paraguay — gastronomía y hotelería ───────────────────────────────
 
       - name: Gastronomía y hoteles — McDonald's, BK, KFC, Bourbon, Granados, NH, Sheraton
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'gastronomia' || github.event_name == 'schedule' }}
-        run: python scrapers/gastronomia_hoteles_scraper.py
+        run: python scripts/run_scraper_monitored.py gastronomia_hoteles_scraper gastronomia_hoteles_scraper scrapers/gastronomia_hoteles_scraper.py
         continue-on-error: true
 
       # ── Paraguay — agroindustria ──────────────────────────────────────────
 
       - name: Agroindustria — Cargill, Bunge, Lactolanda, Agrofértil, Favero, etc.
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'agroindustria' || github.event_name == 'schedule' }}
-        run: python scrapers/agroindustria_scraper.py
+        run: python scripts/run_scraper_monitored.py agroindustria_scraper agroindustria_scraper scrapers/agroindustria_scraper.py
         continue-on-error: true
 
       # ── Paraguay — frigoríficos e industria cárnica ───────────────────────
 
       - name: Frigoríficos — COPACAR, Frigo Concepción, Frigo Guaraní, Frigolar, etc.
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'frigorificos' || github.event_name == 'schedule' }}
-        run: python scrapers/frigorificos_scraper.py
+        run: python scripts/run_scraper_monitored.py frigorificos_scraper frigorificos_scraper scrapers/frigorificos_scraper.py
         continue-on-error: true
 
       # ── Paraguay — industria y manufactura ───────────────────────────────
 
       - name: Industria y manufactura — Cementos, Grupo Casado, Indufar, Mota-Engil, etc.
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'industria' || github.event_name == 'schedule' }}
-        run: python scrapers/industria_manufactura_scraper.py
+        run: python scripts/run_scraper_monitored.py industria_manufactura_scraper industria_manufactura_scraper scrapers/industria_manufactura_scraper.py
         continue-on-error: true
 
       # ── Paraguay — telecomunicaciones ─────────────────────────────────────
 
       - name: Telecomunicaciones — Tigo, Personal, Claro, Copaco, Pronet
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'telecomunicaciones' || github.event_name == 'schedule' }}
-        run: python scrapers/telecomunicaciones_scraper.py
+        run: python scripts/run_scraper_monitored.py telecomunicaciones_scraper telecomunicaciones_scraper scrapers/telecomunicaciones_scraper.py
         continue-on-error: true
 
       # ── Paraguay — medios de comunicación ────────────────────────────────
 
       - name: Medios — Última Hora, Telefuturo, SNT, ABC, Monumental, Ñandutí
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'medios' || github.event_name == 'schedule' }}
-        run: python scrapers/medios_comunicacion_scraper.py
+        run: python scripts/run_scraper_monitored.py medios_comunicacion_scraper medios_comunicacion_scraper scrapers/medios_comunicacion_scraper.py
         continue-on-error: true
 
       # ── Paraguay — retail y malls ─────────────────────────────────────────
 
       - name: Retail y malls — Falabella, Inditex/Zara, Meier, Casa Bahía, Frávega
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'retail_malls' || github.event_name == 'schedule' }}
-        run: python scrapers/retail_malls_scraper.py
+        run: python scripts/run_scraper_monitored.py retail_malls_scraper retail_malls_scraper scrapers/retail_malls_scraper.py
         continue-on-error: true
 
       # ── Paraguay — logística y transporte ────────────────────────────────
 
       - name: Logística y transporte — DHL, FedEx, UPS, COPA, LATAM, Transchaco
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'logistica' || github.event_name == 'schedule' }}
-        run: python scrapers/logistica_transporte_scraper.py
+        run: python scripts/run_scraper_monitored.py logistica_transporte_scraper logistica_transporte_scraper scrapers/logistica_transporte_scraper.py
         continue-on-error: true
 
       # ── Paraguay — energía y utilities ───────────────────────────────────
 
       - name: Energía y utilities — ANDE, ESSAP, Petropar, Gas PY, Total Energies
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'energia' || github.event_name == 'schedule' }}
-        run: python scrapers/energia_utilities_scraper.py
+        run: python scripts/run_scraper_monitored.py energia_utilities_scraper energia_utilities_scraper scrapers/energia_utilities_scraper.py
         continue-on-error: true
 
       # ── Paraguay — puertos e importadoras ────────────────────────────────
 
       - name: Puertos e importadoras — Puerto Asunción, ANNP, Transoceánica, APA
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'puertos' || github.event_name == 'schedule' }}
-        run: python scrapers/puertos_importadoras_scraper.py
+        run: python scripts/run_scraper_monitored.py puertos_importadoras_scraper puertos_importadoras_scraper scrapers/puertos_importadoras_scraper.py
         continue-on-error: true
 
       # ── Paraguay — Ciudad del Este, frontera y Saltos del Guairá ─────────
 
       - name: CDE y frontera — Shopping del Este, FOCA, Itaipú, municipios frontera
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'cde_frontera' || github.event_name == 'schedule' }}
-        run: python scrapers/cde_frontera_scraper.py
+        run: python scripts/run_scraper_monitored.py cde_frontera_scraper cde_frontera_scraper scrapers/cde_frontera_scraper.py
         continue-on-error: true
 
       # ── Multinacionales en Workday (filtradas por Paraguay) ───────────────
 
       - name: Workday multinacionales — Unilever, Nestlé, P&G, AB InBev, Mondelez, etc.
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'workday' || github.event_name == 'schedule' }}
-        run: python scrapers/workday_multinacionales_scraper.py
+        run: python scripts/run_scraper_monitored.py workday_multinacionales_scraper workday_multinacionales_scraper scrapers/workday_multinacionales_scraper.py
         continue-on-error: true
 
       # ── Bolsas locales paraguayas ─────────────────────────────────────────
 
       - name: Bolsas locales — ZonaJobs, Trabajos.com.py, EmpleosPublicos.gov.py, MTESS
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'bolsas_locales' || github.event_name == 'schedule' }}
-        run: python scrapers/bolsas_locales_scraper.py
+        run: python scripts/run_scraper_monitored.py bolsas_locales_scraper bolsas_locales_scraper scrapers/bolsas_locales_scraper.py
         continue-on-error: true
-

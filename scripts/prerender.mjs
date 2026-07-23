@@ -5,13 +5,6 @@ import { join } from 'path'
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
 const SITE_URL = 'https://cvitae.lat'
-
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn('⚠️ Variables de Supabase no definidas')
-  process.exit(0)
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 const distDir = join(process.cwd(), 'dist')
 
 async function prerender() {
@@ -20,6 +13,27 @@ async function prerender() {
     process.exit(0)
   }
   const templateHtml = readFileSync(join(distDir, 'index.html'), 'utf-8')
+
+  const homeFallback = `<main aria-label="CVitae">
+  <section>
+    <p>Gratis · Paraguay y Latinoamérica</p>
+    <h1>Analizá tu CV gratis. Después, encontrá el trabajo que te corresponde.</h1>
+    <p>Subí tu CV y recibí en segundos un score ATS, fortalezas y mejoras concretas.</p>
+    <ol><li>CV</li><li>Perfil entendido</li><li>Matches</li><li>Próxima acción</li></ol>
+    <p><a href="#analizador">Analizar mi CV gratis</a> · <a href="/mi-carrera">Crear mi perfil</a></p>
+  </section>
+  <section id="analizador"><h2>Tu score ATS real, en segundos</h2><p>Análisis inicial sin crear una cuenta.</p></section>
+  <section><h2>Inteligencia profesional para avanzar</h2><p>Matching de oportunidades, CV adaptado, alertas y recomendaciones para candidatos.</p></section>
+  <section><h2>Herramientas para empresas</h2><p>Análisis de CVs, ranking comparativo y evaluación explicable para revisión humana.</p><a href="/empresas">Conocer la solución para empresas</a></section>
+  <nav aria-label="Secciones principales"><a href="/oportunidades">Oportunidades</a> · <a href="/blog">Blog</a> · <a href="/sobre-cvitae">Sobre CVitae</a></nav>
+</main>`
+  writeFileSync(join(distDir, 'index.html'), templateHtml.replace('<div id="root"></div>', `<div id="root">${homeFallback}</div>`))
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.warn('Variables de Supabase no definidas: home estática generada; se omiten rutas dinámicas.')
+    return
+  }
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
   const { data: posts } = await supabase
     .from('content_hub').select('slug, titulo, cuerpo')

@@ -30,8 +30,16 @@ function Hero() {
           Subí tu CV y recibí en segundos un score ATS real, fortalezas y mejoras
           concretas. Sin crear cuenta. Sin límites en el análisis.
         </p>
-        <div className="relative mt-10 max-w-2xl">
-          <GrowthLine className="absolute -top-6 left-0 right-0 h-20 opacity-50" />
+        <div className="relative mt-10 max-w-3xl border-y border-white/8 py-5">
+          <GrowthLine variant="score" className="absolute inset-x-0 top-1/2 h-16 -translate-y-1/2 opacity-45" />
+          <ol className="relative grid grid-cols-2 gap-4 sm:grid-cols-4" aria-label="Recorrido de CVitae">
+            {['CV', 'Perfil entendido', 'Matches', 'Próxima acción'].map((step, index) => (
+              <li key={step} className="flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] text-cream">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-gold/50 bg-[#0a0a0a] text-gold">{index + 1}</span>
+                {step}
+              </li>
+            ))}
+          </ol>
         </div>
         <div className="mt-10 flex flex-wrap gap-3">
           <a
@@ -460,7 +468,7 @@ function ComoFunciona() {
           {steps.map((s, i) => (
             <motion.div
               key={s.n}
-              initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+              initial={false}
               transition={{ duration: 0.6, delay: i * 0.07, ease }}
               className="glass-panel p-6"
             >
@@ -497,7 +505,7 @@ function IATech() {
         {items.map(({ Icon, t, d }, i) => (
           <motion.div
             key={t}
-            initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+            initial={false}
             transition={{ duration: 0.6, delay: i * 0.08, ease }}
             className="editorial-panel p-6"
           >
@@ -527,7 +535,7 @@ function StatsBar() {
           {STATS.map(({ value, label }, i) => (
             <motion.div
               key={value}
-              initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+              initial={false}
               transition={{ duration: 0.5, delay: i * 0.08, ease }}
               className="flex flex-col items-center px-4 text-center"
             >
@@ -578,7 +586,7 @@ function Pricing() {
         {tiers.map((t, i) => (
           <motion.div
             key={t.name}
-            initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+            initial={false}
             transition={{ duration: 0.6, delay: i * 0.08, ease }}
             className={t.featured ? 'rounded-3xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.04] p-8' : 'glass-panel rounded-3xl p-8'}
           >
@@ -695,11 +703,11 @@ export default function LandingPage() {
       </Helmet>
       <SiteShell>
         <Hero />
-        <RegistroBlock />
+        <Analizador />
         <ComoFunciona />
+        <RegistroBlock />
         <IATech />
         <StatsBar />
-        <Analizador />
         <Pricing />
         <ParaEmpresas />
       </SiteShell>

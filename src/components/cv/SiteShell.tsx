@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'wouter'
-import { Linkedin, Facebook, Instagram, MessageCircle } from 'lucide-react'
-import { Logo, GrowthLine } from './visuals'
+import { Linkedin, Facebook, Instagram, MessageCircle, Menu, X } from 'lucide-react'
+import { Logo } from './visuals'
 
 const navLinks = [
   { href: '/oportunidades', label: 'Oportunidades' },
@@ -50,8 +50,9 @@ const socials = [
 
 function Navbar() {
   const [location] = useLocation()
+  const [mobileOpen, setMobileOpen] = useState(false)
   return (
-    <header className="border-b border-border/60 backdrop-blur-md sticky top-0 z-30 bg-background/60">
+    <header className="border-b border-border/60 backdrop-blur-xl sticky top-0 z-30 bg-background/90">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center">
           <Logo className="text-2xl" />
@@ -74,8 +75,31 @@ function Navbar() {
           >
             Entrar
           </Link>
+          <button
+            type="button"
+            className="md:hidden h-9 w-9 grid place-items-center rounded-md border border-white/10 text-cream"
+            aria-label={mobileOpen ? 'Cerrar menú' : 'Abrir menú'}
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen(v => !v)}
+          >
+            {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </button>
         </div>
       </div>
+      {mobileOpen && (
+        <nav className="md:hidden border-t border-white/8 bg-[#0b0b0b] px-6 py-3" aria-label="Navegación móvil">
+          {navLinks.map(l => (
+            <Link
+              key={l.href}
+              href={l.href}
+              onClick={() => setMobileOpen(false)}
+              className={`flex min-h-11 items-center justify-between border-b border-white/5 text-sm ${location === l.href ? 'text-gold' : 'text-cream'}`}
+            >
+              {l.label}<span aria-hidden="true">→</span>
+            </Link>
+          ))}
+        </nav>
+      )}
     </header>
   )
 }
@@ -128,8 +152,7 @@ function NewsletterForm() {
 function Footer() {
   return (
     <footer className="border-t border-border/40 mt-24 bg-background relative overflow-hidden">
-      {/* GrowthLine decorative separator */}
-      <GrowthLine className="absolute top-0 left-0 w-full h-[50px] opacity-30" />
+      <div className="absolute top-0 left-0 w-full border-t border-gold/20" />
 
       <div className="max-w-6xl mx-auto px-6 pt-16 pb-10">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-10 mb-12">
