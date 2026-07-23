@@ -81,12 +81,10 @@ Resolución:
   mediante `@aws-sdk/client-bedrock-runtime`.
 - `jspdf` actualizado a `4.2.1`.
 - El lector antiguo `pdf-parse 1.1.4` fue reemplazado por
-  `pdfjs-dist 5.4.296`; el parser anterior no podía leer algunos PDFs modernos
+  `pdfjs-dist 3.11.174`; el parser anterior no podía leer algunos PDFs modernos
   generados por jsPDF 4.
 - Tanto el analizador como `submit-lead` usan la extracción compartida de
   `netlify/functions/lib/pdf.ts`, para conservar el texto en postulaciones.
-- `@thednp/dommatrix 3.0.4` aporta únicamente el polyfill requerido por
-  PDF.js en Netlify; no incorpora renderizado gráfico ni binarios nativos.
 - `pnpm-lock.yaml` sincronizado porque Netlify usa pnpm.
 - `npm audit --omit=dev`: cero vulnerabilidades.
 
