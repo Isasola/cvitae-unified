@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sparkles, Search, MapPin, Lock,
   Bell, BookOpen, ArrowRight, Target,
-  Mail, ExternalLink, ChevronRight,
+  Mail, ExternalLink, ChevronRight, RefreshCw, AlertCircle,
 } from 'lucide-react'
 import { GrowthLine, CompatibilityTrace, Connector, Eyebrow } from '@/components/cv/visuals'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
@@ -24,6 +24,58 @@ interface MatchItem {
 }
 interface CourseRecommendation {
   skill: string; course: string; platform: string; url: string; why: string
+}
+
+interface DashboardCache {
+  version: 2
+  storedAt: number
+  profileSignature: string
+  matches: MatchItem[]
+  profileSkills: string[]
+  missingSkills: string[]
+  isSubscribed: boolean
+  courses: CourseRecommendation[]
+}
+
+const CACHE_TTL = 30 * 60 * 1000
+const CACHE_VERSION = 2
+
+function cacheKey(userId: string) {
+  return `cvitae:dashboard:v${CACHE_VERSION}:${userId}`
+}
+
+function profileSignature(profile: any): string {
+  return JSON.stringify({
+    title: profile?.professional_title || '',
+    skills: profile?.profile_data?.habilidades || [],
+    seniority: profile?.profile_data?.seniority || '',
+    location: profile?.profile_data?.location || '',
+    route: profile?.profile_data?.career_route || '',
+    updatedAt: profile?.updated_at || '',
+  })
+}
+
+function readCache(userId: string, signature: string): DashboardCache | null {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(cacheKey(userId)) || 'null') as DashboardCache | null
+    if (!parsed || parsed.version !== CACHE_VERSION) return null
+    if (parsed.profileSignature !== signature || Date.now() - parsed.storedAt > CACHE_TTL) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeCache(userId: string, value: Omit<DashboardCache, 'version' | 'storedAt'>) {
+  try {
+    sessionStorage.setItem(cacheKey(userId), JSON.stringify({
+      ...value,
+      version: CACHE_VERSION,
+      storedAt: Date.now(),
+    }))
+  } catch {
+    // El caché es una optimización; el dashboard sigue funcionando sin storage.
+  }
 }
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
@@ -309,6 +361,9 @@ export default function Dashboard() {
   const [courses, setCourses] = useState<CourseRecommendation[]>([])
   const [loadingCourses, setLoadingCourses] = useState(false)
   const [profile, setProfile] = useState<any>(null)
+  const [serverMissingSkills, setServerMissingSkills] = useState<string[]>([])
+  const [dashboardError, setDashboardError] = useState('')
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null)
 
   const loaderSteps = ['Leyendo tu perfil', 'Cargando vacantes activas', 'Calculando compatibilidad', 'Ordenando recomendaciones']
 
@@ -346,67 +401,108 @@ export default function Dashboard() {
 
   useEffect(() => { if (user) loadMatches() }, [user])
 
-  const loadMatches = async () => {
-    setLoadingMatches(true)
+  const loadMatches = async (force = false) => {
+    setDashboardError('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
       if (!token) throw new Error('No autorizado')
+
+      const { data: prof, error: profileError } = await supabase.from('user_master_profiles')
+        .select('professional_title, profile_data, updated_at').eq('user_id', user.id).maybeSingle()
+      if (profileError) throw profileError
+      setProfile(prof)
+
+      const signature = profileSignature(prof)
+      const cached = !force ? readCache(user.id, signature) : null
+      if (cached) {
+        setMatches(cached.matches)
+        setProfileSkills(cached.profileSkills)
+        setServerMissingSkills(cached.missingSkills)
+        setIsSubscribed(cached.isSubscribed)
+        setCourses(cached.courses)
+        setLastUpdatedAt(cached.storedAt)
+        return
+      }
+
+      setLoadingMatches(true)
       const response = await fetch(MATCH_BATCH_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Error')
-      setMatches(data.matches || [])
-      setProfileSkills(data.profileSkills || [])
+      if (!response.ok) throw new Error(data.error || 'No pudimos calcular tus matches')
+      const nextMatches = data.matches || []
+      const nextSkills = data.profileSkills || []
+      const nextMissing = data.missingSkills || []
+      setMatches(nextMatches)
+      setProfileSkills(nextSkills)
+      setServerMissingSkills(nextMissing)
       setIsSubscribed(data.is_subscribed || false)
-      const { data: prof } = await supabase.from('user_master_profiles')
-        .select('professional_title, profile_data').eq('user_id', user.id).maybeSingle()
-      setProfile(prof)
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Asuncion' })
       const usage = prof?.profile_data?.daily_usage
       const usedToday = (usage?.date === today) ? (usage?.matches_shown || 0) : 0
       setDailyMatchesUsed(usedToday)
-      if (data.profileSkills?.length > 0) loadGeminiCourses(data.profileSkills, data.matches || [], token, prof?.profile_data?.career_route || '')
-    } catch { /* silencioso */ } finally {
+      const nextCourses = nextMissing.length > 0
+        ? await loadGeminiCourses(nextSkills, nextMissing, token, prof)
+        : []
+      const storedAt = Date.now()
+      setLastUpdatedAt(storedAt)
+      writeCache(user.id, {
+        profileSignature: signature,
+        matches: nextMatches,
+        profileSkills: nextSkills,
+        missingSkills: nextMissing,
+        isSubscribed: data.is_subscribed || false,
+        courses: nextCourses,
+      })
+    } catch (error: any) {
+      setDashboardError(error?.message || 'No pudimos cargar tu inteligencia profesional.')
+    } finally {
       setLoadingMatches(false)
     }
   }
 
-  const loadGeminiCourses = async (skills: string[], allMatches: any[], token: string, careerRoute = '') => {
+  const loadGeminiCourses = async (skills: string[], missing: string[], token: string, prof: any) => {
+    if (missing.length === 0) {
+      setCourses([])
+      return []
+    }
     setLoadingCourses(true)
     try {
-      const allVacancySkills: string[] = []
-      allMatches.slice(0, 5).forEach((m: any) => {
-        m.vacancySkills?.forEach((s: string) => {
-          if (!skills.some((ps: string) => ps.toLowerCase() === s.toLowerCase())) allVacancySkills.push(s)
-        })
-      })
-      const freq: Record<string, number> = {}
-      allVacancySkills.forEach(s => { freq[s] = (freq[s] || 0) + 1 })
-      const missingSkills = Object.entries(freq).sort(([, a], [, b]) => b - a).slice(0, 4).map(([s]) => s)
-      if (missingSkills.length === 0) return
       const res = await fetch('/.netlify/functions/gemini-courses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           profileSkills: skills,
-          missingSkills,
-          profileTitle: profile?.professional_title || '',
-          profileSeniority: profile?.profile_data?.seniority || '',
-          careerRoute,
+          missingSkills: missing.slice(0, 4),
+          profileTitle: prof?.professional_title || '',
+          profileSeniority: prof?.profile_data?.seniority || '',
+          careerRoute: prof?.profile_data?.career_route || '',
         }),
       })
-      if (!res.ok) return
+      if (!res.ok) throw new Error('No pudimos cargar los cursos')
       const data = await res.json()
-      setCourses(data.courses || [])
-    } catch { /* silencioso */ } finally {
+      const nextCourses = data.courses || []
+      setCourses(nextCourses)
+      return nextCourses
+    } catch {
+      const fallback = missing.slice(0, 4).map((skill) => ({
+        skill,
+        course: `Explorar cursos de ${skill}`,
+        platform: 'Coursera',
+        url: `https://www.coursera.org/search?query=${encodeURIComponent(skill)}`,
+        why: 'Habilidad priorizada según las oportunidades con mayor compatibilidad.',
+      }))
+      setCourses(fallback)
+      return fallback
+    } finally {
       setLoadingCourses(false)
     }
   }
 
   const missingSkills = useMemo(() => {
+    if (serverMissingSkills.length > 0) return serverMissingSkills.slice(0, 4)
     const allVacancySkills: string[] = []
     matches.slice(0, 5).forEach(m => {
       m.vacancySkills?.forEach(s => {
@@ -416,7 +512,7 @@ export default function Dashboard() {
     const freq: Record<string, number> = {}
     allVacancySkills.forEach(s => { freq[s] = (freq[s] || 0) + 1 })
     return Object.entries(freq).sort(([, a], [, b]) => b - a).slice(0, 4).map(([s]) => s)
-  }, [matches, profileSkills])
+  }, [matches, profileSkills, serverMissingSkills])
 
   const employabilityScore = useMemo(() => deriveScore(matches), [matches])
 
@@ -466,6 +562,33 @@ export default function Dashboard() {
             <motion.div key="loader"><LoaderState steps={loaderSteps} currentStep={currentLoaderStep} /></motion.div>
           ) : (
             <motion.div key="content" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  {lastUpdatedAt
+                    ? `Inteligencia actualizada ${new Intl.DateTimeFormat('es-PY', { hour: '2-digit', minute: '2-digit' }).format(lastUpdatedAt)}`
+                    : 'Inteligencia profesional lista'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => loadMatches(true)}
+                  disabled={loadingMatches}
+                  className="inline-flex h-8 items-center gap-2 rounded-full border border-white/10 px-3 text-xs text-muted-foreground transition hover:border-[#c9a84c]/35 hover:text-[#c9a84c] disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${loadingMatches ? 'animate-spin' : ''}`} />
+                  Actualizar análisis
+                </button>
+              </div>
+              {dashboardError && (
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4 text-sm text-red-300">
+                  <span className="inline-flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    {dashboardError}
+                  </span>
+                  <button type="button" onClick={() => loadMatches(true)} className="text-xs underline underline-offset-4">
+                    Reintentar
+                  </button>
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
                 {/* Main column */}
                 <div className="space-y-5">
@@ -535,7 +658,11 @@ export default function Dashboard() {
                     <p className="mt-0.5 text-xs text-muted-foreground">Para subir tu compatibilidad media</p>
                     <ul className="mt-4 space-y-2">
                       {missingSkills.length === 0 ? (
-                        <li className="text-xs italic text-muted-foreground">Calculando…</li>
+                        <li className="text-xs italic text-muted-foreground">
+                          {matches.length > 0
+                            ? 'No detectamos una brecha prioritaria en tus mejores oportunidades.'
+                            : 'Se mostrarán cuando encontremos oportunidades compatibles.'}
+                        </li>
                       ) : missingSkills.map((s, i) => (
                         <li key={s} className="flex items-center gap-3 text-sm text-cream">
                           <span className="w-4 font-display italic text-xs text-[#c9a84c]">0{i + 1}</span>
