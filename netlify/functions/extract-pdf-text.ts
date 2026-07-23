@@ -1,4 +1,4 @@
-import * as pdfParse from "pdf-parse"
+import { extractPdfText } from "./lib/pdf"
 
 export const handler = async (event: any) => {
   const corsHeaders = {
@@ -9,6 +9,14 @@ export const handler = async (event: any) => {
 
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders, body: '' }
+  }
+
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      headers: corsHeaders,
+      body: JSON.stringify({ error: 'Método no permitido' }),
+    }
   }
 
   try {
@@ -22,19 +30,45 @@ export const handler = async (event: any) => {
       }
     }
 
+    if (typeof pdfBase64 !== 'string' || pdfBase64.length > 14_000_000) {
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'El archivo PDF no es válido o supera 10 MB' }),
+      }
+    }
+
     const pdfBuffer = Buffer.from(pdfBase64, 'base64')
-    const data = await pdfParse.default(pdfBuffer)
+    if (pdfBuffer.length < 5 || pdfBuffer.subarray(0, 5).toString('ascii') !== '%PDF-') {
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'El archivo enviado no es un PDF válido' }),
+      }
+    }
+
+    const text = await extractPdfText(pdfBuffer)
+    if (!text || text.length < 50) {
+      return {
+        statusCode: 422,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'No pudimos extraer suficiente texto. Probá con un PDF que contenga texto seleccionable.' }),
+      }
+    }
 
     return {
       statusCode: 200,
       headers: corsHeaders,
-      body: JSON.stringify({ text: data.text, success: true }),
+      body: JSON.stringify({ text, success: true }),
     }
   } catch (error: any) {
+    console.error('extract-pdf-text error:', error?.message || error)
     return {
-      statusCode: 500,
+      statusCode: 422,
       headers: corsHeaders,
-      body: JSON.stringify({ error: error.message }),
+      body: JSON.stringify({
+        error: 'No pudimos leer el PDF. Verificá que no esté dañado o protegido con contraseña.',
+      }),
     }
   }
 }

@@ -1,6 +1,6 @@
 import { Handler } from "@netlify/functions"
-import * as pdfParse from "pdf-parse"
 import { makeSupabaseAdmin } from "./_supabase"
+import { extractPdfText as parsePdfText } from "./lib/pdf"
 
 const SITE_URL = process.env.SITE_URL || "https://cvitae.lat"
 const RESEND_KEY = process.env.RESEND_API_KEY
@@ -27,11 +27,12 @@ async function sendResendEmail(to: string, subject: string, html: string): Promi
   }
 }
 
-async function extractCvText(base64: string): Promise<string> {
+export async function extractCvText(base64: string): Promise<string> {
   try {
     const buf = Buffer.from(base64, "base64")
-    const data = await pdfParse.default(buf)
-    return (data.text || "").substring(0, 8000)
+    if (buf.length < 5 || buf.subarray(0, 5).toString("ascii") !== "%PDF-") return ""
+    const text = await parsePdfText(buf)
+    return text.substring(0, 8000)
   } catch {
     return ""
   }

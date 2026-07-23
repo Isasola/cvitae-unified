@@ -1,7 +1,8 @@
 import { Handler } from "@netlify/functions"
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
 
-const MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001"
+// AWS Bedrock requires the version suffix for Claude Haiku 4.5 inference profiles.
+const MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 const bedrockClient = new BedrockRuntimeClient({
   region: process.env.CVITAE_AWS_REGION || "us-east-1",
   credentials: {

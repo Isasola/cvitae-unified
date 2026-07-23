@@ -37,6 +37,22 @@ const handler: Handler = async (event) => {
         }
       }
 
+      const nextBalance = data.token_balance - 1
+      const { data: reserved } = await supabase
+        .from("recruiter_tokens")
+        .update({ token_balance: nextBalance })
+        .eq("id", data.id)
+        .eq("token_balance", data.token_balance)
+        .select("id")
+        .maybeSingle()
+
+      if (!reserved) {
+        return {
+          statusCode: 409,
+          body: JSON.stringify({ saved: false, error: "El saldo cambió durante el análisis. Intentá guardar nuevamente." }),
+        }
+      }
+
       const { error: insertError } = await supabase
         .from("recruiter_analyses")
         .insert({
@@ -52,16 +68,22 @@ const handler: Handler = async (event) => {
           created_at: new Date().toISOString()
         })
 
-      if (!insertError) {
+      if (insertError) {
         await supabase
           .from("recruiter_tokens")
-          .update({ token_balance: data.token_balance - 1 })
+          .update({ token_balance: data.token_balance })
           .eq("id", data.id)
+          .eq("token_balance", nextBalance)
+
+        return {
+          statusCode: 500,
+          body: JSON.stringify({ saved: false, error: "No se pudo guardar el análisis. El crédito no fue consumido." }),
+        }
       }
 
       return {
         statusCode: 200,
-        body: JSON.stringify({ saved: !insertError, new_balance: data.token_balance - 1 }),
+        body: JSON.stringify({ saved: true, new_balance: nextBalance }),
       }
     }
 

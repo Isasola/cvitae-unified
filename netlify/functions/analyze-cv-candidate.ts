@@ -1,8 +1,10 @@
 // ⚠️ Netlify Free: límite 10s. Para migrar a Lambda: scripts/deploy-lambda.sh
 import { Handler } from "@netlify/functions"
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
+import { makeSupabaseAdmin } from "./_supabase"
 
-const MODEL_ID_EXTRACT = "us.anthropic.claude-haiku-4-5-20251001"
+// AWS Bedrock requires the version suffix for Claude Haiku 4.5 inference profiles.
+const MODEL_ID_EXTRACT = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 const MODEL_ID_ANALYZE = "global.anthropic.claude-sonnet-4-6"
 const bedrockClient = new BedrockRuntimeClient({
   region: process.env.CVITAE_AWS_REGION || "us-east-1",
@@ -42,9 +44,30 @@ const handler: Handler = async (event) => {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
   }
   try {
-    const { cvText, mode, jobTitle, jobDescription } = JSON.parse(event.body || "{}")
+    const { cvText, mode, jobTitle, jobDescription, recruiterToken } = JSON.parse(event.body || "{}")
     if (!cvText?.trim()) {
       return { statusCode: 400, body: JSON.stringify({ error: "CV text is required" }) }
+    }
+    if (cvText.trim().length > 50_000) {
+      return { statusCode: 400, body: JSON.stringify({ error: "El texto del CV supera el límite permitido" }) }
+    }
+
+    if (mode === 'analyze' || mode === 'batch_analyze') {
+      if (!recruiterToken?.trim()) {
+        return { statusCode: 401, body: JSON.stringify({ error: "Token de empresa requerido" }) }
+      }
+      const { data: recruiter } = await makeSupabaseAdmin()
+        .from("recruiter_tokens")
+        .select("id, token_balance")
+        .eq("access_token", recruiterToken.trim())
+        .eq("is_active", true)
+        .single()
+      if (!recruiter) {
+        return { statusCode: 403, body: JSON.stringify({ error: "Token de empresa inválido o inactivo" }) }
+      }
+      if ((recruiter.token_balance ?? 0) <= 0) {
+        return { statusCode: 402, body: JSON.stringify({ error: "Sin créditos disponibles" }) }
+      }
     }
 
     let prompt = ""
