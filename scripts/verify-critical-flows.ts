@@ -3,6 +3,7 @@ import { handler as extractPdfText } from '../netlify/functions/extract-pdf-text
 import { handler as analyzeCandidate } from '../netlify/functions/analyze-cv-candidate'
 import { handler as compareCandidates } from '../netlify/functions/compare-candidates'
 import { extractCvText } from '../netlify/functions/submit-lead'
+import { handler as recommendCourses } from '../netlify/functions/gemini-courses'
 
 async function invoke(handler: any, body: unknown) {
   return await handler({
@@ -51,4 +52,10 @@ const comparisonWithoutToken = await invoke(compareCandidates, {
 })
 assert(comparisonWithoutToken?.statusCode === 403, 'La comparación empresarial debe rechazar token ausente')
 
-console.log('Critical flow checks passed: PDF, invalid input, recruiter analysis auth, comparison auth.')
+const coursesWithoutSession = await invoke(recommendCourses, {
+  profileSkills: ['React'],
+  missingSkills: ['TypeScript'],
+})
+assert(coursesWithoutSession?.statusCode === 401, 'Los cursos con Gemini deben exigir una sesión válida')
+
+console.log('Critical flow checks passed: PDF, invalid input, recruiter auth, comparison auth, Gemini auth.')

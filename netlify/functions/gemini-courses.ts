@@ -1,160 +1,193 @@
-export const handler = async (event: any) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Content-Type': 'application/json',
-  }
+import { makeSupabaseAnon } from './_supabase'
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Content-Type': 'application/json',
+  'Cache-Control': 'private, no-store',
+}
+
+const ROUTE_LABELS: Record<string, string> = {
+  'empleo-local': 'conseguir empleo en empresas de Paraguay',
+  'remoto': 'conseguir trabajo remoto con empresas internacionales',
+  'beca-posgrado': 'acceder a una beca o posgrado',
+  'organismos': 'trabajar en organismos internacionales',
+  'emprendimiento': 'lanzar o hacer crecer un emprendimiento',
+  'cambio-area': 'hacer una reconversión profesional',
+}
+
+const COURSE_SCHEMA = {
+  type: 'ARRAY',
+  maxItems: 4,
+  items: {
+    type: 'OBJECT',
+    required: ['skill', 'course', 'platform', 'why'],
+    properties: {
+      skill: { type: 'STRING' },
+      course: { type: 'STRING' },
+      platform: { type: 'STRING', enum: ['Coursera', 'YouTube', 'Google', 'Microsoft', 'LinkedIn Learning', 'Udemy'] },
+      why: { type: 'STRING' },
+    },
+  },
+}
+
+function cleanText(value: unknown, maxLength = 160): string {
+  return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, maxLength)
+}
+
+function cleanList(value: unknown, limit: number): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.map((item) => cleanText(item, 80)).filter(Boolean))].slice(0, limit)
+}
+
+function courseSearchUrl(platform: string, skill: string): string {
+  const query = encodeURIComponent(`${skill} curso español`)
+  if (platform === 'YouTube') return `https://www.youtube.com/results?search_query=${query}`
+  if (platform === 'Google') return `https://grow.google/intl/es/courses-and-tools/`
+  if (platform === 'Microsoft') return `https://learn.microsoft.com/es-es/training/browse/?terms=${encodeURIComponent(skill)}`
+  if (platform === 'LinkedIn Learning') return `https://www.linkedin.com/learning/search?keywords=${encodeURIComponent(skill)}`
+  if (platform === 'Udemy') return `https://www.udemy.com/courses/search/?q=${encodeURIComponent(skill)}`
+  return `https://www.coursera.org/search?query=${encodeURIComponent(skill)}`
+}
+
+function deterministicCourses(missingSkills: string[]) {
+  return missingSkills.slice(0, 4).map((skill, index) => {
+    const platform = index % 2 === 0 ? 'Coursera' : 'YouTube'
+    return {
+      skill,
+      course: `Formación práctica en ${skill}`,
+      platform,
+      url: courseSearchUrl(platform, skill),
+      why: 'Es una brecha frecuente entre las oportunidades que mejor coinciden con tu perfil.',
+    }
+  })
+}
+
+function normalizeCourses(raw: unknown, missingSkills: string[]) {
+  if (!Array.isArray(raw)) return deterministicCourses(missingSkills)
+  const allowedSkills = missingSkills.map((skill) => skill.toLowerCase())
+  const courses = raw.slice(0, 4).map((item: any, index) => {
+    const proposedSkill = cleanText(item?.skill, 80)
+    const skillIndex = allowedSkills.findIndex((skill) =>
+      skill === proposedSkill.toLowerCase() ||
+      skill.includes(proposedSkill.toLowerCase()) ||
+      proposedSkill.toLowerCase().includes(skill),
+    )
+    const skill = skillIndex >= 0 ? missingSkills[skillIndex] : missingSkills[index]
+    if (!skill) return null
+    const platform = ['Coursera', 'YouTube', 'Google', 'Microsoft', 'LinkedIn Learning', 'Udemy']
+      .includes(item?.platform) ? item.platform : 'Coursera'
+    return {
+      skill,
+      course: cleanText(item?.course, 120) || `Formación práctica en ${skill}`,
+      platform,
+      url: courseSearchUrl(platform, skill),
+      why: cleanText(item?.why, 220) || 'Ayuda a cerrar una brecha detectada en tus oportunidades prioritarias.',
+    }
+  }).filter(Boolean)
+  return courses.length ? courses : deterministicCourses(missingSkills)
+}
+
+export const handler = async (event: any) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: corsHeaders, body: '' }
-  if (event.httpMethod !== 'POST') return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method not allowed' }) }
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method not allowed' }) }
+  }
 
   try {
-    const { profileSkills, missingSkills, profileTitle, profileSeniority, careerRoute } = JSON.parse(event.body || '{}')
-    if (!missingSkills?.length) return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ courses: [] }) }
-
-    const ROUTE_LABELS: Record<string, string> = {
-      'empleo-local':   'conseguir empleo en empresas locales en Paraguay',
-      'remoto':         'conseguir trabajo remoto con empresas internacionales',
-      'beca-posgrado':  'acceder a una beca de posgrado o especialización en el exterior',
-      'organismos':     'trabajar en organismos internacionales (ONU, BID, OEA, PNUD)',
-      'emprendimiento': 'lanzar un emprendimiento y acceder a capital semilla o aceleradoras',
-      'cambio-area':    'hacer un cambio de área o reconversión profesional',
+    const token = String(event.headers?.authorization || event.headers?.Authorization || '').replace(/^Bearer\s+/i, '')
+    if (!token) {
+      return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Sesión requerida', courses: [] }) }
     }
-    const routeContext = careerRoute && ROUTE_LABELS[careerRoute]
-      ? `El objetivo principal del usuario es: ${ROUTE_LABELS[careerRoute]}.`
-      : 'El objetivo del usuario no está definido — recomendá habilidades de alto impacto laboral general.'
+    const { data: { user }, error: authError } = await makeSupabaseAnon().auth.getUser(token)
+    if (authError || !user) {
+      return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Sesión inválida', courses: [] }) }
+    }
+
+    const body = JSON.parse(event.body || '{}')
+    const profileSkills = cleanList(body.profileSkills, 30)
+    const missingSkills = cleanList(body.missingSkills, 4)
+    const profileTitle = cleanText(body.profileTitle, 120) || 'Profesional'
+    const profileSeniority = cleanText(body.profileSeniority, 50) || 'No especificado'
+    const careerGoal = ROUTE_LABELS[cleanText(body.careerRoute, 50)] || 'mejorar su empleabilidad'
+
+    if (!missingSkills.length) {
+      return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ courses: [] }) }
+    }
 
     const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) throw new Error('GEMINI_API_KEY no configurada')
+    if (!apiKey) {
+      console.error('gemini-courses: GEMINI_API_KEY is not configured')
+      return {
+        statusCode: 200,
+        headers: corsHeaders,
+        body: JSON.stringify({ courses: deterministicCourses(missingSkills), fallback: true }),
+      }
+    }
 
-    const prompt = `Sos un asesor de carrera senior especializado en el mercado laboral de Paraguay y Latinoamérica, con conocimiento actualizado de tendencias 2024-2025.
+    const prompt = `Actuá como asesor de carrera para Paraguay y Latinoamérica.
 
-PERFIL DEL USUARIO:
-- Título: ${profileTitle || 'Profesional'}
-- Nivel: ${profileSeniority || 'Semi-Senior'}
-- Habilidades actuales: ${profileSkills?.join(', ') || 'No especificadas'}
-- Habilidades que le faltan según el mercado: ${missingSkills.join(', ')}
+Perfil:
+- Título: ${profileTitle}
+- Seniority: ${profileSeniority}
+- Habilidades actuales: ${profileSkills.join(', ') || 'No especificadas'}
+- Objetivo: ${careerGoal}
+- Brechas priorizadas con datos de oportunidades reales: ${missingSkills.join(', ')}
 
-OBJETIVO DE CARRERA:
-${routeContext}
-
-Tu tarea: Recomendá ${Math.min(missingSkills.length, 4)} recursos de aprendizaje (cursos, certificaciones o recursos) — uno por habilidad faltante prioritaria.
-
-Cada recomendación DEBE estar alineada con el objetivo de carrera del usuario. No recomendés cursos genéricos — explicá concretamente cómo esa habilidad lleva al usuario más cerca de su objetivo.
-
-Para cada recomendación considerá:
-1. Qué demanda el mercado objetivo HOY (local, remoto, organismos, etc. según el objetivo)
-2. Cómo esa habilidad complementa lo que el usuario YA sabe
-3. El impacto concreto en sus chances de lograr el objetivo (estimá un % de mejora realista)
-4. Que sea accesible (gratuito o económico, en español preferentemente)
-
-Respondé ÚNICAMENTE con este JSON válido, sin texto extra ni markdown:
-[
-  {
-    "skill": "nombre de la habilidad faltante",
-    "course": "nombre real y específico del curso o recurso",
-    "platform": "Udemy|Coursera|YouTube|LinkedIn Learning|Google|Microsoft",
-    "url": "URL de búsqueda real: https://www.udemy.com/courses/search/?q=TERMINO o https://www.coursera.org/search?query=TERMINO o https://www.youtube.com/results?search_query=TERMINO+curso+español",
-    "level": "Básico|Intermedio|Avanzado",
-    "duration": "estimación: ej. 8 horas, 4 semanas",
-    "impact": "Dominar [skill] puede aumentar tus chances de conseguir empleo en un X% porque [razón específica basada en el mercado paraguayo]",
-    "why": "Con tu objetivo de [objetivo de carrera] y tu experiencia en [habilidades actuales], agregar [skill] te permite [beneficio concreto y específico para ese objetivo]"
-  }
-]`
+Recomendá exactamente una formación útil por brecha, hasta ${missingSkills.length}.
+Priorizá recursos accesibles, prácticos y preferentemente en español.
+No inventes métricas, porcentajes, certificaciones ni enlaces.
+En "why", explicá en una oración cómo complementa el perfil y acerca al objetivo.
+Usá exclusivamente las habilidades de la lista de brechas.`
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 1500,
+            maxOutputTokens: 1200,
+            responseMimeType: 'application/json',
+            responseSchema: COURSE_SCHEMA,
           },
         }),
-      }
+      },
     )
 
     if (!response.ok) {
-      const errBody = await response.text()
-      // Fallback a Haiku si Gemini falla
-      console.error(`Gemini error ${response.status}: ${errBody}`)
-      return useFallbackHaiku(profileSkills, missingSkills, profileTitle, profileSeniority, careerRoute, corsHeaders)
+      console.error(`Gemini courses failed with status ${response.status}`)
+      return {
+        statusCode: 200,
+        headers: corsHeaders,
+        body: JSON.stringify({ courses: deterministicCourses(missingSkills), fallback: true }),
+      }
     }
 
     const data = await response.json()
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]'
-    const clean = text.replace(/```json|```/g, '').trim()
-    let courses = []
+    let parsed: unknown = []
     try {
-      courses = JSON.parse(clean)
+      parsed = JSON.parse(text)
     } catch {
-      return useFallbackHaiku(profileSkills, missingSkills, profileTitle, profileSeniority, careerRoute, corsHeaders)
+      console.error('Gemini courses returned invalid structured output')
     }
 
     return {
       statusCode: 200,
       headers: corsHeaders,
-      body: JSON.stringify({ courses }),
+      body: JSON.stringify({ courses: normalizeCourses(parsed, missingSkills) }),
     }
-  } catch (err: any) {
-    console.error('gemini-courses error:', err.message)
+  } catch (error: any) {
+    console.error('gemini-courses error:', error?.message || error)
     return {
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: err.message, courses: [] }),
-    }
-  }
-}
-
-async function useFallbackHaiku(
-  profileSkills: string[],
-  missingSkills: string[],
-  profileTitle: string,
-  profileSeniority: string,
-  careerRoute: string,
-  corsHeaders: any
-) {
-  try {
-    const anthropicKey = process.env.ANTHROPIC_API_KEY
-    if (!anthropicKey) throw new Error('Sin API key de fallback')
-
-    const routeHint = careerRoute ? ` Su objetivo es: ${careerRoute}.` : ''
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content: `Sos asesor de carrera para Paraguay. El usuario es ${profileTitle || 'profesional'} ${profileSeniority || ''} con skills: ${profileSkills?.join(', ')}.${routeHint} Le faltan: ${missingSkills.join(', ')}. Recomendá ${Math.min(missingSkills.length, 4)} cursos online accesibles alineados con su objetivo. Respondé SOLO con JSON array: [{"skill":"...","course":"...","platform":"Udemy|Coursera|YouTube","url":"URL de búsqueda real","level":"Básico|Intermedio","duration":"X horas","impact":"Puede mejorar tus chances un X%","why":"Con tu objetivo de... y tu experiencia en..."}]`
-        }],
-      }),
-    })
-
-    const data = await response.json()
-    const text = data.content?.[0]?.text || '[]'
-    const clean = text.replace(/```json|```/g, '').trim()
-    const courses = JSON.parse(clean)
-    
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ courses, fallback: true }),
-    }
-  } catch {
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ courses: [] }),
+      body: JSON.stringify({ error: 'No pudimos generar recomendaciones en este momento.', courses: [] }),
     }
   }
 }
