@@ -1,3 +1,4 @@
+import "pdf-parse/worker"
 import { PDFParse } from "pdf-parse"
 
 export const handler = async (event: any) => {

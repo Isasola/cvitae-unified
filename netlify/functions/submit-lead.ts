@@ -1,4 +1,5 @@
 import { Handler } from "@netlify/functions"
+import "pdf-parse/worker"
 import { PDFParse } from "pdf-parse"
 import { makeSupabaseAdmin } from "./_supabase"
 
