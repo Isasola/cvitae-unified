@@ -1,9 +1,12 @@
 import pdfjs from "pdfjs-dist/legacy/build/pdf.js"
+import pdfjsWorker from "pdfjs-dist/legacy/build/pdf.worker.js"
 
 export async function extractPdfText(buffer: Buffer): Promise<string> {
+  ;(globalThis as typeof globalThis & {
+    pdfjsWorker: typeof pdfjsWorker
+  }).pdfjsWorker = pdfjsWorker
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buffer),
-    disableWorker: true,
     disableFontFace: true,
     isEvalSupported: false,
     useWorkerFetch: false,
