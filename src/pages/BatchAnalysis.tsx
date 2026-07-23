@@ -9,6 +9,7 @@ import {
 import { analytics } from '@/lib/analytics'
 
 const ease = [0.22, 1, 0.36, 1] as const
+const RECRUITER_SESSION_KEY = 'cvitae_recruiter_session'
 
 interface BatchCandidate {
   id: string
@@ -40,7 +41,11 @@ async function extractTextFromFile(file: File): Promise<string> {
           body: JSON.stringify({ pdfBase64: base64, fileName: file.name }),
         })
         const data = await res.json()
-        resolve(data.text || '')
+        if (!res.ok || !data.success || !data.text) {
+          reject(new Error(data.error || 'Error extrayendo texto'))
+          return
+        }
+        resolve(data.text)
       } catch {
         reject(new Error('Error extrayendo texto'))
       }
@@ -86,9 +91,17 @@ export default function BatchAnalysis() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const s = localStorage.getItem('recruiter_session')
-    if (!s) setLocation('/empresas')
-    else setSession(JSON.parse(s))
+    const s = sessionStorage.getItem(RECRUITER_SESSION_KEY)
+    if (!s) {
+      setLocation('/empresas')
+      return
+    }
+    try {
+      setSession(JSON.parse(s))
+    } catch {
+      sessionStorage.removeItem(RECRUITER_SESSION_KEY)
+      setLocation('/empresas')
+    }
   }, [])
 
   const handleFiles = (files: File[]) => {
@@ -125,29 +138,45 @@ export default function BatchAnalysis() {
         const res = await fetch('/.netlify/functions/analyze-cv-candidate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cvText: text, mode: 'batch_analyze', jobTitle, jobDescription: jobDesc }),
+          body: JSON.stringify({
+            cvText: text,
+            mode: 'batch_analyze',
+            jobTitle,
+            jobDescription: jobDesc,
+            recruiterToken: session.token,
+          }),
         })
         const result = await res.json()
-        await fetch('/.netlify/functions/validate-recruiter-token', {
+        if (!res.ok) throw new Error(result.error || `No se pudo analizar ${c.file.name}`)
+        updated[i] = { ...updated[i], text, status: 'analyzing', result }
+      }))
+      // Persist sequentially so each credit is deducted from the latest balance.
+      for (const c of updated) {
+        if (!c.result || !c.text) continue
+        const saveRes = await fetch('/.netlify/functions/validate-recruiter-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             token: session.token,
             action: 'save_analysis',
             analysisData: {
-              candidate_name: result.candidateName || c.file.name,
+              candidate_name: c.result.candidateName || c.file.name,
               file_name: c.file.name,
-              ats_score: result.fitScore,
-              strengths: result.strengths,
-              critical_improvements: result.criticalImprovements,
+              ats_score: c.result.fitScore,
+              strengths: c.result.strengths,
+              critical_improvements: c.result.criticalImprovements,
               vacancy_label: jobTitle,
-              raw_cv_text: text,
+              raw_cv_text: c.text,
             },
           }),
         })
-        setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'done', result } : x))
-        updated[i] = { ...updated[i], status: 'done', result }
-      }))
+        const saveData = await saveRes.json()
+        if (!saveRes.ok || !saveData.saved) {
+          throw new Error(saveData.error || `No se pudo guardar ${c.file.name}`)
+        }
+        c.status = 'done'
+        setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'done', result: c.result } : x))
+      }
       const processedCandidates = updated.filter(c => c.status === 'done').map(c => ({
         name: c.result.candidateName || c.file.name,
         fitScore: c.result.fitScore,
@@ -160,9 +189,11 @@ export default function BatchAnalysis() {
       const compRes = await fetch('/.netlify/functions/compare-candidates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'batch_summary', jobTitle, jobDescription: jobDesc, candidates: processedCandidates, topN: 3 }),
+        body: JSON.stringify({ token: session.token, mode: 'batch_summary', jobTitle, jobDescription: jobDesc, candidates: processedCandidates, topN: 3 }),
       })
-      setSummary(await compRes.json())
+      const compData = await compRes.json()
+      if (!compRes.ok) throw new Error(compData.error || 'No se pudo generar el resumen comparativo')
+      setSummary(compData)
     } catch {
       setError('Ocurrió un error durante el procesamiento masivo.')
     } finally {

@@ -1272,6 +1272,9 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
         }),
       })
       const saveData = await saveRes.json()
+      if (!saveRes.ok || !saveData.saved) {
+        throw new Error(saveData.error || 'El análisis terminó, pero no pudo guardarse')
+      }
       if (saveData.new_balance !== undefined) setBalance(saveData.new_balance)
       setResult(data); setHistoryKey(k => k + 1)
     } catch (err: any) {
