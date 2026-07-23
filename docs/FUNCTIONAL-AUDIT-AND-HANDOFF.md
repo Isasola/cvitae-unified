@@ -80,10 +80,11 @@ Resolución:
 - `@anthropic-ai/sdk` eliminado porque no era utilizado. CVitae invoca Bedrock
   mediante `@aws-sdk/client-bedrock-runtime`.
 - `jspdf` actualizado a `4.2.1`.
-- `pdf-parse` actualizado de `1.1.4` a `2.4.5`; el parser anterior no podía
-  leer algunos PDFs modernos generados por jsPDF 4.
-- Tanto el analizador como `submit-lead` usan la nueva API, para conservar la
-  extracción en postulaciones a vacantes.
+- El lector antiguo `pdf-parse 1.1.4` fue reemplazado por
+  `pdfjs-dist 5.4.296`; el parser anterior no podía leer algunos PDFs modernos
+  generados por jsPDF 4.
+- Tanto el analizador como `submit-lead` usan la extracción compartida de
+  `netlify/functions/lib/pdf.ts`, para conservar el texto en postulaciones.
 - `pnpm-lock.yaml` sincronizado porque Netlify usa pnpm.
 - `npm audit --omit=dev`: cero vulnerabilidades.
 

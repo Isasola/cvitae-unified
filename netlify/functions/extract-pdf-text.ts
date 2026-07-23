@@ -1,5 +1,4 @@
-import "pdf-parse/worker"
-import { PDFParse } from "pdf-parse"
+import { extractPdfText } from "./lib/pdf"
 
 export const handler = async (event: any) => {
   const corsHeaders = {
@@ -48,14 +47,7 @@ export const handler = async (event: any) => {
       }
     }
 
-    const parser = new PDFParse({ data: pdfBuffer })
-    let text = ''
-    try {
-      const data = await parser.getText()
-      text = data.text?.trim() || ''
-    } finally {
-      await parser.destroy()
-    }
+    const text = await extractPdfText(pdfBuffer)
     if (!text || text.length < 50) {
       return {
         statusCode: 422,
