@@ -85,6 +85,8 @@ Resolución:
   generados por jsPDF 4.
 - Tanto el analizador como `submit-lead` usan la extracción compartida de
   `netlify/functions/lib/pdf.ts`, para conservar el texto en postulaciones.
+- `@thednp/dommatrix 3.0.4` aporta únicamente el polyfill requerido por
+  PDF.js en Netlify; no incorpora renderizado gráfico ni binarios nativos.
 - `pnpm-lock.yaml` sincronizado porque Netlify usa pnpm.
 - `npm audit --omit=dev`: cero vulnerabilidades.
 

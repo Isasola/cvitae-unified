@@ -1,6 +1,10 @@
-import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs"
+import DOMMatrix from "@thednp/dommatrix"
 
 export async function extractPdfText(buffer: Buffer): Promise<string> {
+  if (!("DOMMatrix" in globalThis)) {
+    ;(globalThis as typeof globalThis & { DOMMatrix: typeof DOMMatrix }).DOMMatrix = DOMMatrix
+  }
+  const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs")
   const loadingTask = getDocument({
     data: new Uint8Array(buffer),
     disableFontFace: true,
