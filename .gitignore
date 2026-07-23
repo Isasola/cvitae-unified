@@ -19,3 +19,12 @@ deno.lock
 start.bat
 scrapers/_test_count.py
 VITE_SUPABASE_URL=*.txt
+
+# Generated local tooling files
+__pycache__/
+*.py[cod]
+supabase/.temp/
+
+# Local visual test output
+*-server.log
+audit-redesign-*.png

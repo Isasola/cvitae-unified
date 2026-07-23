@@ -2,7 +2,7 @@ name: CVitae LinkedIn Auto-Poster
 
 on:
   schedule:
-    # Cada hora entre 8:00-22:00 hora Paraguay (UTC-4 = 12:00-02:00 UTC)
+    # Cada hora entre 09:00-23:00 hora Paraguay (UTC-3 = 12:00-02:00 UTC)
     - cron: '0 12-23,0,1,2 * * *'
   workflow_dispatch:
 

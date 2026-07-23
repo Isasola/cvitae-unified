@@ -1621,17 +1621,14 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
               CVitae lee los CVs por vos, los compara con criterio ATS y te entrega un ranking listo para entrevistar. Cero horas filtrando PDFs.
             </p>
 
-            {/* Organic line */}
-            <svg viewBox="0 0 800 60" preserveAspectRatio="none" className="mt-6 h-8 w-full max-w-md opacity-40" aria-hidden="true">
-              <defs>
-                <linearGradient id="gl-login" x1="0" x2="1" y1="0" y2="0">
-                  <stop offset="0%" stopColor="#c9a84c" stopOpacity="0" />
-                  <stop offset="50%" stopColor="#c9a84c" stopOpacity="0.7" />
-                  <stop offset="100%" stopColor="#e6cf8a" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path d="M 8 52 C 70 48, 110 30, 150 35 S 250 55, 310 20 S 420 5, 480 15 S 580 40, 640 8 S 760 4, 792 10" fill="none" stroke="url(#gl-login)" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
+            <ol className="mt-7 grid max-w-xl grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Flujo de evaluación">
+              {['CVs recibidos', 'Análisis explicable', 'Shortlist para revisar'].map((step, index) => (
+                <li key={step} className="flex items-center gap-2 border-y border-white/8 py-3 text-[10px] uppercase tracking-[0.12em] text-white/60">
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-[#c9a84c]/40 text-[#c9a84c]">{index + 1}</span>
+                  {step}
+                </li>
+              ))}
+            </ol>
 
             <ul className="mt-10 space-y-4">
               {features.map((f) => (
@@ -1652,7 +1649,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
               <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/10">
                 <Building2 strokeWidth={1.25} className="h-4 w-4 text-[#c9a84c]" />
               </div>
-              <p className="text-[11px] uppercase tracking-[0.22em] text-white/40">Acceso con token</p>
+              <p className="text-[11px] uppercase tracking-[0.22em] text-white/40">Ya tengo acceso · token de empresa</p>
             </div>
 
             <h2 className="mt-4 font-display text-2xl text-white">Ingresá tu token de empresa.</h2>

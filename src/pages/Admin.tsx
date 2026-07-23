@@ -157,6 +157,17 @@ export default function Admin() {
     newLast24h: number
     newLast7d: number
     duplicates: number
+    telemetryAvailable: boolean
+    telemetryError: string | null
+    runSummary: Record<string, number>
+    scraperRuns: {
+      id: string; scraper_id: string; scraper_name: string; script_path: string
+      status: 'running' | 'healthy' | 'warning' | 'failed' | 'timeout'
+      found_count: number | null; inserted_count: number | null
+      warning_count: number; error_count: number; error_summary: string | null
+      github_run_url: string | null; started_at: string; finished_at: string | null
+      duration_seconds: number | null
+    }[]
   } | null>(null)
 
   const NAV_ITEMS = [
@@ -183,8 +194,10 @@ export default function Admin() {
   }, [isAuthenticated, activeTab])
 
   const loadContent = async () => {
-    const { data } = await supabase.from('content_hub').select('*').order('created_at', { ascending: false })
-    if (data) setItems(data)
+    try {
+      const json = await adminFetch('list_content')
+      setItems(json.data || [])
+    } catch { /* non-fatal */ }
   }
 
   const loadSubscribers = async () => {
@@ -197,8 +210,10 @@ export default function Admin() {
   }
 
   const loadSkillCandidates = async () => {
-    const { data } = await supabase.from('skill_candidates').select('*').order('mention_count', { ascending: false })
-    if (data) setSkillCandidates(data as SkillCandidate[])
+    try {
+      const json = await adminFetch('list_skills')
+      setSkillCandidates(json.data || [])
+    } catch { /* non-fatal */ }
   }
 
   const loadMetrics = async () => {
@@ -227,8 +242,10 @@ export default function Admin() {
   }
 
   const loadTokens = async () => {
-    const { data } = await supabase.from('recruiter_tokens').select('*').order('created_at', { ascending: false })
-    if (data) setTokens(data)
+    try {
+      const json = await adminFetch('list_tokens')
+      setTokens(json.data || [])
+    } catch { /* non-fatal */ }
   }
 
   const loadBeta = async () => {
@@ -298,10 +315,7 @@ export default function Admin() {
     try {
       const dataToSave = { ...formData, fecha_vencimiento: `${formData.fecha_vencimiento}T23:59:59Z` }
       if (formData.tipo === 'blog') dataToSave.fecha_vencimiento = '2099-12-31T23:59:59Z'
-      const { error } = isEditing && formData.id
-        ? await supabase.from('content_hub').update(dataToSave).eq('id', formData.id)
-        : await supabase.from('content_hub').insert([dataToSave])
-      if (error) throw error
+      await adminFetch('save_content', { id: isEditing ? formData.id : null, data: dataToSave })
       setNotification({ type: 'success', message: isEditing ? 'Actualizado correctamente' : 'Creado correctamente' })
       resetForm()
       loadContent()
@@ -329,13 +343,13 @@ export default function Admin() {
   }
 
   const approveSkill = async (id: number) => {
-    await supabase.from('skill_candidates').update({ status: 'approved' }).eq('id', id)
+    await adminFetch('set_skill_status', { id, status: 'approved' })
     loadSkillCandidates()
     setNotification({ type: 'success', message: 'Habilidad aprobada' })
   }
 
   const rejectSkill = async (id: number) => {
-    await supabase.from('skill_candidates').update({ status: 'rejected' }).eq('id', id)
+    await adminFetch('set_skill_status', { id, status: 'rejected' })
     loadSkillCandidates()
     setNotification({ type: 'success', message: 'Habilidad rechazada' })
   }
@@ -362,13 +376,13 @@ export default function Admin() {
   }
 
   const toggleStatus = async (item: ContentItem) => {
-    await supabase.from('content_hub').update({ is_active: !item.is_active }).eq('id', item.id)
+    await adminFetch('set_content_active', { id: item.id, value: !item.is_active })
     loadContent()
   }
 
   const deleteItem = async (id: string) => {
     if (!confirm('¿Estás seguro de eliminar este contenido?')) return
-    await supabase.from('content_hub').delete().eq('id', id)
+    await adminFetch('delete_content', { id })
     loadContent()
   }
 
@@ -584,7 +598,7 @@ export default function Admin() {
                             { label: 'TOTAL BD', value: scraperReport.totalOpportunities.toLocaleString('es-PY'), sub: 'tabla opportunities', color: '#c9a84c' },
                             { label: 'NUEVAS HOY', value: scraperReport.newLast24h.toLocaleString('es-PY'), sub: 'desde 00:00 PY', color: '#34d399' },
                             { label: 'NUEVAS 7D', value: scraperReport.newLast7d.toLocaleString('es-PY'), sub: 'últimos 7 días', color: '#c9a84c' },
-                            { label: 'FUENTES', value: scraperReport.bySource.length.toString(), sub: 'cron: 06:00 PY', color: '#c9a84c' },
+                            { label: 'FUENTES', value: scraperReport.bySource.length.toString(), sub: 'cron nominal: 07:00 PY', color: '#c9a84c' },
                             { label: 'DUPLICADOS', value: scraperReport.duplicates.toLocaleString('es-PY'), sub: 'mismo título+empresa', color: scraperReport.duplicates > 100 ? '#f87171' : 'rgba(232,232,224,0.4)' },
                           ].map((m, i) => (
                             <div key={i} className="bg-[#080808] px-4 py-3">
@@ -593,6 +607,67 @@ export default function Admin() {
                               <p style={{ fontFamily: MONO, fontSize: '9px', color: 'rgba(232,232,224,0.2)', marginTop: '3px' }}>{m.sub}</p>
                             </div>
                           ))}
+                        </div>
+                        {/* Real execution telemetry — failures first */}
+                        <div className="border-t border-white/[0.07]">
+                          <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3 bg-[#0b0b0b]">
+                            <div>
+                              <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.14em', color: '#e8e8e0' }}>EJECUCIÓN MÁS RECIENTE POR SCRAPER</p>
+                              <p style={{ fontFamily: MONO, fontSize: '9px', color: 'rgba(232,232,224,0.3)', marginTop: 3 }}>Errores y bloqueos aparecen primero · datos privados del workflow</p>
+                            </div>
+                            <div className="flex gap-3" style={{ fontFamily: MONO, fontSize: '10px' }}>
+                              <span className="text-red-400">{(scraperReport.runSummary.failed || 0) + (scraperReport.runSummary.timeout || 0)} críticos</span>
+                              <span className="text-amber-300">{scraperReport.runSummary.warning || 0} avisos</span>
+                              <span className="text-emerald-400">{scraperReport.runSummary.healthy || 0} saludables</span>
+                            </div>
+                          </div>
+                          {!scraperReport.telemetryAvailable ? (
+                            <div className="px-4 py-4 border-t border-amber-400/20 bg-amber-400/[0.04] text-amber-300 text-xs" style={{ fontFamily: MONO }}>
+                              Telemetría pendiente de activar. Las métricas históricas de fuentes siguen disponibles debajo.
+                            </div>
+                          ) : scraperReport.scraperRuns.length === 0 ? (
+                            <div className="px-4 py-4 text-[rgba(232,232,224,0.35)] text-xs" style={{ fontFamily: MONO }}>
+                              Todavía no hay ejecuciones monitorizadas. Aparecerán después del próximo workflow.
+                            </div>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full border-collapse">
+                                <thead>
+                                  <tr className="border-t border-b border-white/[0.05]">
+                                    {['ESTADO', 'SCRAPER', 'ENCONTRÓ', 'INSERTÓ', 'ERRORES', 'DURACIÓN', 'ÚLTIMA EJECUCIÓN', 'DETALLE'].map(h => (
+                                      <th key={h} className="py-2 px-3 font-normal text-left tracking-widest text-[rgba(232,232,224,0.25)]" style={{ fontFamily: MONO, fontSize: '9px' }}>{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/[0.03]">
+                                  {scraperReport.scraperRuns.map(run => {
+                                    const state = {
+                                      failed: { color: '#f87171', label: 'FALLÓ' },
+                                      timeout: { color: '#fb923c', label: 'TIMEOUT' },
+                                      warning: { color: '#fde047', label: 'REVISAR' },
+                                      running: { color: '#60a5fa', label: 'CORRIENDO' },
+                                      healthy: { color: '#34d399', label: 'OK' },
+                                    }[run.status]
+                                    return (
+                                      <tr key={run.id} className="align-top hover:bg-white/[0.02]">
+                                        <td className="py-2.5 px-3"><span style={{ fontFamily: MONO, fontSize: 9, color: state.color }}>{state.label}</span></td>
+                                        <td className="py-2.5 px-3" style={{ fontFamily: MONO, fontSize: 11, color: '#e8e8e0' }}>{run.scraper_name}</td>
+                                        <td className="py-2.5 px-3 text-xs text-white/50">{run.found_count ?? '—'}</td>
+                                        <td className="py-2.5 px-3 text-xs text-emerald-400">{run.inserted_count ?? '—'}</td>
+                                        <td className="py-2.5 px-3 text-xs" style={{ color: run.error_count ? '#f87171' : 'rgba(232,232,224,0.25)' }}>{run.error_count}</td>
+                                        <td className="py-2.5 px-3 text-xs text-white/40">{run.duration_seconds == null ? '—' : `${run.duration_seconds}s`}</td>
+                                        <td className="py-2.5 px-3 text-[10px] text-white/40 whitespace-nowrap">{new Date(run.started_at).toLocaleString('es-PY')}</td>
+                                        <td className="py-2.5 px-3 max-w-[360px]">
+                                          <p className="text-[10px] text-red-300/80 line-clamp-3" style={{ fontFamily: MONO }}>{run.error_summary || 'Sin errores detectados'}</p>
+                                          {run.github_run_url && <a href={run.github_run_url} target="_blank" rel="noreferrer" className="text-[9px] text-[#c9a84c] hover:underline">Abrir ejecución ↗</a>}
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
                         </div>
                         {/* By source table */}
                         <div className="overflow-x-auto">

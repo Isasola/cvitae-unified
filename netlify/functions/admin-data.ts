@@ -27,6 +27,24 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ data }) }
     }
 
+    if (action === "list_content") {
+      const { data, error } = await supabase.from("content_hub").select("*").order("created_at", { ascending: false })
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify({ data: data || [] }) }
+    }
+
+    if (action === "list_skills") {
+      const { data, error } = await supabase.from("skill_candidates").select("*").order("mention_count", { ascending: false })
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify({ data: data || [] }) }
+    }
+
+    if (action === "list_tokens") {
+      const { data, error } = await supabase.from("recruiter_tokens").select("*").order("created_at", { ascending: false })
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify({ data: data || [] }) }
+    }
+
     if (action === "metrics") {
       const now = new Date()
       const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
@@ -82,7 +100,7 @@ const handler: Handler = async (event) => {
       if (now.getUTCHours() < 4) todayStart.setUTCDate(todayStart.getUTCDate() - 1)
       const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000)
 
-      const [totalOppsRes, totalChRes, new24hRes, new7dRes, bySourceRes, todayRes, yesterdayRes, duplicatesRes] = await Promise.all([
+      const [totalOppsRes, totalChRes, new24hRes, new7dRes, bySourceRes, todayRes, yesterdayRes, duplicatesRes, runsRes] = await Promise.all([
         supabase.from("opportunities").select("id", { count: "exact", head: true }),
         supabase.from("content_hub").select("id", { count: "exact", head: true }).eq("is_active", true),
         supabase.from("opportunities").select("id", { count: "exact", head: true }).gte("created_at", since24h),
@@ -98,6 +116,13 @@ const handler: Handler = async (event) => {
           .lt("created_at", todayStart.toISOString()),
         // duplicate count: same titulo + organization
         supabase.rpc("count_duplicate_opportunities"),
+        // Private execution telemetry, newest first. Service-role only.
+        supabase
+          .from("scraper_runs")
+          .select("id,run_id,scraper_id,scraper_name,script_path,trigger_type,status,exit_code,found_count,inserted_count,warning_count,error_count,error_summary,github_run_url,started_at,finished_at,duration_seconds")
+          .gte("started_at", since7d)
+          .order("started_at", { ascending: false })
+          .limit(1000),
       ])
 
       // build per-source today/yesterday maps
@@ -122,6 +147,27 @@ const handler: Handler = async (event) => {
         }))
         .sort((a, b) => b.count - a.count)
 
+      const latestByScraper = new Map<string, any>()
+      for (const run of (runsRes.data || [])) {
+        if (!latestByScraper.has(run.scraper_id)) latestByScraper.set(run.scraper_id, run)
+      }
+      const severity: Record<string, number> = {
+        failed: 0,
+        timeout: 1,
+        warning: 2,
+        running: 3,
+        healthy: 4,
+      }
+      const scraperRuns = [...latestByScraper.values()].sort((a, b) => {
+        const statusOrder = (severity[a.status] ?? 9) - (severity[b.status] ?? 9)
+        if (statusOrder !== 0) return statusOrder
+        return (b.error_count || 0) - (a.error_count || 0)
+      })
+      const runSummary = scraperRuns.reduce((acc, run) => {
+        acc[run.status] = (acc[run.status] || 0) + 1
+        return acc
+      }, {} as Record<string, number>)
+
       return {
         statusCode: 200,
         body: JSON.stringify({
@@ -131,11 +177,46 @@ const handler: Handler = async (event) => {
           newLast7d: new7dRes.count || 0,
           duplicates: (duplicatesRes.data as any)?.[0]?.duplicate_count || 0,
           bySource,
+          scraperRuns,
+          runSummary,
+          telemetryAvailable: !runsRes.error,
+          telemetryError: runsRes.error ? "La telemetría todavía no está disponible" : null,
         }),
       }
     }
 
     // ── WRITES ───────────────────────────────────────────────────────────────
+
+    if (action === "save_content") {
+      if (!payload?.data) return { statusCode: 400, body: JSON.stringify({ error: "data requerido" }) }
+      const query = payload.id
+        ? supabase.from("content_hub").update(payload.data).eq("id", payload.id)
+        : supabase.from("content_hub").insert([payload.data])
+      const { error } = await query
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
+    if (action === "set_content_active") {
+      if (!payload?.id || typeof payload.value !== "boolean") return { statusCode: 400, body: JSON.stringify({ error: "Datos inválidos" }) }
+      const { error } = await supabase.from("content_hub").update({ is_active: payload.value }).eq("id", payload.id)
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
+    if (action === "delete_content") {
+      if (!payload?.id) return { statusCode: 400, body: JSON.stringify({ error: "id requerido" }) }
+      const { error } = await supabase.from("content_hub").delete().eq("id", payload.id)
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
+    if (action === "set_skill_status") {
+      if (!payload?.id || !["approved", "rejected"].includes(payload.status)) return { statusCode: 400, body: JSON.stringify({ error: "Datos inválidos" }) }
+      const { error } = await supabase.from("skill_candidates").update({ status: payload.status }).eq("id", payload.id)
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
 
     if (action === "toggle_subscribed") {
       if (!payload?.userId) return { statusCode: 400, body: JSON.stringify({ error: "userId requerido" }) }
