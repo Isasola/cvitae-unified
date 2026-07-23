@@ -63,10 +63,16 @@ export const handler = async (event: any) => {
     }
   } catch (error: any) {
     console.error('extract-pdf-text error:', error?.message || error)
+    const diagnostic = process.env.CONTEXT === 'deploy-preview'
+      ? String(error?.message || error).slice(0, 180)
+      : undefined
     return {
       statusCode: 422,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'No pudimos leer el PDF. Verificá que no esté dañado o protegido con contraseña.' }),
+      body: JSON.stringify({
+        error: 'No pudimos leer el PDF. Verificá que no esté dañado o protegido con contraseña.',
+        ...(diagnostic ? { diagnostic } : {}),
+      }),
     }
   }
 }
