@@ -1,10 +1,5 @@
-import pdfjs from "pdfjs-dist/legacy/build/pdf.js"
-import pdfjsWorker from "pdfjs-dist/legacy/build/pdf.worker.js"
-
 export async function extractPdfText(buffer: Buffer): Promise<string> {
-  ;(globalThis as typeof globalThis & {
-    pdfjsWorker: typeof pdfjsWorker
-  }).pdfjsWorker = pdfjsWorker
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs")
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buffer),
     disableFontFace: true,

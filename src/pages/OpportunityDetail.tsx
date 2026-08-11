@@ -1,100 +1,129 @@
-import { useState, useEffect } from 'react'
-import { Link, useParams, useLocation } from 'wouter'
-import { motion } from 'framer-motion'
-import { ArrowLeft, Building2, MapPin, Calendar, Briefcase, ExternalLink } from 'lucide-react'
-import { GlassCard, Badge, GoldButton } from '@/components/cvitae/UI-Elements'
-import { Navbar } from '@/components/cvitae/Navbar'
-import { Footer } from '@/components/cvitae/Footer'
+import { useEffect, useState } from 'react'
+import { Helmet } from 'react-helmet-async'
+import { Link, useParams } from 'wouter'
+import { ArrowLeft, Building2, CalendarDays, ExternalLink, MapPin, ShieldCheck } from 'lucide-react'
+import { SiteShell } from '@/components/cv/SiteShell'
 import { supabase } from '@/lib/supabase'
-import ReactMarkdown from 'react-markdown'
+import { analytics } from '@/lib/analytics'
 
 interface Opportunity {
   id: string
-  titulo: string
   slug: string
-  cuerpo: string
-  categoria: string
-  ubicacion: string
-  fecha_vencimiento: string
-  tipo: string
-  metadata?: { application_url?: string; organization?: string }
+  title: string
+  organization: string | null
+  location: string | null
+  description: string | null
+  opportunity_type: string | null
+  application_url: string
+  source: string | null
+  deadline: string | null
+  funding_type: string | null
+  funding_amount: number | null
+  currency: string | null
+  fully_funded: boolean | null
+  eligible_countries: string[] | null
+  eligible_regions: string[] | null
+  education_level: string | null
+  updated_at: string
 }
 
-const WA_NUMBER = '595992954169'
+const LABELS: Record<string, string> = {
+  scholarship: 'Beca', fellowship: 'Fellowship', grant: 'Grant', seed_capital: 'Capital semilla',
+  accelerator: 'Aceleradora', incubator: 'Incubadora', startup_competition: 'Competencia',
+  research_funding: 'Financiación de investigación', training: 'Formación',
+  exchange_program: 'Intercambio', volunteering: 'Voluntariado', tender: 'Licitación',
+}
+const clean = (value: unknown) => String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 
 export default function OpportunityDetail() {
   const { slug } = useParams<{ slug: string }>()
-  const [opportunity, setOpportunity] = useState<Opportunity | null>(null)
+  const [item, setItem] = useState<Opportunity | null>(null)
   const [loading, setLoading] = useState(true)
-  const [, setLocation] = useLocation()
 
   useEffect(() => {
-    if (slug) {
-      supabase
-        .from('content_hub')
-        .select('*')
-        .eq('slug', slug)
-        .eq('is_active', true)
-        .single()
-        .then(({ data }) => { setOpportunity(data); setLoading(false) })
-    }
+    if (!slug) return
+    supabase
+      .from('opportunities')
+      .select('id,slug,title,organization,location,description,opportunity_type,application_url,source,deadline,funding_type,funding_amount,currency,fully_funded,eligible_countries,eligible_regions,education_level,updated_at')
+      .eq('slug', slug)
+      .eq('is_active', true)
+      .eq('verification_status', 'verified')
+      .eq('catalog_eligible', true)
+      .is('deleted_at', null)
+      .is('archived_at', null)
+      .or(`deadline.is.null,deadline.gte.${new Date().toISOString()}`)
+      .maybeSingle()
+      .then(({ data }) => {
+        const loaded = data as Opportunity | null
+        setItem(loaded)
+        if (loaded) analytics.opportunityViewed(loaded.id, loaded.source || 'unknown')
+        setLoading(false)
+      })
   }, [slug])
 
-  if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-4 border-gold border-t-transparent rounded-full animate-spin" /></div>
-  if (!opportunity) return <div className="min-h-screen bg-background text-white flex items-center justify-center">Oportunidad no encontrada.</div>
+  if (loading) return <SiteShell><main className="mx-auto min-h-[60vh] max-w-5xl px-6 py-20 text-sm text-white/40">Cargando oportunidad…</main></SiteShell>
+  if (!item) return <SiteShell><main className="mx-auto min-h-[60vh] max-w-5xl px-6 py-20"><p className="text-cream">Esta oportunidad ya no está activa o no existe.</p><Link href="/oportunidades" className="mt-4 inline-block text-sm text-[#c9a84c]">Volver a oportunidades</Link></main></SiteShell>
 
-  const appUrl = opportunity.metadata?.application_url
+  const type = LABELS[item.opportunity_type || ''] || clean(item.opportunity_type).replaceAll('_', ' ') || 'Oportunidad'
+  const eligibility = [...(item.eligible_countries || []), ...(item.eligible_regions || [])].join(', ')
+  const title = `${clean(item.title)} | CVitae`
+  const description = `${type} de ${clean(item.organization) || 'una organización verificada'}. Revisá elegibilidad, fecha y postulación en CVitae.`
+  const canonical = `https://cvitae.lat/oportunidades/${item.slug}`
+  const funding = item.funding_amount ? `${item.currency || ''} ${Number(item.funding_amount).toLocaleString('es-PY')}`.trim() : clean(item.funding_type)
+
+  const apply = () => {
+    analytics.applyClicked(item.id, item.source || 'unknown')
+    window.open(item.application_url, '_blank', 'noopener,noreferrer')
+  }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <div className="pt-32 pb-20 px-4 max-w-4xl mx-auto">
-        <div className="mb-8">
-          <Link href="/oportunidades" className="text-gold flex items-center gap-2 hover:underline text-sm">
-            <ArrowLeft size={16} /> Volver a oportunidades
-          </Link>
-        </div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <GlassCard>
-            <div className="flex items-center gap-2 mb-4">
-              <Badge variant={opportunity.tipo === 'beca' ? 'gold' : 'muted'}>{opportunity.tipo === 'beca' ? 'Beca' : 'Foro'}</Badge>
-              <span className="text-xs text-muted flex items-center gap-1">
-                <Calendar size={12} />
-                Vence: {new Date(opportunity.fecha_vencimiento).toLocaleDateString()}
-              </span>
-            </div>
-            <h1 className="text-3xl font-bold text-white mb-6">{opportunity.titulo}</h1>
-
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="flex items-center gap-2 text-sm text-muted">
-                <MapPin size={16} className="text-gold" /> {opportunity.ubicacion}
+    <>
+      <Helmet>
+        <title>{title}</title>
+        <meta name="description" content={description} />
+        <link rel="canonical" href={canonical} />
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
+        <meta property="og:url" content={canonical} />
+      </Helmet>
+      <SiteShell>
+        <main className="mx-auto max-w-5xl px-6 py-12 sm:py-16">
+          <Link href="/oportunidades" className="inline-flex items-center gap-2 text-sm text-white/40 transition hover:text-cream"><ArrowLeft className="h-4 w-4" />Volver a oportunidades</Link>
+          <article className="mt-8 grid gap-8 lg:grid-cols-[1fr_300px]">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-[#c9a84c]">{type}</p>
+              <h1 className="mt-3 max-w-3xl font-display text-4xl leading-tight text-cream sm:text-5xl">{clean(item.title)}</h1>
+              <div className="mt-6 flex flex-wrap gap-x-5 gap-y-3 text-sm text-white/45">
+                <span className="flex items-center gap-2"><Building2 className="h-4 w-4" />{clean(item.organization) || 'Organización no informada'}</span>
+                <span className="flex items-center gap-2"><MapPin className="h-4 w-4" />{clean(item.location) || eligibility || 'Consultar elegibilidad'}</span>
+                {item.deadline && <span className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Cierra {new Date(item.deadline).toLocaleDateString('es-PY')}</span>}
               </div>
-              <div className="flex items-center gap-2 text-sm text-muted">
-                <Briefcase size={16} className="text-gold" /> {opportunity.categoria}
-              </div>
-            </div>
 
-            <div className="prose prose-invert max-w-none text-muted mb-8">
-              <ReactMarkdown>{opportunity.cuerpo}</ReactMarkdown>
-            </div>
-
-            <div className="flex gap-4">
-              {appUrl && (
-                <GoldButton onClick={() => window.open(appUrl, '_blank', 'noopener,noreferrer')}>
-                  Postularse a esta oportunidad <ExternalLink size={16} />
-                </GoldButton>
+              {(funding || eligibility || item.education_level) && (
+                <dl className="mt-8 grid gap-px overflow-hidden border border-white/8 bg-white/8 sm:grid-cols-3">
+                  <div className="bg-[#0a0a0a] p-4"><dt className="text-[10px] uppercase tracking-wider text-white/30">Financiación</dt><dd className="mt-2 text-sm text-cream">{item.fully_funded ? 'Financiación total' : funding || 'No informada'}</dd></div>
+                  <div className="bg-[#0a0a0a] p-4"><dt className="text-[10px] uppercase tracking-wider text-white/30">Elegibilidad</dt><dd className="mt-2 text-sm text-cream">{eligibility || 'Revisar bases'}</dd></div>
+                  <div className="bg-[#0a0a0a] p-4"><dt className="text-[10px] uppercase tracking-wider text-white/30">Nivel</dt><dd className="mt-2 text-sm text-cream">{clean(item.education_level) || 'No especificado'}</dd></div>
+                </dl>
               )}
-              <GoldButton
-                variant="outline"
-                onClick={() => window.open(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola! Quiero mejorar mi CV para la oportunidad: ' + opportunity.titulo)}`, '_blank')}
-              >
-                Mejorar mi CV para esta oportunidad
-              </GoldButton>
+
+              <section className="mt-9 border-t border-white/8 pt-7">
+                <h2 className="font-display text-2xl text-cream">Información de la convocatoria</h2>
+                <p className="mt-4 whitespace-pre-line text-sm leading-7 text-white/55">{clean(item.description) || 'La fuente no proporcionó una descripción completa. Revisá las bases antes de postular.'}</p>
+              </section>
             </div>
-          </GlassCard>
-        </motion.div>
-      </div>
-      <Footer />
-    </div>
+
+            <aside className="h-fit border border-white/8 bg-white/[0.018] p-5 lg:sticky lg:top-24">
+              <button onClick={apply} className="flex w-full items-center justify-center gap-2 bg-[#c9a84c] px-4 py-3 text-sm font-semibold text-[#090909] transition hover:bg-[#dfc36e]">Abrir postulación <ExternalLink className="h-4 w-4" /></button>
+              <div className="mt-5 space-y-3 border-t border-white/8 pt-4 text-xs leading-relaxed text-white/35">
+                <p className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />Esta ficha pasó por revisión, pero las bases de la organización son siempre la referencia final.</p>
+                <p>Revisada {new Date(item.updated_at).toLocaleDateString('es-PY')}</p>
+                <p>Fuente: {clean(item.source) || 'No informada'}</p>
+              </div>
+            </aside>
+          </article>
+        </main>
+      </SiteShell>
+    </>
   )
 }

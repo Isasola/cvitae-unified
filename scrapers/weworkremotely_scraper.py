@@ -92,7 +92,7 @@ def extract_job(item, rubro):
     description = strip_html(desc_el.text if desc_el is not None else "")
 
     return {
-        "titulo": title,
+        "title": title,
         "organization": company,
         "location": "Remote",
         "rubro": rubro,
@@ -141,7 +141,7 @@ def main():
             status = insert_job(job)
             if status in (200, 201, 409):
                 total_inserted += 1
-            print(f"  [{job['organization'][:25]}] {job['titulo'][:45]} -> {status}")
+            print(f"  [{job['organization'][:25]}] {job['title'][:45]} -> {status}")
 
         time.sleep(1)
 

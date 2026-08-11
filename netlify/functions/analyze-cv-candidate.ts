@@ -61,6 +61,7 @@ const handler: Handler = async (event) => {
         .select("id, token_balance")
         .eq("access_token", recruiterToken.trim())
         .eq("is_active", true)
+        .eq("verification_status", "verified")
         .single()
       if (!recruiter) {
         return { statusCode: 403, body: JSON.stringify({ error: "Token de empresa inválido o inactivo" }) }

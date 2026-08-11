@@ -9,6 +9,7 @@
 
 [functions]
   node_bundler = "esbuild"
+  external_node_modules = ["pdfjs-dist"]
 
 # Funciones con riesgo de timeout (análisis con Bedrock)
 [functions."analyze-cv-candidate"]

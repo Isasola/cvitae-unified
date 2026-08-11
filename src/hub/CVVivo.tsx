@@ -240,9 +240,9 @@ export default function CVVivo() {
                   <Lock size={16} /> Límite diario alcanzado
                 </button>
                 <p className="text-center text-xs text-white/40">
-                  <a href={`https://wa.me/595992954169?text=${encodeURIComponent('Hola! Quiero activar CVitae Pro por USD 9/mes.')}`}
+                  <a href={`https://wa.me/595992954169?text=${encodeURIComponent('Hola, quiero solicitar acceso ampliado a la beta de CVitae.')}`}
                     target="_blank" rel="noopener noreferrer"
-                    className="text-[#c9a84c] hover:underline">Pro</a> para adaptaciones ilimitadas
+                    className="text-[#c9a84c] hover:underline">Solicitá acceso beta</a> para más adaptaciones
                 </p>
               </div>
             ) : (
@@ -254,7 +254,7 @@ export default function CVVivo() {
                   {adapting ? <><RefreshCw className="animate-spin" size={16} /> Adaptando…</> : <><Briefcase size={16} /> Adaptar CV</>}
                 </button>
                 {!isSubscribed && (
-                  <p className="text-center text-xs text-white/40">1 gratis hoy · <a href={`https://wa.me/595992954169?text=${encodeURIComponent('Hola! Quiero activar CVitae Pro por USD 9/mes.')}`} target="_blank" rel="noopener noreferrer" className="text-[#c9a84c] hover:underline">Pro</a> para más</p>
+                  <p className="text-center text-xs text-white/40">1 incluida hoy · <a href={`https://wa.me/595992954169?text=${encodeURIComponent('Hola, quiero solicitar acceso ampliado a la beta de CVitae.')}`} target="_blank" rel="noopener noreferrer" className="text-[#c9a84c] hover:underline">solicitá acceso beta</a> para más</p>
                 )}
               </div>
             )}

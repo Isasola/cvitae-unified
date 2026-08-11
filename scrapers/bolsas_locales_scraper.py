@@ -107,7 +107,7 @@ def scrape_zonajobs(max_pages: int = 5) -> list:
                 location = loc_el.get_text(strip=True) if loc_el else "Paraguay"
                 seen.add(job_url)
                 page_jobs.append({
-                    "titulo": title,
+                    "title": title,
                     "organization": org,
                     "location": location,
                     "rubro": infer_rubro(title),
@@ -122,20 +122,6 @@ def scrape_zonajobs(max_pages: int = 5) -> list:
                 break
 
         if not page_jobs:
-            # Fallback: generic entry for this page
-            if page == 1:
-                page_jobs.append({
-                    "titulo": "Ver empleos en ZonaJobs Paraguay",
-                    "organization": "ZonaJobs Paraguay",
-                    "location": "Paraguay",
-                    "rubro": "General",
-                    "type": "Tiempo completo",
-                    "description": "Portal de empleos ZonaJobs para Paraguay.",
-                    "application_url": base_url,
-                    "source": SOURCE,
-                    "is_active": True,
-                    "tags": ["zonajobs", "paraguay"],
-                })
             break
 
         jobs.extend(page_jobs)
@@ -191,7 +177,7 @@ def scrape_trabajos_com_py(max_pages: int = 5) -> list:
                 location = loc_el.get_text(strip=True) if loc_el else "Paraguay"
                 seen.add(job_url)
                 page_jobs.append({
-                    "titulo": title,
+                    "title": title,
                     "organization": org,
                     "location": location,
                     "rubro": "General",
@@ -206,19 +192,6 @@ def scrape_trabajos_com_py(max_pages: int = 5) -> list:
                 break
 
         if not page_jobs:
-            if page == 1:
-                page_jobs.append({
-                    "titulo": "Ver empleos en Trabajos.com.py",
-                    "organization": "Trabajos.com.py",
-                    "location": "Paraguay",
-                    "rubro": "General",
-                    "type": "Tiempo completo",
-                    "description": "Portal de empleos Trabajos.com.py para Paraguay.",
-                    "application_url": base_url,
-                    "source": SOURCE,
-                    "is_active": True,
-                    "tags": ["trabajos.com.py", "paraguay"],
-                })
             break
 
         jobs.extend(page_jobs)
@@ -236,18 +209,7 @@ def scrape_empleos_publicos() -> list:
     url = "https://www.empleospublicos.gov.py/convocatorias"
     html = fetch(url)
     if not html:
-        return [{
-            "titulo": "Ver convocatorias en EmpleosPublicos.gov.py",
-            "organization": "Estado Paraguayo",
-            "location": "Paraguay",
-            "rubro": "Sector Público",
-            "type": "Tiempo completo",
-            "description": "Portal oficial de empleos públicos del Estado Paraguayo.",
-            "application_url": url,
-            "source": SOURCE,
-            "is_active": True,
-            "tags": ["estado", "sector público", "empleos públicos"],
-        }]
+        return []
 
     soup = BeautifulSoup(html, "html.parser")
     jobs = []
@@ -280,7 +242,7 @@ def scrape_empleos_publicos() -> list:
             org = org_el.get_text(strip=True) if org_el else "Estado Paraguayo"
             seen.add(job_url)
             jobs.append({
-                "titulo": title,
+                "title": title,
                 "organization": org,
                 "location": "Paraguay",
                 "rubro": "Sector Público",
@@ -293,20 +255,6 @@ def scrape_empleos_publicos() -> list:
             })
         if jobs:
             break
-
-    if not jobs:
-        jobs.append({
-            "titulo": "Ver convocatorias en EmpleosPublicos.gov.py",
-            "organization": "Estado Paraguayo",
-            "location": "Paraguay",
-            "rubro": "Sector Público",
-            "type": "Tiempo completo",
-            "description": "Portal oficial de empleos públicos del Estado Paraguayo.",
-            "application_url": url,
-            "source": SOURCE,
-            "is_active": True,
-            "tags": ["estado", "sector público", "empleos públicos"],
-        })
 
     print(f"  [empleos_publicos] encontradas: {len(jobs)}")
     return jobs
@@ -321,18 +269,7 @@ def scrape_mtess() -> list:
     url = "https://www.trabajo.gov.py/portaldelempleo/buscar-empleo"
     html = fetch(url)
     if not html:
-        return [{
-            "titulo": "Ver empleos en Portal MTESS",
-            "organization": "Ministerio de Trabajo (MTESS)",
-            "location": "Paraguay",
-            "rubro": "General",
-            "type": "Tiempo completo",
-            "description": "Portal del Empleo del Ministerio de Trabajo, Empleo y Seguridad Social de Paraguay.",
-            "application_url": url,
-            "source": SOURCE,
-            "is_active": True,
-            "tags": ["mtess", "ministerio", "paraguay"],
-        }]
+        return []
 
     soup = BeautifulSoup(html, "html.parser")
     jobs = []
@@ -367,7 +304,7 @@ def scrape_mtess() -> list:
             location = loc_el.get_text(strip=True) if loc_el else "Paraguay"
             seen.add(job_url)
             jobs.append({
-                "titulo": title,
+                "title": title,
                 "organization": org,
                 "location": location,
                 "rubro": "General",
@@ -380,20 +317,6 @@ def scrape_mtess() -> list:
             })
         if jobs:
             break
-
-    if not jobs:
-        jobs.append({
-            "titulo": "Ver empleos en Portal MTESS",
-            "organization": "Ministerio de Trabajo (MTESS)",
-            "location": "Paraguay",
-            "rubro": "General",
-            "type": "Tiempo completo",
-            "description": "Portal del Empleo del Ministerio de Trabajo, Empleo y Seguridad Social de Paraguay.",
-            "application_url": url,
-            "source": SOURCE,
-            "is_active": True,
-            "tags": ["mtess", "ministerio", "paraguay"],
-        })
 
     print(f"  [mtess] encontradas: {len(jobs)}")
     return jobs

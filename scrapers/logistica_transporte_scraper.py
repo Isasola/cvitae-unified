@@ -70,7 +70,7 @@ def scrape_empresa(key, url, org, rubro):
                 if not job_url:
                     job_url = f"{url}#{title[:40].replace(' ', '-').lower()}"
                 jobs.append({
-                    "titulo": title,
+                    "title": title,
                     "organization": org,
                     "location": "Paraguay",
                     "rubro": rubro,
@@ -94,7 +94,7 @@ def scrape_empresa(key, url, org, rubro):
             if any(kw in text.lower() or kw in href.lower() for kw in LINK_KEYWORDS):
                 job_url = href if href.startswith("http") else url
                 jobs.append({
-                    "titulo": text,
+                    "title": text,
                     "organization": org,
                     "location": "Paraguay",
                     "rubro": rubro,
@@ -120,7 +120,7 @@ def scrape_empresa(key, url, org, rubro):
 def fallback(key, url, org, rubro):
     """Generic fallback entry when no vacancies found in HTML."""
     return [{
-        "titulo": f"Empleos en {org}",
+        "title": f"Empleos en {org}",
         "organization": org,
         "location": "Paraguay",
         "rubro": rubro,

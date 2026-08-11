@@ -1,222 +1,155 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Link, useLocation } from 'wouter'
-import { MapPin, Calendar, ArrowRight, ArrowLeft, Sparkles, RefreshCw, AlertCircle } from 'lucide-react'
+import { Link } from 'wouter'
+import { ArrowRight, CalendarDays, Filter, MapPin, Search, ShieldCheck } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
-import { GrowthLine, Eyebrow } from '@/components/cv/visuals'
-import { supabase, auth } from '@/lib/supabase'
+import { Eyebrow } from '@/components/cv/visuals'
+import { supabase } from '@/lib/supabase'
+
+const OPPORTUNITY_TYPES = [
+  'scholarship', 'fellowship', 'grant', 'seed_capital', 'accelerator', 'incubator',
+  'startup_competition', 'research_funding', 'training', 'exchange_program',
+  'volunteering', 'tender',
+] as const
+
+type Category = 'Todas' | 'Becas' | 'Financiación' | 'Programas' | 'Experiencias'
 
 interface Opportunity {
   id: string
-  titulo: string
-  slug: string
-  categoria: string
-  tipo: string
-  ubicacion: string
-  fecha_vencimiento: string
-  is_active: boolean
-  metadata?: { application_url?: string; organization?: string }
+  slug: string | null
+  title: string
+  organization: string | null
+  location: string | null
+  opportunity_type: string | null
+  deadline: string | null
+  funding_type: string | null
+  fully_funded: boolean | null
+  source: string | null
 }
 
-function cleanText(text: string): string {
-  return text
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/â€™/g, "'").replace(/â€œ/g, '"').replace(/â€/g, '"').replace(/â€"/g, '–').replace(/â€"/g, '—')
-    .replace(/Ã©/g, 'é').replace(/Ã¡/g, 'á').replace(/Ã­/g, 'í').replace(/Ã³/g, 'ó').replace(/Ãº/g, 'ú')
-    .replace(/[\u{0080}-\u{009F}]/gu, '').trim()
+const TYPE_LABELS: Record<string, string> = {
+  scholarship: 'Beca', fellowship: 'Fellowship', grant: 'Grant',
+  seed_capital: 'Capital semilla', accelerator: 'Aceleradora', incubator: 'Incubadora',
+  startup_competition: 'Competencia', research_funding: 'Investigación',
+  training: 'Formación', exchange_program: 'Intercambio',
+  volunteering: 'Voluntariado', tender: 'Licitación',
 }
 
-const cats = ['Todas', 'Becas', 'Foros'] as const
-type Cat = (typeof cats)[number]
+const CATEGORY_TYPES: Record<Exclude<Category, 'Todas'>, string[]> = {
+  Becas: ['scholarship', 'fellowship'],
+  Financiación: ['grant', 'seed_capital', 'research_funding', 'tender'],
+  Programas: ['accelerator', 'incubator', 'startup_competition', 'training'],
+  Experiencias: ['exchange_program', 'volunteering'],
+}
+
+const clean = (value: unknown) => String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 
 export default function Opportunities() {
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([])
+  const [items, setItems] = useState<Opportunity[]>([])
   const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
-  const [cat, setCat] = useState<Cat>('Todas')
-  const [user, setUser] = useState<any>(null)
-  const [ctaEmail, setCtaEmail] = useState('')
-  const [ctaSent, setCtaSent] = useState(false)
-  const [ctaSending, setCtaSending] = useState(false)
-
-  const loadOpportunities = async () => {
-    setLoading(true)
-    setLoadError('')
-    const { data, error } = await supabase
-      .from('content_hub')
-      .select('*')
-      .eq('is_active', true)
-      .in('tipo', ['beca', 'foro'])
-      .order('created_at', { ascending: false })
-    if (error) {
-      setLoadError('No pudimos cargar las oportunidades. Revisá tu conexión e intentá nuevamente.')
-    } else {
-      setOpportunities(data || [])
-    }
-    setLoading(false)
-  }
+  const [error, setError] = useState('')
+  const [category, setCategory] = useState<Category>('Todas')
+  const [query, setQuery] = useState('')
 
   useEffect(() => {
-    loadOpportunities()
-    auth.getUser().then(setUser)
-    const sub = auth.onAuthStateChange(setUser)
-    return () => sub.unsubscribe()
+    supabase
+      .from('opportunities')
+      .select('id,slug,title,organization,location,opportunity_type,deadline,funding_type,fully_funded,source')
+      .eq('is_active', true)
+      .eq('verification_status', 'verified')
+      .eq('catalog_eligible', true)
+      .in('opportunity_type', [...OPPORTUNITY_TYPES])
+      .is('deleted_at', null)
+      .is('archived_at', null)
+      .or(`deadline.is.null,deadline.gte.${new Date().toISOString()}`)
+      .order('deadline', { ascending: true, nullsFirst: false })
+      .limit(250)
+      .then(({ data, error: loadError }) => {
+        if (loadError) setError('No pudimos cargar las oportunidades. Intentá nuevamente en unos minutos.')
+        else setItems((data || []) as Opportunity[])
+        setLoading(false)
+      })
   }, [])
 
-  const handleCtaSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!ctaEmail.trim()) return
-    setCtaSending(true)
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: ctaEmail.trim().toLowerCase(),
-        options: { emailRedirectTo: 'https://cvitae.lat/mi-carrera/perfil' },
-      })
-      if (!error) setCtaSent(true)
-    } finally {
-      setCtaSending(false)
-    }
-  }
-
-  const filtered = opportunities.filter((o) =>
-    cat === 'Todas' ? true : cat === 'Becas' ? o.tipo === 'beca' : o.tipo === 'foro'
-  )
+  const filtered = useMemo(() => {
+    const needle = clean(query).toLocaleLowerCase('es')
+    return items.filter(item => {
+      const type = item.opportunity_type || ''
+      const categoryMatch = category === 'Todas' || CATEGORY_TYPES[category].includes(type)
+      const text = `${item.title} ${item.organization || ''} ${item.location || ''} ${TYPE_LABELS[type] || type}`.toLocaleLowerCase('es')
+      return categoryMatch && (!needle || text.includes(needle))
+    })
+  }, [category, items, query])
 
   return (
     <>
       <Helmet>
-        <title>Oportunidades Laborales Paraguay | CVitae</title>
-        <meta name="description" content="Becas, empleos, foros y eventos seleccionados para profesionales paraguayos y latinoamericanos." />
+        <title>Becas y oportunidades para Paraguay | CVitae</title>
+        <meta name="description" content="Becas, grants, aceleradoras, intercambios y programas vigentes verificados para personas y emprendimientos de Paraguay." />
         <link rel="canonical" href="https://cvitae.lat/oportunidades" />
-        <meta property="og:title" content="Oportunidades Laborales Paraguay | CVitae" />
-        <meta property="og:description" content="Becas, empleos, foros y eventos curados para profesionales paraguayos y latinoamericanos." />
+        <meta property="og:title" content="Becas y oportunidades para Paraguay | CVitae" />
+        <meta property="og:description" content="Oportunidades verificadas con elegibilidad y fecha de cierre claras." />
         <meta property="og:url" content="https://cvitae.lat/oportunidades" />
-        <meta property="og:type" content="website" />
       </Helmet>
       <SiteShell>
-        <div className="max-w-5xl mx-auto px-6 py-12">
-          <div className="mb-6">
-            <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-cream transition-colors">
-              <ArrowLeft className="h-4 w-4" /> Inicio
-            </Link>
-          </div>
-          <div className="relative">
-            <Eyebrow>Oportunidades</Eyebrow>
-            <h1 className="font-display text-4xl sm:text-5xl mt-2 text-cream">
-              Lo que pasa en <em>tu carrera</em> esta semana.
-            </h1>
-            <p className="text-muted-foreground mt-3 max-w-xl">
-              Becas, foros y empleos curados a mano y validados por la IA. Todo lo que
-              normalmente se pierde en grupos de WhatsApp, acá en un solo lugar.
-            </p>
-            <GrowthLine className="absolute -bottom-6 left-0 right-0 h-10 opacity-40" />
-          </div>
+        <main className="mx-auto max-w-6xl px-6 py-12 sm:py-16">
+          <header className="max-w-3xl">
+            <Eyebrow>Oportunidades verificadas</Eyebrow>
+            <h1 className="mt-3 font-display text-4xl leading-tight text-cream sm:text-5xl">Más que empleos: oportunidades para avanzar.</h1>
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">Becas, financiación y programas con una convocatoria comprobable. Mostramos únicamente oportunidades aprobadas y aclaramos quién puede postular.</p>
+          </header>
 
-          <div className="mt-10 flex gap-1 p-1 glass-panel w-fit">
-            {cats.map((c) => (
-              <button
-                key={c}
-                onClick={() => setCat(c)}
-                className={`px-4 py-1.5 text-xs rounded-md transition-colors ${
-                  cat === c ? 'bg-gold text-ink' : 'text-muted-foreground hover:text-cream'
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-
-          {/* CTA — connect with email+CV for personalised matches */}
-          {!user && (
-            <div className="mt-8 glass-panel p-6 border border-gold/20 bg-gradient-to-br from-gold/5 to-transparent">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Sparkles className="h-4 w-4 text-gold" />
-                    <span className="text-xs uppercase tracking-widest text-gold">Oportunidades personalizadas</span>
-                  </div>
-                  <p className="text-cream font-medium">
-                    Conectá tu correo y CV para ver oportunidades que encajan con tu perfil.
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    CVitae analiza tu experiencia y te muestra automáticamente las vacantes, becas y foros más relevantes para vos.
-                  </p>
-                </div>
-                {ctaSent ? (
-                  <div className="shrink-0 text-sm text-emerald-400 font-medium">
-                    ✓ Revisá tu correo para acceder
-                  </div>
-                ) : (
-                  <form onSubmit={handleCtaSubmit} className="shrink-0 flex gap-2">
-                    <input
-                      type="email"
-                      required
-                      value={ctaEmail}
-                      onChange={e => setCtaEmail(e.target.value)}
-                      placeholder="tu@email.com"
-                      className="px-3 py-2 text-sm bg-white/5 border border-white/10 text-cream placeholder-white/30 focus:outline-none focus:border-gold/40 rounded-lg w-48"
-                    />
-                    <button
-                      type="submit"
-                      disabled={ctaSending}
-                      className="px-4 py-2 text-sm bg-gold text-ink font-medium rounded-lg hover:bg-gold/80 transition-colors disabled:opacity-50 whitespace-nowrap"
-                    >
-                      {ctaSending ? '...' : 'Conectar →'}
-                    </button>
-                  </form>
-                )}
-              </div>
-            </div>
-          )}
-
-          {loading ? (
-            <div className="mt-8 grid gap-3" aria-label="Cargando oportunidades" aria-busy="true">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="glass-panel p-6 animate-pulse">
-                  <div className="h-3 w-20 rounded bg-white/10" />
-                  <div className="mt-4 h-6 w-2/3 rounded bg-white/10" />
-                  <div className="mt-3 h-3 w-1/3 rounded bg-white/5" />
-                </div>
+          <section className="mt-9 border-y border-white/8 py-5" aria-label="Filtros de oportunidades">
+            <label className="relative block max-w-2xl">
+              <span className="sr-only">Buscar oportunidad u organización</span>
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
+              <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Beca, programa, organización o país" className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.025] pl-11 pr-4 text-sm text-cream outline-none placeholder:text-white/25 focus:border-[#c9a84c]/45" />
+            </label>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <Filter className="mr-1 h-4 w-4 text-white/25" />
+              {(['Todas', 'Becas', 'Financiación', 'Programas', 'Experiencias'] as Category[]).map(option => (
+                <button key={option} onClick={() => setCategory(option)} className={`rounded-full border px-3 py-1.5 text-xs transition ${category === option ? 'border-[#c9a84c]/55 bg-[#c9a84c]/10 text-[#dbc16f]' : 'border-white/10 text-white/45 hover:border-white/20 hover:text-white/70'}`}>{option}</button>
               ))}
             </div>
-          ) : loadError ? (
-            <div className="mt-8 rounded-2xl border border-red-400/20 bg-red-400/[0.04] p-8 text-center" role="alert">
-              <AlertCircle className="mx-auto h-7 w-7 text-red-300" />
-              <p className="mt-3 text-sm text-cream">{loadError}</p>
-              <button onClick={loadOpportunities} className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm text-cream hover:border-gold/40">
-                <RefreshCw className="h-4 w-4" /> Intentar nuevamente
-              </button>
-            </div>
+          </section>
+
+          <div className="mt-6 flex items-center justify-between gap-4 text-xs text-white/45">
+            <span>{loading ? 'Consultando fuentes…' : `${filtered.length} oportunidades visibles`}</span>
+            <span className="hidden items-center gap-1.5 sm:flex"><ShieldCheck className="h-3.5 w-3.5 text-emerald-400/70" />Solo registros verificados</span>
+          </div>
+
+          {error ? (
+            <div className="mt-6 border border-red-400/20 bg-red-400/[0.04] p-6 text-sm text-red-200" role="alert">{error}</div>
+          ) : loading ? (
+            <div className="mt-6 grid gap-px overflow-hidden border border-white/8 bg-white/8 md:grid-cols-2">{[0, 1, 2, 3].map(item => <div key={item} className="h-48 animate-pulse bg-[#0b0b0b]" />)}</div>
           ) : filtered.length === 0 ? (
-            <p className="mt-10 text-center text-muted-foreground">No hay oportunidades en esta categoría todavía.</p>
-          ) : (
-            <div className="mt-6 space-y-3">
-              {filtered.map((o) => (
-                <Link
-                  key={o.id}
-                  href={`/oportunidades/${o.slug}`}
-                  className="glass-panel p-6 flex flex-wrap items-center gap-4 hover:border-gold/40 transition-colors block"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] uppercase tracking-wider border border-gold/30 text-gold px-2 py-0.5 rounded-full">
-                        {o.tipo === 'beca' ? 'Beca' : 'Foro'}
-                      </span>
-                    </div>
-                    <h3 className="font-display text-xl text-cream mt-2 truncate">{cleanText(o.titulo)}</h3>
-                    <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {o.ubicacion}</span>
-                      <span className="inline-flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> Vence {new Date(o.fecha_vencimiento).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                </Link>
-              ))}
+            <div className="mt-6 border border-white/8 px-6 py-14 text-center">
+              <p className="text-cream">No hay oportunidades verificadas con estos filtros.</p>
+              <p className="mt-2 text-sm text-white/40">Probá otra categoría o volvé pronto: las fuentes se revisan antes de aparecer acá.</p>
+              <button onClick={() => { setQuery(''); setCategory('Todas') }} className="mt-4 text-sm text-[#c9a84c] hover:underline">Limpiar filtros</button>
             </div>
+          ) : (
+            <section className="mt-6 grid gap-px overflow-hidden border border-white/8 bg-white/8 md:grid-cols-2">
+              {filtered.map(item => {
+                const type = item.opportunity_type || ''
+                return (
+                  <Link key={item.id} href={`/oportunidades/${item.slug || item.id}`} className="group flex min-h-48 flex-col bg-[#0a0a0a] p-5 transition hover:bg-[#0e0e0e] focus:outline-none focus-visible:ring-1 focus-visible:ring-[#c9a84c]">
+                    <div className="flex items-start justify-between gap-4">
+                      <span className="text-[10px] uppercase tracking-[0.16em] text-[#c9a84c]">{TYPE_LABELS[type] || type.replaceAll('_', ' ')}</span>
+                      {item.fully_funded && <span className="border border-emerald-400/20 px-2 py-1 text-[9px] uppercase tracking-wider text-emerald-300/70">Financiación total</span>}
+                    </div>
+                    <h2 className="mt-3 font-display text-xl leading-snug text-cream transition group-hover:text-white">{clean(item.title)}</h2>
+                    <p className="mt-1 text-sm text-white/55">{clean(item.organization) || 'Organización no informada'}</p>
+                    <div className="mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-white/6 pt-4 text-xs text-white/45">
+                      <span className="flex min-w-0 items-center gap-1.5"><MapPin className="h-3 w-3 shrink-0" />{clean(item.location) || 'Elegibilidad internacional'}</span>
+                      <span className="flex shrink-0 items-center gap-1.5">{item.deadline ? <><CalendarDays className="h-3 w-3" />Hasta {new Date(item.deadline).toLocaleDateString('es-PY')}</> : <>Ver detalle <ArrowRight className="h-3 w-3" /></>}</span>
+                    </div>
+                  </Link>
+                )
+              })}
+            </section>
           )}
-        </div>
+        </main>
       </SiteShell>
     </>
   )

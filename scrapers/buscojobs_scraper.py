@@ -89,7 +89,7 @@ def insert_job(job_raw, rubro):
     description = job_raw.get('Descripcion', '') or job_raw.get('description', '')
 
     payload = {
-        "titulo": title,
+        "title": title,
         "organization": company,
         "location": location,
         "rubro": rubro,

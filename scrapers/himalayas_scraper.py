@@ -141,7 +141,7 @@ def main():
 
             cats = job.get("categories") or job.get("parentCategories") or []
             payload = {
-                "titulo": title,
+                "title": title,
                 "organization": job.get("companyName", ""),
                 "location": "Remote",
                 "rubro": get_rubro(title, cats),

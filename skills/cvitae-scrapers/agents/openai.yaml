@@ -1,0 +1,4 @@
+interface:
+  display_name: "CVitae Scrapers"
+  short_description: "Audita y agrega fuentes de oportunidades seguras"
+  default_prompt: "Usa $cvitae-scrapers para auditar o incorporar una fuente sin publicar datos no verificados."

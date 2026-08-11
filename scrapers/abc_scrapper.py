@@ -80,7 +80,7 @@ def main():
             location = location_el.get_text(strip=True) if location_el else ""
 
         jobs.append({
-            "titulo": title,
+            "title": title,
             "organization": company,
             "location": location or "Paraguay",
             "rubro": "General",
@@ -97,7 +97,7 @@ def main():
         status = insert_job(job)
         if status in (200, 201, 409):
             total += 1
-        print(f"[ABC] {job['titulo'][:60]} -> {status}")
+        print(f"[ABC] {job['title'][:60]} -> {status}")
 
     print(f"\nTotal ABC insertadas/actualizadas: {total}/{len(jobs)}")
 

@@ -60,6 +60,17 @@ function scoreColor(s: number) {
   return 'oklch(0.65 0.22 25)'
 }
 
+async function runWithConcurrency<T>(items: T[], limit: number, task: (item: T, index: number) => Promise<void>) {
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++
+      await task(items[index], index)
+    }
+  })
+  await Promise.all(workers)
+}
+
 function Ambient() {
   return (
     <>
@@ -105,7 +116,19 @@ export default function BatchAnalysis() {
   }, [])
 
   const handleFiles = (files: File[]) => {
-    const valid = files.filter(f => ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'].includes(f.type))
+    const allowed = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']
+    const unsupported = files.filter(f => !allowed.includes(f.type))
+    const oversized = files.filter(f => allowed.includes(f.type) && f.size > 4 * 1024 * 1024)
+    const valid = files.filter(f => allowed.includes(f.type) && f.size <= 4 * 1024 * 1024)
+    if (unsupported.length || oversized.length) {
+      const details = [
+        unsupported.length ? `${unsupported.length} con formato no soportado` : '',
+        oversized.length ? `${oversized.length} de más de 4 MB` : '',
+      ].filter(Boolean).join(' y ')
+      setError(`No agregamos ${details}. Usá PDF, DOCX o TXT; para archivos grandes, comprimilos o generá un CV optimizado en CVitae.`)
+    } else {
+      setError('')
+    }
     if (candidates.length + valid.length > 30) { setError('Máximo 30 CVs por corrida.'); return }
     const newCandidates = valid.map(f => ({
       id: Math.random().toString(36).substr(2, 9),
@@ -131,7 +154,7 @@ export default function BatchAnalysis() {
     analytics.batchStarted(candidates.length)
     const updated = [...candidates]
     try {
-      await Promise.all(updated.map(async (c, i) => {
+      await runWithConcurrency(updated, 3, async (c, i) => {
         setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'extracting' } : x))
         const text = await extractTextFromFile(c.file)
         setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'analyzing', text } : x))
@@ -149,7 +172,7 @@ export default function BatchAnalysis() {
         const result = await res.json()
         if (!res.ok) throw new Error(result.error || `No se pudo analizar ${c.file.name}`)
         updated[i] = { ...updated[i], text, status: 'analyzing', result }
-      }))
+      })
       // Persist sequentially so each credit is deducted from the latest balance.
       for (const c of updated) {
         if (!c.result || !c.text) continue
@@ -313,7 +336,8 @@ export default function BatchAnalysis() {
                       <Upload strokeWidth={1.25} className="h-5 w-5 text-[#c9a84c]" />
                     </div>
                     <p className="mt-3 font-display text-xl text-white/90">Arrastrá hasta 30 CVs aquí</p>
-                    <p className="mt-1 text-xs font-light text-white/45">PDF, DOCX, TXT — o hacé click para seleccionarlos</p>
+                    <p className="mt-1 text-xs font-light text-white/45">PDF, DOCX o TXT · máximo 4 MB por archivo</p>
+                    <Link href="/mi-carrera/cv" onClick={event => event.stopPropagation()} className="mt-2 text-xs text-[#c9a84c] underline decoration-[#c9a84c]/30 underline-offset-4">Crear un CV optimizado en CVitae</Link>
                   </div>
 
                   {/* File list */}

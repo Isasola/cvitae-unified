@@ -98,7 +98,7 @@ def scrape_via_api():
                 continue
 
             jobs.append({
-                "titulo": title,
+                "title": title,
                 "organization": "BECAL - Gobierno de Paraguay",
                 "location": "Internacional",
                 "rubro": "Becas y Posgrados",
@@ -135,7 +135,7 @@ def scrape_via_html():
                 continue
             seen.add(href)
             jobs.append({
-                "titulo": text,
+                "title": text,
                 "organization": "BECAL - Gobierno de Paraguay",
                 "location": "Internacional",
                 "rubro": "Becas y Posgrados",
@@ -161,7 +161,7 @@ def main():
         status = insert_job(job)
         if status in (200, 201, 409):
             total_inserted += 1
-        print(f"  {job['titulo'][:65]} -> {status}")
+        print(f"  {job['title'][:65]} -> {status}")
 
     print(f"\n=== BECAL: {total_inserted}/{len(jobs)} insertadas/actualizadas ===")
 

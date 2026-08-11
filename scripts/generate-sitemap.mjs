@@ -32,11 +32,22 @@ async function generate() {
     .order('created_at', { ascending: false })
     .limit(200)
 
+  const { data: jobs } = await supabase
+    .from('opportunities').select('slug, updated_at')
+    .eq('is_active', true)
+    .eq('verification_status', 'verified')
+    .eq('seo_eligible', true)
+    .is('deleted_at', null)
+    .not('slug', 'is', null)
+    .order('updated_at', { ascending: false })
+    .limit(1000)
+
   let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n'
   sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
 
   const staticPages = [
     { url: '/', priority: '1.0', freq: 'daily' },
+    { url: '/empleos', priority: '0.9', freq: 'daily' },
     { url: '/oportunidades', priority: '0.9', freq: 'daily' },
     { url: '/blog', priority: '0.8', freq: 'weekly' },
     { url: '/about', priority: '0.6', freq: 'monthly' },
@@ -55,6 +66,11 @@ async function generate() {
   opportunities?.forEach(opp => {
     const lastmod = opp.created_at?.split('T')[0] || today
     sitemap += `  <url>\n    <loc>${SITE_URL}/oportunidades/${opp.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.6</priority>\n  </url>\n`
+  })
+
+  jobs?.forEach(job => {
+    const lastmod = job.updated_at?.split('T')[0] || today
+    sitemap += `  <url>\n    <loc>${SITE_URL}/empleos/${job.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.8</priority>\n  </url>\n`
   })
 
   sitemap += '</urlset>'

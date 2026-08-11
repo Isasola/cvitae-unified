@@ -4,7 +4,8 @@ import { Linkedin, Facebook, Instagram, MessageCircle, Menu, X } from 'lucide-re
 import { Logo } from './visuals'
 
 const navLinks = [
-  { href: '/oportunidades', label: 'Oportunidades' },
+  { href: '/empleos', label: 'Empleos' },
+  { href: '/oportunidades', label: 'Becas y programas' },
   { href: '/mi-carrera', label: 'Mi carrera' },
   { href: '/demo', label: 'Demo' },
   { href: '/blog', label: 'Blog' },
@@ -16,7 +17,8 @@ const footerCols = [
     title: 'Producto',
     items: [
       { label: 'Mi Carrera', href: '/mi-carrera' },
-      { label: 'Oportunidades', href: '/oportunidades' },
+      { label: 'Empleos', href: '/empleos' },
+      { label: 'Becas y programas', href: '/oportunidades' },
       { label: 'Analizador CV', href: '/#registro' },
       { label: 'Blog', href: '/blog' },
     ],

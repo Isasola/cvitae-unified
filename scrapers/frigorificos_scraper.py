@@ -105,7 +105,7 @@ def scrape_empresa(key, url, org):
 
 def _build_job(title, org, job_url, key):
     return {
-        "titulo": title,
+        "title": title,
         "organization": org,
         "location": DEFAULT_LOCATION,
         "rubro": RUBRO,
@@ -120,7 +120,7 @@ def _build_job(title, org, job_url, key):
 
 def _generic_entry(key, url, org):
     return {
-        "titulo": f"Empleo en {org}",
+        "title": f"Empleo en {org}",
         "organization": org,
         "location": DEFAULT_LOCATION,
         "rubro": RUBRO,

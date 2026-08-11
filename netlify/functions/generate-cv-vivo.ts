@@ -157,7 +157,7 @@ Respondé ÚNICAMENTE con el CV en markdown, sin explicaciones, sin texto antes 
     // Si es vacante externa (pegada por el candidato), guardarla en opportunities para enriquecer el pool
     if (!isBaseCV && vacancy?.id === 'custom' && vacancy?.cuerpo?.length > 20) {
       await supabase.from('opportunities').insert({
-        titulo: vacancy.titulo || 'Vacante sin título',
+        title: vacancy.titulo || 'Vacante sin título',
         organization: 'Empresa externa',
         description: vacancy.cuerpo,
         rubro: 'General',

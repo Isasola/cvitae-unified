@@ -65,7 +65,7 @@ def fetch_workday_jobs(company_id: str, company_name: str, rubro: str, search_te
             if isinstance(jd, dict):
                 description = jd.get("descriptor", "")[:500]
             result.append({
-                "titulo": title,
+                "title": title,
                 "organization": company_name,
                 "location": location_info if location_info else "Paraguay",
                 "rubro": rubro,

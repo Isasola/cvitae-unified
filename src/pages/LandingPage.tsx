@@ -8,7 +8,7 @@ import {
   CheckCircle, AlertCircle, Mail,
 } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
-import { GrowthLine, CompatibilityTrace, Eyebrow } from '@/components/cv/visuals'
+import { AmbientSignalLines, CompatibilityTrace, Eyebrow } from '@/components/cv/visuals'
 import { supabase } from '@/lib/supabase'
 import { analytics } from '@/lib/analytics'
 
@@ -19,7 +19,8 @@ const ease = [0.22, 1, 0.36, 1] as const
 function Hero() {
   return (
     <section className="relative overflow-hidden">
-      <div className="mx-auto max-w-6xl px-6 pb-10 pt-16 sm:pb-16 sm:pt-24">
+      <AmbientSignalLines className="pointer-events-none absolute inset-y-0 left-[52%] right-0 hidden h-full w-[52%] opacity-75 lg:block" />
+      <div className="relative mx-auto max-w-6xl px-6 pb-10 pt-16 sm:pb-16 sm:pt-24">
         <Eyebrow>Gratis · Paraguay &amp; LATAM</Eyebrow>
         <h1 className="font-display mt-3 max-w-3xl text-4xl leading-[1.05] text-cream sm:text-6xl">
           Analizá tu CV gratis.
@@ -28,10 +29,9 @@ function Hero() {
         </h1>
         <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
           Subí tu CV y recibí en segundos un score ATS real, fortalezas y mejoras
-          concretas. Sin crear cuenta. Sin límites en el análisis.
+          concretas. Sin crear cuenta. Gratis durante nuestra beta pública.
         </p>
         <div className="relative mt-10 max-w-3xl border-y border-white/8 py-5">
-          <GrowthLine variant="score" className="absolute inset-x-0 top-1/2 h-16 -translate-y-1/2 opacity-45" />
           <ol className="relative grid grid-cols-2 gap-4 sm:grid-cols-4" aria-label="Recorrido de CVitae">
             {['CV', 'Perfil entendido', 'Matches', 'Próxima acción'].map((step, index) => (
               <li key={step} className="flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] text-cream">
@@ -193,7 +193,7 @@ function Analizador() {
               : <><Sparkles className="h-4 w-4" /> Analizar ahora</>}
           </button>
           <p className="text-center text-[11px] text-muted-foreground">
-            Sin cuenta. Sin guardar tu archivo. Análisis ilimitados.
+            Sin cuenta. Sin guardar tu archivo. Uso generoso durante la beta.
           </p>
         </div>
 
@@ -378,7 +378,6 @@ function RegistroBlock() {
     <section id="registro" className="mx-auto max-w-6xl px-6 py-16">
       <div className="relative overflow-hidden rounded-3xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.03] p-8 sm:p-12">
         <div className="absolute -inset-2 -z-10 bg-gradient-to-br from-[#c9a84c]/10 via-transparent to-transparent blur-3xl" />
-        <GrowthLine className="absolute -top-2 left-0 right-0 h-24 opacity-60" />
         <div className="relative grid items-center gap-10 lg:grid-cols-[1.2fr_1fr]">
           <div>
             <Eyebrow>Registro en un solo paso</Eyebrow>
@@ -463,7 +462,6 @@ function ComoFunciona() {
         Cuatro pasos. <em>Cero ruido.</em>
       </h2>
       <div className="relative mt-12">
-        <GrowthLine className="absolute -top-6 left-0 right-0 hidden h-16 opacity-40 md:block" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map((s, i) => (
             <motion.div
@@ -554,34 +552,37 @@ function StatsBar() {
 function Pricing() {
   const tiers = [
     {
-      name: 'Free', price: 'Gs. 0', per: 'para siempre',
+      name: 'Beta Fundadores', price: 'Gs. 0', per: 'durante 3 meses',
       features: [
-        'Analizador de CV ilimitado',
-        '3 matches por día',
-        '1 CV Vivo adaptado por día',
-        '1 alerta semanal',
-        'Volvé mañana para tus próximos matches',
+        'Analizador de CV con uso generoso',
+        'Matching diario de oportunidades',
+        'CV Vivo adaptado a vacantes',
+        'Alertas y recomendaciones personalizadas',
+        'Acceso anticipado a nuevas funciones',
       ],
-      cta: 'Empezar gratis', featured: false,
+      cta: 'Sumarme a la beta', featured: true,
     },
     {
-      name: 'Pro', price: 'USD 9', per: '/ mes',
+      name: 'Después de la beta', price: 'A definir', per: 'según uso y capacidad',
       features: [
-        'Matches ilimitados',
-        'CV Vivo ilimitado para cada vacante',
+        'Límites transparentes según capacidad',
+        'Más adaptaciones de CV según el plan',
         'Análisis de vacante con IA',
         'Alertas diarias personalizadas',
         'Recomendación de cursos',
       ],
-      cta: 'Probar Pro', featured: true,
+      cta: 'Conocer el futuro plan', featured: false,
     },
   ]
   return (
     <section className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
       <Eyebrow>Para candidatos</Eyebrow>
       <h2 className="font-display mt-2 text-3xl text-cream sm:text-4xl">
-        Empezá <em>gratis</em>. Subí cuando lo necesites.
+        Probá CVitae <em>gratis</em> durante nuestra beta.
       </h2>
+      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        Queremos mejorar CVitae con usuarios reales antes de activar los planes pagos. El acceso es generoso y no requiere tarjeta. Si la demanda afecta la disponibilidad o el costo del servicio, podremos ajustar temporalmente algunos límites y lo comunicaremos con anticipación.
+      </p>
       <div className="mt-10 grid max-w-3xl gap-4 md:grid-cols-2">
         {tiers.map((t, i) => (
           <motion.div
@@ -694,10 +695,10 @@ export default function LandingPage() {
     <>
       <Helmet>
         <title>CVitae — Analizá tu CV gratis con IA | Paraguay &amp; LATAM</title>
-        <meta name="description" content="Analizá tu CV gratis con IA y conocé tu score ATS real. El primer agente de carrera para Paraguay y Latinoamérica: matching automático con +4500 oportunidades, CV Vivo adaptado y alertas proactivas." />
+        <meta name="description" content="Analizá tu CV con IA y conocé tu score ATS. Encontrá oportunidades verificadas de Paraguay, adaptá tu CV y recibí recomendaciones según tu perfil." />
         <link rel="canonical" href="https://cvitae.lat" />
         <meta property="og:title" content="CVitae — Analizá tu CV gratis con IA" />
-        <meta property="og:description" content="Score ATS real en segundos, sin crear cuenta. Después encontrá el trabajo que te corresponde: matching con +4500 oportunidades en Paraguay y Latinoamérica." />
+        <meta property="og:description" content="Score ATS, matching con oportunidades verificadas de Paraguay y recomendaciones según tu perfil." />
         <meta property="og:url" content="https://cvitae.lat" />
         <meta property="og:type" content="website" />
       </Helmet>

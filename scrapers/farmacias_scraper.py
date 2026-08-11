@@ -70,7 +70,7 @@ def scrape_empresa(key, url, org):
                     href = link_el.get("href", "")
                     job_url = href if href.startswith("http") else f"{url.rstrip('/')}/{href.lstrip('/')}"
                 jobs.append({
-                    "titulo": title,
+                    "title": title,
                     "organization": org,
                     "location": "Paraguay",
                     "rubro": RUBRO,
@@ -94,7 +94,7 @@ def scrape_empresa(key, url, org):
             if any(kw in text.lower() or kw in href.lower() for kw in LINK_KEYWORDS):
                 job_url = href if href.startswith("http") else url
                 jobs.append({
-                    "titulo": text,
+                    "title": text,
                     "organization": org,
                     "location": "Paraguay",
                     "rubro": RUBRO,
@@ -121,7 +121,7 @@ def scrape_empresa(key, url, org):
 
 def _generic_entry(key, url, org):
     return {
-        "titulo": f"Vacantes abiertas en {org}",
+        "title": f"Vacantes abiertas en {org}",
         "organization": org,
         "location": "Paraguay",
         "rubro": RUBRO,

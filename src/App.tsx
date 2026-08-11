@@ -22,6 +22,8 @@ import BatchAnalysis from './pages/BatchAnalysis'
 import VacantePage from './pages/VacantePage'
 import Demo from './pages/Demo'
 import NotFound from './pages/NotFound'
+import Jobs from './pages/Jobs'
+import JobDetail from './pages/JobDetail'
 
 export default function App() {
   return (
@@ -30,6 +32,8 @@ export default function App() {
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/oportunidades" component={Opportunities} />
       <Route path="/oportunidades/:slug" component={OpportunityDetail} />
+      <Route path="/empleos" component={Jobs} />
+      <Route path="/empleos/:slug" component={JobDetail} />
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:slug" component={BlogPost} />
       <Route path="/sobre-cvitae" component={About} />

@@ -134,7 +134,7 @@ def parse_jobs(html, default_rubro, location):
         rubro = guess_rubro(title, default_rubro)
 
         jobs.append({
-            "titulo": title,
+            "title": title,
             "organization": company or "No especificada",
             "location": location,
             "rubro": rubro,
@@ -183,7 +183,7 @@ def main():
             status = insert_job(job)
             if status in (200, 201, 409):
                 total_inserted += 1
-            print(f"  [{job['organization'][:30]}] {job['titulo'][:50]} -> {status}")
+            print(f"  [{job['organization'][:30]}] {job['title'][:50]} -> {status}")
 
         time.sleep(1.5)
 

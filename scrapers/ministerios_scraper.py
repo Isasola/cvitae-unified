@@ -61,7 +61,7 @@ def parse_ministry(html, base_url, key, org_name):
             base_url.rstrip("/") + "/" + href.lstrip("/") if href.startswith("/") else base_url + href
         )
         jobs.append({
-            "titulo": text,
+            "title": text,
             "organization": org_name,
             "location": "Paraguay",
             "rubro": "Gobierno / Sector Público",

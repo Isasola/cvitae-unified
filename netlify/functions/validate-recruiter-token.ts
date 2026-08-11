@@ -19,9 +19,10 @@ const handler: Handler = async (event) => {
     // Buscar token
     const { data, error } = await supabase
       .from("recruiter_tokens")
-      .select("id, email, company_name, access_token, token_balance, plan_type, is_active, created_at")
+      .select("id, email, company_name, access_token, token_balance, plan_type, is_active, verification_status, created_at")
       .eq("access_token", token.trim())
       .eq("is_active", true)
+      .eq("verification_status", "verified")
       .single()
 
     if (error || !data) {
@@ -138,7 +139,7 @@ const handler: Handler = async (event) => {
 
       const { data: applicants } = await supabase
         .from("vacancy_applications")
-        .select("id, name, email, cv_file_name, cover_letter, cv_text, ats_score, fit_score, recommendation, ai_summary, strengths, key_matches, key_gaps, analyzed_at, applied_at, recruiter_action, recruiter_notes")
+        .select("id, name, email, cv_file_name, cv_storage_path, cv_parse_status, cover_letter, cv_text, ats_score, fit_score, recommendation, ai_summary, strengths, key_matches, key_gaps, analyzed_at, applied_at, recruiter_action, recruiter_notes")
         .eq("vacancy_id", body.vacancy_id)
         .order("applied_at", { ascending: false })
         .limit(100)
@@ -160,9 +161,18 @@ const handler: Handler = async (event) => {
         }
       }
 
-      const enrichedApplicants = (applicants || []).map((a: any) => ({
-        ...a,
-        badges: badgesByEmail[a.email] || [],
+      const enrichedApplicants = await Promise.all((applicants || []).map(async (a: any) => {
+        let cvDownloadUrl: string | null = null
+        if (a.cv_storage_path) {
+          const { data: signed } = await supabase.storage.from("candidate-cvs").createSignedUrl(a.cv_storage_path, 600)
+          cvDownloadUrl = signed?.signedUrl || null
+        }
+        const { cv_storage_path: _privatePath, ...safeApplicant } = a
+        return {
+          ...safeApplicant,
+          cv_download_url: cvDownloadUrl,
+          badges: badgesByEmail[a.email] || [],
+        }
       }))
 
       return {

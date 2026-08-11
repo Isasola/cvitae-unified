@@ -82,7 +82,7 @@ def scrape_oya():
         opp_type = determine_type(full_url)
 
         jobs.append({
-            "titulo": title,
+            "title": title,
             "organization": "OYA Opportunities",
             "location": "Global",
             "rubro": "Internacional",
@@ -103,7 +103,7 @@ def main():
         status = insert_job(job)
         if status in (200, 201, 409):
             total += 1
-        print(f"[OYA] {job['titulo'][:60]} -> {status}")
+        print(f"[OYA] {job['title'][:60]} -> {status}")
     print(f"\nTotal OYA insertadas/actualizadas: {total}/{len(jobs)}")
 
 

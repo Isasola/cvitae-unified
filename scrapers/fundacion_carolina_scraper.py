@@ -91,7 +91,7 @@ def scrape():
             continue
         seen.add(url)
         jobs.append({
-            "titulo": title,
+            "title": title,
             "organization": "Fundación Carolina",
             "location": "España",
             "rubro": "Becas y Posgrados",
@@ -125,7 +125,7 @@ def scrape():
                         soup2 = BeautifulSoup(resp2.text, "html.parser")
                         description = extract_description(soup2)
                     jobs.append({
-                        "titulo": text,
+                        "title": text,
                         "organization": "Fundación Carolina",
                         "location": "España",
                         "rubro": "Becas y Posgrados",

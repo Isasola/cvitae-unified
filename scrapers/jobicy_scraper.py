@@ -94,7 +94,7 @@ def main():
                 tags = [tags]
 
             payload = {
-                "titulo": title,
+                "title": title,
                 "organization": job.get("companyName", ""),
                 "location": job.get("jobGeo", "Remote"),
                 "rubro": rubro,

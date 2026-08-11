@@ -25,7 +25,8 @@ const sidebarLinks = [
   { href: '/mi-carrera', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/mi-carrera/analizar', label: 'Análisis IA', icon: Sparkles },
   { href: '/mi-carrera/cv', label: 'CV Vivo', icon: FileText },
-  { href: '/oportunidades', label: 'Oportunidades', icon: Search },
+  { href: '/empleos', label: 'Empleos', icon: Search },
+  { href: '/oportunidades', label: 'Becas y programas', icon: Briefcase },
   { href: '/mi-carrera/alertas', label: 'Alertas', icon: Bell },
 ]
 

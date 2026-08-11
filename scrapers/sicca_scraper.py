@@ -61,7 +61,7 @@ def parse_jobs(html, source_url, source_key):
         org_el = item.select_one("td:nth-child(2), .institucion, .organismo")
         org = org_el.get_text(strip=True) if org_el else "Estado Paraguayo"
         jobs.append({
-            "titulo": title,
+            "title": title,
             "organization": org or "Estado Paraguayo",
             "location": "Paraguay",
             "rubro": "Gobierno / Sector Público",

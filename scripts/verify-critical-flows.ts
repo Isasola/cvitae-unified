@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf'
 import { handler as extractPdfText } from '../netlify/functions/extract-pdf-text'
 import { handler as analyzeCandidate } from '../netlify/functions/analyze-cv-candidate'
 import { handler as compareCandidates } from '../netlify/functions/compare-candidates'
+import { handler as analyzeRecruitersBatch } from '../netlify/functions/analyze-recruiters-batch'
 import { extractCvText } from '../netlify/functions/submit-lead'
 import { handler as recommendCourses } from '../netlify/functions/gemini-courses'
 
@@ -58,4 +59,10 @@ const coursesWithoutSession = await invoke(recommendCourses, {
 })
 assert(coursesWithoutSession?.statusCode === 401, 'Los cursos con Gemini deben exigir una sesión válida')
 
-console.log('Critical flow checks passed: PDF, invalid input, recruiter auth, comparison auth, Gemini auth.')
+const batchWithoutToken = await invoke(analyzeRecruitersBatch, {
+  cvTexts: [{ text: cvText, fileName: 'cv-prueba.pdf' }],
+  jobTitle: 'Ingeniera de software',
+})
+assert(batchWithoutToken?.statusCode === 401, 'El análisis masivo debe exigir token de empresa')
+
+console.log('Critical flow checks passed: PDF, invalid input, recruiter auth, batch auth, comparison auth, Gemini auth.')

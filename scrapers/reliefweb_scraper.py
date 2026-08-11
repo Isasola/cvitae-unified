@@ -145,7 +145,7 @@ def parse_job(raw):
     type_name = job_type[0].get("name", "Tiempo completo") if job_type else "Tiempo completo"
 
     return {
-        "titulo": title,
+        "title": title,
         "organization": org,
         "location": location,
         "rubro": rubro,
@@ -177,7 +177,7 @@ def main():
             status = insert_job(job)
             if status in (200, 201, 409):
                 total_inserted += 1
-            print(f"  [{job['organization']}] {job['titulo'][:50]} -> {status}")
+            print(f"  [{job['organization']}] {job['title'][:50]} -> {status}")
 
         time.sleep(0.5)
 
@@ -192,7 +192,7 @@ def main():
         status = insert_job(job)
         if status in (200, 201, 409):
             total_inserted += 1
-        print(f"  [{job['organization']}] {job['titulo'][:50]} -> {status}")
+        print(f"  [{job['organization']}] {job['title'][:50]} -> {status}")
 
     print(f"\n=== ReliefWeb: {total_inserted}/{total_found} insertadas/actualizadas ===")
 

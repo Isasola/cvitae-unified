@@ -1,6 +1,9 @@
 import requests
 from bs4 import BeautifulSoup
 import os
+import json
+
+from opportunity_sink import OpportunitySink
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -62,7 +65,7 @@ def scrape_clasipar():
         location_el = item.select_one(".location, .city")
         location = location_el.get_text(strip=True) if location_el else "Paraguay"
         jobs.append({
-            "titulo": title,
+            "title": title,
             "organization": company,
             "location": location,
             "rubro": "General",
@@ -93,7 +96,7 @@ def scrape_mtess():
            any(p in href for p in ["convocatoria", "empleo", "oportunidad"]):
             url = href if href.startswith("http") else "https://www.mtess.gov.py" + href
             jobs.append({
-                "titulo": link.get_text(strip=True),
+                "title": link.get_text(strip=True),
                 "organization": "MTESS",
                 "location": "Paraguay",
                 "rubro": "Gobierno",
@@ -131,7 +134,7 @@ def scrape_abc():
         location_el = item.select_one(".location, .ciudad")
         location = location_el.get_text(strip=True) if location_el else "Paraguay"
         jobs.append({
-            "titulo": title,
+            "title": title,
             "organization": company,
             "location": location,
             "rubro": "General",
@@ -165,7 +168,7 @@ def scrape_tigo():
         if not url.startswith("http"):
             url = "https://www.tigo.com.py" + url
         jobs.append({
-            "titulo": title,
+            "title": title,
             "organization": "Tigo Paraguay",
             "location": "Paraguay",
             "rubro": "Telecomunicaciones",
@@ -199,7 +202,7 @@ def scrape_personal():
         if not url.startswith("http"):
             url = "https://www.personal.com.py" + url
         jobs.append({
-            "titulo": title,
+            "title": title,
             "organization": "Personal Paraguay",
             "location": "Paraguay",
             "rubro": "Telecomunicaciones",
@@ -233,7 +236,7 @@ def scrape_itau():
         if not url.startswith("http"):
             url = "https://www.itau.com.py" + url
         jobs.append({
-            "titulo": title,
+            "title": title,
             "organization": "Banco Itaú Paraguay",
             "location": "Paraguay",
             "rubro": "Banca y Finanzas",
@@ -267,7 +270,7 @@ def scrape_copaco():
         if not url.startswith("http"):
             url = "https://www.copaco.com.py" + url
         jobs.append({
-            "titulo": title,
+            "title": title,
             "organization": "Copaco",
             "location": "Paraguay",
             "rubro": "Telecomunicaciones",
@@ -282,30 +285,34 @@ def scrape_copaco():
 
 
 def main():
-    scrapers = [
-        ("clasipar", scrape_clasipar),
-        ("mtess", scrape_mtess),
-        ("abc_color", scrape_abc),
-        ("tigo", scrape_tigo),
-        ("personal", scrape_personal),
-        ("itau", scrape_itau),
-        ("copaco", scrape_copaco),
-    ]
+    scrapers = []
+    paused = {
+        "clasipar": "Clasificados mixtos; contiene ofertas de servicios y contenido no laboral",
+        "mtess_home": "La portada institucional devuelve navegación, no vacantes",
+        "abc_color": "SPA; se audita en el scraper Playwright dedicado",
+        "tigo": "Endpoint histórico sin contenido extraíble",
+        "personal": "Endpoint histórico sin contenido extraíble",
+        "itau": "Endpoint histórico sin vacantes extraíbles",
+        "copaco": "Endpoint histórico sin contenido extraíble",
+    }
 
     all_jobs = []
     for name, fn in scrapers:
         jobs = fn()
         print(f"[{name}] encontradas: {len(jobs)}")
         all_jobs.extend(jobs)
+    for name, reason in paused.items():
+        print(f"[PAUSED] {name}: {reason}")
 
-    count = 0
-    for job in all_jobs:
-        status = insert_job(job)
-        if status in (200, 201, 409):
-            count += 1
-        print(f"[{job['source']}] {job['titulo'][:60]} -> {status}")
-
-    print(f"\nTotal insertados/actualizados: {count}/{len(all_jobs)}")
+    summary = OpportunitySink().upsert(all_jobs)
+    print("CVITAE_INGESTION_SUMMARY=" + json.dumps(summary.to_dict(), ensure_ascii=False))
+    print(
+        f"\n=== Clasipar: {summary.inserted} nuevas, {summary.updated} actualizadas, "
+        f"{summary.duplicates_in_run} duplicadas y {summary.rejected} rechazadas "
+        f"de {summary.found} encontradas ==="
+    )
+    for error in summary.errors[:5]:
+        print(f"  ERROR: {error}")
 
 
 if __name__ == "__main__":

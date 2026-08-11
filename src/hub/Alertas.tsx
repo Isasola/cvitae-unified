@@ -143,6 +143,9 @@ export default function Alertas() {
         .from('opportunities')
         .select('id, title, organization, location, type, rubro, tags, application_url')
         .eq('is_active' as any, true)
+        .eq('verification_status' as any, 'verified')
+        .eq('alerts_eligible' as any, true)
+        .is('deleted_at' as any, null)
         .limit(100)
         .order('created_at', { ascending: false })
 

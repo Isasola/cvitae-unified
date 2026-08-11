@@ -1,0 +1,977 @@
+{
+  "schema_version": 1,
+  "defaults": {
+    "collection_enabled": false,
+    "require_review": true,
+    "catalog_enabled": false,
+    "matching_enabled": false,
+    "alerts_enabled": false,
+    "seo_enabled": false,
+    "max_items_per_run": 100
+  },
+  "proposed_types": [
+    "job",
+    "internship",
+    "consultancy",
+    "scholarship",
+    "fellowship",
+    "grant",
+    "seed_capital",
+    "accelerator",
+    "incubator",
+    "startup_competition",
+    "research_funding",
+    "training",
+    "exchange_program",
+    "volunteering",
+    "tender"
+  ],
+  "sources": [
+    {
+      "source_id": "empleapy_mtess",
+      "start_url": "https://emplea.mtess.gov.py/",
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority": 1,
+      "priority_grade": "A+",
+      "opportunity_scopes": [
+        "private_employment",
+        "youth_employment",
+        "labor_migration"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial MTESS. Detectar catálogo o endpoint público; nunca automatizar login, cédula ni identidad electrónica."
+    },
+    {
+      "source_id": "mef_inapp_becas",
+      "script": "scrapers/mef_inapp_becas_scraper.py",
+      "start_url": "https://becas.mef.gov.py/cooperacion/",
+      "market": "PY",
+      "kind": "scholarship",
+      "source_tier": "A",
+      "status": "candidate",
+      "priority": 2,
+      "priority_grade": "A+",
+      "opportunity_scopes": [
+        "international_cooperation_scholarship",
+        "course",
+        "public_sector_training",
+        "degree",
+        "postgraduate"
+      ],
+      "programs": [
+        "JICA",
+        "KOICA",
+        "India cooperation",
+        "Chile cooperation",
+        "Korea cooperation"
+      ],
+      "education_levels": [
+        "course",
+        "degree",
+        "postgraduate"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial MEF/INAPP. Recolectar fichas activas y el plazo nacional paraguayo; excluir archivos históricos y postulaciones cerradas."
+    },
+    {
+      "source_id": "conacyt_convocatorias",
+      "start_url": "https://www.conacyt.gov.py/",
+      "application_portal": "https://spi.conacyt.gov.py/user",
+      "market": "PY",
+      "kind": "research_funding",
+      "source_tier": "A",
+      "status": "research_pending",
+      "access_state": "blocked_403",
+      "paused_reason": "El portal oficial responde HTTP 403 al acceso automatizado. No implementar ni activar hasta encontrar feed, repositorio o permiso publico estable.",
+      "priority": 3,
+      "priority_grade": "A",
+      "opportunity_scopes": [
+        "research",
+        "postgraduate",
+        "science",
+        "research_funding",
+        "research_stay"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial CONACYT. Descubrir solo fichas y convocatorias públicas vigentes; usar SPI únicamente como enlace de postulación y nunca automatizar cuentas."
+    },
+    {
+      "source_id": "mitic_opportunities",
+      "start_url": "https://mitic.gov.py/",
+      "course_portal": "https://www.cursos.gov.py/",
+      "application_portal": "https://spi.conacyt.gov.py/user",
+      "market": "PY",
+      "kind": "training",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority": 4,
+      "priority_grade": "A",
+      "opportunity_scopes": [
+        "digital_scholarship",
+        "technology",
+        "training",
+        "official_call"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial MITIC. Separar cursos permanentes de convocatorias con cierre; publicar noticias solo cuando contengan inscripción, requisitos y vigencia verificables. Nunca automatizar SPI."
+    },
+    {
+      "source_id": "innovandopy_startups",
+      "start_url": "https://innovando.gov.py/",
+      "market": "PY",
+      "kind": "seed_capital",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority": 5,
+      "priority_grade": "A",
+      "opportunity_scopes": [
+        "seed_capital",
+        "startup_incubation",
+        "startup_acceleration"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": false,
+      "access_note": "Programa oficial MITIC. Publicar únicamente ediciones con cronograma y formulario vigentes; conservar ediciones cerradas como histórico, no como oportunidades activas."
+    },
+    {
+      "source_id": "mic_portal_emprendedor",
+      "start_url": "https://portalemprendedor.mic.gov.py/",
+      "secondary_url": "https://www.mipymes.gov.py/",
+      "market": "PY",
+      "kind": "startup_competition",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority": 6,
+      "priority_grade": "A",
+      "opportunity_scopes": [
+        "entrepreneur_competition",
+        "entrepreneur_award",
+        "entrepreneur_program"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial MIC/Viceministerio de MIPYMES. Exigir convocatoria, bases, plazo y postulación vigentes; servicios permanentes y convocatorias históricas no entran al feed activo."
+    },
+    {
+      "source_id": "reemujerpy_mipymes",
+      "start_url": "https://www.mipymes.gov.py/reemujerpy/",
+      "secondary_url": "https://portalemprendedor.mic.gov.py/",
+      "market": "PY",
+      "kind": "seed_capital",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority": 7,
+      "priority_grade": "B+",
+      "opportunity_scopes": [
+        "women_seed_capital",
+        "entrepreneurship_program"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial MIC/Viceministerio de MIPYMES. Recolectar capital semilla y programas accionables para emprendimientos. La pagina informa que actualmente no existen convocatorias abiertas: mantener monitoreo sin publicar ediciones historicas. Activar una oportunidad solo con nueva edicion, bases, plazo y formulario vigentes."
+    },
+    {
+      "source_id": "snj_paraguay",
+      "start_url": "https://snj.gov.py/",
+      "application_portal": "https://postulacion-becas.snj.gov.py/becas/",
+      "market": "PY",
+      "kind": "scholarship",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority": 8,
+      "priority_grade": "A",
+      "opportunity_scopes": [
+        "youth_scholarship",
+        "youth_program",
+        "youth_training",
+        "youth_call"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial de la Secretaria Nacional de la Juventud. Recolectar becas, programas, formacion y convocatorias juveniles accionables con destinatarios, requisitos, plazo y postulacion verificables; excluir anuncios, resultados, renovaciones y noticias institucionales sin inscripcion abierta. No duplicar EmpleaPY Joven: enlazar la vacante original del MTESS. Premios y voluntariados quedan fuera del alcance automatico hasta revision."
+    },
+    {
+      "source_id": "ipa_convocatorias",
+      "start_url": "https://artesania.gov.py/convocatorias/",
+      "secondary_url": "https://artesania.gov.py/",
+      "market": "PY",
+      "kind": "seed_capital",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority": 9,
+      "priority_grade": "B+",
+      "opportunity_scopes": [
+        "artisan_seed_capital",
+        "artisan_award",
+        "artisan_fair_participation",
+        "artisan_productive_support"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial del Instituto Paraguayo de Artesania. Recolectar capital semilla, premios, participacion postulable en ferias y apoyo productivo. Exigir bases, beneficiarios, fecha de cierre y mecanismo de postulacion; excluir agenda general, ediciones historicas, noticias de resultados, directorios y licitaciones publicas."
+    },
+    {
+      "source_id": "aecid_paraguay_calls",
+      "start_url": "https://paraguay.aecid.es/convocatorias",
+      "secondary_url": "https://www.aecid.gob.es/activos",
+      "market": "PY",
+      "kind": "consultancy",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority": 10,
+      "priority_grade": "A+",
+      "opportunity_scopes": [
+        "local_employment",
+        "consultancy",
+        "technical_assistance",
+        "scholarship",
+        "development_cooperation_call"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial de la Oficina de Cooperacion Espanola/AECID en Paraguay. Recolectar empleo, consultorias, asistencia tecnica, becas y cooperacion con convocatoria activa y elegibilidad paraguaya demostrable. Excluir compras o contrataciones genericas para proveedores, subvenciones fuera de alcance, listas de admitidos, adjudicaciones, avisos cerrados y llamados globales que no acepten Paraguay."
+    },
+    {
+      "source_id": "us_embassy_paraguay",
+      "start_url": "https://py.usembassy.gov/",
+      "exchange_portal": "https://exchanges.state.gov/non-us/",
+      "fulbright_portal": "https://eca.state.gov/fulbright/country/paraguay",
+      "educationusa_portal": "https://educationusa.state.gov/centers/ccpa-asuncion",
+      "ylai_portal": "https://ylai.state.gov/",
+      "market": "PY",
+      "kind": "exchange_program",
+      "source_tier": "A",
+      "status": "research_pending",
+      "priority": 11,
+      "priority_grade": "A",
+      "opportunity_scopes": [
+        "exchange_program",
+        "scholarship",
+        "ylai_fellowship",
+        "opportunity_funds",
+        "grant"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial de la Embajada de Estados Unidos y del Department of State. Recolectar exchanges, scholarships, YLAI, Opportunity Funds y grants solo con convocatoria vigente y elegibilidad paraguaya explicita. EducationUSA CCPA confirma que coordina Opportunity Funds en Paraguay. El sitio py.usembassy.gov respondio Forbidden durante la auditoria: no activar scraper hasta confirmar un canal publico estable, RSS o endpoint permitido. Excluir visas, comunicados y programas para ciudadanos estadounidenses; redes sociales sirven solo para descubrir y deben conducir a la fuente oficial."
+    },
+    {
+      "source_id": "eu_delegation_paraguay",
+      "start_url": "https://www.eeas.europa.eu/delegations/paraguay_es",
+      "vacancies_portal": "https://www.eeas.europa.eu/eeas/vacantes_es?s=188",
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority": 12,
+      "priority_grade": "A",
+      "opportunity_scopes": [
+        "local_employment",
+        "funded_traineeship",
+        "grant",
+        "tender"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial de la Delegacion de la Union Europea en Paraguay/EEAS. Recolectar empleo, traineeships, grants y tenders activos cuya ficha confirme elegibilidad local, fecha limite y postulacion. Excluir vacantes de otras delegaciones, noticias, resultados y programas reservados a ciudadanos de la UE. Mantener tenders separados del feed profesional personal y dirigirlos al segmento de empresas/proveedores."
+    },
+    {
+      "source_id": "becas_gobierno_itaipu",
+      "start_url": "https://becasgobierno.gov.py/sgbc/DashPrincipal.aspx",
+      "secondary_url": "https://becas.gov.py/",
+      "news_source": "https://www.itaipu.gov.py/noticias/tag/convocatoria-2026/",
+      "market": "PY",
+      "kind": "scholarship",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority": 13,
+      "priority_grade": "A",
+      "opportunity_scopes": [
+        "university_scholarship",
+        "technical_education_scholarship",
+        "teacher_training_scholarship"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": false,
+      "access_note": "Portal oficial del Programa Becas Gobierno del Paraguay con participacion de ITAIPU. Recolectar becas universitarias, tecnicas y de formacion docente. La postulacion 2026 ya cerro y existen beneficiarios definitivos: no publicarla como activa. Monitorear el portal principal para la siguiente convocatoria y exigir bases, carreras habilitadas, requisitos, cronograma y postulacion vigente. Noticias de ITAIPU son apoyo de verificacion; excluir resultados, examenes, renovaciones, firmas de acuerdos y desembolsos."
+    },
+    {
+      "source_id": "eby_yacyreta",
+      "start_url": "https://eby.gov.py/",
+      "market": "PY",
+      "kind": "scholarship",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority": 14,
+      "priority_grade": "B",
+      "opportunity_scopes": [
+        "scholarship",
+        "labor_competition",
+        "public_call"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial paraguaya de la Entidad Binacional Yacyreta. Recolectar becas, concursos laborales y llamados con postulacion publica, bases y plazo vigentes, incluyendo oportunidades regionales en Itapua, Misiones, Neembucu y Caazapa. Becas Gobierno del Paraguay deben deduplicarse y conservar como original el portal becasgobierno.gov.py. Excluir renovaciones, desembolsos, listas de beneficiarios, noticias, licitaciones, comunicados generales y rumores sin convocatoria oficial vigente."
+    },
+    {
+      "source_id": "wwf_paraguay_calls",
+      "start_url": "https://www.wwf.org.py/informate/convocatorias/",
+      "market": "PY",
+      "kind": "consultancy",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority": 15,
+      "priority_grade": "A",
+      "opportunity_scopes": [
+        "professional_consultancy",
+        "environmental_project_call"
+      ],
+      "eligible_regions": [
+        "PY",
+        "LATAM"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial de WWF Paraguay con feed de convocatorias y llamados 2026. Recolectar consultorias profesionales y convocatorias postulables para proyectos ambientales cuya ficha o terminos de referencia permitan participar desde Paraguay; una sede en otro pais no implica elegibilidad paraguaya. Exigir fecha limite, perfil, modalidad, territorio y canal de postulacion. Excluir noticias sobre proyectos en ejecucion, actividades, contenidos educativos y llamados cerrados; las oportunidades regionales requieren verificacion manual inicial."
+    },
+    {
+      "source_id": "cird_competitions_tenders",
+      "start_url": "https://www.cird.org.py/concurso/",
+      "market": "PY",
+      "kind": "consultancy",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority": 16,
+      "priority_grade": "B+",
+      "opportunity_scopes": [
+        "professional_consultancy",
+        "professional_service",
+        "development_cooperation_project"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial de la Fundacion CIRD con archivo de concursos y licitaciones. Recolectar consultorias, servicios profesionales y oportunidades postulables en proyectos de cooperacion con fecha limite, documentos y mecanismo de presentacion verificables. Excluir compras de equipos, licitaciones puramente comerciales, desiertos, adjudicados, cancelados, prorrogas sin llamado activo y el archivo historico; la fecha de publicacion por si sola no demuestra vigencia."
+    },
+    {
+      "source_id": "pro_ong_conevio",
+      "start_url": "https://ong.com.py/listings/",
+      "directory_url": "https://ong.com.py/",
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "B",
+      "status": "research_verified",
+      "priority": 17,
+      "priority_grade": "A",
+      "opportunity_scopes": [
+        "ngo_job",
+        "volunteering",
+        "civil_society_event",
+        "civil_society_call"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": true,
+      "access_note": "Conévio/PRO ONG es un portal paraguayo del sector civil con vacancias ONG, voluntariado, eventos y convocatorias de sociedad civil de mas de 800 organizaciones. Tratarlo como agregador Tier B: seguir cada anuncio hasta la ONG convocante, verificar la fuente original, fecha limite y postulacion antes de publicar. Los eventos deben tener inscripcion, fecha futura y utilidad profesional o comunitaria, y no mezclarse con empleos. Si solo ofrece un PDF alojado por Conévio, validar identidad y contacto de la organizacion y mantener revision manual. Excluir perfiles del directorio, noticias y anuncios sin vigencia demostrable."
+    },
+    {
+      "source_id": "fiuna_job_board",
+      "script": "scrapers/fiuna_job_board_scraper.py",
+      "start_url": "https://www.ing.una.py/FIUNA3/?page_id=12939",
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "B",
+      "status": "candidate",
+      "priority": 18,
+      "priority_grade": "A+",
+      "opportunity_scopes": [
+        "engineering",
+        "construction",
+        "technology",
+        "industry"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": true,
+      "access_note": "Bolsa oficial de FIUNA/UNA para estudiantes, egresados y docentes, activa desde 2008 y con vacantes actualizadas en agosto de 2026. Recolectar empleos y pasantias de ingenieria, construccion, tecnologia e industria, incluidos puestos junior y para estudiantes. Tratar como agregador Tier B porque publica ofertas de empresas: validar organizacion, dominio de contacto, fecha, ubicacion y canal antes de aprobar. Cuando no exista pagina original del empleador, conservar revision manual y marcar a FIUNA como intermediario verificado. Aplicar vencimiento operativo a anuncios sin deadline y excluir concursos docentes, noticias y contenido academico ajeno a la bolsa."
+    },
+    {
+      "source_id": "ucom_job_board",
+      "start_url": "https://ucom.edu.py/bolsa-de-trabajo/",
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "B",
+      "status": "research_verified",
+      "priority": 19,
+      "priority_grade": "A",
+      "opportunity_scopes": [
+        "corporate_employment",
+        "technology",
+        "administration",
+        "internship"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": true,
+      "access_note": "Bolsa oficial y publica de la Universidad Comunera para empresas de su red. Recolectar empleo corporativo, tecnologia, administracion y pasantias. Al 11 de agosto de 2026 la pagina expone solo una vacante visible, por lo que no asumir volumen ni actualizacion frecuente. Tratar como agregador Tier B: abrir cada detalle y verificar empresa, fecha, ubicacion, requisitos y postulacion original. Aplicar vencimiento operativo si falta deadline; excluir oferta academica, diplomados, ferias antiguas y contenido promocional de UCOM."
+    },
+    {
+      "source_id": "fcq_una_job_board",
+      "start_url": "https://www.qui.una.py/category/bolsa-de-trabajo/",
+      "directory_url": "https://www.qui.una.py/graduados/bolsa-de-trabajo/",
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "B",
+      "status": "research_verified",
+      "priority": 20,
+      "priority_grade": "A",
+      "opportunity_scopes": [
+        "biochemistry",
+        "pharmacy",
+        "food_science",
+        "chemistry",
+        "industry"
+      ],
+      "eligible_regions": [
+        "PY"
+      ],
+      "original_source_required": true,
+      "access_note": "Bolsa oficial de la Facultad de Ciencias Quimicas de la UNA con publicaciones por carrera y ediciones 2025/2026. Recolectar empleos y pasantias de bioquimica, farmacia, alimentos, quimica e industria. Tratar como agregador Tier B porque difunde vacantes de empresas: verificar empleador, fecha, ubicacion, contacto y postulacion original. Aplicar vencimiento operativo a avisos sin deadline y revisar cada bloque interno, ya que una sola pagina puede acumular multiples ofertas. Excluir concursos internos/externos de la Facultad, admision, ferias ya realizadas y contenido academico."
+    },
+    {
+      "source_id": "chevening",
+      "start_url": "https://www.chevening.org/scholarships/",
+      "country_portal": "https://www.chevening.org/scholarship/paraguay/",
+      "market": "GLOBAL",
+      "kind": "scholarship",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 4,
+      "latam_fit": "excellent",
+      "opportunity_scopes": [
+        "fully_funded_uk_masters"
+      ],
+      "education_levels": [
+        "masters"
+      ],
+      "onsite_country": "GB",
+      "eligible_regions": [
+        "LATAM"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial Chevening del Gobierno del Reino Unido, con paginas por pais, incluida Paraguay. Recolectar maestrias totalmente financiadas en el Reino Unido. Verificar ciclo vigente, pais de ciudadania, residencia, experiencia, titulacion, cursos elegibles, componentes de cobertura y deadline. Marcar fully_funded solo cuando la ficha del ciclo lo confirme. Publicar la ficha nacional aplicable y no confundir contenido informativo, perfiles de becarios o convocatorias cerradas con postulaciones activas."
+    },
+    {
+      "source_id": "erasmus_mundus",
+      "start_url": "https://erasmus-plus.ec.europa.eu/opportunities/individuals/students/erasmus-mundus-joint-masters",
+      "programme_url": "https://erasmus-plus.ec.europa.eu/",
+      "market": "GLOBAL",
+      "kind": "scholarship",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 2,
+      "latam_fit": "excellent",
+      "opportunity_scopes": [
+        "fully_funded_masters",
+        "academic_mobility",
+        "eu_study"
+      ],
+      "education_levels": [
+        "masters"
+      ],
+      "eligible_regions": [
+        "LATAM",
+        "REGION_10_LATIN_AMERICA"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial Erasmus+ y Erasmus Mundus. Recolectar maestrias con beca completa, movilidad academica y estudios en la Union Europea. Paraguay y otros paises latinoamericanos pueden participar segun accion y consorcio, pero cada programa define nacionalidad, residencia, titulo, idioma, movilidad, cobertura y deadline. Marcar fully_funded solo cuando la ficha individual confirme la cobertura. Seguir desde el catalogo hasta la ficha del Joint Master o convocatoria original y deduplicar programas repetidos entre portales."
+    },
+    {
+      "source_id": "oas_scholarships",
+      "start_url": "https://www.oas.org/en/scholarships/",
+      "market": "AMERICAS",
+      "kind": "scholarship",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 1,
+      "latam_fit": "excellent",
+      "opportunity_scopes": [
+        "undergraduate_scholarship",
+        "postgraduate_scholarship",
+        "masters_scholarship",
+        "doctoral_scholarship"
+      ],
+      "education_levels": [
+        "undergraduate",
+        "postgraduate",
+        "masters",
+        "doctorate"
+      ],
+      "eligible_regions": [
+        "LATAM",
+        "CARIBBEAN"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial de becas de la OEA para ciudadanos o residentes de Estados miembros. Recolectar becas de grado y posgrado, maestrias y doctorados. Verificar en cada programa paises elegibles, nivel, institucion oferente, cobertura, idioma, deadline y canal oficial; no asumir que toda convocatoria acepta a todos los paises latinoamericanos."
+    },
+    {
+      "source_id": "daad",
+      "start_url": "https://www2.daad.de/deutschland/stipendium/datenbank/en/21148-scholarship-database/",
+      "market": "GLOBAL",
+      "kind": "scholarship",
+      "source_tier": "B",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 3,
+      "latam_fit": "excellent",
+      "opportunity_scopes": [
+        "masters_scholarship",
+        "doctoral_scholarship",
+        "research_funding_in_germany"
+      ],
+      "education_levels": [
+        "masters",
+        "doctorate",
+        "research"
+      ],
+      "eligible_regions": [
+        "LATAM"
+      ],
+      "original_source_required": true,
+      "access_note": "Base oficial de DAAD con programas propios y de otras organizaciones seleccionadas. Recolectar maestrias, doctorados y oportunidades de investigacion en Alemania. Verificar nacionalidad o pais de origen, residencia, nivel academico, disciplina, institucion, idioma, cobertura, deadline y financiador en cada ficha. Para programas de terceros, seguir y guardar la convocatoria original antes de publicar; no asumir elegibilidad latinoamericana por aparecer en la base."
+    },
+    {
+      "source_id": "coimbra_group",
+      "start_url": "https://www.coimbra-group.eu/scholarships/grant-information-for-latin-america/",
+      "market": "LATAM",
+      "kind": "research_funding",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 5,
+      "latam_fit": "A",
+      "opportunity_scopes": [
+        "research_stay",
+        "academic_mobility_in_europe"
+      ],
+      "eligible_regions": [
+        "LATAM"
+      ],
+      "original_source_required": false,
+      "access_note": "Programa oficial Coimbra Group Scholarship Programme for Young Professors and Researchers from Latin American Universities. Recolectar estancias de investigacion y movilidad en universidades europeas. Verificar ciclo vigente, pais elegible, vinculo con universidad latinoamericana, grado academico, edad si aplica, universidad anfitriona, duracion, cobertura y deadline. Seguir cada oferta hasta la universidad miembro y no publicar ediciones cerradas ni paginas meramente informativas."
+    },
+    {
+      "source_id": "santander_open_academy",
+      "start_url": "https://www.santanderopenacademy.com/en/sites/scholarships.html",
+      "market": "GLOBAL",
+      "kind": "scholarship",
+      "source_tier": "B",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 6,
+      "latam_fit": "A",
+      "opportunity_scopes": [
+        "scholarship",
+        "academic_mobility",
+        "training",
+        "professional_program"
+      ],
+      "eligible_regions": [
+        "LATAM"
+      ],
+      "original_source_required": true,
+      "access_note": "Plataforma Santander Open Academy con becas, movilidad, formacion y programas profesionales de multiples universidades y organizaciones. Verificar pais de residencia, nacionalidad, edad, institucion, modalidad, idioma, cobertura, coste, deadline y bases en cada programa. Seguir a la entidad convocante cuando corresponda, deduplicar la misma oportunidad en varios idiomas y diferenciar cursos permanentes de convocatorias con cupos y fecha limite."
+    },
+    {
+      "source_id": "one_young_world_scholarships",
+      "start_url": "https://apply.oneyoungworld.com/",
+      "secondary_url": "https://www.oneyoungworld.com/scholarships",
+      "market": "GLOBAL",
+      "kind": "fellowship",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 7,
+      "latam_fit": "A",
+      "opportunity_scopes": [
+        "fellowship",
+        "leadership_program",
+        "funded_travel",
+        "grant"
+      ],
+      "eligible_regions": [
+        "LATAM",
+        "CARIBBEAN",
+        "GLOBAL"
+      ],
+      "original_source_required": false,
+      "access_note": "Portal oficial de One Young World para fellowships, liderazgo, viajes financiados y algunos grants vinculados a su Summit y comunidad. Algunas oportunidades son globales y otras delimitan region, edad, sector o identidad; verificar cada ficha, socio financiador, cobertura, sede, edad, impacto demostrado y deadline. Marcar funded_travel o grant solo cuando la convocatoria individual lo confirme. La beca Ilia Calderon 2026 confirma una linea especifica para America Latina y el Caribe. Excluir plazas de pago, contenido editorial, formularios cerrados y ediciones pasadas; deduplicar pagina informativa y formulario de la misma oportunidad."
+    },
+    {
+      "source_id": "500_latam",
+      "start_url": "https://500.co/latam",
+      "market": "LATAM",
+      "kind": "seed_capital",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 10,
+      "latam_fit": "A+",
+      "opportunity_scopes": [
+        "seed_capital",
+        "accelerator"
+      ],
+      "eligible_regions": [
+        "LATAM"
+      ],
+      "funding_amount": 300000,
+      "currency": "USD",
+      "original_source_required": false,
+      "access_note": "Portal oficial de 500 Global para capital semilla y aceleracion en America Latina. La pagina vigente informa una propuesta de inversion de USD 300.000 para equipos fundadores latinoamericanos de startups tecnologicas tempranas con potencial de escala global; confirmar monto, instrumento, terminos de inversion, etapa, pais de operacion, equipo, cohorte, deadline y formulario en cada apertura antes de publicar. No presentar la inversion como grant ni como financiamiento sin participacion; separar la aceleradora de cursos pagos, eventos, waitlists, contenido editorial y programas de educacion para inversionistas. Paraguay puede estar dentro del mercado regional, pero la ficha debe demostrar que la convocatoria concreta acepta al equipo postulante."
+    },
+    {
+      "source_id": "google_startups_latam",
+      "start_url": "https://startup.google.com/programs/accelerator/spanish-speaking-latin-america/",
+      "market": "LATAM",
+      "kind": "accelerator",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 11,
+      "latam_fit": "A",
+      "opportunity_scopes": [
+        "equity_free_accelerator",
+        "startup_mentoring",
+        "technical_support"
+      ],
+      "eligible_regions": [
+        "SPANISH_SPEAKING_LATAM"
+      ],
+      "startup_stage": [
+        "seed",
+        "series_a"
+      ],
+      "program_duration_weeks": 10,
+      "equity_free": true,
+      "original_source_required": false,
+      "access_note": "Fuente oficial de Google for Startups Accelerator para America Latina hispanohablante. Programa hibrido de diez semanas, sin equity ni tarifa, para startups con sede u operacion significativa en la region, idealmente Seed a Series A, con traccion, producto escalable y componente tecnico, preferentemente IA/ML; exige participacion del CTO o roles tecnicos. Publicar solo cuando exista una cohorte con postulacion abierta, fechas y formulario verificables. No prometer creditos de Google Cloud: requieren evaluacion y aprobacion separadas. Excluir alumni, testimonios, programas de Brasil u otras regiones, beneficios informativos y paginas sin convocatoria activa."
+    },
+    {
+      "source_id": "startup_chile",
+      "start_url": "https://startupchile.org/en/apply/",
+      "build_url": "https://startupchile.org/en/apply/build/",
+      "ignite_url": "https://startupchile.org/en/apply/ignite/",
+      "growth_url": "https://startupchile.org/en/apply/growth/",
+      "market": "GLOBAL",
+      "kind": "accelerator",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 12,
+      "latam_fit": "A+",
+      "opportunity_scopes": [
+        "equity_free_funding",
+        "pre_acceleration",
+        "acceleration",
+        "internationalization"
+      ],
+      "eligible_regions": [
+        "GLOBAL"
+      ],
+      "program_tracks": [
+        "build",
+        "ignite",
+        "growth"
+      ],
+      "equity_free": true,
+      "original_source_required": false,
+      "access_note": "Programa oficial de CORFO para startups chilenas y extranjeras. Monitorear por separado Build, Ignite y Growth porque cambian etapa, monto, cofinanciamiento, duracion, requisitos y condiciones de presencia en Chile. Las paginas oficiales describen financiamiento equity-free: Build para etapa temprana, Ignite para producto funcional y validacion inicial, y Growth para internacionalizacion; confirmar siempre las bases de la cohorte vigente antes de mostrar importes o beneficios. Extraer convocatoria, track, etapa, paises, antiguedad de la startup, porcentaje de cofinanciamiento, monto en CLP, equivalencia referencial, residencia o presencia requerida, Female Founder Factor, fechas y formulario. Excluir generaciones anteriores, alumni, blog, eventos y paginas que solo anuncien apertura futura; no publicar una oportunidad activa sin bases y postulacion abiertas."
+    },
+    {
+      "source_id": "idb_calls",
+      "start_url": "https://www.iadb.org/en/home/calls-proposals",
+      "market": "LATAM",
+      "kind": "grant",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 8,
+      "latam_fit": "A+",
+      "opportunity_scopes": [
+        "grant",
+        "innovation_call",
+        "research_funding",
+        "startup_program",
+        "innovation_challenge"
+      ],
+      "eligible_regions": [
+        "LATAM",
+        "CARIBBEAN"
+      ],
+      "original_source_required": false,
+      "access_note": "Portal oficial del Grupo BID para grants, innovacion, investigacion, startups y desafios en America Latina y el Caribe. Verificar en cada llamado tipo de postulante, paises, sector, etapa, financiamiento, contrapartida, documentos, deadline y portal de aplicacion. Excluir compras, procurement, consultorias, noticias, resultados y convocatorias cerradas."
+    },
+    {
+      "source_id": "caf_calls",
+      "start_url": "https://www.caf.com/es/trabaja-con-nosotros/convocatorias/",
+      "market": "LATAM",
+      "kind": "consultancy",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 9,
+      "latam_fit": "A",
+      "opportunity_scopes": [
+        "employment",
+        "consultancy",
+        "regional_program"
+      ],
+      "eligible_regions": [
+        "LATAM",
+        "CARIBBEAN"
+      ],
+      "original_source_required": false,
+      "access_note": "Portal oficial de CAF - banco de desarrollo de America Latina y el Caribe para empleo, consultorias y programas regionales. No todos los llamados son oportunidades personales ni todos admiten postulantes de cualquier pais. Extraer opportunity_type, deadline, estado (abierta, prorrogada, cancelada o cerrada), tipo de postulante, paises, presupuesto, documentos y canal de aplicacion. Clasificar vacantes individuales como job, servicios profesionales como consultancy y programas postulables como su tipo especifico; nunca usar regional_program como tipo publico generico. Separar consultorias individuales de procesos para firmas y programas para instituciones. Publicar solo llamados vigentes, accionables y con elegibilidad demostrable; excluir noticias, resultados, llamados anulados, RFI sin postulacion contractual y procesos exclusivos para gobiernos o proveedores fuera del alcance del usuario."
+    },
+    {
+      "source_id": "mit_solve",
+      "start_url": "https://solve.mit.edu/challenges",
+      "market": "GLOBAL",
+      "kind": "startup_competition",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 13,
+      "latam_fit": "A",
+      "opportunity_scopes": [
+        "global_innovation_challenge",
+        "social_impact_acceleration",
+        "grant",
+        "prize"
+      ],
+      "eligible_regions": [
+        "GLOBAL"
+      ],
+      "original_source_required": false,
+      "access_note": "Fuente oficial de MIT Solve para desafios abiertos de innovacion y soluciones tecnologicas de impacto, con postulantes de cualquier parte del mundo. Tratar cada challenge como convocatoria independiente y extraer tema, pregunta del reto, elegibilidad, etapa de solucion, deadline, criterios, formulario, soporte y premios. No sumar ni prometer cifras historicas o fondos de terceros como financiacion garantizada: distinguir grant base para equipos seleccionados, premios condicionados, inversiones potenciales y apoyo no monetario segun la ficha vigente. Publicar solo desafios con aplicaciones abiertas; excluir eventos, application clinics, newsletters, challenges pasados, directorio de Solvers y anuncios de proximas aperturas."
+    },
+    {
+      "source_id": "eu_lac_accelerator",
+      "start_url": "https://eulacdigitalaccelerator.com/open-call/",
+      "market": "LATAM",
+      "kind": "accelerator",
+      "source_tier": "A",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 14,
+      "latam_fit": "A",
+      "opportunity_scopes": [
+        "corporate_startup_acceleration",
+        "proof_of_concept_grant",
+        "cross_regional_matching",
+        "digital_transformation"
+      ],
+      "eligible_regions": [
+        "EU",
+        "LATAM",
+        "CARIBBEAN"
+      ],
+      "program_duration_months": 6,
+      "grant_max_amount": 10500,
+      "grant_currency": "EUR",
+      "grant_recipient": "startup_or_eligible_sme",
+      "service_value_max_amount": 40000,
+      "equity_free": true,
+      "original_source_required": false,
+      "access_note": "Programa oficial financiado por la Union Europea para alianzas privadas corporate-startup de dos regiones distintas entre UE, America Latina y Caribe. La pagina anuncia la proxima convocatoria para septiembre de 2026: hasta que publique fecha y formulario debe permanecer como upcoming, no activa. El programa dura seis meses; informa servicios de aceleracion valorizados hasta EUR 30.000, o EUR 40.000 con socio caribeno, y grants de hasta EUR 10.500 exclusivamente para startups o pymes elegibles destinados al PoC. Exigir al menos una corporacion y una startup, desafio de transformacion digital, regiones distintas, acuerdo de colaboracion y criterios economicos de la corporacion; entidades publicas no son elegibles. Diferenciar grant monetario de valor estimado de servicios y de la plataforma de matching. Excluir noticias, calls cerradas, directorio, red de aceleradoras y perfiles sin alianza elegible."
+    },
+    {
+      "source_id": "f6s_latam",
+      "start_url": "https://www.f6s.com/programs",
+      "market": "LATAM",
+      "kind": "accelerator",
+      "source_tier": "B",
+      "status": "research_pending",
+      "priority_group": "international_latam",
+      "international_priority": 15,
+      "latam_fit": "A",
+      "opportunity_scopes": [
+        "accelerator",
+        "incubator",
+        "startup_competition",
+        "investment_program",
+        "grant_discovery"
+      ],
+      "eligible_regions": [
+        "LATAM",
+        "CARIBBEAN"
+      ],
+      "original_source_required": true,
+      "access_note": "F6S es una plataforma agregadora Tier B con programas, aceleradoras, concursos y fondos publicados por multiples organizaciones; tambien mezcla eventos, servicios, ofertas antiguas y formularios alojados en F6S. Usarla solo para descubrimiento de oportunidades potencialmente elegibles para Latinoamerica o Caribe. Para cada resultado, abrir la ficha, identificar al organizador, seguir su dominio o bases oficiales y verificar convocatoria, paises, etapa, deadline, monto, moneda, equity, tarifa y formulario antes de aprobar. Si el organizador usa F6S como unico portal de postulacion, exigir identidad institucional, bases o sitio corporativo verificable y mantener revision manual. No confiar en etiquetas como Open o Funds Startups sin evidencia original; excluir eventos pagos, mentor applications, servicios, deals comerciales, listados permanentes, programas cerrados y resultados sin alcance regional demostrado."
+    },
+    {
+      "source_id": "devex",
+      "start_url": "https://www.devex.com/jobs",
+      "paraguay_search_url": "https://www.devex.com/jobs/search?filter%5Blocations%5D%5B%5D=Paraguay&sorting%5Border%5D=desc",
+      "funding_url": "https://www.devex.com/funding",
+      "market": "LATAM",
+      "kind": "job",
+      "source_tier": "B",
+      "status": "research_pending",
+      "priority_group": "international_latam",
+      "international_priority": 17,
+      "latam_fit": "A+",
+      "opportunity_scopes": [
+        "international_development_job",
+        "consultancy",
+        "ngo_job",
+        "development_finance_job",
+        "grant_discovery",
+        "development_funding_discovery"
+      ],
+      "eligible_regions": [
+        "LATAM",
+        "CARIBBEAN"
+      ],
+      "original_source_required": true,
+      "funding_access_note": "Devex Funding mezcla inteligencia temprana, programas, tenders, grants, oportunidades abiertas y adjudicaciones, con acceso sujeto a Devex Pro Funding. Solo grants y calls abiertas pueden convertirse en oportunidades, siempre despues de seguir al donante o entidad convocante original. Program reports, funding activity y contract awards son inteligencia interna o discovery, no convocatorias publicables.",
+      "access_note": "Devex es una bolsa agregadora Tier B especializada en cooperacion y desarrollo internacional, con vacantes y consultorias reales en Paraguay y la region, pero parte del contenido exige Career Account o inicio de sesion. Usarla solo como descubrimiento mediante paginas publicas permitidas. Por cada resultado, identificar empleador y localizar la vacante original en su dominio, ATS o portal institucional; verificar cargo, organizacion, ubicacion, modalidad, nacionalidad o residencia, contrato, publicacion, deadline y application_url antes de aprobar. No intentar eludir paywall, login ni controles de acceso y no copiar contenido exclusivo. Si no existe fuente original publica, conservar el registro en revision sin catalogo, matching, alertas ni SEO. Excluir vacantes cerradas aunque Devex las marque Current, contenido editorial, servicios de carrera, eventos y duplicados de organismos ya recolectados directamente."
+    },
+    {
+      "source_id": "developmentaid",
+      "start_url": "https://www.developmentaid.org/jobs",
+      "latam_jobs_url": "https://www.developmentaid.org/jobs-in-latin-america-and-the-caribbean",
+      "market": "LATAM",
+      "kind": "job",
+      "source_tier": "B",
+      "status": "research_pending",
+      "priority_group": "international_latam",
+      "international_priority": 19,
+      "latam_fit": "A+",
+      "opportunity_scopes": [
+        "international_development_job",
+        "consultancy",
+        "grant_discovery",
+        "tender_discovery"
+      ],
+      "eligible_regions": [
+        "LATAM",
+        "CARIBBEAN"
+      ],
+      "original_source_required": true,
+      "access_note": "DevelopmentAid es una base agregadora Tier B de empleo, consultorias, grants y tenders del sector de desarrollo y ayuda humanitaria. Parte de la descripcion, documentos y datos del convocante requiere registro o membresia, y organizaciones usuarias pueden publicar oportunidades en la plataforma. Usar solo contenido publico permitido para discovery; no eludir login, reCAPTCHA ni membresia. Para cada resultado, identificar organizacion y localizar la convocatoria original en el portal del donante, organismo, ONG, consultora o ATS; verificar vigencia, ubicacion, elegibilidad, experiencia, contrato, monto, documentos, deadline y application_url. Mantener en revision todo registro sin fuente original publica. Separar jobs/consultancies de grants/tenders y excluir adjudicaciones, perfiles de expertos, organizaciones, noticias, contenido member-only y oportunidades vencidas."
+    },
+    {
+      "source_id": "impactpool",
+      "start_url": "https://www.impactpool.org/search",
+      "market": "LATAM",
+      "kind": "job",
+      "source_tier": "B",
+      "status": "research_verified",
+      "priority_group": "international_latam",
+      "international_priority": 18,
+      "latam_fit": "A+",
+      "opportunity_scopes": [
+        "un_job",
+        "ngo_job",
+        "multilateral_job",
+        "international_development_job",
+        "consultancy",
+        "internship",
+        "volunteering"
+      ],
+      "eligible_regions": [
+        "LATAM",
+        "CARIBBEAN",
+        "GLOBAL"
+      ],
+      "original_source_required": true,
+      "access_note": "Impactpool es una bolsa agregadora Tier B de organismos internacionales, ONU, ONG, instituciones financieras y sector de impacto. Sus filtros mezclan puestos internacionales y nacionales, consultorias, pasantias pagas o no pagas y voluntariados, por lo que cada resultado debe conservar su tipo y condiciones. Seguir application_url hasta el ATS o portal oficial de la organizacion y verificar vigencia, ubicacion, remote scope, nacionalidad, derecho a trabajar, nivel, experiencia, remuneracion cuando exista y deadline. No asumir que un puesto internacional acepta paraguayos ni que remoto significa remoto global. Excluir contenido de carrera, Fellowship, perfiles, listas vencidas y resultados sin fuente original activa; deduplicar organismos que CVitae recolecte directamente."
+    },
+    {
+      "source_id": "globaljobs",
+      "start_url": "https://www.globaljobs.org/jobs",
+      "market": "LATAM",
+      "kind": "job",
+      "source_tier": "B",
+      "status": "research_pending",
+      "priority_group": "international_latam",
+      "international_priority": 20,
+      "opportunity_scopes": [
+        "international_affairs_job",
+        "ngo_job",
+        "policy_job",
+        "government_job",
+        "think_tank_job",
+        "international_development_job",
+        "internship",
+        "fellowship"
+      ],
+      "eligible_regions": [
+        "LATAM",
+        "CARIBBEAN",
+        "GLOBAL"
+      ],
+      "original_source_required": true,
+      "access_note": "GlobalJobs.org es una bolsa agregadora Tier B donde ONG, think tanks, gobiernos, universidades, organismos y empresas publican empleos de asuntos internacionales y desarrollo. Las fichas son publicas, pero la plataforma acepta publicaciones pagadas de empleadores; por ello se debe verificar organizacion y seguir la postulacion hasta su ATS o portal oficial. Extraer experiencia, sector, region, ciudad, modalidad onsite/remote/hybrid, contrato, deadline, requisitos de ciudadania o derecho a trabajar y application_url. No asumir que una posicion regional acepta residentes de Paraguay: algunas vacantes latinoamericanas son solo para candidatos locales. Excluir eventos, contenido institucional, puestos vencidos, duplicados y anuncios sin empleador o fuente original verificable; mantenerlos en revision si el unico enlace de aplicacion no permite comprobar identidad y vigencia."
+    },
+    {
+      "source_id": "vc4a_pes_latam",
+      "script": "scrapers/vc4a_pes_latam_scraper.py",
+      "start_url": "https://vc4a.com/pes-latam/?lang=es",
+      "market": "LATAM",
+      "kind": "accelerator",
+      "source_tier": "B",
+      "status": "untested",
+      "priority_group": "international_latam",
+      "international_priority": 16,
+      "latam_fit": "A",
+      "opportunity_scopes": [
+        "social_impact_startup",
+        "capital_discovery",
+        "social_enterprise_acceleration",
+        "social_innovation"
+      ],
+      "eligible_regions": [
+        "LATAM",
+        "CARIBBEAN"
+      ],
+      "access_note": "PES Latam es una alianza historica alojada en VC4A y ejecutada por organizaciones como Ashoka, Bridge for Billions y New Ventures. La pagina incluye Paraguay entre los paises objetivo y mezcla incubacion, aceleracion, grants, formacion, acceso a redes y programas de diferentes socios y anos; algunas oportunidades aparecen expresamente cerradas y otras pueden ser solo fichas historicas. Tratar VC4A/PES Latam como Tier B de descubrimiento: seguir cada programa hasta el socio organizador y verificar edicion vigente, formulario, paises, etapa, deadline, monto, moneda y condiciones antes de aprobar. No publicar el grant historico de CHF 50.000, I3 Latam ni ningun beneficio descrito en la pagina sin una convocatoria original actualmente abierta. Excluir portfolio, articulos, cursos permanentes, comunidad, perfiles y programas cerrados.",
+      "original_source_required": true,
+      "collection_enabled": false,
+      "catalog_enabled": false,
+      "matching_enabled": false,
+      "alerts_enabled": false,
+      "seo_enabled": false
+    }
+  ]
+}

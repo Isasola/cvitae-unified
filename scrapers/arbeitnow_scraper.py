@@ -125,7 +125,7 @@ def main():
 
             total_found += 1
             payload = {
-                "titulo": title,
+                "title": title,
                 "organization": job.get("company_name", ""),
                 "location": job.get("location", "Remote"),
                 "rubro": get_rubro(title, job.get("tags", [])),

@@ -98,7 +98,7 @@ def scrape_category(path, opp_type, max_pages=3):
             description = title
 
             page_jobs.append({
-                "titulo": title,
+                "title": title,
                 "organization": "OpportunityDesk",
                 "location": "Global",
                 "rubro": "Internacional",
@@ -133,7 +133,7 @@ def main():
             status = insert_job(job)
             if status in (200, 201, 409):
                 total_inserted += 1
-            print(f"  {job['titulo'][:60]} -> {status}")
+            print(f"  {job['title'][:60]} -> {status}")
 
         time.sleep(2)
 

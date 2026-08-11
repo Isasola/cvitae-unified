@@ -122,7 +122,7 @@ def main():
                 description = f"Salario: {salary}\n\n{snippet}"
 
             job = {
-                "titulo": title,
+                "title": title,
                 "organization": company or "No especificada",
                 "location": loc,
                 "rubro": rubro,

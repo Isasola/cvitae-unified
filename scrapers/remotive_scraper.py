@@ -106,7 +106,7 @@ def main():
                 full_description = f"{salary}\n\n{description}"
 
             job = {
-                "titulo": title,
+                "title": title,
                 "organization": company,
                 "location": location,
                 "rubro": rubro,

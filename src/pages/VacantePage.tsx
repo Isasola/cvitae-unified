@@ -156,6 +156,7 @@ export default function VacantePage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [coverLetter, setCoverLetter] = useState('')
+  const [talentPoolConsent, setTalentPoolConsent] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -182,7 +183,7 @@ export default function VacantePage() {
     if (!list || !list[0]) return
     const f = list[0]
     if (f.type !== 'application/pdf') { setError('Solo se aceptan archivos PDF.'); return }
-    if (f.size > 10 * 1024 * 1024) { setError('El archivo no puede superar 10 MB.'); return }
+    if (f.size > 4 * 1024 * 1024) { setError('El PDF supera 4 MB. Podés comprimirlo o crear una versión optimizada desde Mi Carrera en CVitae.'); return }
     setFile(f); setError('')
   }
 
@@ -222,6 +223,7 @@ export default function VacantePage() {
           cv_base64: base64,
           cv_file_name: file.name,
           cover_letter: coverLetter.trim() || undefined,
+          talent_pool_consent: talentPoolConsent,
         }),
       })
       const data = await res.json()
@@ -308,7 +310,7 @@ export default function VacantePage() {
               </motion.div>
             )}
 
-            {/* Double-value note */}
+            {/* Optional talent-pool benefit */}
             <motion.div
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.14, ease }}
@@ -318,9 +320,7 @@ export default function VacantePage() {
                 <Sparkles strokeWidth={1.5} className="h-4 w-4 text-[#c9a84c]" />
               </div>
               <p className="text-sm font-light leading-relaxed text-white/70">
-                Al postular, no solo aplicás a esta búsqueda. Tu perfil queda guardado en
-                <span className="text-white"> CVitae</span> y otras empresas podrán encontrarte
-                para oportunidades parecidas, sin que tengas que volver a cargar tu CV.
+                Tu postulación siempre se envía únicamente a esta empresa. Más abajo podés elegir, de forma opcional, si también querés crear un perfil en CVitae para futuras oportunidades.
               </p>
             </motion.div>
 
@@ -381,10 +381,15 @@ export default function VacantePage() {
                     <div className="flex flex-col items-center gap-3 text-white/50">
                       <Upload strokeWidth={1.5} className="h-5 w-5" />
                       <p className="text-sm font-light">Arrastrá tu CV acá o <span className="text-white underline underline-offset-4">elegí un archivo</span></p>
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/30">PDF · hasta 10 MB</p>
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/30">PDF · hasta 4 MB</p>
                     </div>
                   )}
                 </div>
+                <p className="mt-3 text-xs leading-relaxed text-white/40">
+                  Si tu archivo pesa más o está escaneado, podés crear un CV liviano y legible en{' '}
+                  <Link href="/mi-carrera/cv" className="text-[#c9a84c] underline decoration-[#c9a84c]/35 underline-offset-4">CV Vivo</Link>.
+                  {' '}Tu postulación no se descarta si el texto no puede extraerse: el reclutador recibirá el PDF para revisión manual.
+                </p>
               </div>
 
               {/* Cover letter */}
@@ -400,6 +405,11 @@ export default function VacantePage() {
                   className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm font-light text-white placeholder:text-white/25 focus:border-[#c9a84c]/40 focus:outline-none resize-none transition"
                 />
               </div>
+
+              <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-white/8 bg-white/[0.02] p-4 text-sm leading-relaxed text-white/60">
+                <input type="checkbox" checked={talentPoolConsent} onChange={event => setTalentPoolConsent(event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-[#c9a84c]" />
+                <span><strong className="font-medium text-white/85">Quiero crear mi perfil en CVitae.</strong> Acepto recibir un acceso por correo y que empresas verificadas puedan encontrarme para oportunidades similares. Esto es opcional y no afecta esta postulación.</span>
+              </label>
 
               {error && (
                 <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-sm text-red-400">

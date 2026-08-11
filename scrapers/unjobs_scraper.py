@@ -91,7 +91,7 @@ def scrape_page(url, default_location):
             break
 
         jobs.append({
-            "titulo": title,
+            "title": title,
             "organization": organization or "Organización ONU",
             "location": default_location,
             "rubro": "Organismos Internacionales",
@@ -123,7 +123,7 @@ def main():
             status = insert_job(job)
             if status in (200, 201, 409):
                 total_inserted += 1
-            print(f"  [{job['organization'][:30]}] {job['titulo'][:45]} -> {status}")
+            print(f"  [{job['organization'][:30]}] {job['title'][:45]} -> {status}")
 
         time.sleep(1.5)
 

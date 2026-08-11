@@ -59,13 +59,13 @@ export default function Configuracion() {
                   onClick={(e) => { e.preventDefault(); window.location.href = '/' }}
                   className="flex items-center gap-1.5 rounded-xl border border-gold/30 bg-gold/10 px-3 py-2.5 text-xs font-medium text-gold transition hover:bg-gold/20"
                 >
-                  <Star size={13} className="fill-gold text-gold" /> Subir a Pro
+                  <Star size={13} className="fill-gold text-gold" /> Solicitar beta ampliada
                 </a>
               )}
             </div>
             {plan === 'Free' && (
               <p className="mt-2 text-xs text-muted/60">
-                Con Pro tenés matches ilimitados, CV Vivo ilimitado y alertas diarias por USD 9/mes.
+                El acceso ampliado de la beta se habilita por cupos para cuidar disponibilidad y calidad.
               </p>
             )}
           </div>

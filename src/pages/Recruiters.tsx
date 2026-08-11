@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link } from 'wouter'
 import { motion, AnimatePresence } from 'framer-motion'
+import { ProductGuide } from '@/components/cv/ProductGuide'
 import {
   Building2, Key, AlertCircle, ChevronRight,
   Coins, LogOut, Loader2, History, Sparkles,
@@ -492,6 +493,8 @@ interface Applicant {
   name: string
   email: string
   cv_file_name: string | null
+  cv_download_url: string | null
+  cv_parse_status: 'parsed' | 'manual_review' | 'missing'
   cv_text: string | null
   cover_letter: string | null
   ats_score: number | null
@@ -944,8 +947,18 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                               <Brain strokeWidth={1.5} className="h-3.5 w-3.5" /> Análisis individual
                             </button>
                           )}
+                          {a.cv_download_url && (
+                            <a
+                              href={a.cv_download_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-white/55 transition hover:border-white/25 hover:text-white"
+                            >
+                              <Download strokeWidth={1.5} className="h-3.5 w-3.5" /> Ver CV original
+                            </a>
+                          )}
                           {!a.cv_text && (
-                            <p className="text-xs text-white/25 italic ml-auto">Sin texto extraíble</p>
+                            <p className="text-xs text-amber-200/60 italic">Revisión manual: no se pudo extraer texto</p>
                           )}
                         </div>
                       </div>
@@ -1016,7 +1029,7 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error al crear la vacante')
       setCreatedUrl(data.url)
-      setForm({ title: '', description: '', requirements: '', location: '', modality: 'Presencial', salary_range: '', company_name: '', rubro: '' })
+      setForm({ title: '', description: '', requirements: '', location: '', modality: 'Presencial', salary_range: '', company_name: companyName, rubro: '' })
       loadVacancies()
     } catch (err: any) {
       setSaveError(err.message)
@@ -1061,8 +1074,9 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
 
           <div>
             <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Empresa *</label>
-            <input required value={form.company_name} onChange={set('company_name')} placeholder="Nombre de tu empresa"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition" />
+            <input readOnly value={form.company_name} aria-describedby="verified-company-help"
+              className="w-full cursor-not-allowed rounded-xl border border-emerald-400/15 bg-emerald-400/[0.03] px-4 py-3 text-sm text-white/75 outline-none" />
+            <p id="verified-company-help" className="mt-1.5 text-xs text-white/35">Identidad verificada por CVitae. Contactanos si necesitás corregirla.</p>
           </div>
 
           <div>
@@ -1240,7 +1254,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   const handleFile = (f: File) => {
     const ok = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']
     if (!ok.includes(f.type)) { setError('Formato no soportado. Usá PDF, DOCX o TXT.'); return }
-    if (f.size > 5 * 1024 * 1024) { setError('El archivo no puede superar 5 MB.'); return }
+    if (f.size > 4 * 1024 * 1024) { setError('El archivo supera 4 MB. Comprimilo o generá una versión optimizada desde Mi Carrera en CVitae.'); return }
     setFile(f); setResult(null); setError('')
   }
 
@@ -1443,7 +1457,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                     >
                       <div className="flex items-center justify-between">
                         <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">02 · El CV</p>
-                        <span className="text-xs font-light text-white/30">PDF, DOCX, TXT · máx 5 MB</span>
+                        <span className="text-xs font-light text-white/30">PDF, DOCX, TXT · máx 4 MB</span>
                       </div>
 
                       {injectCvText && (
@@ -1551,6 +1565,15 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
           <span>Panel · sesión segura</span>
         </div>
       </footer>
+      <ProductGuide
+        storageKey="b2b_panel_v1"
+        label="Panel de empresa"
+        steps={[
+          { title: 'Publicá una vacante', description: 'Completá cargo, requisitos y ubicación. Si tu empresa está verificada, CVitae genera un enlace de postulación y habilita el matching.' },
+          { title: 'Revisá candidatos', description: 'Cada análisis explica fortalezas, brechas y ajuste al puesto. El score ordena; la decisión siempre sigue siendo humana.' },
+          { title: 'Construí tu shortlist', description: 'Marcá a quién contactar, entrevistar o descartar y agregá notas. El historial queda disponible para tu equipo.' },
+        ]}
+      />
     </div>
   )
 }
@@ -1564,6 +1587,33 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showVerification, setShowVerification] = useState(false)
+  const [requestSent, setRequestSent] = useState(false)
+  const [verificationForm, setVerificationForm] = useState({
+    name: '', email: '', company: '', legalName: '', ruc: '', website: '', contactRole: '', phone: '', hiringNeed: '',
+  })
+
+  const submitVerification = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/.netlify/functions/submit-lead', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: verificationForm.name, email: verificationForm.email, company_name: verificationForm.company,
+          source: 'company_verification',
+          verification_data: {
+            legal_name: verificationForm.legalName, ruc: verificationForm.ruc, website: verificationForm.website,
+            contact_role: verificationForm.contactRole, phone: verificationForm.phone, hiring_need: verificationForm.hiringNeed,
+          },
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'No pudimos enviar la solicitud')
+      setRequestSent(true)
+    } catch (requestError: any) { setError(requestError.message) }
+    finally { setLoading(false) }
+  }
 
   const handleValidate = async () => {
     if (!token.trim()) return
@@ -1694,10 +1744,41 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
 
             <div className="mt-8 border-t border-white/8 pt-6 text-center">
               <p className="text-xs font-light text-white/35">¿Todavía no tenés token?</p>
-              <a href="mailto:contacto@cvitae.lat" className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-[#c9a84c] transition hover:text-[#e6cf8a]">
-                Contactar a CVitae <ChevronRight strokeWidth={1.5} className="h-3.5 w-3.5" />
-              </a>
+              <button onClick={() => setShowVerification(value => !value)} className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-[#c9a84c] transition hover:text-[#e6cf8a]">
+                Solicitar acceso verificado <ChevronRight strokeWidth={1.5} className={`h-3.5 w-3.5 transition ${showVerification ? 'rotate-90' : ''}`} />
+              </button>
             </div>
+
+            <AnimatePresence>
+              {showVerification && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                  {requestSent ? (
+                    <div className="mt-6 border-t border-white/8 pt-6 text-center">
+                      <CheckCircle2 className="mx-auto h-6 w-6 text-emerald-400" />
+                      <p className="mt-3 text-sm text-white">Recibimos la solicitud.</p>
+                      <p className="mt-1 text-xs leading-relaxed text-white/40">Revisaremos los datos antes de habilitar publicaciones y matching. Te avisaremos por email.</p>
+                    </div>
+                  ) : (
+                    <form onSubmit={submitVerification} className="mt-6 space-y-3 border-t border-white/8 pt-6 text-left">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Verificación de empresa</p>
+                        <p className="mt-1 text-xs leading-relaxed text-white/40">Estos datos no se publican; se usan para confirmar identidad y proteger a los candidatos.</p>
+                      </div>
+                      {[
+                        ['name', 'Nombre y apellido', 'text', true], ['email', 'Email corporativo', 'email', true],
+                        ['company', 'Nombre comercial', 'text', true], ['legalName', 'Razón social', 'text', true],
+                        ['ruc', 'RUC', 'text', true], ['website', 'Sitio web o LinkedIn de la empresa', 'url', false],
+                        ['contactRole', 'Tu cargo', 'text', true], ['phone', 'Teléfono de contacto', 'tel', true],
+                      ].map(([key, placeholder, type, required]) => (
+                        <input key={String(key)} required={Boolean(required)} type={String(type)} value={verificationForm[key as keyof typeof verificationForm]} onChange={event => setVerificationForm(current => ({ ...current, [String(key)]: event.target.value }))} placeholder={String(placeholder)} className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none" />
+                      ))}
+                      <textarea required value={verificationForm.hiringNeed} onChange={event => setVerificationForm(current => ({ ...current, hiringNeed: event.target.value }))} rows={3} placeholder="¿Qué perfiles contratan y con qué frecuencia?" className="w-full resize-none rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none" />
+                      <button disabled={loading} className="w-full rounded-full border border-[#c9a84c]/40 px-5 py-3 text-sm text-[#c9a84c] transition hover:bg-[#c9a84c]/10 disabled:opacity-40">{loading ? 'Enviando…' : 'Enviar para verificación'}</button>
+                    </form>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         </div>
       </section>

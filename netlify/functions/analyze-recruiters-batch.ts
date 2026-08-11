@@ -1,5 +1,6 @@
 import { Handler } from "@netlify/functions"
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
+import { makeSupabaseAdmin } from "./_supabase"
 
 const MODEL_ID = "global.anthropic.claude-sonnet-4-6"
 const bedrockClient = new BedrockRuntimeClient({
@@ -64,7 +65,23 @@ const handler: Handler = async (event) => {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
   }
   try {
-    const { cvTexts, jobTitle, jobDescription } = JSON.parse(event.body || "{}")
+    const { token, cvTexts, jobTitle, jobDescription } = JSON.parse(event.body || "{}")
+
+    if (typeof token !== "string" || !token.trim()) {
+      return { statusCode: 401, body: JSON.stringify({ error: "Token de empresa requerido" }) }
+    }
+
+    const { data: recruiter } = await makeSupabaseAdmin()
+      .from("recruiter_tokens")
+      .select("id")
+      .eq("access_token", token.trim())
+      .eq("is_active", true)
+      .eq("verification_status", "verified")
+      .maybeSingle()
+
+    if (!recruiter) {
+      return { statusCode: 403, body: JSON.stringify({ error: "Empresa no verificada o acceso inactivo" }) }
+    }
 
     if (!Array.isArray(cvTexts) || cvTexts.length === 0) {
       return { statusCode: 400, body: JSON.stringify({ error: "cvTexts array is required" }) }
@@ -75,11 +92,28 @@ const handler: Handler = async (event) => {
     }
 
     // Parallelizar todos los análisis — de ~90s secuencial a ~3s paralelo
-    const results = await Promise.allSettled(
-      cvTexts.map(({ text, fileName }: { text: string; fileName: string }) =>
-        analyzeOne(text, jobTitle, jobDescription, fileName)
-      )
+    const invalidCv = cvTexts.some(({ text, fileName }: { text?: unknown; fileName?: unknown }) =>
+      typeof text !== "string" || !text.trim() || text.length > 20_000 ||
+      typeof fileName !== "string" || fileName.length > 240
     )
+    if (invalidCv) {
+      return { statusCode: 400, body: JSON.stringify({ error: "Cada CV debe incluir texto válido (máximo 20.000 caracteres) y nombre de archivo" }) }
+    }
+
+    const results: PromiseSettledResult<any>[] = new Array(cvTexts.length)
+    let cursor = 0
+    const workers = Array.from({ length: Math.min(3, cvTexts.length) }, async () => {
+      while (cursor < cvTexts.length) {
+        const index = cursor++
+        const { text, fileName } = cvTexts[index]
+        try {
+          results[index] = { status: "fulfilled", value: await analyzeOne(text, jobTitle, jobDescription, fileName) }
+        } catch (reason) {
+          results[index] = { status: "rejected", reason }
+        }
+      }
+    })
+    await Promise.all(workers)
 
     const analyzed = results.map((r, i) => {
       if (r.status === "fulfilled") return r.value

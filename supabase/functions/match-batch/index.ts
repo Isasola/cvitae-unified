@@ -257,8 +257,14 @@ Deno.serve(async (req) => {
 
     const { data: opportunities, error: opportunitiesError } = await supabase
       .from('opportunities')
-      .select('id, title, organization, location, rubro, tags, description, application_url, type, source, created_at')
+      .select('id, slug, title, organization, location, rubro, tags, description, application_url, type, opportunity_type, source, deadline, created_at')
       .eq('is_active', true)
+      .eq('verification_status', 'verified')
+      .eq('match_eligible', true)
+      .neq('opportunity_type', 'tender')
+      .is('deleted_at', null)
+      .is('archived_at', null)
+      .or(`deadline.is.null,deadline.gte.${new Date().toISOString()}`)
       .order('created_at', { ascending: false })
       .limit(300)
 
@@ -317,9 +323,9 @@ Deno.serve(async (req) => {
 
       return {
         id: opp.id,
-        slug: opp.id,
+        slug: opp.slug ?? opp.id,
         titulo: opp.title ?? '',
-        categoria: opp.rubro ?? opp.type ?? 'Oportunidad',
+        categoria: opp.rubro ?? opp.opportunity_type ?? opp.type ?? 'Oportunidad',
         ubicacion: opp.location ?? '',
         organization: opp.organization ?? '',
         application_url: opp.application_url ?? '',

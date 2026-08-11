@@ -143,7 +143,7 @@ const handler: Handler = async (event) => {
 
   try {
     const body = JSON.parse(event.body || "{}")
-    const { name, email, company, company_name, source, cv_base64, cv_file_name, cover_letter } = body
+    const { name, email, company, company_name, source, cv_base64, cv_file_name, cover_letter, verification_data, talent_pool_consent } = body
 
     if (!email) {
       return { statusCode: 400, body: JSON.stringify({ error: "Email requerido" }) }
@@ -164,6 +164,15 @@ const handler: Handler = async (event) => {
         email: email.trim().toLowerCase(),
         company_name: resolvedCompany,
         source: source || "landing_b2b",
+        verification_status: "pending",
+        verification_data: verification_data && typeof verification_data === "object" ? {
+          legal_name: String(verification_data.legal_name || "").slice(0, 200),
+          ruc: String(verification_data.ruc || "").slice(0, 40),
+          website: String(verification_data.website || "").slice(0, 500),
+          contact_role: String(verification_data.contact_role || "").slice(0, 120),
+          phone: String(verification_data.phone || "").slice(0, 60),
+          hiring_need: String(verification_data.hiring_need || "").slice(0, 1000),
+        } : {},
       })
 
       if (error) {
@@ -201,31 +210,59 @@ const handler: Handler = async (event) => {
     const vacancySlug = source.replace("vacante:", "")
     const normalizedEmail = email.trim().toLowerCase()
 
-    // 1. Extract CV text for analysis (runs in parallel with profile upsert)
-    const cvText = cv_base64 ? await extractCvText(cv_base64) : ""
-
-    // 2. Look up vacancy id
+    // Resolve the active vacancy before accepting or storing candidate data.
     const { data: vacancyRow } = await supabase
       .from("recruiter_vacancies")
       .select("id, title, recruiter_token_id")
       .eq("slug", vacancySlug)
-      .single()
+      .eq("is_active", true)
+      .maybeSingle()
 
-    // 3. Save application record (separate from user profile)
+    if (!vacancyRow) {
+      return { statusCode: 404, body: JSON.stringify({ error: "La vacante ya no está disponible" }) }
+    }
+
+    if (typeof cv_base64 !== "string" || !cv_base64) {
+      return { statusCode: 400, body: JSON.stringify({ error: "Adjuntá tu CV en PDF" }) }
+    }
+    const cvBuffer = Buffer.from(cv_base64, "base64")
+    if (cvBuffer.length < 5 || cvBuffer.subarray(0, 5).toString("ascii") !== "%PDF-") {
+      return { statusCode: 400, body: JSON.stringify({ error: "El archivo enviado no es un PDF válido" }) }
+    }
+    if (cvBuffer.length > 4 * 1024 * 1024) {
+      return { statusCode: 413, body: JSON.stringify({ error: "El PDF supera 4 MB. Comprimilo o generá una versión optimizada desde Mi Carrera en CVitae." }) }
+    }
+
+    const cvText = await extractCvText(cv_base64)
+    const cvStoragePath = `${vacancyRow.id}/${crypto.randomUUID()}.pdf`
+    const { error: uploadError } = await supabase.storage
+      .from("candidate-cvs")
+      .upload(cvStoragePath, cvBuffer, { contentType: "application/pdf", upsert: false })
+
+    if (uploadError) {
+      console.error("upload candidate CV:", uploadError.message)
+      return { statusCode: 500, body: JSON.stringify({ error: "No pudimos guardar tu CV de forma segura. Intentá nuevamente." }) }
+    }
+
+    // Save the application even when text extraction fails; it remains available for manual review.
     const { error: appError } = await supabase
       .from("vacancy_applications")
       .insert({
-        vacancy_id: vacancyRow?.id || null,
+        vacancy_id: vacancyRow.id,
         vacancy_slug: vacancySlug,
         name: name || "",
         email: normalizedEmail,
         cv_text: cvText || null,
         cv_file_name: cv_file_name || null,
+        cv_storage_path: cvStoragePath,
+        cv_parse_status: cvText ? "parsed" : "manual_review",
         cover_letter: cover_letter || null,
       })
 
     if (appError) {
       console.error("insert vacancy_applications:", appError.message)
+      await supabase.storage.from("candidate-cvs").remove([cvStoragePath])
+      return { statusCode: 500, body: JSON.stringify({ error: "No pudimos registrar tu postulación. Tu archivo no fue conservado; intentá nuevamente." }) }
     }
 
     // Notify recruiter when a new application arrives
@@ -282,7 +319,9 @@ const handler: Handler = async (event) => {
       }
     }
 
-    // 4. Upsert candidate into user_master_profiles
+    let magicLinkSent = false
+    if (talent_pool_consent === true) {
+    // Create a reusable CVitae profile only with explicit, optional consent.
     const profilePayload: Record<string, any> = {
       email: normalizedEmail,
       full_name: name || null,
@@ -302,7 +341,6 @@ const handler: Handler = async (event) => {
     }
 
     // 2. Generate magic link via admin API (no email sent by Supabase)
-    let magicLinkSent = false
     try {
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: "magiclink",
@@ -349,13 +387,16 @@ const handler: Handler = async (event) => {
     } catch (err: any) {
       console.error("magic link flow error:", err.message)
     }
+    }
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         success: true,
         magicLinkSent,
-        message: "Postulación recibida. Revisá tu email para acceder a tu perfil.",
+        message: talent_pool_consent === true
+          ? "Postulación recibida. Revisá tu email para acceder a tu perfil."
+          : "Postulación recibida correctamente.",
       }),
     }
   } catch (err: any) {

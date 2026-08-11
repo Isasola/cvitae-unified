@@ -71,7 +71,7 @@ export default function Terms() {
                   <h2 className="text-xl font-bold m-0">5. Suscripciones y Pagos</h2>
                 </div>
                 <p>
-                  CVitae ofrece un modelo gratuito y planes "Pro". Las suscripciones pagas permiten acceso ilimitado a matches, alertas proactivas y análisis avanzado. 
+                  CVitae puede ofrecer etapas gratuitas, betas con cupos y futuros planes pagos. Los límites, precios y funciones vigentes se informarán antes de cualquier contratación.
                   Los pagos se procesan de forma segura y pueden cancelarse en cualquier momento desde tu perfil.
                 </p>
               </section>

@@ -3,6 +3,9 @@ from bs4 import BeautifulSoup
 import time
 import os
 import re
+import json
+
+from opportunity_sink import OpportunitySink
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -15,6 +18,10 @@ HEADERS = {
 }
 
 BASE_URL = "https://py.computrabajo.com"
+FOREIGN_COUNTRIES = re.compile(
+    r"\b(uruguay|argentina|brasil|brazil|bolivia|per[uú]|chile|colombia|m[eé]xico|espa[nñ]a)\b",
+    re.IGNORECASE,
+)
 
 # Categories to scrape — covers the main job sectors in Paraguay
 CATEGORIES = [
@@ -65,7 +72,11 @@ def fetch(url):
         return ""
 
 
+_insert_error_reported = False
+
+
 def insert_job(job):
+    global _insert_error_reported
     try:
         r = requests.post(
             TABLE_URL + "?on_conflict=application_url",
@@ -76,7 +87,11 @@ def insert_job(job):
                 "Prefer": "resolution=merge-duplicates",
             },
             json=job,
+            timeout=30,
         )
+        if r.status_code >= 400 and not _insert_error_reported:
+            print(f"  Supabase rechazó la oportunidad ({r.status_code}): {r.text[:800]}")
+            _insert_error_reported = True
         return r.status_code
     except Exception as e:
         print(f"  insert error: {e}")
@@ -135,6 +150,9 @@ def scrape_category(slug, rubro, max_pages=3):
                     break
             if not location:
                 location = "Paraguay"
+            if FOREIGN_COUNTRIES.search(location):
+                print(f"  omitida fuera de Paraguay: {title} ({location})")
+                continue
 
             # Salary: inside .fs13 div
             salary_el = card.select_one("div.fs13 span:last-child, div.fs13")
@@ -145,7 +163,7 @@ def scrape_category(slug, rubro, max_pages=3):
                     description = sal_text
 
             page_jobs.append({
-                "titulo": title,
+                "title": title,
                 "organization": company,
                 "location": location,
                 "rubro": rubro,
@@ -168,23 +186,24 @@ def scrape_category(slug, rubro, max_pages=3):
 
 
 def main():
-    total_found = 0
-    total_inserted = 0
+    all_jobs = []
 
     for slug, rubro in CATEGORIES:
         print(f"\nRastreando: {slug} ({rubro})")
         jobs = scrape_category(slug, rubro, max_pages=5)
-        total_found += len(jobs)
-
-        for job in jobs:
-            status = insert_job(job)
-            if status in (200, 201, 409):
-                total_inserted += 1
-            print(f"  [{job['organization'] or 'N/A'}] {job['titulo'][:50]} -> {status}")
+        all_jobs.extend(jobs)
 
         time.sleep(2)
 
-    print(f"\n=== Computrabajo: {total_inserted}/{total_found} insertadas/actualizadas ===")
+    summary = OpportunitySink().upsert(all_jobs)
+    print("CVITAE_INGESTION_SUMMARY=" + json.dumps(summary.to_dict(), ensure_ascii=False))
+    print(
+        f"\n=== Computrabajo: {summary.inserted} nuevas, {summary.updated} actualizadas, "
+        f"{summary.duplicates_in_run} duplicadas, {summary.rejected} rechazadas "
+        f"de {summary.found} encontradas ==="
+    )
+    for error in summary.errors[:5]:
+        print(f"  ERROR: {error}")
 
 
 if __name__ == "__main__":

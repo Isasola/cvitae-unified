@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from 'react'
+import { useReducedMotion } from 'framer-motion'
 
 export function Logo({ className = '' }: { className?: string }) {
   return (
@@ -89,6 +90,77 @@ export function GrowthLine({
           <animate attributeName="r" values="3;5;3" dur="2s" repeatCount="indefinite" />
         </circle>
       )}
+    </svg>
+  )
+}
+
+export function AmbientSignalLines({ className = '' }: { className?: string }) {
+  const uid = useId().replace(/[^a-z0-9]/gi, 'u')
+  const reduceMotion = useReducedMotion()
+
+  return (
+    <svg
+      viewBox="0 0 800 400"
+      preserveAspectRatio="none"
+      className={className}
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id={`js-main-${uid}`} x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stopColor="#c9a84c" stopOpacity="0" />
+          <stop offset="40%" stopColor="#c9a84c" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#c9a84c" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={`js-soft-${uid}`} x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stopColor="#c9a84c" stopOpacity="0" />
+          <stop offset="60%" stopColor="#c9a84c" stopOpacity="0.08" />
+          <stop offset="100%" stopColor="#c9a84c" stopOpacity="0" />
+        </linearGradient>
+        <filter id={`js-glow-${uid}`} x="-10%" y="-80%" width="120%" height="260%">
+          <feGaussianBlur stdDeviation="2.2" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+
+      <path
+        d="M -50 100 C 120 80, 240 140, 400 112 S 600 72, 880 88"
+        fill="none"
+        stroke={`url(#js-main-${uid})`}
+        strokeWidth="1"
+        filter={`url(#js-glow-${uid})`}
+      >
+        {!reduceMotion && (
+          <>
+            <animate attributeName="opacity" values="0.6;1;0.6" dur="3.2s" repeatCount="indefinite" />
+            <animate
+              attributeName="d"
+              values="M -50 100 C 120 80, 240 140, 400 112 S 600 72, 880 88;M -50 112 C 120 96, 240 120, 400 128 S 600 88, 880 100;M -50 100 C 120 80, 240 140, 400 112 S 600 72, 880 88"
+              dur="8s"
+              repeatCount="indefinite"
+            />
+          </>
+        )}
+      </path>
+      <path
+        d="M -50 220 C 160 200, 320 248, 480 220 S 680 192, 880 208"
+        fill="none"
+        stroke={`url(#js-soft-${uid})`}
+        strokeWidth="1"
+      >
+        {!reduceMotion && <animate attributeName="opacity" values="0.3;0.7;0.3" dur="5.5s" repeatCount="indefinite" />}
+      </path>
+      <path
+        d="M -50 300 C 200 288, 400 320, 600 296 S 760 280, 880 292"
+        fill="none"
+        stroke="#c9a84c"
+        strokeOpacity="0.05"
+        strokeWidth="0.5"
+      >
+        {!reduceMotion && <animate attributeName="opacity" values="0.04;0.12;0.04" dur="9s" repeatCount="indefinite" />}
+      </path>
     </svg>
   )
 }

@@ -40,6 +40,19 @@ async function callBedrock(system: string, user: string, maxTokens: number): Pro
 
 const SYSTEM = "Sos un director de RRHH latinoamericano experto. Respondés ÚNICAMENTE con JSON válido y bien formateado, sin texto adicional ni markdown."
 
+async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++
+      results[index] = await task(items[index])
+    }
+  })
+  await Promise.all(workers)
+  return results
+}
+
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
@@ -60,6 +73,7 @@ const handler: Handler = async (event) => {
       .select("id, token_balance")
       .eq("access_token", token.trim())
       .eq("is_active", true)
+      .eq("verification_status", "verified")
       .single()
 
     if (tokenErr || !tokenData) {
@@ -93,7 +107,7 @@ const handler: Handler = async (event) => {
     const jobContext = `PUESTO: ${vacancy.title}\nEMPRESA: ${vacancy.company}\nDESCRIPCIÓN:\n${vacancy.description}\nREQUISITOS:\n${vacancy.requirements}`
 
     // Analyze all applicants in parallel
-    const analysisPromises = applicants.map(async (a) => {
+    const analysisResults = await mapWithConcurrency(applicants, 3, async (a) => {
       try {
         const text = await callBedrock(
           SYSTEM,
@@ -108,7 +122,6 @@ const handler: Handler = async (event) => {
       }
     })
 
-    const analysisResults = await Promise.all(analysisPromises)
     const successful = analysisResults.filter(r => r.ok && r.result)
 
     // Persist results to DB

@@ -28,3 +28,4 @@ supabase/.temp/
 # Local visual test output
 *-server.log
 audit-redesign-*.png
+tmp/

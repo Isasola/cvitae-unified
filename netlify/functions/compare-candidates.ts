@@ -46,6 +46,7 @@ async function validateRecruiter(token: unknown) {
     .select("id")
     .eq("access_token", token.trim())
     .eq("is_active", true)
+    .eq("verification_status", "verified")
     .single()
   return data
 }
