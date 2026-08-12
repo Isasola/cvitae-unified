@@ -7,6 +7,8 @@ import {
   Loader2, CheckCircle2, AlertCircle, Brain, RotateCcw, Building2
 } from 'lucide-react'
 import { analytics } from '@/lib/analytics'
+import { ProductGuide } from '@/components/cv/ProductGuide'
+import { B2BInfoPopover } from '@/components/cv/B2BInfoPopover'
 
 const ease = [0.22, 1, 0.36, 1] as const
 const RECRUITER_SESSION_KEY = 'cvitae_recruiter_session'
@@ -167,36 +169,17 @@ export default function BatchAnalysis() {
             jobTitle,
             jobDescription: jobDesc,
             recruiterToken: session.token,
+            fileName: c.file.name,
           }),
         })
         const result = await res.json()
         if (!res.ok) throw new Error(result.error || `No se pudo analizar ${c.file.name}`)
         updated[i] = { ...updated[i], text, status: 'analyzing', result }
       })
-      // Persist sequentially so each credit is deducted from the latest balance.
+      // El endpoint batch reserva, guarda y devuelve cada resultado de forma atÃ³mica.
       for (const c of updated) {
         if (!c.result || !c.text) continue
-        const saveRes = await fetch('/.netlify/functions/validate-recruiter-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            token: session.token,
-            action: 'save_analysis',
-            analysisData: {
-              candidate_name: c.result.candidateName || c.file.name,
-              file_name: c.file.name,
-              ats_score: c.result.fitScore,
-              strengths: c.result.strengths,
-              critical_improvements: c.result.criticalImprovements,
-              vacancy_label: jobTitle,
-              raw_cv_text: c.text,
-            },
-          }),
-        })
-        const saveData = await saveRes.json()
-        if (!saveRes.ok || !saveData.saved) {
-          throw new Error(saveData.error || `No se pudo guardar ${c.file.name}`)
-        }
+        if (!c.result.saved) throw new Error(`No se pudo guardar ${c.file.name}`)
         c.status = 'done'
         setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'done', result: c.result } : x))
       }
@@ -366,6 +349,15 @@ export default function BatchAnalysis() {
 
                   <div className="mt-5 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-xs font-light text-white/35">Mínimo 2 CVs · cada uno consume 1 crédito</p>
+                    <div className="flex items-center gap-2 text-xs font-light text-white/35">
+                      <span>Un crédito por CV analizado</span>
+                      <B2BInfoPopover
+                        label="Cómo funciona el análisis masivo"
+                        title="Un crédito por CV"
+                        description="El análisis masivo procesa cada archivo por separado y descuenta un crédito por candidato guardado. La IA sugiere un orden; no decide por la empresa."
+                        points={['Usá CVs legibles y de hasta 4 MB.', 'Los archivos que fallan no deberían consumir crédito.', 'Revisá siempre la evidencia antes de contactar.']}
+                      />
+                    </div>
                     <button
                       onClick={startAnalysis}
                       disabled={candidates.length < 2 || !jobTitle.trim()}
@@ -531,6 +523,15 @@ export default function BatchAnalysis() {
           <span>Análisis masivo · {session?.company_name || ''}</span>
         </div>
       </footer>
+      <ProductGuide
+        storageKey="b2b_batch_v1"
+        label="AnÃ¡lisis masivo"
+        steps={[
+          { title: 'DefinÃ­ el puesto', description: 'EscribÃ­ el cargo y los requisitos reales. Cuanto mÃ¡s concreto sea el contexto, mÃ¡s Ãºtil serÃ¡ la comparaciÃ³n.' },
+          { title: 'CargÃ¡ el pool', description: 'PodÃ©s procesar hasta 30 CVs compatibles. Cada CV analizado consume un crÃ©dito y los estados se muestran durante el proceso.' },
+          { title: 'RevisÃ¡ antes de decidir', description: 'El orden sugerido resume evidencia del CV. AbrÃ­ los detalles y mantenÃ© la decisiÃ³n, el contacto y la evaluaciÃ³n final bajo control humano.' },
+        ]}
+      />
     </div>
   )
 }

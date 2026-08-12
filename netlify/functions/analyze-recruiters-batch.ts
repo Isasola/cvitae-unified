@@ -73,7 +73,7 @@ const handler: Handler = async (event) => {
 
     const { data: recruiter } = await makeSupabaseAdmin()
       .from("recruiter_tokens")
-      .select("id")
+      .select("id, token_balance")
       .eq("access_token", token.trim())
       .eq("is_active", true)
       .eq("verification_status", "verified")
@@ -87,14 +87,19 @@ const handler: Handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ error: "cvTexts array is required" }) }
     }
 
+    if (Number(recruiter.token_balance ?? 0) < cvTexts.length) {
+      return { statusCode: 402, body: JSON.stringify({ error: `Lote de ${cvTexts.length} CVs supera el saldo disponible de ${recruiter.token_balance ?? 0} crÃ©ditos.` }) }
+    }
+
     if (cvTexts.length > 30) {
       return { statusCode: 400, body: JSON.stringify({ error: "Máximo 30 CVs por análisis" }) }
     }
 
     // Parallelizar todos los análisis — de ~90s secuencial a ~3s paralelo
-    const invalidCv = cvTexts.some(({ text, fileName }: { text?: unknown; fileName?: unknown }) =>
-      typeof text !== "string" || !text.trim() || text.length > 20_000 ||
-      typeof fileName !== "string" || fileName.length > 240
+    const invalidCv = cvTexts.some((item: any) =>
+      !item || typeof item !== "object" ||
+      typeof item.text !== "string" || !item.text.trim() || item.text.length > 20_000 ||
+      typeof item.fileName !== "string" || item.fileName.length > 240
     )
     if (invalidCv) {
       return { statusCode: 400, body: JSON.stringify({ error: "Cada CV debe incluir texto válido (máximo 20.000 caracteres) y nombre de archivo" }) }

@@ -59,7 +59,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-function SuccessState({ name }: { name: string }) {
+function SuccessState({ name, magicLinkSent }: { name: string; magicLinkSent: boolean }) {
   const first = name.split(' ')[0] || 'Hola'
   return (
     <motion.div
@@ -82,11 +82,17 @@ function SuccessState({ name }: { name: string }) {
       <h2 className="mt-8 text-center font-display text-4xl leading-tight text-white sm:text-5xl">
         ¡Postulación enviada, <em className="not-italic text-white/70">{first}</em>!
       </h2>
-      <p className="mx-auto mt-4 max-w-md text-center text-sm font-light leading-relaxed text-white/55">
-        Revisá tu email — te enviamos un link para acceder a tu perfil en CVitae y ver el estado de tu postulación.
-      </p>
+      {magicLinkSent ? (
+        <p className="mx-auto mt-4 max-w-md text-center text-sm font-light leading-relaxed text-white/55">
+          Revisá tu email: te enviamos un link para acceder a tu perfil en CVitae y ver el estado de tu postulación.
+        </p>
+      ) : (
+        <p className="mx-auto mt-4 max-w-md text-center text-sm font-light leading-relaxed text-white/55">
+          Tu postulación fue registrada y enviada únicamente a la empresa. No creamos un perfil adicional porque esa opción es voluntaria.
+        </p>
+      )}
 
-      <div className="mx-auto mt-8 max-w-md rounded-2xl border border-[#c9a84c]/15 bg-[#c9a84c]/[0.04] p-5 text-left flex items-start gap-3">
+      {magicLinkSent && <div className="mx-auto mt-8 max-w-md rounded-2xl border border-[#c9a84c]/15 bg-[#c9a84c]/[0.04] p-5 text-left flex items-start gap-3">
         <Mail strokeWidth={1.5} className="h-5 w-5 text-[#c9a84c] mt-0.5 shrink-0" />
         <div>
           <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Revisá tu correo</p>
@@ -94,10 +100,10 @@ function SuccessState({ name }: { name: string }) {
             Asunto: <span className="text-white">"Tu acceso a CVitae está listo ✦"</span>
           </p>
           <p className="mt-2 text-xs text-white/35">
-            ¿No lo ves? Revisá la carpeta de <span className="text-white/55">Spam</span> o <span className="text-white/55">Promociones</span>. El email sale desde <span className="font-mono text-white/55">noreply@cvitae.lat</span>.
+            ¿No lo ves? Revisá la carpeta de <span className="text-white/55">Spam</span> o <span className="text-white/55">Promociones</span>. El email sale desde <span className="font-mono text-white/55">contacto@cvitae.lat</span>.
           </p>
         </div>
-      </div>
+      </div>}
 
       <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
         <Link
@@ -161,6 +167,7 @@ export default function VacantePage() {
   const [dragOver, setDragOver] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [magicLinkSent, setMagicLinkSent] = useState(false)
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -228,6 +235,7 @@ export default function VacantePage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error al enviar la postulación')
+      setMagicLinkSent(data.magicLinkSent === true)
       setSubmitted(true)
     } catch (err: any) {
       setError(err.message || 'Error de conexión. Intentá de nuevo.')
@@ -265,7 +273,7 @@ export default function VacantePage() {
         ) : notFound ? (
           <NotFoundState slug={slug} />
         ) : submitted ? (
-          <SuccessState name={name} />
+          <SuccessState name={name} magicLinkSent={magicLinkSent} />
         ) : (
           <>
             {/* Vacancy header */}

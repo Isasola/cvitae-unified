@@ -53,13 +53,46 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: 
   return results
 }
 
+async function reserveCredits(supabase: any, tokenId: string, amount: number): Promise<{ ok: boolean; balance?: number }> {
+  if (amount <= 0) return { ok: true }
+  const { data } = await supabase
+    .from("recruiter_tokens")
+    .select("token_balance")
+    .eq("id", tokenId)
+    .single()
+  const balance = Number(data?.token_balance ?? 0)
+  if (balance < amount) return { ok: false, balance }
+  const { data: reserved } = await supabase
+    .from("recruiter_tokens")
+    .update({ token_balance: balance - amount })
+    .eq("id", tokenId)
+    .eq("token_balance", balance)
+    .select("id")
+    .maybeSingle()
+  return { ok: Boolean(reserved), balance }
+}
+
+async function refundCredits(supabase: any, tokenId: string, amount: number): Promise<void> {
+  if (amount <= 0) return
+  const { data } = await supabase
+    .from("recruiter_tokens")
+    .select("token_balance")
+    .eq("id", tokenId)
+    .single()
+  if (!data) return
+  await supabase
+    .from("recruiter_tokens")
+    .update({ token_balance: Number(data.token_balance ?? 0) + amount })
+    .eq("id", tokenId)
+}
+
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
   }
 
   try {
-    const { token, vacancy_id } = JSON.parse(event.body || "{}")
+    const { token, vacancy_id, force } = JSON.parse(event.body || "{}")
 
     if (!token?.trim() || !vacancy_id) {
       return { statusCode: 400, body: JSON.stringify({ error: "token y vacancy_id requeridos" }) }
@@ -91,17 +124,27 @@ const handler: Handler = async (event) => {
       return { statusCode: 403, body: JSON.stringify({ error: "Vacante no encontrada o sin acceso" }) }
     }
 
-    // Fetch applicants that have cv_text and haven't been analyzed yet
-    const { data: applicants, error: appErr } = await supabase
+    // By default only process pending applicants. Re-analysis is explicit and charged again.
+    let applicantsQuery = supabase
       .from("vacancy_applications")
       .select("id, name, email, cv_text, cover_letter")
       .eq("vacancy_id", vacancy_id)
       .not("cv_text", "is", null)
       .order("applied_at", { ascending: true })
       .limit(30)
+    if (force !== true) applicantsQuery = applicantsQuery.is("analyzed_at", null)
+    const { data: applicants, error: appErr } = await applicantsQuery
 
     if (appErr || !applicants || applicants.length === 0) {
       return { statusCode: 200, body: JSON.stringify({ results: [], summary: null, message: "Sin postulantes con CV para analizar" }) }
+    }
+
+    const reservation = await reserveCredits(supabase, tokenData.id, applicants.length)
+    if (!reservation.ok) {
+      return {
+        statusCode: 402,
+        body: JSON.stringify({ error: `Necesitás ${applicants.length} créditos para analizar este lote. Saldo actual: ${reservation.balance ?? 0}.` }),
+      }
     }
 
     const jobContext = `PUESTO: ${vacancy.title}\nEMPRESA: ${vacancy.company}\nDESCRIPCIÓN:\n${vacancy.description}\nREQUISITOS:\n${vacancy.requirements}`
@@ -124,10 +167,10 @@ const handler: Handler = async (event) => {
 
     const successful = analysisResults.filter(r => r.ok && r.result)
 
-    // Persist results to DB
-    await Promise.all(
-      successful.map(({ applicantId, result }) =>
-        supabase
+    // Persist results to DB and refund credits for model/database failures.
+    const persisted = await Promise.all(
+      successful.map(async ({ applicantId, result }) => {
+        const { error } = await supabase
           .from("vacancy_applications")
           .update({
             ats_score: result.atsScore ?? null,
@@ -140,13 +183,17 @@ const handler: Handler = async (event) => {
             analyzed_at: new Date().toISOString(),
           })
           .eq("id", applicantId)
-      )
+        return { applicantId, ok: !error }
+      })
     )
+    const persistedResults = successful.filter((candidate) => persisted.some((row) => row.applicantId === candidate.applicantId && row.ok))
+    const persistedCount = persistedResults.length
+    await refundCredits(supabase, tokenData.id, applicants.length - persistedCount)
 
     // Build executive summary over all results
     let summary = null
-    if (successful.length >= 2) {
-      const ranked = successful
+    if (persistedResults.length >= 2) {
+      const ranked = persistedResults
         .filter(r => r.result?.fitScore !== undefined)
         .sort((a, b) => (b.result.fitScore ?? 0) - (a.result.fitScore ?? 0))
 
@@ -169,7 +216,7 @@ const handler: Handler = async (event) => {
     }
 
     // Return ranked results
-    const ranked = successful
+    const ranked = persistedResults
       .map(r => ({
         applicantId: r.applicantId,
         name: r.name,
@@ -189,8 +236,8 @@ const handler: Handler = async (event) => {
       body: JSON.stringify({
         results: ranked,
         summary,
-        analyzed: successful.length,
-        failed: analysisResults.filter(r => !r.ok).length,
+        analyzed: persistedResults.length,
+        failed: applicants.length - persistedResults.length,
       }),
     }
   } catch (err: any) {

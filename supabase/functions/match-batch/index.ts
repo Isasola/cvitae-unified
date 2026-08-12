@@ -89,6 +89,29 @@ function toStrings(value: unknown): string[] {
   return []
 }
 
+function isEligibleForProfile(opp: any, profileLocation: string): boolean {
+  const declared = [...toStrings(opp.eligible_countries), ...toStrings(opp.eligible_regions)]
+    .map((value) => normalize(value))
+    .filter(Boolean)
+  if (!declared.length) return true
+
+  const profile = normalize(`${profileLocation} paraguay py latinoamerica latino america latam sudamerica south america`)
+  return declared.some((value) =>
+    value === 'py' || value.includes('paraguay') || value.includes('latam') ||
+    value.includes('latin america') || value.includes('latinoamerica') ||
+    value.includes('south america') || value.includes('sudamerica') ||
+    value.includes('worldwide') || value.includes('all countr') ||
+    profile.includes(value)
+  )
+}
+
+function isTender(opp: any): boolean {
+  return opp.opportunity_type === 'tender' ||
+    /(^|\s)(tender|licitacion|licitaciones|llamado a licitacion)(\s|$)/i.test(
+      normalize(`${opp.title ?? ''} ${opp.type ?? ''} ${opp.opportunity_kind ?? ''} ${opp.rubro ?? ''}`)
+    )
+}
+
 function sameSkill(left: string, right: string): boolean {
   const a = normalize(left)
   const b = normalize(right)
@@ -257,11 +280,10 @@ Deno.serve(async (req) => {
 
     const { data: opportunities, error: opportunitiesError } = await supabase
       .from('opportunities')
-      .select('id, slug, title, organization, location, rubro, tags, description, application_url, type, opportunity_type, source, deadline, created_at')
+      .select('id, slug, title, organization, location, rubro, tags, description, application_url, type, opportunity_type, opportunity_kind, eligible_countries, eligible_regions, source, deadline, created_at')
       .eq('is_active', true)
       .eq('verification_status', 'verified')
       .eq('match_eligible', true)
-      .neq('opportunity_type', 'tender')
       .is('deleted_at', null)
       .is('archived_at', null)
       .or(`deadline.is.null,deadline.gte.${new Date().toISOString()}`)
@@ -269,7 +291,10 @@ Deno.serve(async (req) => {
       .limit(300)
 
     if (opportunitiesError) throw opportunitiesError
-    if (!opportunities?.length) {
+    const eligibleOpportunities = (opportunities ?? []).filter((opp) =>
+      !isTender(opp) && isEligibleForProfile(opp, profileLocation)
+    )
+    if (!eligibleOpportunities.length) {
       return new Response(JSON.stringify({
         matches: [],
         profileSkills,
@@ -305,7 +330,7 @@ Deno.serve(async (req) => {
       await supabase.from('user_master_profiles').update({ embedding }).eq('user_id', user.id)
     }
 
-    const ranked = opportunities.map((opp) => {
+    const ranked = eligibleOpportunities.map((opp) => {
       const vacancySkills = extractSkills(opp, dictionary)
       const skillsScore = calculateSkillScore(profileSkills, vacancySkills)
       const titleScore = calculateTitleScore(profileTitle, opp)
@@ -365,7 +390,7 @@ Deno.serve(async (req) => {
       missingSkills,
       is_subscribed: profile.is_subscribed ?? false,
       meta: {
-        activeOpportunities: opportunities.length,
+        activeOpportunities: eligibleOpportunities.length,
         vectorCandidates: similarities.size,
         generatedAt: new Date().toISOString(),
       },

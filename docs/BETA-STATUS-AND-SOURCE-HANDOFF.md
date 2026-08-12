@@ -1,6 +1,44 @@
 # CVitae beta: estado real y handoff
 
-Fecha de corte: 11 de agosto de 2026.
+Fecha de corte: 12 de agosto de 2026.
+
+## Cierre B2B de esta tanda
+
+- Recruiters y analisis masivo incorporan guias de primer uso, popups de creditos y criterio humano, y una lectura transparente del score.
+- La postulacion comunica de forma condicional si se creo perfil y envio acceso por email; sin consentimiento solo confirma el envio a la empresa.
+- Se agrego navegacion por teclado para expandir candidatos y se aclaro que el score no elimina ni notifica personas.
+- El endpoint batch hace un preflight de saldo y el descuento final ocurre al guardar cada resultado; queda pendiente convertirlo en una reserva transaccional antes de llamar a Bedrock.
+- No se pudo completar una captura visual navegable porque el servidor local Vite no logro iniciar en esta sesion; la revision visual no queda certificada por captura.
+
+## Auditoría funcional B2C/B2B — 12 de agosto
+
+Se dejó fuera deliberadamente la aprobación y carga de nuevos scrapers. La auditoría se concentró en el flujo existente con las oportunidades ya investigadas.
+
+Correcciones aplicadas:
+
+- B2C matching filtra elegibilidad declarada para Paraguay/Latinoamérica y excluye licitaciones también cuando llegan con campos heredados o texto de licitación.
+- B2C conserva el filtro de vigencia, verificación, permisos de matching, archivado y borrado lógico.
+- B2B sólo analiza postulantes pendientes por defecto; el reanálisis debe ser explícito.
+- El análisis de postulantes reserva créditos de forma atómica y devuelve los créditos correspondientes cuando falla IA o persistencia.
+- El análisis masivo valida objetos malformados y rechaza lotes que superan el saldo antes de iniciar IA.
+- El panel B2B envía la intención de reanálisis sólo cuando ya existen resultados previos.
+
+Validaciones ejecutadas después de estos cambios:
+
+- `npm.cmd run build`: aprobado.
+- `npm.cmd run test:critical`: aprobado.
+- `python -m unittest tests.test_priority_scrapers -v`: 2/2 aprobado.
+- `python scripts\\validate_scraper_registry.py`: 40 fuentes válidas.
+- `python scripts\\audit_scraper_contracts.py`: sin errores de sintaxis; los POST directos heredados continúan bajo el adaptador universal.
+- `git diff --check`: limpio.
+- Importación de las dos funciones Netlify modificadas: aprobada.
+
+Limitaciones todavía abiertas:
+
+- No hay ejecución contra Supabase productivo ni prueba E2E con datos reales en esta sesión.
+- No se pudo ejecutar `deno check` porque Deno no está instalado localmente.
+- La función Edge de matching debe probarse después de aplicar migraciones en un entorno controlado.
+- La auditoría visual, responsive y comercial del panel B2B queda para el siguiente bloque.
 
 ## Avance local de catálogo y matching
 

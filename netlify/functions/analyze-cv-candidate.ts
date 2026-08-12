@@ -43,8 +43,9 @@ const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
   }
+  let reservedRecruiter: { id: string; token_balance: number } | null = null
   try {
-    const { cvText, mode, jobTitle, jobDescription, recruiterToken } = JSON.parse(event.body || "{}")
+    const { cvText, mode, jobTitle, jobDescription, recruiterToken, fileName } = JSON.parse(event.body || "{}")
     if (!cvText?.trim()) {
       return { statusCode: 400, body: JSON.stringify({ error: "CV text is required" }) }
     }
@@ -69,6 +70,27 @@ const handler: Handler = async (event) => {
       if ((recruiter.token_balance ?? 0) <= 0) {
         return { statusCode: 402, body: JSON.stringify({ error: "Sin créditos disponibles" }) }
       }
+    }
+
+    if (mode === 'batch_analyze' && recruiterToken?.trim()) {
+      const { data: recruiter } = await makeSupabaseAdmin()
+        .from("recruiter_tokens")
+        .select("id, token_balance")
+        .eq("access_token", recruiterToken.trim())
+        .eq("is_active", true)
+        .eq("verification_status", "verified")
+        .single()
+      if (!recruiter) return { statusCode: 403, body: JSON.stringify({ error: "Token invÃ¡lido" }) }
+      const balance = Number(recruiter.token_balance ?? 0)
+      const { data: reserved } = await makeSupabaseAdmin()
+        .from("recruiter_tokens")
+        .update({ token_balance: balance - 1 })
+        .eq("id", recruiter.id)
+        .eq("token_balance", balance)
+        .select("id, token_balance")
+        .maybeSingle()
+      if (!reserved) return { statusCode: 409, body: JSON.stringify({ error: "El saldo cambiÃ³ durante el anÃ¡lisis. IntentÃ¡ nuevamente." }) }
+      reservedRecruiter = { id: recruiter.id, token_balance: balance - 1 }
     }
 
     let prompt = ""
@@ -132,9 +154,34 @@ ${cvText}`
       mode === 'extract' ? MODEL_ID_EXTRACT : MODEL_ID_ANALYZE
     )
     const result = extractJSON(responseText)
+    if (mode === 'batch_analyze' && reservedRecruiter) {
+      const { error: insertError } = await makeSupabaseAdmin()
+        .from("recruiter_analyses")
+        .insert({
+          token_id: reservedRecruiter.id,
+          candidate_name: result.candidateName || fileName || null,
+          file_name: fileName || null,
+          ats_score: result.atsScore ?? result.fitScore ?? null,
+          strengths: result.strengths || [],
+          critical_improvements: result.criticalImprovements || [],
+          vacancy_label: jobTitle || null,
+          raw_cv_text: cvText,
+          is_starred: false,
+          created_at: new Date().toISOString(),
+        })
+      if (insertError) throw insertError
+      return { statusCode: 200, body: JSON.stringify({ ...result, saved: true, new_balance: reservedRecruiter.token_balance }) }
+    }
     return { statusCode: 200, body: JSON.stringify(result) }
 
   } catch (error: any) {
+    if (reservedRecruiter) {
+      await makeSupabaseAdmin()
+        .from("recruiter_tokens")
+        .update({ token_balance: reservedRecruiter.token_balance + 1 })
+        .eq("id", reservedRecruiter.id)
+        .eq("token_balance", reservedRecruiter.token_balance)
+    }
     console.error("analyze-cv-candidate error:", error.message)
     return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
   }

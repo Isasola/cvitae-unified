@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet-async'
 import { Link } from 'wouter'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ProductGuide } from '@/components/cv/ProductGuide'
+import { B2BInfoPopover } from '@/components/cv/B2BInfoPopover'
 import {
   Building2, Key, AlertCircle, ChevronRight,
   Coins, LogOut, Loader2, History, Sparkles,
@@ -113,11 +114,19 @@ function PanelHeader({ session, balance, onLogout }: { session: RecruiterSession
             </div>
             <span className="font-light">{session.company_name}</span>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] px-3.5 py-1.5">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-full border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] px-3.5 py-1.5">
             <Coins strokeWidth={1.5} className="h-4 w-4 text-[#c9a84c]" />
             <span className="text-xs font-medium tracking-wide text-white/80">
               <span className="text-[#c9a84c]">{balance}</span> créditos
             </span>
+            </div>
+            <B2BInfoPopover
+              label="Cómo funcionan los créditos"
+              title="Créditos y control humano"
+              description="Cada análisis de CV con IA consume un crédito. La IA ordena y explica evidencia; no contrata, rechaza ni contacta a nadie por su cuenta."
+              points={['Las postulaciones recibidas no consumen créditos.', 'Los reanálisis se cobran nuevamente y siempre son explícitos.', 'Si un análisis falla, el crédito se devuelve cuando es posible.']}
+            />
           </div>
           <button
             onClick={onLogout}
@@ -594,7 +603,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
     try {
       const res = await fetch('/.netlify/functions/analyze-vacancy-applicants', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, vacancy_id: vacancyId }),
+        body: JSON.stringify({ token, vacancy_id: vacancyId, force: analyzed.length > 0 }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error en el análisis')
@@ -674,6 +683,15 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
             )}
           </div>
           <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2 text-[11px] text-white/35">
+              <span>El score orienta; la decisión es tuya.</span>
+              <B2BInfoPopover
+                label="Cómo leer el ranking"
+                title="Ranking con contexto"
+                description="El ranking combina ajuste al puesto, evidencia del CV y la descripción que cargaste. Es una ayuda para priorizar conversaciones, no una decisión automática de contratación."
+                points={['Abrí cada candidato para ver fortalezas y brechas.', 'La IA puede equivocarse o pasar por alto contexto: verificá la evidencia en el CV.', 'Un score bajo no elimina ni notifica al candidato.', 'Podés cambiar el estado y dejar notas como responsable del proceso.']}
+              />
+            </div>
             {withCv.length > 0 && (
               <button
                 onClick={handleRankAll}
@@ -786,6 +804,16 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                 <div
                   className="flex items-center gap-4 px-5 py-4 cursor-pointer"
                   onClick={() => setExpandedId(expandedId === a.id ? null : a.id)}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={expandedId === a.id}
+                  aria-controls={`applicant-${a.id}`}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setExpandedId(expandedId === a.id ? null : a.id)
+                    }
+                  }}
                 >
                   {/* Rank number */}
                   <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-display ${
@@ -834,6 +862,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                 <AnimatePresence>
                   {expandedId === a.id && (
                     <motion.div
+                      id={`applicant-${a.id}`}
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
@@ -1062,7 +1091,15 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
         transition={{ duration: 0.6, ease }}
         className="glass-card rounded-3xl p-7"
       >
-        <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">Nueva vacante</p>
+        <div className="flex items-center gap-3">
+          <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">Nueva vacante</p>
+          <B2BInfoPopover
+            label="Qué verá el candidato"
+            title="Un proceso claro para postular"
+            description="El candidato verá el puesto, la empresa verificada, los requisitos y el límite del archivo antes de enviar su CV."
+            points={['El CV se guarda en un espacio privado.', 'La postulación se envía sólo a esta empresa.', 'Crear un perfil general es opcional y requiere consentimiento separado.']}
+          />
+        </div>
         <p className="mt-1 text-sm font-light text-white/40">Generá un link de postulación único para compartir con candidatos.</p>
 
         <div className="mt-7 grid gap-5 md:grid-cols-2">
