@@ -13,7 +13,8 @@ interface BlogPost {
   slug: string
   cuerpo: string
   categoria: string
-  fecha_vencimiento: string
+  created_at: string
+  fecha_vencimiento?: string
   imagen_url?: string
 }
 
@@ -27,7 +28,7 @@ export default function BlogPost() {
     if (slug) {
       supabase
         .from('content_hub')
-        .select('id, titulo, slug, cuerpo, categoria, fecha_vencimiento, imagen_url')
+        .select('id, titulo, slug, cuerpo, categoria, created_at, fecha_vencimiento, imagen_url')
         .eq('slug', slug)
         .eq('tipo', 'blog')
         .eq('is_active', true)
@@ -75,7 +76,7 @@ export default function BlogPost() {
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Calendar size={12} />
-                {new Date(post.fecha_vencimiento).toLocaleDateString('es-PY', { year: 'numeric', month: 'long', day: 'numeric' })}
+                {new Date(post.created_at).toLocaleDateString('es-PY', { year: 'numeric', month: 'long', day: 'numeric' })}
               </span>
             </div>
 

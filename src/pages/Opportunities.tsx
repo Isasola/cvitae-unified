@@ -6,12 +6,6 @@ import { SiteShell } from '@/components/cv/SiteShell'
 import { Eyebrow } from '@/components/cv/visuals'
 import { supabase } from '@/lib/supabase'
 
-const OPPORTUNITY_TYPES = [
-  'scholarship', 'fellowship', 'grant', 'seed_capital', 'accelerator', 'incubator',
-  'startup_competition', 'research_funding', 'training', 'exchange_program',
-  'volunteering', 'tender',
-] as const
-
 type Category = 'Todas' | 'Becas' | 'Financiación' | 'Programas' | 'Experiencias'
 
 interface Opportunity {
@@ -21,6 +15,7 @@ interface Opportunity {
   organization: string | null
   location: string | null
   opportunity_type: string | null
+  opportunity_kind: string | null
   deadline: string | null
   funding_type: string | null
   fully_funded: boolean | null
@@ -42,6 +37,12 @@ const CATEGORY_TYPES: Record<Exclude<Category, 'Todas'>, string[]> = {
   Experiencias: ['exchange_program', 'volunteering'],
 }
 
+const kindToType = (kind: string | null) => ({
+  empleo: 'job', pasantia: 'internship', beca: 'scholarship', voluntariado: 'volunteering',
+  curso: 'training', intercambio: 'exchange_program', concurso: 'startup_competition',
+  programa: 'grant', conferencia: 'training',
+}[kind || ''] || '')
+
 const clean = (value: unknown) => String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 
 export default function Opportunities() {
@@ -54,11 +55,10 @@ export default function Opportunities() {
   useEffect(() => {
     supabase
       .from('opportunities')
-      .select('id,slug,title,organization,location,opportunity_type,deadline,funding_type,fully_funded,source')
+      .select('id,slug,title,organization,location,opportunity_type,opportunity_kind,deadline,funding_type,fully_funded,source')
       .eq('is_active', true)
       .eq('verification_status', 'verified')
       .eq('catalog_eligible', true)
-      .in('opportunity_type', [...OPPORTUNITY_TYPES])
       .is('deleted_at', null)
       .is('archived_at', null)
       .or(`deadline.is.null,deadline.gte.${new Date().toISOString()}`)
@@ -74,8 +74,10 @@ export default function Opportunities() {
   const filtered = useMemo(() => {
     const needle = clean(query).toLocaleLowerCase('es')
     return items.filter(item => {
-      const type = item.opportunity_type || ''
-      const categoryMatch = category === 'Todas' || CATEGORY_TYPES[category].includes(type)
+      const type = item.opportunity_type || kindToType(item.opportunity_kind)
+      const categoryMatch = category === 'Todas'
+        || CATEGORY_TYPES[category].includes(type)
+        || (category === 'Programas' && item.opportunity_kind === 'programa')
       const text = `${item.title} ${item.organization || ''} ${item.location || ''} ${TYPE_LABELS[type] || type}`.toLocaleLowerCase('es')
       return categoryMatch && (!needle || text.includes(needle))
     })
@@ -124,8 +126,8 @@ export default function Opportunities() {
             <div className="mt-6 grid gap-px overflow-hidden border border-white/8 bg-white/8 md:grid-cols-2">{[0, 1, 2, 3].map(item => <div key={item} className="h-48 animate-pulse bg-[#0b0b0b]" />)}</div>
           ) : filtered.length === 0 ? (
             <div className="mt-6 border border-white/8 px-6 py-14 text-center">
-              <p className="text-cream">No hay oportunidades verificadas con estos filtros.</p>
-              <p className="mt-2 text-sm text-white/40">Probá otra categoría o volvé pronto: las fuentes se revisan antes de aparecer acá.</p>
+              <p className="text-cream">{items.length === 0 ? 'Todavía no hay oportunidades publicadas en este catálogo.' : 'No hay oportunidades verificadas con estos filtros.'}</p>
+              <p className="mt-2 text-sm text-white/40">Sólo mostramos fichas activas, vigentes y verificadas. Las fuentes en revisión no aparecen hasta confirmar el enlace, la elegibilidad y la fecha de cierre.</p>
               <button onClick={() => { setQuery(''); setCategory('Todas') }} className="mt-4 text-sm text-[#c9a84c] hover:underline">Limpiar filtros</button>
             </div>
           ) : (

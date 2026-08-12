@@ -675,7 +675,7 @@ function ParaEmpresas() {
               <Users className="h-4 w-4" /> Acceder al portal de empresas
             </Link>
             <Link
-              href="/empresas"
+              href="/demo"
               className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full border border-white/10 text-sm text-cream transition hover:border-white/25"
             >
               Ver demo del panel <ChevronRight className="h-4 w-4" />

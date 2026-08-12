@@ -1626,6 +1626,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
   const [error, setError] = useState('')
   const [showVerification, setShowVerification] = useState(false)
   const [requestSent, setRequestSent] = useState(false)
+  const [requestEmailSent, setRequestEmailSent] = useState(false)
   const [verificationForm, setVerificationForm] = useState({
     name: '', email: '', company: '', legalName: '', ruc: '', website: '', contactRole: '', phone: '', hiringNeed: '',
   })
@@ -1647,6 +1648,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
       })
       const data = await res.json()
       if (!res.ok || data.error) throw new Error(data.error || 'No pudimos enviar la solicitud')
+      setRequestEmailSent(data.confirmationSent === true)
       setRequestSent(true)
     } catch (requestError: any) { setError(requestError.message) }
     finally { setLoading(false) }
@@ -1793,7 +1795,12 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
                     <div className="mt-6 border-t border-white/8 pt-6 text-center">
                       <CheckCircle2 className="mx-auto h-6 w-6 text-emerald-400" />
                       <p className="mt-3 text-sm text-white">Recibimos la solicitud.</p>
-                      <p className="mt-1 text-xs leading-relaxed text-white/40">Revisaremos los datos antes de habilitar publicaciones y matching. Te avisaremos por email.</p>
+                      <p className="mt-1 text-xs leading-relaxed text-white/40">Revisaremos los datos antes de habilitar publicaciones y matching.</p>
+                      <p className={`mt-3 text-xs leading-relaxed ${requestEmailSent ? 'text-emerald-300/80' : 'text-amber-200/80'}`}>
+                        {requestEmailSent
+                          ? `También enviamos una confirmación a ${verificationForm.email}.`
+                          : 'La solicitud quedó registrada, pero no pudimos confirmar el envío del email. Escribinos a contacto@cvitae.lat si no recibís novedades.'}
+                      </p>
                     </div>
                   ) : (
                     <form onSubmit={submitVerification} className="mt-6 space-y-3 border-t border-white/8 pt-6 text-left">

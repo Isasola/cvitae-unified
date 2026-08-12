@@ -182,7 +182,7 @@ const handler: Handler = async (event) => {
         throw error
       }
 
-      await sendResendEmail(
+      const adminNotified = await sendResendEmail(
         "contacto@cvitae.lat",
         `🎯 Nuevo lead Beta: ${resolvedCompany} (${email})`,
         `<h2>Nuevo lead en la landing</h2>
@@ -192,9 +192,10 @@ const handler: Handler = async (event) => {
       )
 
       // Send confirmation email to B2B lead
+      let confirmationSent = false
       try {
         const confirmationHtml = buildB2BConfirmationEmail(name || "", resolvedCompany)
-        await sendResendEmail(
+        confirmationSent = await sendResendEmail(
           email.trim().toLowerCase(),
           `CVitae recibió tu solicitud, ${resolvedCompany} ✦`,
           confirmationHtml
@@ -203,7 +204,7 @@ const handler: Handler = async (event) => {
         console.error("B2B confirmation email failed:", e.message)
       }
 
-      return { statusCode: 200, body: JSON.stringify({ success: true }) }
+      return { statusCode: 200, body: JSON.stringify({ success: true, adminNotified, confirmationSent }) }
     }
 
     // ── Vacancy application flow

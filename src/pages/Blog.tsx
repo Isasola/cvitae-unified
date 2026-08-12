@@ -12,7 +12,8 @@ interface BlogPost {
   slug: string
   cuerpo: string
   categoria: string
-  fecha_vencimiento: string
+  created_at: string
+  fecha_vencimiento?: string
   tipo: string
   imagen_url?: string
 }
@@ -25,7 +26,7 @@ export default function Blog() {
   useEffect(() => {
     supabase
       .from('content_hub')
-      .select('id, titulo, slug, cuerpo, categoria, fecha_vencimiento, tipo, imagen_url')
+      .select('id, titulo, slug, cuerpo, categoria, created_at, fecha_vencimiento, tipo, imagen_url')
       .eq('tipo', 'blog')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
@@ -99,7 +100,7 @@ export default function Blog() {
                       <span className="text-[10px] uppercase tracking-wider border border-gold/30 text-gold px-2.5 py-0.5 rounded-full">
                         {p.categoria}
                       </span>
-                      <span>{new Date(p.fecha_vencimiento).toLocaleDateString('es-PY', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      <span>{new Date(p.created_at).toLocaleDateString('es-PY', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                     </div>
                     <h2 className="font-display text-xl text-cream mt-3 mb-2 leading-snug group-hover:text-gold transition-colors line-clamp-2">{p.titulo}</h2>
                     <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
