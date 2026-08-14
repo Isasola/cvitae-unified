@@ -1,5 +1,11 @@
 # Auditoría de nuevas fuentes — 13 de agosto de 2026
 
+## Addendum post-deploy — 14 de agosto de 2026
+
+El estado productivo posterior al QA esta documentado en `docs/POST-DEPLOY-HANDOFF-2026-08-14.md`. Seis recolectores nuevos cuentan con codigo y tests PASS: MEF/INAPP, IPA, WWF Paraguay, AECID Paraguay, MITIC y SNJ Paraguay. Esto no implica activacion: las fuentes siguen desactivadas hasta muestra manual, revision de vigencia, fuente original y elegibilidad.
+
+Produccion observa 133 oportunidades verificadas y 556 en `in_review` con `is_active=false`. Los scrapers legacy que escriben directamente en REST no son sink-compliant; deben migrarse o pasar por el adaptador antes de habilitar coleccion productiva.
+
 No se realizó deploy, no se activaron cron y no se escribió en Supabase. Todas las ejecuciones usaron `CVITAE_AUDIT_MODE=1`, `CVITAE_REQUIRE_REVIEW=1` y un máximo de 40 registros por fuente.
 
 ## MITIC Oportunidades

@@ -233,6 +233,173 @@ jobs:
         run: python scripts/run_scraper_monitored.py tech_local_scraper tech_local_scraper scrapers/tech_local_scraper.py
         continue-on-error: true
 
+      # ── Fuentes source_registry — becas, organismos y aceleradoras ──────────
+
+      - name: EU Delegation Paraguay — empleo, traineeships, grants, tenders
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py eu_delegation_paraguay eu_delegation_paraguay scrapers/eu_delegation_py_scraper.py
+        continue-on-error: true
+
+      - name: OAS/OEA Scholarships — becas grado y posgrado LATAM
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py oas_scholarships oas_scholarships scrapers/oas_scholarships_scraper.py
+        continue-on-error: true
+
+      - name: Impactpool — ONU, ONG, multilaterales LATAM
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py impactpool impactpool scrapers/impactpool_scraper.py
+        continue-on-error: true
+
+      - name: Erasmus Mundus — maestrías con beca completa en Europa
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py erasmus_mundus erasmus_mundus scrapers/erasmus_mundus_scraper.py
+        continue-on-error: true
+
+      - name: Coimbra Group — investigación y movilidad en Europa para LATAM
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py coimbra_group coimbra_group scrapers/coimbra_group_scraper.py
+        continue-on-error: true
+
+      - name: One Young World — fellowships y liderazgo global LATAM
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py one_young_world_scholarships one_young_world scrapers/one_young_world_scraper.py
+        continue-on-error: true
+
+      - name: Santander Open Academy — becas y programas internacionales LATAM
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py santander_open_academy santander_open_academy scrapers/santander_open_academy_scraper.py
+        continue-on-error: true
+
+      - name: Chevening — maestrías financiadas en UK para Paraguay
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py chevening chevening scrapers/chevening_scholarships_scraper.py
+        continue-on-error: true
+
+      - name: IDB/BID — grants, innovación y llamados LATAM
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py idb_calls idb_calls scrapers/idb_calls_scraper.py
+        continue-on-error: true
+
+      - name: DAAD — becas Alemania para LATAM
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py daad daad scrapers/daad_scholarships_scraper.py
+        continue-on-error: true
+
+      - name: AECID Paraguay — empleo, consultorías, becas cooperación
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py aecid_paraguay_calls aecid_paraguay_calls scrapers/aecid_paraguay_calls_scraper.py
+        continue-on-error: true
+
+      - name: WWF Paraguay — consultorías ambientales
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py wwf_paraguay_calls wwf_paraguay_calls scrapers/wwf_paraguay_calls_scraper.py
+        continue-on-error: true
+
+      - name: SNJ Paraguay — becas y programas juveniles
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py snj_paraguay snj_paraguay scrapers/snj_paraguay_scraper.py
+        continue-on-error: true
+
+      - name: MEF/INAPP Becas — cooperación internacional Paraguay
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py mef_inapp_becas mef_inapp_becas scrapers/mef_inapp_becas_scraper.py
+        continue-on-error: true
+
+      - name: IPA — convocatorias artesanía Paraguay
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py ipa_convocatorias ipa_convocatorias scrapers/ipa_convocatorias_scraper.py
+        continue-on-error: true
+
+      - name: MITIC Paraguay — capacitación y tecnología
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py mitic_opportunities mitic_opportunities scrapers/mitic_opportunities_scraper.py
+        continue-on-error: true
+
+      - name: FIUNA Job Board — ingeniería y tecnología UNA
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py fiuna_job_board fiuna_job_board scrapers/fiuna_job_board_scraper.py
+        continue-on-error: true
+
+      - name: MIC Portal Emprendedor — convocatorias startups PY
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py mic_portal_emprendedor mic_portal_emprendedor scrapers/mic_portal_emprendedor_scraper.py
+        continue-on-error: true
+
+      - name: CAF — empleo y consultorías banco desarrollo LATAM
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py caf_calls caf_calls scrapers/caf_calls_scraper.py
+        continue-on-error: true
+
+      - name: MIT Solve — desafíos de innovación global
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py mit_solve mit_solve scrapers/mit_solve_scraper.py
+        continue-on-error: true
+
+      - name: Startup Chile — Build, Ignite, Growth (equity-free)
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py startup_chile startup_chile scrapers/startup_chile_scraper.py
+        continue-on-error: true
+
+      - name: Google Startups LATAM — aceleradora sin equity
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py google_startups_latam google_startups_latam scrapers/google_startups_latam_scraper.py
+        continue-on-error: true
+
+      - name: EU-LAC Digital Accelerator — startups UE-LatAm (sept 2026)
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py eu_lac_accelerator eu_lac_accelerator scrapers/eu_lac_accelerator_scraper.py
+        continue-on-error: true
+
+      - name: Becas Gobierno Itaipú — becas universitarias PY
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py becas_gobierno_itaipu becas_gobierno_itaipu scrapers/becas_gobierno_itaipu_scraper.py
+        continue-on-error: true
+
+      - name: UCOM Job Board — bolsa de trabajo Universidad Comunera
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py ucom_job_board ucom_job_board scrapers/ucom_job_board_scraper.py
+        continue-on-error: true
+
+      - name: FCQ UNA Job Board — química, farmacia, alimentos UNA
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py fcq_una_job_board fcq_una_job_board scrapers/fcq_una_job_board_scraper.py
+        continue-on-error: true
+
+      - name: Pro ONG Conévio — empleos ONG y sociedad civil PY
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py pro_ong_conevio pro_ong_conevio scrapers/pro_ong_conevio_scraper.py
+        continue-on-error: true
+
+      - name: CIRD — consultorías y proyectos de cooperación PY
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py cird_competitions_tenders cird_competitions scrapers/cird_competitions_scraper.py
+        continue-on-error: true
+
+      - name: VC4A PES LatAm — capital social y aceleradoras LATAM
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py vc4a_pes_latam vc4a_pes_latam scrapers/vc4a_pes_latam_scraper.py
+        continue-on-error: true
+
+      - name: 500 LATAM — capital semilla USD 300k para startups
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py 500_latam 500_latam scrapers/500_latam_scraper.py
+        continue-on-error: true
+
+      - name: EmpleaPY MTESS — convocatorias públicas de empleo
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py empleapy_mtess empleapy_mtess scrapers/empleapy_mtess_scraper.py
+        continue-on-error: true
+
+      - name: Innovando.gov.py — convocatorias para startups PY
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py innovandopy_startups innovandopy_startups scrapers/innovandopy_startups_scraper.py
+        continue-on-error: true
+
+      - name: EBY Yacyretá — becas y concursos laborales PY
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        run: python scripts/run_scraper_monitored.py eby_yacyreta eby_yacyreta scrapers/eby_yacyreta_scraper.py
+        continue-on-error: true
+
       # ── Foros y comunidades ───────────────────────────────────────────────
 
       - name: Foros — Reddit r/Paraguay + comunidades PY

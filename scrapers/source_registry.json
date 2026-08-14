@@ -29,6 +29,7 @@
   "sources": [
     {
       "source_id": "empleapy_mtess",
+      "script": "scrapers/empleapy_mtess_scraper.py",
       "start_url": "https://emplea.mtess.gov.py/",
       "market": "PY",
       "kind": "job",
@@ -126,6 +127,7 @@
     },
     {
       "source_id": "innovandopy_startups",
+      "script": "scrapers/innovandopy_startups_scraper.py",
       "start_url": "https://innovando.gov.py/",
       "market": "PY",
       "kind": "seed_capital",
@@ -146,6 +148,7 @@
     },
     {
       "source_id": "mic_portal_emprendedor",
+      "script": "scrapers/mic_portal_emprendedor_scraper.py",
       "start_url": "https://portalemprendedor.mic.gov.py/",
       "secondary_url": "https://www.mipymes.gov.py/",
       "market": "PY",
@@ -300,6 +303,7 @@
     },
     {
       "source_id": "eu_delegation_paraguay",
+      "script": "scrapers/eu_delegation_py_scraper.py",
       "start_url": "https://www.eeas.europa.eu/delegations/paraguay_es",
       "vacancies_portal": "https://www.eeas.europa.eu/eeas/vacantes_es?s=188",
       "market": "PY",
@@ -322,6 +326,7 @@
     },
     {
       "source_id": "becas_gobierno_itaipu",
+      "script": "scrapers/becas_gobierno_itaipu_scraper.py",
       "start_url": "https://becasgobierno.gov.py/sgbc/DashPrincipal.aspx",
       "secondary_url": "https://becas.gov.py/",
       "news_source": "https://www.itaipu.gov.py/noticias/tag/convocatoria-2026/",
@@ -344,6 +349,7 @@
     },
     {
       "source_id": "eby_yacyreta",
+      "script": "scrapers/eby_yacyreta_scraper.py",
       "start_url": "https://eby.gov.py/",
       "market": "PY",
       "kind": "scholarship",
@@ -391,6 +397,7 @@
     },
     {
       "source_id": "cird_competitions_tenders",
+      "script": "scrapers/cird_competitions_scraper.py",
       "start_url": "https://www.cird.org.py/concurso/",
       "market": "PY",
       "kind": "consultancy",
@@ -411,6 +418,7 @@
     },
     {
       "source_id": "pro_ong_conevio",
+      "script": "scrapers/pro_ong_conevio_scraper.py",
       "start_url": "https://ong.com.py/listings/",
       "directory_url": "https://ong.com.py/",
       "market": "PY",
@@ -455,6 +463,7 @@
     },
     {
       "source_id": "ucom_job_board",
+      "script": "scrapers/ucom_job_board_scraper.py",
       "start_url": "https://ucom.edu.py/bolsa-de-trabajo/",
       "market": "PY",
       "kind": "job",
@@ -476,6 +485,7 @@
     },
     {
       "source_id": "fcq_una_job_board",
+      "script": "scrapers/fcq_una_job_board_scraper.py",
       "start_url": "https://www.qui.una.py/category/bolsa-de-trabajo/",
       "directory_url": "https://www.qui.una.py/graduados/bolsa-de-trabajo/",
       "market": "PY",
@@ -499,6 +509,7 @@
     },
     {
       "source_id": "chevening",
+      "script": "scrapers/chevening_scholarships_scraper.py",
       "start_url": "https://www.chevening.org/scholarships/",
       "country_portal": "https://www.chevening.org/scholarship/paraguay/",
       "market": "GLOBAL",
@@ -523,6 +534,7 @@
     },
     {
       "source_id": "erasmus_mundus",
+      "script": "scrapers/erasmus_mundus_scraper.py",
       "start_url": "https://erasmus-plus.ec.europa.eu/opportunities/individuals/students/erasmus-mundus-joint-masters",
       "programme_url": "https://erasmus-plus.ec.europa.eu/",
       "market": "GLOBAL",
@@ -549,6 +561,7 @@
     },
     {
       "source_id": "oas_scholarships",
+      "script": "scrapers/oas_scholarships_scraper.py",
       "start_url": "https://www.oas.org/en/scholarships/",
       "market": "AMERICAS",
       "kind": "scholarship",
@@ -578,6 +591,7 @@
     },
     {
       "source_id": "daad",
+      "script": "scrapers/daad_scholarships_scraper.py",
       "start_url": "https://www2.daad.de/deutschland/stipendium/datenbank/en/21148-scholarship-database/",
       "market": "GLOBAL",
       "kind": "scholarship",
@@ -604,6 +618,7 @@
     },
     {
       "source_id": "coimbra_group",
+      "script": "scrapers/coimbra_group_scraper.py",
       "start_url": "https://www.coimbra-group.eu/scholarships/grant-information-for-latin-america/",
       "market": "LATAM",
       "kind": "research_funding",
@@ -624,6 +639,7 @@
     },
     {
       "source_id": "santander_open_academy",
+      "script": "scrapers/santander_open_academy_scraper.py",
       "start_url": "https://www.santanderopenacademy.com/en/sites/scholarships.html",
       "market": "GLOBAL",
       "kind": "scholarship",
@@ -646,6 +662,7 @@
     },
     {
       "source_id": "one_young_world_scholarships",
+      "script": "scrapers/one_young_world_scraper.py",
       "start_url": "https://apply.oneyoungworld.com/",
       "secondary_url": "https://www.oneyoungworld.com/scholarships",
       "market": "GLOBAL",
@@ -671,6 +688,7 @@
     },
     {
       "source_id": "500_latam",
+      "script": "scrapers/500_latam_scraper.py",
       "start_url": "https://500.co/latam",
       "market": "LATAM",
       "kind": "seed_capital",
@@ -693,6 +711,7 @@
     },
     {
       "source_id": "google_startups_latam",
+      "script": "scrapers/google_startups_latam_scraper.py",
       "start_url": "https://startup.google.com/programs/accelerator/spanish-speaking-latin-america/",
       "market": "LATAM",
       "kind": "accelerator",
@@ -720,6 +739,7 @@
     },
     {
       "source_id": "startup_chile",
+      "script": "scrapers/startup_chile_scraper.py",
       "start_url": "https://startupchile.org/en/apply/",
       "build_url": "https://startupchile.org/en/apply/build/",
       "ignite_url": "https://startupchile.org/en/apply/ignite/",
@@ -751,6 +771,7 @@
     },
     {
       "source_id": "idb_calls",
+      "script": "scrapers/idb_calls_scraper.py",
       "start_url": "https://www.iadb.org/en/home/calls-proposals",
       "market": "LATAM",
       "kind": "grant",
@@ -775,6 +796,7 @@
     },
     {
       "source_id": "caf_calls",
+      "script": "scrapers/caf_calls_scraper.py",
       "start_url": "https://www.caf.com/es/trabaja-con-nosotros/convocatorias/",
       "market": "LATAM",
       "kind": "consultancy",
@@ -797,6 +819,7 @@
     },
     {
       "source_id": "mit_solve",
+      "script": "scrapers/mit_solve_scraper.py",
       "start_url": "https://solve.mit.edu/challenges",
       "market": "GLOBAL",
       "kind": "startup_competition",
@@ -819,6 +842,7 @@
     },
     {
       "source_id": "eu_lac_accelerator",
+      "script": "scrapers/eu_lac_accelerator_scraper.py",
       "start_url": "https://eulacdigitalaccelerator.com/open-call/",
       "market": "LATAM",
       "kind": "accelerator",
@@ -925,6 +949,7 @@
     },
     {
       "source_id": "impactpool",
+      "script": "scrapers/impactpool_scraper.py",
       "start_url": "https://www.impactpool.org/search",
       "market": "LATAM",
       "kind": "job",

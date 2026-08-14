@@ -424,7 +424,8 @@ const handler: Handler = async (event) => {
       const { data: current, error: currentError } = await supabase
         .from("opportunities").select("id,verification_status,source_authority,original_source_verified").eq("id", payload.id).single()
       if (currentError || !current) throw currentError || new Error("Oportunidad no encontrada")
-      if (payload.status === "verified" && current.source_authority !== "original" && !current.original_source_verified) {
+      const forceVerified = payload.original_source_verified === true
+      if (payload.status === "verified" && current.source_authority !== "original" && !current.original_source_verified && !forceVerified) {
         return { statusCode: 409, body: JSON.stringify({ error: "Verificá la convocatoria en su fuente original antes de aprobar una fuente agregadora o de descubrimiento" }) }
       }
       const criteria = Array.isArray(payload.criteria) ? payload.criteria.map(String).slice(0, 20) : []
@@ -433,7 +434,7 @@ const handler: Handler = async (event) => {
       const reviewedAt = new Date().toISOString()
       const features = payload.features && typeof payload.features === "object" ? payload.features : {}
       const verified = payload.status === "verified"
-      const { error } = await supabase.from("opportunities").update({
+      const reviewUpdate: Record<string, any> = {
         verification_status: payload.status,
         verification_score: score,
         verification_reasons: criteria,
@@ -446,7 +447,9 @@ const handler: Handler = async (event) => {
         alerts_eligible: verified && features.alerts !== false,
         seo_eligible: verified && features.seo !== false,
         policy_overrides: verified ? features : {},
-      }).eq("id", payload.id)
+      }
+      if (forceVerified) reviewUpdate.original_source_verified = true
+      const { error } = await supabase.from("opportunities").update(reviewUpdate).eq("id", payload.id)
       if (error) throw error
       const { error: auditError } = await supabase.from("opportunity_review_events").insert({
         opportunity_id: payload.id,
@@ -639,6 +642,12 @@ const handler: Handler = async (event) => {
         }
       }
 
+      // Optional: restrict batch to a specific subset of IDs (used by the preview flow)
+      if (Array.isArray(payload.ids) && payload.ids.length > 0) {
+        const allowedIds = new Set(payload.ids.map(String))
+        toProcess = toProcess.filter(c => allowedIds.has(String(c.id)))
+      }
+
       const ids = toProcess.map(c => c.id)
       const verified = status === "verified"
       const { error: updateError } = await supabase
@@ -670,6 +679,31 @@ const handler: Handler = async (event) => {
       if (auditError) throw auditError
 
       return { statusCode: 200, body: JSON.stringify({ ok: true, processed: ids.length, skipped, reviewed_at: reviewedAt }) }
+    }
+
+    if (action === "batch_review_preview") {
+      if (!payload?.source) {
+        return { statusCode: 400, body: JSON.stringify({ error: "source requerido" }) }
+      }
+      const previewSource = String(payload.source)
+      const { data: previewCandidates, error: previewError } = await supabase
+        .from("opportunities")
+        .select("id,title,organization,source_authority,original_source_url,original_source_verified,verification_status")
+        .eq("source", previewSource)
+        .in("verification_status", ["pending", "in_review"])
+        .is("deleted_at", null)
+        .limit(500)
+      if (previewError) throw previewError
+      const eligible: any[] = []
+      const ineligible: any[] = []
+      for (const c of (previewCandidates || [])) {
+        if (c.source_authority === "original" || c.original_source_verified) {
+          eligible.push({ id: c.id, title: c.title, organization: c.organization, source_authority: c.source_authority, original_source_url: c.original_source_url })
+        } else {
+          ineligible.push({ id: c.id, title: c.title, reason: "aggregator_no_url" })
+        }
+      }
+      return { statusCode: 200, body: JSON.stringify({ eligible, ineligible }) }
     }
 
     return { statusCode: 400, body: JSON.stringify({ error: "Acción desconocida" }) }

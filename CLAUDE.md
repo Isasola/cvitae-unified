@@ -1,5 +1,11 @@
 # CVitae — CLAUDE.md
 
+## Estado operativo post-deploy (2026-08-14)
+
+Leer primero [`docs/POST-DEPLOY-HANDOFF-2026-08-14.md`](docs/POST-DEPLOY-HANDOFF-2026-08-14.md). El QA P13-P19 esta cerrado localmente y desplegado desde `feature/aws-migration`; Netlify publica automaticamente cada push. No crear otro sitio.
+
+Produccion tiene 133 oportunidades verificadas y 556 en `in_review` con `is_active=false`. No activar fuentes, matching, alertas, SEO, migraciones ni variables privadas sin autorizacion explicita. El siguiente trabajo operativo es moderacion gradual y sink compliance de scrapers legacy.
+
 ## Comandos
 
 ```bash

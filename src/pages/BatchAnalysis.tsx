@@ -145,7 +145,7 @@ export default function BatchAnalysis() {
     } else {
       setError('')
     }
-    if (candidates.length + valid.length > 30) { setError('Máximo 30 CVs por corrida.'); return }
+    // no hard UI limit — backend processes in internal batches
     const newCandidates = valid.map(f => ({
       id: crypto.randomUUID(),
       operationId: pendingOperationId('batch', `${f.name}:${f.size}:${f.lastModified}`),
@@ -289,10 +289,10 @@ export default function BatchAnalysis() {
       <Ambient />
       <Helmet>
         <title>Análisis Masivo de CVs | CVitae Empresas</title>
-        <meta name="description" content="Analizá hasta 30 CVs en lote con IA. Ranking comparativo, score ATS y recomendación automática." />
+        <meta name="description" content="Analizá tu pool de CVs en lote con IA. Ranking comparativo, score ATS y recomendación automática." />
         <link rel="canonical" href="https://cvitae.lat/empresas/masivo" />
         <meta property="og:title" content="Análisis Masivo de CVs con IA | CVitae Empresas" />
-        <meta property="og:description" content="Analizá hasta 30 CVs en lote. Ranking comparativo, score ATS y recomendación de entrevista automática." />
+        <meta property="og:description" content="Analizá tu pool de CVs en lote. Ranking comparativo, score ATS y recomendación de entrevista automática." />
         <meta property="og:url" content="https://cvitae.lat/empresas/masivo" />
         <meta property="og:type" content="website" />
       </Helmet>
@@ -324,7 +324,7 @@ export default function BatchAnalysis() {
           <span className="h-px w-8 bg-white/20" /> Análisis masivo
         </div>
         <h1 className="mt-6 font-display text-4xl leading-[1.05] tracking-[-0.01em] text-white md:text-6xl">
-          30 CVs. Un veredicto. <em className="italic font-normal">Cero filas en Excel.</em>
+          Tu pool. Un veredicto. <em className="italic font-normal">Cero filas en Excel.</em>
         </h1>
         <p className="mt-5 max-w-xl text-sm font-light leading-relaxed text-white/55 md:text-base">
           Configurá el puesto, subí el lote y CVitae te devuelve el orden de entrevista sugerido con justificación por candidato.
@@ -364,7 +364,7 @@ export default function BatchAnalysis() {
                 <div className="glass-card rounded-3xl p-7 lg:col-span-7">
                   <div className="flex items-center justify-between">
                     <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">02 · Los CVs</p>
-                    <span className="text-xs font-light text-white/30">{candidates.length}/30 cargados</span>
+                    <span className="text-xs font-light text-white/30">{candidates.length} CVs cargados</span>
                   </div>
 
                   <div
@@ -380,7 +380,7 @@ export default function BatchAnalysis() {
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03]">
                       <Upload strokeWidth={1.25} className="h-5 w-5 text-[#c9a84c]" />
                     </div>
-                    <p className="mt-3 font-display text-xl text-white/90">Arrastrá hasta 30 CVs aquí</p>
+                    <p className="mt-3 font-display text-xl text-white/90">Arrastrá los CVs aquí</p>
                     <p className="mt-1 text-xs font-light text-white/45">PDF, DOCX o TXT · máximo 4 MB por archivo</p>
                     <Link href="/mi-carrera/cv" onClick={event => event.stopPropagation()} className="mt-2 text-xs text-[#c9a84c] underline decoration-[#c9a84c]/30 underline-offset-4">Crear un CV optimizado en CVitae</Link>
                   </div>
@@ -592,14 +592,14 @@ export default function BatchAnalysis() {
       </footer>
       <ProductGuide
         storageKey="b2b_batch_v1"
-        label="AnÃ¡lisis masivo"
+        label="Análisis masivo"
         steps={[
-          { title: 'DefinÃ­ el puesto', description: 'EscribÃ­ el cargo y los requisitos reales. Cuanto mÃ¡s concreto sea el contexto, mÃ¡s Ãºtil serÃ¡ la comparaciÃ³n.' },
-          { title: 'CargÃ¡ el pool', description: 'PodÃ©s procesar hasta 30 CVs compatibles. Cada CV analizado consume un crÃ©dito y los estados se muestran durante el proceso.' },
-          { title: 'RevisÃ¡ antes de decidir', description: 'El orden sugerido resume evidencia del CV. AbrÃ­ los detalles y mantenÃ© la decisiÃ³n, el contacto y la evaluaciÃ³n final bajo control humano.' },
+          { title: 'Definí el puesto', description: 'Escribí el cargo y los requisitos reales. Cuanto más concreto sea el contexto, más útil será la comparación.' },
+          { title: 'Cargá el pool', description: 'Subí los CVs compatibles. Cada CV analizado consume un crédito y los estados se muestran durante el proceso.' },
+          { title: 'Revisá antes de decidir', description: 'El orden sugerido resume evidencia del CV. Abrí los detalles y mantené la decisión, el contacto y la evaluación final bajo control humano.' },
         ]}
       />
-      <FeedbackReporter audience="b2b" feature="Análisis masivo B2B" className="bottom-5 right-5" />
+      <FeedbackReporter audience="b2b" feature="Análisis masivo B2B" className="bottom-5 left-5" />
     </div>
   )
 }

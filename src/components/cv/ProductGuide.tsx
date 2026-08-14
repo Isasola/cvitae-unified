@@ -14,11 +14,26 @@ interface ProductGuideProps {
 
 export function ProductGuide({ storageKey, label, steps }: ProductGuideProps) {
   const completedKey = `cvitae_guide_${storageKey}_completed`
-  const [open, setOpen] = useState(() => localStorage.getItem(completedKey) !== 'true')
+  const closedKey = `cvitae_guide_${storageKey}_closed_at`
+  const [open, setOpen] = useState(() => {
+    if (localStorage.getItem(completedKey) === 'true') return false
+    const closedAt = localStorage.getItem(closedKey)
+    if (closedAt) {
+      const elapsed = Date.now() - Number(closedAt)
+      if (elapsed < 24 * 60 * 60 * 1000) return false
+    }
+    return true
+  })
   const [step, setStep] = useState(0)
 
   const closeCompleted = () => {
     localStorage.setItem(completedKey, 'true')
+    setOpen(false)
+    setStep(0)
+  }
+
+  const closeSnoozed = () => {
+    localStorage.setItem(closedKey, String(Date.now()))
     setOpen(false)
     setStep(0)
   }
@@ -29,7 +44,7 @@ export function ProductGuide({ storageKey, label, steps }: ProductGuideProps) {
         <section className="w-[min(360px,calc(100vw-2rem))] border border-white/10 bg-[#0b0b0b] p-5 shadow-2xl" aria-label={`Guía de ${label}`}>
           <div className="flex items-center justify-between gap-4">
             <p className="text-[10px] uppercase tracking-[0.16em] text-[#c9a84c]">Guía · {label}</p>
-            <button onClick={() => setOpen(false)} className="grid h-11 w-11 place-items-center text-white/35 transition hover:text-white" aria-label="Cerrar guía"><X className="h-4 w-4" /></button>
+            <button onClick={closeSnoozed} className="grid h-11 w-11 place-items-center text-white/35 transition hover:text-white" aria-label="Cerrar guía"><X className="h-4 w-4" /></button>
           </div>
           <p className="mt-5 text-xs text-white/35">{step + 1} de {steps.length}</p>
           <h2 className="mt-2 font-display text-xl text-cream">{steps[step].title}</h2>

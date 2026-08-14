@@ -578,10 +578,11 @@ const ACTION_LABELS: Record<string, string> = {
   rejected: 'Descartado',
 }
 
-function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSingle }: {
+function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, onAnalyzeSingle }: {
   token: string
   vacancyId: string
   vacancyTitle: string
+  vacancySlug?: string
   onBack: () => void
   onAnalyzeSingle: (cvText: string, name: string) => void
 }) {
@@ -597,6 +598,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
   const [review, setReview] = useState<VacancyReviewState | null>(null)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
 
   const handleActionUpdate = async (applicationId: string, action: string, notes?: string) => {
@@ -705,6 +707,34 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
         <span className="text-white/20">·</span>
         <span className="text-sm text-white/60 truncate max-w-xs">{vacancyTitle}</span>
       </div>
+
+      {/* Vacancy link — prominent */}
+      {vacancySlug && (
+        <div className="rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.05] p-4">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[#c9a84c] mb-2">Link de postulación</p>
+          <div className="flex items-center gap-3">
+            <code className="flex-1 min-w-0 truncate text-sm text-white/85 font-mono">
+              https://cvitae.lat/vacante/{vacancySlug}
+            </code>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(`https://cvitae.lat/vacante/${vacancySlug}`).then(() => {
+                  setLinkCopied(true)
+                  setTimeout(() => setLinkCopied(false), 2000)
+                }).catch(() => {})
+              }}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.08] px-3 py-1.5 text-xs text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.18]"
+            >
+              {linkCopied ? <CheckIcon strokeWidth={2} className="h-3.5 w-3.5" /> : <Copy strokeWidth={1.5} className="h-3.5 w-3.5" />}
+              {linkCopied ? 'Copiado' : 'Copiar'}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] font-light text-white/45">
+            Compartí este link con candidatos — cada postulación queda registrada automáticamente
+          </p>
+        </div>
+      )}
 
       {/* Stats + CTA */}
       <div className="glass-card rounded-2xl p-5">
@@ -1161,6 +1191,7 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
         token={token}
         vacancyId={selectedVacancy.id}
         vacancyTitle={selectedVacancy.title}
+        vacancySlug={selectedVacancy.slug}
         onBack={() => setSelectedVacancy(null)}
         onAnalyzeSingle={(cvText, name) => onAnalyzeApplicant(cvText, name)}
       />
@@ -1169,6 +1200,25 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
 
   return (
     <div className="space-y-8">
+      {/* First-vacancy banner — only when list is loaded and empty */}
+      {!loadingList && vacancies.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease }}
+          className="rounded-2xl border border-[#c9a84c]/30 bg-[#c9a84c]/[0.05] px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4"
+        >
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-[#c9a84c]">Creá tu primera vacante</p>
+            <p className="mt-0.5 text-xs font-light text-white/55">
+              Obtené un link de postulación propio listo para compartir — cada CV recibido queda registrado automáticamente.
+            </p>
+          </div>
+          <span className="shrink-0 text-xs font-light text-white/35 flex items-center gap-1.5">
+            <ChevronDown strokeWidth={1.5} className="h-4 w-4" /> Completá el formulario abajo
+          </span>
+        </motion.div>
+      )}
+
       {/* Form */}
       <motion.form
         onSubmit={handleSubmit}
@@ -1284,9 +1334,21 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
         {loadingList ? (
           <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#c9a84c]" /></div>
         ) : vacancies.length === 0 ? (
-          <div className="glass-card rounded-2xl py-14 text-center">
-            <Link2 strokeWidth={1.25} className="mx-auto mb-4 h-8 w-8 text-white/20" />
-            <p className="text-sm font-light text-white/40">Todavía no creaste ninguna vacante.</p>
+          <div className="glass-card rounded-3xl py-12 px-8 text-center border border-[#c9a84c]/15 bg-[#c9a84c]/[0.02]">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.08]">
+              <Link2 strokeWidth={1.25} className="h-7 w-7 text-[#c9a84c]" />
+            </div>
+            <h3 className="font-display text-xl text-white">Creá tu primera vacante</h3>
+            <p className="mt-2 text-sm font-light text-white/50 max-w-xs mx-auto">
+              Obtené un link de postulación propio listo para compartir — cada CV recibido queda registrado automáticamente.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-6 py-2.5 text-sm font-medium text-[#0a0a0a] transition hover:shadow-[0_0_30px_-4px_rgba(201,168,76,0.5)]"
+            >
+              <Plus strokeWidth={2} className="h-4 w-4" /> Crear vacante →
+            </button>
           </div>
         ) : (
           <div className="rounded-xl overflow-hidden border border-white/8">
@@ -1476,7 +1538,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
           {session.company_name} — <em className="italic font-normal">análisis de candidatos</em>.
         </h1>
         <p className="mt-4 max-w-xl text-sm font-light leading-relaxed text-white/55">
-          Analizá un CV individual o usá el modo masivo para rankear hasta 30 en una corrida.
+          Analizá un CV individual o usá el modo masivo para rankear tu pool completo.
         </p>
 
         {/* KPI row */}
@@ -1504,7 +1566,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
             className="group inline-flex items-center gap-3 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-5 py-2.5 text-xs font-medium uppercase tracking-[0.18em] text-[#c9a84c] transition-all hover:border-[#c9a84c]/60 hover:bg-[#c9a84c]/[0.1]"
           >
             <Share2 strokeWidth={1.5} className="h-4 w-4" />
-            Análisis masivo (hasta 30 CVs)
+            Análisis masivo
           </Link>
         </div>
 
@@ -1761,7 +1823,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
   }
 
   const features = [
-    'Analizá un CV o un lote de hasta 30 en una corrida',
+    'Analizá CVs individualmente o en modo masivo con ranking IA',
     'Ranking comparativo con score, fortalezas y red flags',
     'Banco de talento histórico, acumulado por tu empresa',
     'Link de postulación propio que alimenta tu base',
@@ -1820,6 +1882,15 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
                 </li>
               ))}
             </ul>
+
+            <div className="mt-8 rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] px-5 py-4">
+              <p className="text-sm font-medium text-[#c9a84c]">
+                Servicio gratuito para las primeras 100 empresas
+              </p>
+              <p className="mt-1 text-xs font-light text-white/55">
+                Valor real USD 79/mes — sin costo mientras seas parte del grupo fundador.
+              </p>
+            </div>
           </div>
 
           {/* Right — login form */}
@@ -1944,6 +2015,6 @@ export default function Recruiters() {
     setSession(null)
   }
 
-  if (!session) return <><TokenLogin onSuccess={handleLogin} /><FeedbackReporter audience="b2b" feature="Acceso empresarial" className="bottom-5 right-5" /></>
-  return <><RecruiterPanel session={session} onLogout={handleLogout} /><FeedbackReporter audience="b2b" className="bottom-5 right-5" /></>
+  if (!session) return <><TokenLogin onSuccess={handleLogin} /><FeedbackReporter audience="b2b" feature="Acceso empresarial" className="bottom-5 left-5" /></>
+  return <><RecruiterPanel session={session} onLogout={handleLogout} /><FeedbackReporter audience="b2b" className="bottom-5 left-5" /></>
 }

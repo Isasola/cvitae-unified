@@ -1,5 +1,7 @@
 # Relevo completo para continuar QA desde el punto 13
 
+> Addendum post-deploy 2026-08-14: el cierre P13-P19 ya fue ejecutado y desplegado. La fuente de verdad actual es [`docs/POST-DEPLOY-HANDOFF-2026-08-14.md`](POST-DEPLOY-HANDOFF-2026-08-14.md). Las secciones historicas de este relevo que indiquen "sin deploy" corresponden al corte anterior y no describen el estado actual.
+
 Fecha de corte: 13 de agosto de 2026, zona `America/Asuncion`.
 
 Este documento es el contrato operativo para que otro agente continúe el QA de

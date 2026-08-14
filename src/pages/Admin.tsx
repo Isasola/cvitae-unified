@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle, AlertCircle, X, Eye, EyeOff, Edit, Trash2, Save, Plus } from 'lucide-react'
+import { CheckCircle, AlertCircle, X, Eye, EyeOff, Edit, Trash2, Save, Plus, RefreshCw } from 'lucide-react'
 
 interface ContentItem {
   id?: string
@@ -241,7 +241,7 @@ export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(ADMIN_VISUAL_PREVIEW)
   const [password, setPassword] = useState('')
   const adminPasswordRef = useRef('')
-  const [activeTab, setActiveTab] = useState<'brief' | 'feedback' | 'moderacion' | 'fuentes' | 'usuarios' | 'beta' | 'prospects' | 'contenido' | 'tokens' | 'skills'>(ADMIN_PREVIEW_MODE === 'feedback' ? 'feedback' : 'brief')
+  const [activeTab, setActiveTab] = useState<'brief' | 'feedback' | 'moderacion' | 'fuentes' | 'usuarios' | 'beta' | 'prospects' | 'contenido' | 'tokens' | 'skills' | 'analytics'>(ADMIN_PREVIEW_MODE === 'feedback' ? 'feedback' : 'brief')
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -275,8 +275,12 @@ export default function Admin() {
   const [editingReview, setEditingReview] = useState(false)
   const [reviewEditData, setReviewEditData] = useState<Record<string, string>>({})
   const [batchSource, setBatchSource] = useState('all')
-  const [batchAction, setBatchAction] = useState<'rejected' | 'quarantined'>('rejected')
+  const [batchAction, setBatchAction] = useState<'verified' | 'rejected' | 'quarantined'>('rejected')
   const [batchLoading, setBatchLoading] = useState(false)
+  const [aggregatorConfirmPanel, setAggregatorConfirmPanel] = useState(false)
+  const [batchPreviewData, setBatchPreviewData] = useState<{ eligible: { id: string; title: string; organization: string | null; source_authority: string; original_source_url: string | null }[]; ineligible: { id: string; title: string; reason: string }[] } | null>(null)
+  const [batchPreviewLoading, setBatchPreviewLoading] = useState(false)
+  const [batchPreviewSelectedIds, setBatchPreviewSelectedIds] = useState<string[]>([])
   const [scraperControls, setScraperControls] = useState<any[]>([])
   const [sourcePolicies, setSourcePolicies] = useState<any[]>([])
   const [sourceStats, setSourceStats] = useState<Record<string, any>>({})
@@ -305,6 +309,10 @@ export default function Admin() {
   const [sendingSuggestion, setSendingSuggestion] = useState(false)
 
   // Scraper report state
+  const [analyticsData, setAnalyticsData] = useState<{ metrics: any; insights: string | null; blogIdeas: string[]; generatedAt: string } | null>(null)
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null)
+
   const [scraperReport, setScraperReport] = useState<{
     totalOpportunities: number
     totalContentHub: number
@@ -347,6 +355,7 @@ export default function Admin() {
     { id: 'contenido', label: 'Contenido', dotColor: 'bg-white/30', badge: null },
     { id: 'tokens', label: 'Tokens B2B', dotColor: 'bg-white/30', badge: null },
     { id: 'skills', label: 'Skills IA', dotColor: 'bg-amber-400', badge: null },
+    { id: 'analytics', label: 'Analytics', dotColor: 'bg-sky-300', badge: null },
   ]
 
   useEffect(() => {
@@ -376,6 +385,10 @@ export default function Admin() {
   useEffect(() => {
     if (isAuthenticated && activeTab === 'feedback') loadProductFeedback()
   }, [feedbackStatus, feedbackAudience])
+
+  useEffect(() => {
+    if (isAuthenticated && activeTab === 'analytics' && !analyticsData) loadAnalytics()
+  }, [isAuthenticated, activeTab])
 
   useEffect(() => {
     if (isAuthenticated && activeTab === 'moderacion') loadOpportunityReviews()
@@ -507,6 +520,7 @@ export default function Admin() {
       source_authority: opportunity.source_authority || 'aggregator', original_source_url: opportunity.original_source_url || '', original_source_verified: opportunity.original_source_verified || false,
       description: opportunity.description || '', application_url: opportunity.application_url || '',
     })
+    setAggregatorConfirmPanel(false)
     setEditingReview(false)
   }
 
@@ -525,17 +539,61 @@ export default function Admin() {
       setSelectedReview(null)
       await Promise.all([loadOpportunityReviews(), loadReviewSummary(), loadScraperReport()])
     } catch (err: any) {
+      if ((err as any).status === 409 && status === 'verified') {
+        setAggregatorConfirmPanel(true)
+      } else {
+        setNotification({ type: 'error', message: err.message })
+      }
+    } finally { setLoading(false) }
+  }
+
+  const submitVerifyWithSourceConfirm = async () => {
+    if (!selectedReview) return
+    setLoading(true)
+    setAggregatorConfirmPanel(false)
+    try {
+      await adminFetch('review_opportunity', {
+        id: selectedReview.id, status: 'verified', original_source_verified: true,
+        criteria: selectedCriteria, note: reviewNote, score: reviewScore, features: reviewFeatures,
+      })
+      setNotification({ type: 'success', message: 'Oportunidad habilitada y fuente original marcada como verificada' })
+      setSelectedReview(null)
+      await Promise.all([loadOpportunityReviews(), loadReviewSummary(), loadScraperReport()])
+    } catch (err: any) {
       setNotification({ type: 'error', message: err.message })
     } finally { setLoading(false) }
   }
 
   const submitBatchReview = async () => {
     if (batchSource === 'all') { setNotification({ type: 'error', message: 'Seleccioná una fuente específica para la acción en lote' }); return }
+    if (batchAction === 'verified') {
+      setBatchPreviewLoading(true)
+      try {
+        const json = await adminFetch('batch_review_preview', { source: batchSource })
+        setBatchPreviewData(json)
+        setBatchPreviewSelectedIds((json.eligible || []).map((item: any) => item.id))
+      } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
+      finally { setBatchPreviewLoading(false) }
+      return
+    }
     if (!window.confirm(`¿Marcar como "${batchAction}" todos los registros en revisión de "${batchSource}"? Esta acción se registra en auditoría y puede revertirse registro por registro.`)) return
     setBatchLoading(true)
     try {
       const json = await adminFetch('batch_review_by_source', { source: batchSource, status: batchAction, note: `Acción en lote desde admin: ${batchAction}` })
       setNotification({ type: 'success', message: `Procesados: ${json.processed}${json.skipped ? ` · Omitidos (fuente no original): ${json.skipped}` : ''}` })
+      await Promise.all([loadOpportunityReviews(), loadReviewSummary()])
+    } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
+    finally { setBatchLoading(false) }
+  }
+
+  const submitBatchApproveSelected = async () => {
+    if (!batchPreviewSelectedIds.length) return
+    setBatchLoading(true)
+    try {
+      const json = await adminFetch('batch_review_by_source', { source: batchSource, status: 'verified', ids: batchPreviewSelectedIds, note: `Aprobación en lote desde preview — fuente: ${batchSource}` })
+      setNotification({ type: 'success', message: `Aprobadas: ${json.processed}${json.skipped ? ` · Omitidas: ${json.skipped}` : ''}` })
+      setBatchPreviewData(null)
+      setBatchPreviewSelectedIds([])
       await Promise.all([loadOpportunityReviews(), loadReviewSummary()])
     } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
     finally { setBatchLoading(false) }
@@ -592,6 +650,24 @@ export default function Admin() {
     await adminFetch('update_source_policy', { source, data })
     setSelectedControl(current => current?.kind === 'source' && current.data.source === source ? { ...current, data: { ...current.data, ...data } } : current)
     await loadControlCenter()
+  }
+
+  const loadAnalytics = async () => {
+    setAnalyticsLoading(true)
+    setAnalyticsError(null)
+    try {
+      const res = await fetch('/.netlify/functions/admin-analytics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminPasswordRef.current}` },
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Error al cargar analytics')
+      setAnalyticsData(json)
+    } catch (err: any) {
+      setAnalyticsError(err.message)
+    } finally {
+      setAnalyticsLoading(false)
+    }
   }
 
   const reviewRecruiter = async (id: string, status: 'verified' | 'rejected' | 'in_review') => {
@@ -652,7 +728,10 @@ export default function Admin() {
     } catch {
       throw new Error(`Error del servidor (${res.status})`)
     }
-    if (!res.ok) throw new Error(json.error || `Error ${res.status}`)
+    if (!res.ok) {
+      const err = Object.assign(new Error(json.error || `Error ${res.status}`), { status: res.status, data: json })
+      throw err
+    }
     return json
   }
 
@@ -1433,22 +1512,76 @@ export default function Admin() {
                   </div>
 
                   <div className="mb-5 border border-white/[0.07] bg-white/[0.015] p-4">
-                    <p className="mb-3 text-[10px] uppercase tracking-[0.14em] text-white/30" style={{ fontFamily: MONO }}>Acción en lote — solo rechazar o poner en cuarentena</p>
+                    <p className="mb-3 text-[10px] uppercase tracking-[0.14em] text-white/30" style={{ fontFamily: MONO }}>Acción en lote por fuente</p>
                     <div className="flex flex-wrap items-center gap-3">
-                      <select value={batchSource} onChange={e => setBatchSource(e.target.value)} className={inputCls + ' flex-1 min-w-[160px]'}>
+                      <select value={batchSource} onChange={e => { setBatchSource(e.target.value); setBatchPreviewData(null) }} className={inputCls + ' flex-1 min-w-[160px]'}>
                         <option value="all">Seleccioná una fuente</option>
                         {reviewSources.map(s => <option key={s.source} value={s.source}>{s.display_name || s.source}</option>)}
                       </select>
-                      <select value={batchAction} onChange={e => setBatchAction(e.target.value as 'rejected' | 'quarantined')} className={inputCls}>
+                      <select value={batchAction} onChange={e => { setBatchAction(e.target.value as 'verified' | 'rejected' | 'quarantined'); setBatchPreviewData(null) }} className={inputCls}>
+                        <option value="verified">Verificar (preview)</option>
                         <option value="rejected">Rechazar</option>
                         <option value="quarantined">Cuarentena</option>
                       </select>
-                      <button onClick={submitBatchReview} disabled={batchLoading || batchSource === 'all'} className="border border-red-500/30 px-5 py-2 text-xs text-red-400 transition hover:bg-red-500/10 disabled:opacity-40" style={{ fontFamily: MONO }}>
-                        {batchLoading ? 'PROCESANDO…' : 'APLICAR A REVISIÓN'}
+                      <button onClick={submitBatchReview} disabled={batchLoading || batchPreviewLoading || batchSource === 'all'} className={`px-5 py-2 text-xs transition disabled:opacity-40 ${batchAction === 'verified' ? 'border border-[#c9a84c]/40 text-[#c9a84c] hover:bg-[#c9a84c]/10' : 'border border-red-500/30 text-red-400 hover:bg-red-500/10'}`} style={{ fontFamily: MONO }}>
+                        {batchPreviewLoading ? 'CARGANDO…' : batchLoading ? 'PROCESANDO…' : batchAction === 'verified' ? 'VER ELEGIBLES →' : 'APLICAR A REVISIÓN'}
                       </button>
                     </div>
-                    <p className="mt-2 text-xs text-white/30">Solo afecta registros en estado "en revisión" o "pendiente". Las aprobaciones en lote requieren que la fuente original esté verificada y se hacen registro por registro.</p>
+                    <p className="mt-2 text-xs text-white/30">Solo afecta registros en estado "en revisión" o "pendiente". "Verificar (preview)" muestra cuáles tienen fuente original verificada antes de aprobar en lote.</p>
                   </div>
+
+                  {batchPreviewData !== null && (
+                    <div className="mb-5 border border-white/[0.07]">
+                      <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3">
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-white/30" style={{ fontFamily: MONO }}>Preview de aprobación — {batchSource}</p>
+                        <button onClick={() => { setBatchPreviewData(null); setBatchPreviewSelectedIds([]) }} className="text-xs text-white/35 hover:text-white transition-colors">✕ Cerrar</button>
+                      </div>
+                      {batchPreviewData.eligible.length === 0 ? (
+                        <div className="px-5 py-5">
+                          <p className="text-sm text-amber-200/70">Ninguna de estas oportunidades tiene fuente original verificada — verificalas una por una.</p>
+                          <p className="mt-1 text-xs text-white/30">Podés editar el campo "Confirmé manualmente la convocatoria en la fuente original" en cada registro y luego usar el preview de nuevo.</p>
+                        </div>
+                      ) : (
+                        <div className="grid gap-px bg-white/[0.04] xl:grid-cols-2">
+                          <div className="bg-[#080808] p-4">
+                            <p className="mb-3 text-[10px] uppercase tracking-[0.14em] text-emerald-400/70" style={{ fontFamily: MONO }}>Aprobables ahora ({batchPreviewData.eligible.length}) — tienen fuente verificada</p>
+                            <div className="max-h-64 overflow-y-auto space-y-0.5">
+                              {batchPreviewData.eligible.map(item => (
+                                <label key={item.id} className="flex cursor-pointer items-start gap-3 px-1 py-1.5 hover:bg-white/[0.02]">
+                                  <input type="checkbox" checked={batchPreviewSelectedIds.includes(item.id)} onChange={() => setBatchPreviewSelectedIds(ids => ids.includes(item.id) ? ids.filter(id => id !== item.id) : [...ids, item.id])} className="mt-0.5 h-3.5 w-3.5 shrink-0 appearance-none border border-white/25 checked:border-[#c9a84c] checked:bg-[#c9a84c]" />
+                                  <span>
+                                    <span className="block text-xs leading-snug text-[#e8e8e0]">{item.title}</span>
+                                    <span className="mt-0.5 block text-[10px] text-white/35" style={{ fontFamily: MONO }}>{item.organization || 'Sin org.'} · {item.source_authority}</span>
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="bg-[#080808] p-4">
+                            <p className="mb-3 text-[10px] uppercase tracking-[0.14em] text-amber-300/60" style={{ fontFamily: MONO }}>Requieren revisión manual ({batchPreviewData.ineligible.length}) — son de un agregador</p>
+                            <div className="max-h-64 overflow-y-auto space-y-0.5">
+                              {batchPreviewData.ineligible.length === 0 ? (
+                                <p className="px-1 text-xs text-white/25">Ninguna.</p>
+                              ) : batchPreviewData.ineligible.map(item => (
+                                <div key={item.id} className="px-1 py-1.5">
+                                  <span className="block text-xs leading-snug text-white/50">{item.title}</span>
+                                  <span className="mt-0.5 block text-[10px] text-amber-300/40" style={{ fontFamily: MONO }}>{item.reason === 'aggregator_no_url' ? 'Fuente original no verificada' : item.reason}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {batchPreviewData.eligible.length > 0 && (
+                        <div className="flex items-center justify-between gap-3 border-t border-white/[0.07] px-4 py-3">
+                          <button onClick={() => setBatchPreviewSelectedIds(batchPreviewData!.eligible.map(item => item.id))} className="text-xs text-white/40 transition hover:text-white" style={{ fontFamily: MONO }}>Seleccionar todas</button>
+                          <button onClick={submitBatchApproveSelected} disabled={batchLoading || batchPreviewSelectedIds.length === 0} className="bg-[#c9a84c] px-5 py-2 text-xs font-medium text-black disabled:opacity-40">
+                            {batchLoading ? 'PROCESANDO…' : `Aprobar las seleccionadas (${batchPreviewSelectedIds.length})`}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="grid min-h-[620px] border border-white/[0.07] lg:grid-cols-[380px_1fr]">
                     <div className="border-b border-white/[0.07] lg:border-b-0 lg:border-r">
@@ -1545,6 +1678,17 @@ export default function Admin() {
                               </div>
                             </div>
                           </div>
+
+                          {aggregatorConfirmPanel && (
+                            <div className="mt-5 border border-amber-400/20 bg-amber-400/[0.04] p-4">
+                              <p className="text-sm font-medium text-amber-200">Esta oportunidad viene de un agregador</p>
+                              <p className="mt-2 text-xs leading-relaxed text-white/50">Para aprobarla primero confirmá que verificaste la convocatoria en su fuente original.</p>
+                              <div className="mt-4 flex gap-2">
+                                <button onClick={submitVerifyWithSourceConfirm} disabled={loading} className="bg-[#c9a84c] px-4 py-2 text-xs font-medium text-black disabled:opacity-40">Marcar como verificada y aprobar</button>
+                                <button onClick={() => setAggregatorConfirmPanel(false)} className="border border-white/15 px-4 py-2 text-xs text-white/60 transition hover:text-white">Cancelar</button>
+                              </div>
+                            </div>
+                          )}
 
                           <div className="mt-7 flex flex-wrap gap-2 border-t border-white/[0.07] pt-5">
                             <button disabled={loading} onClick={() => submitOpportunityReview('verified')} className="bg-[#c9a84c] px-5 py-2.5 text-xs font-medium text-black disabled:opacity-40">Verificar y aplicar permisos</button>
@@ -2061,6 +2205,138 @@ export default function Admin() {
               )}
 
               {/* ── SKILLS IA ───────────────────────────────────────────── */}
+              {activeTab === 'analytics' && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>MÉTRICAS + IA</p>
+                      <h2 className="text-xl text-[#e8e8e0] mt-0.5">Analytics del Producto</h2>
+                    </div>
+                    <button
+                      onClick={loadAnalytics}
+                      disabled={analyticsLoading}
+                      className="flex items-center gap-2 text-xs border border-white/[0.07] text-[rgba(232,232,224,0.5)] px-3 py-1.5 hover:border-[#c9a84c]/40 hover:text-[#c9a84c] transition-colors disabled:opacity-40"
+                      style={{ fontFamily: MONO }}
+                    >
+                      <RefreshCw size={11} className={analyticsLoading ? 'animate-spin' : ''} />
+                      {analyticsLoading ? 'CARGANDO...' : 'ACTUALIZAR'}
+                    </button>
+                  </div>
+
+                  {analyticsError && (
+                    <div className="border border-red-500/30 bg-red-500/[0.05] px-4 py-3 text-sm text-red-400" style={{ fontFamily: MONO }}>{analyticsError}</div>
+                  )}
+
+                  {analyticsLoading && !analyticsData && (
+                    <div className="flex items-center justify-center py-16 text-[rgba(232,232,224,0.3)]" style={{ fontFamily: MONO, fontSize: '12px' }}>
+                      Analizando métricas con Gemini...
+                    </div>
+                  )}
+
+                  {analyticsData && (
+                    <>
+                      {/* Stats grid */}
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        {[
+                          { label: 'USUARIOS TOTALES', value: analyticsData.metrics.users.total, sub: `+${analyticsData.metrics.users.week} esta semana`, color: '#c9a84c' },
+                          { label: 'OPORTUNIDADES ACTIVAS', value: analyticsData.metrics.opportunities.active, sub: 'verificadas', color: '#86efac' },
+                          { label: 'BLOG POSTS', value: analyticsData.metrics.blog.posts.length, sub: 'publicados', color: 'rgba(232,232,224,0.5)' },
+                          { label: 'EMPRESAS B2B', value: analyticsData.metrics.b2b.tokens.length, sub: 'registradas', color: '#93c5fd' },
+                        ].map(stat => (
+                          <div key={stat.label} className="border border-white/[0.07] p-4">
+                            <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>{stat.label}</p>
+                            <p className="text-3xl mt-2" style={{ color: stat.color, fontFamily: MONO }}>{stat.value}</p>
+                            <p style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.25)', marginTop: '2px' }}>{stat.sub}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Top sources */}
+                      <div className="border border-white/[0.07]">
+                        <div className="px-4 py-3 border-b border-white/[0.07]">
+                          <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>TOP FUENTES DE OPORTUNIDADES</p>
+                        </div>
+                        <div className="divide-y divide-white/[0.04]">
+                          {(analyticsData.metrics.opportunities.by_source as [string, number][]).map(([src, cnt]) => {
+                            const max = (analyticsData.metrics.opportunities.by_source as [string, number][])[0]?.[1] || 1
+                            return (
+                              <div key={src} className="flex items-center gap-3 px-4 py-2.5">
+                                <span className="w-32 text-[11px] text-[#e8e8e0] truncate" style={{ fontFamily: MONO }}>{src}</span>
+                                <div className="flex-1 bg-white/[0.04] h-1.5">
+                                  <div className="h-1.5 bg-[#c9a84c]/60" style={{ width: `${(cnt / max) * 100}%` }} />
+                                </div>
+                                <span className="text-[11px] text-[rgba(232,232,224,0.4)]" style={{ fontFamily: MONO }}>{cnt}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Gemini insights */}
+                      {analyticsData.insights && (
+                        <div className="border border-[#c9a84c]/20 bg-[#c9a84c]/[0.03] p-5 space-y-4">
+                          <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: '#c9a84c', textTransform: 'uppercase' }}>ANÁLISIS GEMINI</p>
+                          <div className="space-y-2">
+                            {analyticsData.insights.split('\n').filter(Boolean).map((line, i) => {
+                              const isHeader = line.startsWith('ESTADO:') || line.startsWith('URGENTE:') || line.startsWith('BLOG IDEAS:')
+                              if (isHeader) {
+                                const [hdr, ...rest] = line.split(':')
+                                const colorMap: Record<string, string> = { ESTADO: '#86efac', URGENTE: '#fca5a5', 'BLOG IDEAS': '#93c5fd' }
+                                return (
+                                  <div key={i}>
+                                    <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.12em', color: colorMap[hdr] || '#c9a84c', textTransform: 'uppercase', marginBottom: '4px' }}>{hdr}</p>
+                                    <p className="text-sm text-[rgba(232,232,224,0.65)] leading-relaxed">{rest.join(':').trim()}</p>
+                                  </div>
+                                )
+                              }
+                              return null
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Blog ideas */}
+                      {analyticsData.blogIdeas.length > 0 && (
+                        <div className="border border-white/[0.07]">
+                          <div className="px-4 py-3 border-b border-white/[0.07]">
+                            <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>IDEAS DE CONTENIDO SUGERIDAS</p>
+                          </div>
+                          <div className="divide-y divide-white/[0.04]">
+                            {analyticsData.blogIdeas.map((idea, i) => (
+                              <div key={i} className="flex items-start gap-3 px-4 py-3">
+                                <span style={{ fontFamily: MONO, fontSize: '11px', color: '#c9a84c', minWidth: '20px' }}>0{i + 1}</span>
+                                <p className="text-sm text-[rgba(232,232,224,0.65)]">{idea}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Recent blog posts */}
+                      {analyticsData.metrics.blog.posts.length > 0 && (
+                        <div className="border border-white/[0.07]">
+                          <div className="px-4 py-3 border-b border-white/[0.07]">
+                            <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>POSTS ACTUALES</p>
+                          </div>
+                          <div className="divide-y divide-white/[0.04]">
+                            {analyticsData.metrics.blog.posts.map((post: any) => (
+                              <div key={post.id} className="flex items-center justify-between px-4 py-2.5">
+                                <p className="text-sm text-[rgba(232,232,224,0.6)] truncate max-w-sm">{post.titulo}</p>
+                                <span style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.25)' }}>{new Date(post.created_at).toLocaleDateString('es-PY')}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <p style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.2)', textAlign: 'right' }}>
+                        Generado: {new Date(analyticsData.generatedAt).toLocaleString('es-PY')}
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+
               {activeTab === 'skills' && (
                 <div>
                   <div className="flex items-center justify-between mb-6">

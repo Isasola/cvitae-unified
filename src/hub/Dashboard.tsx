@@ -11,6 +11,8 @@ import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { auth, supabase } from '@/lib/supabase'
+import { CVLoader } from '@/components/cv/CVLoader'
+import { playComplete } from '@/lib/sounds'
 
 const MATCH_BATCH_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1/match-batch'
 const WA_NUMBER = '595992954169'
@@ -184,8 +186,8 @@ function LoaderState({ steps, currentStep }: { steps: string[]; currentStep: num
       <Eyebrow>Trazando tu trayecto</Eyebrow>
       <h2 className="font-display mt-2 text-3xl text-cream">Un momento…</h2>
       <p className="mt-1 text-muted-foreground">Estamos leyendo tu carrera, paso a paso.</p>
-      <div className="relative mt-8 h-20">
-        <GrowthLine className="absolute inset-0 h-full w-full" />
+      <div className="mt-8 flex justify-center">
+        <CVLoader variant="inline" size={40} label="Buscando matches..." />
       </div>
       <ul className="mt-6 space-y-3">
         {steps.map((label, i) => (
@@ -454,6 +456,7 @@ export default function Dashboard() {
         : []
       const storedAt = Date.now()
       setLastUpdatedAt(storedAt)
+      playComplete()
       writeCache(user.id, {
         profileSignature: signature,
         matches: nextMatches,

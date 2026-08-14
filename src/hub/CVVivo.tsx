@@ -11,6 +11,8 @@ import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { GrowthLine } from '@/components/cv/visuals'
 import { auth, supabase } from '@/lib/supabase'
+import { CVLoader } from '@/components/cv/CVLoader'
+import { playComplete } from '@/lib/sounds'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 
@@ -224,6 +226,7 @@ export default function CVVivo() {
         const version = data.version as CvVersion
         setVersions((current) => [version, ...current.filter((item) => item.id !== version.id)])
         applyVersion(version)
+        playComplete()
         setFromCache(data.fromCache || false)
         if (!isSubscribed) {
           const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Asuncion' })
@@ -346,6 +349,7 @@ export default function CVVivo() {
 
   return (
     <DashboardLayout>
+      {adapting && <CVLoader variant="overlay" label="Generando tu CV Vivo..." />}
       <Helmet>
         <title>CV Vivo | CVitae</title>
         <meta name="description" content="Generá un CV adaptado por IA a cada vacante que te interesa. Descargalo en PDF en segundos." />
@@ -540,7 +544,7 @@ export default function CVVivo() {
                       disabled={adapting}
                       className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-[#c9a84c] px-5 text-sm font-medium text-[#0a0a0a] disabled:opacity-40"
                     >
-                      {adapting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      {adapting ? <CVLoader variant="button" size={20} /> : <Sparkles className="h-4 w-4" />}
                       Crear primera versión
                     </button>
                   )}

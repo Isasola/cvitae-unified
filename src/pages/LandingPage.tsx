@@ -31,11 +31,15 @@ function Hero() {
           Subí tu CV y recibí en segundos un score ATS real, fortalezas y mejoras
           concretas. Sin crear cuenta. Gratis durante nuestra beta pública.
         </p>
-        <div className="relative mt-10 max-w-3xl border-y border-white/8 py-5">
+        <div className="relative mt-10 max-w-3xl border-y border-white/[0.12] py-5">
+          {/* Línea conectora horizontal en desktop */}
+          <div className="absolute left-[12.5%] right-[12.5%] top-1/2 hidden h-px -translate-y-1/2 bg-gold/20 sm:block" aria-hidden="true" />
           <ol className="relative grid grid-cols-2 gap-4 sm:grid-cols-4" aria-label="Recorrido de CVitae">
             {['CV', 'Perfil entendido', 'Matches', 'Próxima acción'].map((step, index) => (
-              <li key={step} className="flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] text-cream">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-gold/50 bg-[#0a0a0a] text-gold">{index + 1}</span>
+              <li key={step} className="flex items-center gap-3 text-[11px] uppercase tracking-[0.12em] text-cream">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-gold/70 bg-[#0a0a0a] text-gold shadow-[0_0_12px_rgba(201,168,76,0.4)]">
+                  <span className="font-display text-base font-bold">{index + 1}</span>
+                </span>
                 {step}
               </li>
             ))}
@@ -141,7 +145,7 @@ function Analizador() {
     : ''
 
   return (
-    <section id="analizador" className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
+    <section id="analizador" className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
       <Eyebrow>Analizador gratuito — sin límites</Eyebrow>
       <h2 className="font-display mt-2 max-w-2xl text-3xl text-cream sm:text-4xl">
         Tu score ATS <em>real</em>. En segundos.
@@ -461,11 +465,15 @@ function ComoFunciona() {
           {steps.map((s, i) => (
             <motion.div
               key={s.n}
-              initial={false}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: i * 0.07, ease }}
-              className="glass-panel p-6"
+              className="glass-panel relative overflow-hidden p-6"
             >
-              <span className="font-display italic text-[#c9a84c]">{s.n}</span>
+              {/* Número decorativo de fondo */}
+              <span className="font-display pointer-events-none absolute right-4 top-2 select-none text-8xl font-bold text-[#c9a84c]/15" aria-hidden="true">{s.n}</span>
+              {/* Número legible */}
+              <span className="font-mono text-xs font-bold uppercase tracking-widest text-[#c9a84c]">{s.n}</span>
               <h3 className="font-display mt-2 text-xl text-cream">{s.t}</h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.d}</p>
             </motion.div>
@@ -485,7 +493,7 @@ function IATech() {
     { Icon: FileText, t: 'Optimización dinámica del perfil', d: 'Tu CV se adapta a cada vacante para pasar filtros ATS sin perder tu voz.' },
   ]
   return (
-    <section className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
+    <section className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
       <Eyebrow>IA que entiende tu carrera</Eyebrow>
       <h2 className="font-display mt-2 max-w-2xl text-3xl text-cream sm:text-4xl">
         No es <em>palabra clave</em>. Es contexto.
@@ -522,9 +530,9 @@ const STATS = [
 
 function StatsBar() {
   return (
-    <section className="border-y border-white/8 bg-white/[0.015] py-8">
+    <section className="border-y border-white/[0.12] bg-white/[0.015] py-8">
       <div className="mx-auto max-w-6xl px-6">
-        <div className="grid grid-cols-3 divide-x divide-white/8">
+        <div className="grid grid-cols-3 divide-x divide-white/[0.12]">
           {STATS.map(({ value, label }, i) => (
             <motion.div
               key={value}
@@ -570,7 +578,7 @@ function Pricing() {
     },
   ]
   return (
-    <section className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
+    <section className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
       <Eyebrow>Para candidatos</Eyebrow>
       <h2 className="font-display mt-2 text-3xl text-cream sm:text-4xl">
         Probá CVitae <em>gratis</em> durante nuestra beta.
@@ -625,7 +633,7 @@ function Pricing() {
 
 function ParaEmpresas() {
   return (
-    <section className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
+    <section className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
       <div className="grid gap-10 lg:grid-cols-[1.1fr_1fr]">
         <div>
           <Eyebrow>Para empresas</Eyebrow>

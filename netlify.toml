@@ -30,6 +30,15 @@
 [functions."analyze-recruiters-batch"]
   timeout = 26
 
+[functions."cv-ats-workspace"]
+  timeout = 30
+
+[functions."application-workspace"]
+  timeout = 30
+
+[functions."cv-rewrite-workspace"]
+  timeout = 30
+
 [[redirects]]
   from = "/ads.txt"
   to = "/ads.txt"

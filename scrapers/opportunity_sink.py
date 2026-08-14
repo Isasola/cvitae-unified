@@ -279,6 +279,9 @@ class OpportunitySink:
 
         for start in range(0, len(items), batch_size):
             batch = items[start:start + batch_size]
+            # Normalize: all rows in batch must have identical keys for Supabase REST
+            all_keys = set().union(*(row.keys() for row in batch))
+            batch = [{k: row.get(k) for k in all_keys} for row in batch]
             try:
                 response = self.session.post(
                     f"{self.table_url}?on_conflict=application_url",

@@ -10,6 +10,8 @@ import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { CompatibilityTrace, Eyebrow } from '@/components/cv/visuals'
 import { auth, supabase } from '@/lib/supabase'
+import { CVLoader } from '@/components/cv/CVLoader'
+import { playComplete } from '@/lib/sounds'
 
 type CategoryScore = { key: string; score: number; max: number; reason: string; evidence?: string | null }
 type AtsQuestion = {
@@ -249,6 +251,7 @@ export default function ATSDiagnostic() {
       applyWorkspace(data)
       setUploaded(null)
       setMessage(data.idempotent ? 'Este CV ya estaba analizado; abrimos su diagnóstico guardado.' : 'Diagnóstico guardado. Revisá primero los bloqueos y después respondé las preguntas.')
+      playComplete()
     } catch (err: any) { setError(err.message || 'No pudimos analizar el CV') }
     finally { setAnalyzing(false) }
   }
@@ -330,7 +333,7 @@ export default function ATSDiagnostic() {
                   {workspace.versions.map((version) => <option key={version.id} value={version.id}>{version.label} · v{version.version_number} · {formatDate(version.created_at)}</option>)}
                 </select>
                 <button type="button" onClick={() => analyze('generated_cv')} disabled={analyzing || !selectedVersionId} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-[#c9a84c]/35 bg-[#c9a84c]/10 py-2.5 text-sm text-[#e6cf8a] transition hover:bg-[#c9a84c]/15 disabled:opacity-40">
-                  {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSearch className="h-4 w-4" />} Diagnosticar esta versión
+                  {analyzing ? <CVLoader variant="button" size={20} /> : <FileSearch className="h-4 w-4" />} Diagnosticar esta versión
                 </button>
               </>
             ) : <p className="mt-5 rounded-xl border border-dashed border-white/10 p-4 text-xs text-white/40">Todavía no tenés versiones guardadas. Podés cargar un archivo aquí o crear tu CV en Mi CV.</p>}
@@ -347,7 +350,7 @@ export default function ATSDiagnostic() {
               {extracting ? <Loader2 className="h-4 w-4 animate-spin text-[#c9a84c]" /> : <ArrowRight className="h-4 w-4 text-white/30" />}
             </button>
             <button type="button" onClick={() => analyze('uploaded_cv')} disabled={analyzing || !uploaded} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c9a84c] py-2.5 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-40">
-              {analyzing ? <><Loader2 className="h-4 w-4 animate-spin" /> Analizando señales…</> : <><Sparkles className="h-4 w-4" /> Ejecutar diagnóstico</>}
+              {analyzing ? <><CVLoader variant="button" size={20} /> Analizando señales…</> : <><Sparkles className="h-4 w-4" /> Ejecutar diagnóstico</>}
             </button>
           </div>
         </section>

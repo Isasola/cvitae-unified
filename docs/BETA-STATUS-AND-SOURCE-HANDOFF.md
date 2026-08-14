@@ -1,5 +1,9 @@
 # CVitae beta: estado real y handoff
 
+## Addendum post-deploy 2026-08-14
+
+Para el estado actual prevalece `docs/POST-DEPLOY-HANDOFF-2026-08-14.md`. El QA P13-P19 fue desplegado desde `feature/aws-migration` (commits `413c6348` y `0fdae690`). Produccion tiene 133 oportunidades verificadas y 556 en revision inactivas. Las fuentes y scrapers nuevos siguen desactivados hasta moderacion y activacion gradual; no interpretar las fichas de este documento como catalogo publicado.
+
 Fecha de corte: 12 de agosto de 2026.
 
 ## Cierre B2B de esta tanda
