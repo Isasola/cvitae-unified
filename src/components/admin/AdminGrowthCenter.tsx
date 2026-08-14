@@ -311,7 +311,8 @@ function AdminGrowthCenter({ adminPassword }: Props) {
       })
       if (!res.ok) throw new Error(`Error ${res.status}`)
       const json: GrowthResponse = await res.json()
-      setAnswer(json.gemini?.answer ?? 'Sin respuesta disponible')
+      const ans = json.gemini?.answer
+      setAnswer(ans && ans.trim() ? ans : 'Sin respuesta disponible')
     } catch (e: unknown) {
       setAnswer(`Error: ${e instanceof Error ? e.message : 'desconocido'}`)
     } finally {

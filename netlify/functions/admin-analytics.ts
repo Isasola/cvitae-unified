@@ -332,7 +332,7 @@ const GEMINI_SCHEMA = {
         required: ['title', 'reason'],
       },
     },
-    answer: { type: 'STRING', nullable: true },
+    answer: { type: 'STRING' },
   },
   required: ['executive_summary', 'signals', 'recommendations', 'seo_quick_wins', 'blog_insights', 'linkedin_picks', 'answer'],
 }
@@ -351,16 +351,21 @@ async function callGemini(apiKey: string, prompt: string): Promise<GeminiResult 
         },
       }),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      const errText = await res.text()
+      console.error(`[Gemini] HTTP ${res.status}:`, errText)
+      return null
+    }
     const raw = (await res.json())?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-    if (!raw) return null
+    if (!raw) { console.error('[Gemini] respuesta vacía'); return null }
     try {
       return JSON.parse(raw) as GeminiResult
     } catch {
       const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim()
       return JSON.parse(clean) as GeminiResult
     }
-  } catch {
+  } catch (e) {
+    console.error('[Gemini] excepción:', e)
     return null
   }
 }
@@ -766,7 +771,7 @@ Reglas de respuesta:
 - linkedin_picks: 2-3 oportunidades del catálogo para publicar en el bot de LinkedIn de CVitae (título corto + razón de impacto)
 - confidence bajo si la muestra es pequeña (menos de 100 sesiones o menos de 7 días de datos)
 - No inventar causalidades sin evidencia en los datos
-- answer: null si no hay pregunta del operador${questionBlock}`
+- answer: string vacío ("") si no hay pregunta del operador${questionBlock}`
 
       geminiResult = await callGemini(geminiKey, prompt)
     }
