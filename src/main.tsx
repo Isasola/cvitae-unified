@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { HelmetProvider } from 'react-helmet-async'
 import App from './App'
@@ -9,20 +9,11 @@ import './index.css'
 initializeConsentMode()
 void loadAllowedGoogleServices()
 
-function Root() {
-  useEffect(() => {
-    document.body.style.opacity = '1'
-  }, [])
-  return (
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
     <HelmetProvider>
       <App />
       <CookiePreferences />
     </HelmetProvider>
-  )
-}
-
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <Root />
   </React.StrictMode>
 )
