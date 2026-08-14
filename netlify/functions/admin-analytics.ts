@@ -142,15 +142,29 @@ function parseOverviewRow(report: any, rangeIndex: number) {
 
 // ── Search Console helpers ────────────────────────────────────────────────────
 
+// Try URL-prefix property first, then domain property — whichever the user registered in GSC
+const GSC_SITE_VARIANTS = [
+  'https://cvitae.lat/',
+  'sc-domain:cvitae.lat',
+]
+
+let _gscSite: string | null = null
+
 async function gscQuery(token: string, body: object): Promise<any> {
-  const encodedSite = encodeURIComponent(GSC_SITE)
-  const res = await fetch(`${GSC_API}/${encodedSite}/searchAnalytics/query`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (res.status === 403) return { blocked: true }
-  return res.ok ? res.json() : null
+  const candidates = _gscSite ? [_gscSite] : GSC_SITE_VARIANTS
+  for (const site of candidates) {
+    const res = await fetch(`${GSC_API}/${encodeURIComponent(site)}/searchAnalytics/query`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (res.status === 403 || res.status === 404) continue
+    if (res.ok) {
+      _gscSite = site
+      return res.json()
+    }
+  }
+  return { blocked: true }
 }
 
 // ── Anomaly detection ─────────────────────────────────────────────────────────
