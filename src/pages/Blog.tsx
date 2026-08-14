@@ -50,6 +50,13 @@ export default function Blog() {
         <meta property="og:description" content="Ideas, guías y datos sobre carrera, IA y mercado laboral en Paraguay." />
         <meta property="og:url" content="https://cvitae.lat/blog" />
         <meta property="og:type" content="website" />
+        <script type="application/ld+json">{JSON.stringify({
+          '@context': 'https://schema.org', '@type': 'Blog',
+          name: 'Blog CVitae',
+          url: 'https://cvitae.lat/blog',
+          description: 'Ideas, guías y datos sobre carrera, IA y mercado laboral en Paraguay.',
+          publisher: { '@type': 'Organization', name: 'CVitae', url: 'https://cvitae.lat', logo: { '@type': 'ImageObject', url: 'https://cvitae.lat/favicon.svg' } },
+        })}</script>
       </Helmet>
       <SiteShell>
         <div className="max-w-5xl mx-auto px-6 py-16">

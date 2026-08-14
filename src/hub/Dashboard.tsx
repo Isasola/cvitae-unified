@@ -24,22 +24,26 @@ interface MatchItem {
   finalScore: number; vacancySkills: string[]
 }
 interface CourseRecommendation {
-  skill: string; course: string; platform: string; url: string; why: string
+  id: string; skill: string; course: string; platform: string; url: string; why: string
+  status: 'suggested' | 'in_progress' | 'completed' | 'dismissed'
+  learningFocus: string; level: string
+  sources: Array<{ id: string; slug: string; title: string }>
 }
 
 interface DashboardCache {
-  version: 2
+  version: 4
   storedAt: number
   profileSignature: string
   matches: MatchItem[]
   profileSkills: string[]
   missingSkills: string[]
   isSubscribed: boolean
+  alertsEnabled: boolean
   courses: CourseRecommendation[]
 }
 
 const CACHE_TTL = 30 * 60 * 1000
-const CACHE_VERSION = 2
+const CACHE_VERSION = 4
 
 function cacheKey(userId: string) {
   return `cvitae:dashboard:v${CACHE_VERSION}:${userId}`
@@ -91,10 +95,7 @@ function EmptyState() {
     if (!email.trim()) return
     setLoading(true); setError(''); setMessage('')
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: { shouldCreateUser: true, emailRedirectTo: 'https://cvitae.lat/auth/callback' },
-      })
+      const { error } = await auth.signInWithMagicLink(email.trim())
       if (error) throw error
       setMessage('Revisá tu correo y hacé clic en el enlace mágico.')
     } catch (err: any) {
@@ -150,6 +151,7 @@ function EmptyState() {
             <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="email" value={email}
+              aria-label="Email para entrar a Mi carrera"
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
               placeholder="tu@email.com" disabled={loading}
@@ -356,6 +358,7 @@ export default function Dashboard() {
   const [loadingMatches, setLoadingMatches] = useState(false)
   const [profileSkills, setProfileSkills] = useState<string[]>([])
   const [isSubscribed, setIsSubscribed] = useState(false)
+  const [alertsEnabled, setAlertsEnabled] = useState(false)
   const [dailyMatchesUsed, setDailyMatchesUsed] = useState(0)
   const [hasProfile, setHasProfile] = useState<boolean | null>(null)
   const [currentLoaderStep, setCurrentLoaderStep] = useState(0)
@@ -421,6 +424,7 @@ export default function Dashboard() {
         setProfileSkills(cached.profileSkills)
         setServerMissingSkills(cached.missingSkills)
         setIsSubscribed(cached.isSubscribed)
+        setAlertsEnabled(cached.alertsEnabled)
         setCourses(cached.courses)
         setLastUpdatedAt(cached.storedAt)
         return
@@ -440,12 +444,13 @@ export default function Dashboard() {
       setProfileSkills(nextSkills)
       setServerMissingSkills(nextMissing)
       setIsSubscribed(data.is_subscribed || false)
+      setAlertsEnabled(data.match_alerts_enabled || false)
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Asuncion' })
       const usage = prof?.profile_data?.daily_usage
       const usedToday = (usage?.date === today) ? (usage?.matches_shown || 0) : 0
       setDailyMatchesUsed(usedToday)
       const nextCourses = nextMissing.length > 0
-        ? await loadGeminiCourses(nextSkills, nextMissing, token, prof)
+        ? await loadGeminiCourses(nextMissing, token, nextMatches)
         : []
       const storedAt = Date.now()
       setLastUpdatedAt(storedAt)
@@ -455,6 +460,7 @@ export default function Dashboard() {
         profileSkills: nextSkills,
         missingSkills: nextMissing,
         isSubscribed: data.is_subscribed || false,
+        alertsEnabled: data.match_alerts_enabled || false,
         courses: nextCourses,
       })
     } catch (error: any) {
@@ -464,7 +470,7 @@ export default function Dashboard() {
     }
   }
 
-  const loadGeminiCourses = async (skills: string[], missing: string[], token: string, prof: any) => {
+  const loadGeminiCourses = async (missing: string[], token: string, matched: MatchItem[]) => {
     if (missing.length === 0) {
       setCourses([])
       return []
@@ -475,11 +481,9 @@ export default function Dashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
-          profileSkills: skills,
+          action: 'recommend',
           missingSkills: missing.slice(0, 4),
-          profileTitle: prof?.professional_title || '',
-          profileSeniority: prof?.profile_data?.seniority || '',
-          careerRoute: prof?.profile_data?.career_route || '',
+          opportunityIds: matched.slice(0, 10).map((item) => item.id),
         }),
       })
       if (!res.ok) throw new Error('No pudimos cargar los cursos')
@@ -488,15 +492,8 @@ export default function Dashboard() {
       setCourses(nextCourses)
       return nextCourses
     } catch {
-      const fallback = missing.slice(0, 4).map((skill) => ({
-        skill,
-        course: `Explorar cursos de ${skill}`,
-        platform: 'Coursera',
-        url: `https://www.coursera.org/search?query=${encodeURIComponent(skill)}`,
-        why: 'Habilidad priorizada según las oportunidades con mayor compatibilidad.',
-      }))
-      setCourses(fallback)
-      return fallback
+      setCourses([])
+      return []
     } finally {
       setLoadingCourses(false)
     }
@@ -673,11 +670,11 @@ export default function Dashboard() {
                     </ul>
                   </div>
 
-                  {/* Courses */}
+                  {/* Learning plan */}
                   <div className="glass-panel p-5">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-display text-lg text-cream">Cursos recomendados</h4>
-                      <span className="rounded-full border border-[#c9a84c]/30 px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#c9a84c]">IA</span>
+                      <h4 className="font-display text-lg text-cream">Plan de aprendizaje</h4>
+                      <a href="/mi-carrera/aprender" className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-[#c9a84c]">Ver plan <ArrowRight className="h-3 w-3" /></a>
                     </div>
                     {profile?.profile_data?.career_route && (
                       <p className="mt-1 text-[11px] text-muted-foreground">
@@ -701,31 +698,32 @@ export default function Dashboard() {
                       <div className="mt-4 flex">
                         <Connector />
                         <div className="flex-1 space-y-4">
-                          {courses.map((c, i) => (
-                            <a key={i} href={c.url} target="_blank" rel="noopener noreferrer" className="group block">
+                          {courses.slice(0, 3).map((c) => (
+                            <a key={c.id} href="/mi-carrera/aprender" className="group block">
                               <div className="flex items-center gap-2">
                                 <BookOpen className="h-3.5 w-3.5 text-[#c9a84c]" />
                                 <p className="text-sm text-cream transition-colors group-hover:text-[#c9a84c]">{c.course}</p>
                               </div>
-                              <p className="pl-[22px] text-[11px] text-muted-foreground">{c.platform} · {c.why}</p>
+                              <p className="pl-[22px] text-[11px] text-muted-foreground">{c.platform} · {c.level} · {c.sources.length} {c.sources.length === 1 ? 'oportunidad' : 'oportunidades'}</p>
                             </a>
                           ))}
                         </div>
                       </div>
                     ) : (
-                      <p className="mt-3 text-xs italic text-muted-foreground">Completá tu perfil para ver cursos personalizados.</p>
+                      <p className="mt-3 text-xs italic text-muted-foreground">Actualizá tus matches para crear una ruta respaldada por oportunidades verificadas.</p>
                     )}
                   </div>
 
-                  {/* Alerts (soon) */}
-                  <div className="glass-panel p-5 opacity-60">
+                  {/* Proactive alerts */}
+                  <div className="glass-panel p-5">
                     <div className="flex items-center justify-between">
                       <h4 className="inline-flex items-center gap-2 font-display text-lg text-cream">
                         <Bell className="h-4 w-4 text-[#c9a84c]" /> Alertas proactivas
                       </h4>
-                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">Pronto</span>
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${alertsEnabled ? 'border-emerald-400/30 text-emerald-300' : 'border-white/10 text-muted-foreground'}`}>{alertsEnabled ? 'Activas' : 'Desactivadas'}</span>
                     </div>
-                    <p className="mt-2 text-xs text-muted-foreground">Te avisaremos cuando aparezcan vacantes nuevas que encajen.</p>
+                    <p className="mt-2 text-xs text-muted-foreground">Recibí un correo cuando aparezca una oportunidad verificada con match muy alto.</p>
+                    <a href="/mi-carrera/alertas" className="mt-3 inline-flex items-center gap-1.5 text-xs text-[#c9a84c]">Configurar alertas <ArrowRight className="h-3 w-3" /></a>
                   </div>
 
                   {/* Premium */}

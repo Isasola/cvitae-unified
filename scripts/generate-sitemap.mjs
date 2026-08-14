@@ -42,6 +42,13 @@ async function generate() {
     .order('updated_at', { ascending: false })
     .limit(1000)
 
+  const { data: vacancies } = await supabase
+    .from('recruiter_vacancies').select('slug, updated_at')
+    .eq('is_active', true)
+    .not('slug', 'is', null)
+    .order('updated_at', { ascending: false })
+    .limit(500)
+
   let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n'
   sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
 
@@ -50,8 +57,9 @@ async function generate() {
     { url: '/empleos', priority: '0.9', freq: 'daily' },
     { url: '/oportunidades', priority: '0.9', freq: 'daily' },
     { url: '/blog', priority: '0.8', freq: 'weekly' },
-    { url: '/about', priority: '0.6', freq: 'monthly' },
+    { url: '/sobre-cvitae', priority: '0.6', freq: 'monthly' },
     { url: '/privacy', priority: '0.3', freq: 'monthly' },
+    { url: '/terminos', priority: '0.3', freq: 'yearly' },
   ]
 
   staticPages.forEach(p => {
@@ -71,6 +79,11 @@ async function generate() {
   jobs?.forEach(job => {
     const lastmod = job.updated_at?.split('T')[0] || today
     sitemap += `  <url>\n    <loc>${SITE_URL}/empleos/${job.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.8</priority>\n  </url>\n`
+  })
+
+  vacancies?.forEach(v => {
+    const lastmod = v.updated_at?.split('T')[0] || today
+    sitemap += `  <url>\n    <loc>${SITE_URL}/vacante/${v.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`
   })
 
   sitemap += '</urlset>'

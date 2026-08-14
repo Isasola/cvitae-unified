@@ -9,12 +9,15 @@ import {
 import { analytics } from '@/lib/analytics'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { B2BInfoPopover } from '@/components/cv/B2BInfoPopover'
+import { clearPendingOperation, pendingOperationId } from '@/lib/pendingOperation'
+import { FeedbackReporter } from '@/components/cv/FeedbackReporter'
 
 const ease = [0.22, 1, 0.36, 1] as const
 const RECRUITER_SESSION_KEY = 'cvitae_recruiter_session'
 
 interface BatchCandidate {
   id: string
+  operationId: string
   file: File
   status: 'pending' | 'extracting' | 'analyzing' | 'done' | 'error'
   text?: string
@@ -52,6 +55,7 @@ async function extractTextFromFile(file: File): Promise<string> {
         reject(new Error('Error extrayendo texto'))
       }
     }
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'))
     reader.readAsArrayBuffer(file)
   })
 }
@@ -118,14 +122,24 @@ export default function BatchAnalysis() {
   }, [])
 
   const handleFiles = (files: File[]) => {
-    const allowed = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']
-    const unsupported = files.filter(f => !allowed.includes(f.type))
-    const oversized = files.filter(f => allowed.includes(f.type) && f.size > 4 * 1024 * 1024)
-    const valid = files.filter(f => allowed.includes(f.type) && f.size <= 4 * 1024 * 1024)
-    if (unsupported.length || oversized.length) {
+    const allowedExtensions = new Set(['pdf', 'docx', 'txt'])
+    const isSupported = (file: File) => allowedExtensions.has(file.name.toLowerCase().split('.').pop() || '')
+    const unsupported = files.filter(f => !isSupported(f))
+    const oversized = files.filter(f => isSupported(f) && f.size > 4 * 1024 * 1024)
+    const known = new Set(candidates.map(c => `${c.file.name}:${c.file.size}:${c.file.lastModified}`))
+    const duplicates: File[] = []
+    const valid = files.filter(f => {
+      if (!isSupported(f) || f.size > 4 * 1024 * 1024) return false
+      const fingerprint = `${f.name}:${f.size}:${f.lastModified}`
+      if (known.has(fingerprint)) { duplicates.push(f); return false }
+      known.add(fingerprint)
+      return true
+    })
+    if (unsupported.length || oversized.length || duplicates.length) {
       const details = [
         unsupported.length ? `${unsupported.length} con formato no soportado` : '',
         oversized.length ? `${oversized.length} de más de 4 MB` : '',
+        duplicates.length ? `${duplicates.length} duplicado${duplicates.length === 1 ? '' : 's'}` : '',
       ].filter(Boolean).join(' y ')
       setError(`No agregamos ${details}. Usá PDF, DOCX o TXT; para archivos grandes, comprimilos o generá un CV optimizado en CVitae.`)
     } else {
@@ -133,7 +147,8 @@ export default function BatchAnalysis() {
     }
     if (candidates.length + valid.length > 30) { setError('Máximo 30 CVs por corrida.'); return }
     const newCandidates = valid.map(f => ({
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
+      operationId: pendingOperationId('batch', `${f.name}:${f.size}:${f.lastModified}`),
       file: f,
       status: 'pending' as const,
     }))
@@ -150,6 +165,19 @@ export default function BatchAnalysis() {
   const startAnalysis = async () => {
     if (!jobTitle.trim()) { setError('Ingresá el nombre del puesto'); return }
     if (candidates.length < 2) { setError('Subí al menos 2 CVs'); return }
+    if (!session?.token) { setError('La sesión de empresa expiró. Volvé a ingresar.'); return }
+
+    const balanceResponse = await fetch('/.netlify/functions/validate-recruiter-token', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: session.token }),
+    })
+    const balanceData = await balanceResponse.json()
+    if (!balanceResponse.ok || !balanceData.valid) { setError(balanceData.error || 'La sesión de empresa expiró.'); return }
+    if (Number(balanceData.balance || 0) < candidates.length) {
+      setError(`El lote requiere ${candidates.length} créditos y el saldo actual es ${balanceData.balance || 0}. No iniciamos ningún análisis.`)
+      return
+    }
+
     setIsProcessing(true)
     setError('')
     setSummary(null)
@@ -157,32 +185,37 @@ export default function BatchAnalysis() {
     const updated = [...candidates]
     try {
       await runWithConcurrency(updated, 3, async (c, i) => {
-        setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'extracting' } : x))
-        const text = await extractTextFromFile(c.file)
-        setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'analyzing', text } : x))
-        const res = await fetch('/.netlify/functions/analyze-cv-candidate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            cvText: text,
-            mode: 'batch_analyze',
-            jobTitle,
-            jobDescription: jobDesc,
-            recruiterToken: session.token,
-            fileName: c.file.name,
-          }),
-        })
-        const result = await res.json()
-        if (!res.ok) throw new Error(result.error || `No se pudo analizar ${c.file.name}`)
-        updated[i] = { ...updated[i], text, status: 'analyzing', result }
+        try {
+          setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'extracting' } : x))
+          const text = await extractTextFromFile(c.file)
+          setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'analyzing', text } : x))
+          const res = await fetch('/.netlify/functions/analyze-cv-candidate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              cvText: text,
+              mode: 'batch_analyze',
+              jobTitle,
+              jobDescription: jobDesc,
+              recruiterToken: session.token,
+              operationId: c.operationId,
+              fileName: c.file.name,
+            }),
+          })
+          const result = await res.json()
+          if (!res.ok || !result.saved) {
+            if (result.retryable) clearPendingOperation(c.operationId)
+            throw new Error(result.error || `No se pudo analizar ${c.file.name}`)
+          }
+          clearPendingOperation(c.operationId)
+          updated[i] = { ...updated[i], text, status: 'done', result }
+          setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, text, status: 'done', result } : x))
+        } catch (candidateError: any) {
+          const message = candidateError?.message || `No se pudo analizar ${c.file.name}`
+          updated[i] = { ...updated[i], status: 'error', error: message }
+          setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'error', error: message } : x))
+        }
       })
-      // El endpoint batch reserva, guarda y devuelve cada resultado de forma atÃ³mica.
-      for (const c of updated) {
-        if (!c.result || !c.text) continue
-        if (!c.result.saved) throw new Error(`No se pudo guardar ${c.file.name}`)
-        c.status = 'done'
-        setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'done', result: c.result } : x))
-      }
       const processedCandidates = updated.filter(c => c.status === 'done').map(c => ({
         name: c.result.candidateName || c.file.name,
         fitScore: c.result.fitScore,
@@ -192,16 +225,45 @@ export default function BatchAnalysis() {
         keyMatches: c.result.keyMatches,
         keyGaps: c.result.keyGaps,
       }))
-      const compRes = await fetch('/.netlify/functions/compare-candidates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: session.token, mode: 'batch_summary', jobTitle, jobDescription: jobDesc, candidates: processedCandidates, topN: 3 }),
-      })
-      const compData = await compRes.json()
-      if (!compRes.ok) throw new Error(compData.error || 'No se pudo generar el resumen comparativo')
-      setSummary(compData)
-    } catch {
-      setError('Ocurrió un error durante el procesamiento masivo.')
+      const failedCount = updated.filter(c => c.status === 'error').length
+      if (!processedCandidates.length) {
+        setError('No se pudo completar ningún CV. Los archivos fallidos no deben consumir créditos.')
+        return
+      }
+
+      let comparison: BatchSummary = {
+        finalRecommendation: 'Revisá la evidencia individual antes de decidir a quién entrevistar.',
+        hiringInsight: 'El ranking se calculó con los análisis completados.',
+        interviewOrder: [...processedCandidates]
+          .sort((a, b) => (b.fitScore || 0) - (a.fitScore || 0))
+          .slice(0, 3)
+          .map(candidate => candidate.name),
+      }
+      if (processedCandidates.length >= 2) {
+        try {
+          const compRes = await fetch('/.netlify/functions/compare-candidates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: session.token, mode: 'batch_summary', jobTitle, jobDescription: jobDesc, candidates: processedCandidates, topN: 3 }),
+          })
+          const compData = await compRes.json()
+          if (compRes.ok) comparison = compData
+        } catch { /* El ranking local sigue disponible. */ }
+      }
+      setSummary(comparison)
+      if (failedCount) setError(`${processedCandidates.length} CVs completados y ${failedCount} fallidos. Los fallidos no deberían consumir créditos.`)
+
+      const refreshed = await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: session.token }),
+      }).then(response => response.json()).catch(() => null)
+      if (refreshed?.valid) {
+        const nextSession = { ...session, balance: refreshed.balance }
+        setSession(nextSession)
+        sessionStorage.setItem(RECRUITER_SESSION_KEY, JSON.stringify(nextSession))
+      }
+    } catch (batchError: any) {
+      setError(batchError?.message || 'Ocurrió un error durante el procesamiento masivo.')
     } finally {
       setIsProcessing(false)
     }
@@ -314,7 +376,7 @@ export default function BatchAnalysis() {
                       isDragging ? 'border-[#c9a84c]/60 bg-[#c9a84c]/[0.04]' : 'border-white/12 bg-white/[0.015] hover:border-white/25'
                     }`}
                   >
-                    <input ref={fileInputRef} type="file" multiple accept=".pdf,.docx,.doc,.txt" className="hidden" onChange={handleFileSelect} />
+                    <input ref={fileInputRef} type="file" multiple accept=".pdf,.docx,.txt" className="hidden" onChange={handleFileSelect} />
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03]">
                       <Upload strokeWidth={1.25} className="h-5 w-5 text-[#c9a84c]" />
                     </div>
@@ -414,6 +476,11 @@ export default function BatchAnalysis() {
           {/* ── Results stage ─────────────────────────────────────────── */}
           {summary && !isProcessing && (
             <motion.div key="results" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-16 space-y-6">
+              {error && (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 text-sm text-amber-300">
+                  <AlertCircle strokeWidth={1.5} className="mt-0.5 h-4 w-4 shrink-0" /> {error}
+                </div>
+              )}
               {/* Veredicto IA */}
               <div className="relative">
                 <div className="absolute -inset-3 -z-10 rounded-[2rem] bg-gradient-to-br from-[#c9a84c]/15 via-transparent to-transparent blur-2xl" />
@@ -532,6 +599,7 @@ export default function BatchAnalysis() {
           { title: 'RevisÃ¡ antes de decidir', description: 'El orden sugerido resume evidencia del CV. AbrÃ­ los detalles y mantenÃ© la decisiÃ³n, el contacto y la evaluaciÃ³n final bajo control humano.' },
         ]}
       />
+      <FeedbackReporter audience="b2b" feature="Análisis masivo B2B" className="bottom-5 right-5" />
     </div>
   )
 }

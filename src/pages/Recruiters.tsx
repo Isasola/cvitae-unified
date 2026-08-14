@@ -4,6 +4,8 @@ import { Link } from 'wouter'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { B2BInfoPopover } from '@/components/cv/B2BInfoPopover'
+import { clearPendingOperation, pendingOperationId } from '@/lib/pendingOperation'
+import { FeedbackReporter } from '@/components/cv/FeedbackReporter'
 import {
   Building2, Key, AlertCircle, ChevronRight,
   Coins, LogOut, Loader2, History, Sparkles,
@@ -518,6 +520,23 @@ interface Applicant {
   recruiter_notes: string | null
   badges: string[]
   applied_at: string
+  review_status: 'pending' | 'processing' | 'analyzed' | 'manual_review' | 'failed'
+  review_batch_number: number | null
+  batch_selected: boolean
+  progressive_shortlist: boolean
+  progressive_rank: number | null
+  triage_tier: 'strong' | 'priority' | 'reviewed' | null
+  selection_reason: string | null
+}
+
+interface VacancyReviewState {
+  total: number
+  analyzed: number
+  pending: number
+  manual_review: number
+  strong: number
+  shortlist: number
+  batches_completed: number
 }
 
 interface AISummary {
@@ -531,7 +550,11 @@ interface AISummary {
 function recColor(r: string | null) {
   if (r === 'Llamar') return 'text-emerald-400 border-emerald-500/30 bg-emerald-500/[0.06]'
   if (r === 'Considerar') return 'text-[#c9a84c] border-[#c9a84c]/30 bg-[#c9a84c]/[0.06]'
-  return 'text-red-400 border-red-500/30 bg-red-500/[0.06]'
+  return 'text-sky-300 border-sky-500/25 bg-sky-500/[0.05]'
+}
+
+function recommendationLabel(recommendation: string | null) {
+  return recommendation === 'No llamar' ? 'Revisado' : recommendation
 }
 function fitColor(s: number) {
   if (s >= 75) return 'oklch(0.75 0.18 145)'
@@ -568,9 +591,13 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
   const [rankProgress, setRankProgress] = useState('')
   const [aiSummary, setAiSummary] = useState<AISummary | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [filter, setFilter] = useState<'all' | 'Llamar' | 'Considerar' | 'No llamar'>('all')
+  const [filter, setFilter] = useState<'all' | 'Llamar' | 'Considerar' | 'Revisado'>('all')
   const [rankError, setRankError] = useState('')
   const [updatingAction, setUpdatingAction] = useState<string | null>(null)
+  const [review, setReview] = useState<VacancyReviewState | null>(null)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   const handleActionUpdate = async (applicationId: string, action: string, notes?: string) => {
     setUpdatingAction(applicationId)
@@ -584,32 +611,52 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
     finally { setUpdatingAction(null) }
   }
 
-  const loadApplicants = () => {
-    setLoading(true)
-    fetch('/.netlify/functions/validate-recruiter-token', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, action: 'get_applicants', vacancy_id: vacancyId }),
-    })
-      .then(r => r.json())
-      .then(d => setApplicants(d.applicants || []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
+  const loadApplicants = async (requestedPage = 0, append = false) => {
+    if (append) setLoadingMore(true)
+    else setLoading(true)
+    try {
+      const response = await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action: 'get_applicants', vacancy_id: vacancyId, page: requestedPage, page_size: 60 }),
+      })
+      const data = await response.json()
+      const nextApplicants = data.applicants || []
+      setApplicants(previous => append
+        ? [...previous, ...nextApplicants.filter((candidate: Applicant) => !previous.some(existing => existing.id === candidate.id))]
+        : nextApplicants)
+      setReview(data.review || null)
+      setPage(requestedPage)
+      setHasMore(data.pagination?.has_more === true)
+    } catch { /* conserva el último estado visible */ }
+    finally {
+      setLoading(false)
+      setLoadingMore(false)
+    }
   }
 
   useEffect(() => { loadApplicants() }, [vacancyId])
 
   const handleRankAll = async () => {
-    setRanking(true); setRankError(''); setRankProgress('Analizando CVs en paralelo…')
+    setRanking(true); setRankError('')
+    setRankProgress('Revisando la siguiente tanda y comparando sus mejores perfiles…')
+    const operationId = pendingOperationId('batch', `vacancy-progressive:${vacancyId}:pending:${review?.pending ?? 'unknown'}:batches:${review?.batches_completed ?? 0}`)
     try {
       const res = await fetch('/.netlify/functions/analyze-vacancy-applicants', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, vacancy_id: vacancyId, force: analyzed.length > 0 }),
+        body: JSON.stringify({ token, vacancy_id: vacancyId, operation_id: operationId }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error en el análisis')
+      if (!res.ok) {
+        if (data.retryable) clearPendingOperation(operationId)
+        throw new Error(data.error || 'Error en el análisis')
+      }
+      clearPendingOperation(operationId)
 
-      setRankProgress(`${data.analyzed} CVs analizados${data.failed > 0 ? ` (${data.failed} sin texto)` : ''}`)
+      setRankProgress(data.complete
+        ? 'La revisión está al día.'
+        : `Tanda ${data.batchNumber || ''}: ${data.analyzed} CVs analizados${data.failed > 0 ? ` · ${data.failed} se reintentará` : ''}`)
       if (data.summary) setAiSummary(data.summary)
+      if (data.review) setReview(data.review)
 
       // Merge results into applicants list
       if (data.results?.length) {
@@ -629,6 +676,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
           }
         }).sort((a, b) => (b.fit_score ?? -1) - (a.fit_score ?? -1)))
       }
+      await loadApplicants(0, false)
     } catch (err: any) {
       setRankError(err.message)
     } finally {
@@ -638,11 +686,13 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
 
   const analyzed = applicants.filter(a => a.analyzed_at)
   const withCv = applicants.filter(a => a.cv_text)
-  const filtered = filter === 'all' ? applicants : applicants.filter(a => a.recommendation === filter)
+  const filtered = filter === 'all' ? applicants : applicants.filter(a => filter === 'Revisado'
+    ? a.recommendation === 'Revisado' || a.recommendation === 'No llamar'
+    : a.recommendation === filter)
   const counts = {
     Llamar: applicants.filter(a => a.recommendation === 'Llamar').length,
     Considerar: applicants.filter(a => a.recommendation === 'Considerar').length,
-    'No llamar': applicants.filter(a => a.recommendation === 'No llamar').length,
+    Revisado: applicants.filter(a => a.recommendation === 'Revisado' || a.recommendation === 'No llamar').length,
   }
 
   return (
@@ -662,22 +712,22 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
           <div className="flex items-center gap-6 flex-wrap">
             <div>
               <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Total</p>
-              <p className="font-display text-3xl text-white">{applicants.length}</p>
+              <p className="font-display text-3xl text-white">{review?.total ?? applicants.length}</p>
             </div>
-            {analyzed.length > 0 && (
+            {(review?.analyzed || analyzed.length) > 0 && (
               <>
                 <div className="h-8 w-px bg-white/8" />
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Llamar</p>
-                  <p className="font-display text-3xl text-emerald-400">{counts['Llamar']}</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Ajuste fuerte</p>
+                  <p className="font-display text-3xl text-emerald-400">{review?.strong ?? counts['Llamar']}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Considerar</p>
-                  <p className="font-display text-3xl text-[#c9a84c]">{counts['Considerar']}</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Destacados</p>
+                  <p className="font-display text-3xl text-[#c9a84c]">{review?.shortlist ?? 0}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">No llamar</p>
-                  <p className="font-display text-3xl text-red-400">{counts['No llamar']}</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Pendientes</p>
+                  <p className="font-display text-3xl text-sky-300">{review?.pending ?? 0}</p>
                 </div>
               </>
             )}
@@ -692,7 +742,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                 points={['Abrí cada candidato para ver fortalezas y brechas.', 'La IA puede equivocarse o pasar por alto contexto: verificá la evidencia en el CV.', 'Un score bajo no elimina ni notifica al candidato.', 'Podés cambiar el estado y dejar notas como responsable del proceso.']}
               />
             </div>
-            {withCv.length > 0 && (
+            {(review?.pending ?? withCv.filter(candidate => !candidate.analyzed_at).length) > 0 && (
               <button
                 onClick={handleRankAll}
                 disabled={ranking}
@@ -700,9 +750,14 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
               >
                 {ranking
                   ? <><Loader2 strokeWidth={1.5} className="h-4 w-4 animate-spin" /> Analizando…</>
-                  : <><Sparkles strokeWidth={1.5} className="h-4 w-4" /> {analyzed.length > 0 ? 'Re-analizar todos' : `Analizar ${withCv.length} CVs con IA`}</>
+                  : <><Sparkles strokeWidth={1.5} className="h-4 w-4" /> Analizar siguiente tanda</>
                 }
               </button>
+            )}
+            {review && review.batches_completed > 0 && (
+              <p className="text-[11px] text-white/35">
+                {review.batches_completed} {review.batches_completed === 1 ? 'tanda revisada' : 'tandas revisadas'} · los perfiles fuertes se conservan
+              </p>
             )}
             {rankProgress && !ranking && (
               <p className="text-[11px] text-white/40">{rankProgress}</p>
@@ -722,7 +777,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
             className="relative rounded-2xl p-7 overflow-hidden border border-white/5 bg-[#0d0d0d]"
           >
             <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/40 mb-5">
-              <span className="h-px w-8 bg-[#c9a84c]/40" /> Decisión de la IA
+              <span className="h-px w-8 bg-[#c9a84c]/40" /> Síntesis asistida para entrevistas
             </div>
 
             <p className="font-display text-xl text-white leading-snug mb-4">{aiSummary.topPick}</p>
@@ -730,7 +785,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
 
             {aiSummary.callList?.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
-                <span className="text-[10px] uppercase tracking-[0.18em] text-white/35 self-center mr-1">Llamar a:</span>
+                <span className="text-[10px] uppercase tracking-[0.18em] text-white/35 self-center mr-1">Priorizar entrevista:</span>
                 {aiSummary.callList.map(name => (
                   <span key={name} className="rounded-full border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-1 text-xs text-emerald-400">
                     {name}
@@ -765,9 +820,9 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
       ) : (
         <>
           {/* Filter tabs — only when analyzed */}
-          {analyzed.length > 0 && (
+          {(review?.analyzed || analyzed.length) > 0 && (
             <div className="flex flex-wrap gap-2">
-              {(['all', 'Llamar', 'Considerar', 'No llamar'] as const).map(f => (
+              {(['all', 'Llamar', 'Considerar', 'Revisado'] as const).map(f => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
@@ -777,7 +832,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                       : 'border border-white/10 text-white/40 hover:border-white/25 hover:text-white/70'
                   }`}
                 >
-                  {f === 'all' ? `Todos (${applicants.length})` : `${f} (${counts[f]})`}
+                  {f === 'all' ? `Cargados (${applicants.length})` : `${f} (${counts[f]})`}
                 </button>
               ))}
             </div>
@@ -794,8 +849,8 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                 className={`rounded-2xl overflow-hidden transition-colors border border-white/8 bg-white/[0.02] border-l-[3px] ${
                   a.recommendation === 'Llamar'
                     ? 'border-l-emerald-500/60'
-                    : a.recommendation === 'No llamar'
-                    ? 'border-l-red-500/40'
+                    : a.progressive_shortlist
+                    ? 'border-l-[#c9a84c]/60'
                     : a.analyzed_at
                     ? 'border-l-sky-500/30'
                     : 'border-l-white/10'
@@ -821,7 +876,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                       ? 'border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-400'
                       : 'border-white/10 bg-white/[0.03] text-white/40'
                   }`}>
-                    {String(i + 1).padStart(2, '0')}
+                    {a.progressive_rank ? String(a.progressive_rank).padStart(2, '0') : '—'}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -829,7 +884,17 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                       <p className="text-sm text-white font-medium">{a.name}</p>
                       {a.recommendation && (
                         <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${recColor(a.recommendation)}`}>
-                          {a.recommendation}
+                          {recommendationLabel(a.recommendation)}
+                        </span>
+                      )}
+                      {a.triage_tier === 'strong' && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/[0.05] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-emerald-300">
+                          <Star strokeWidth={1.5} className="h-3 w-3" /> Ajuste fuerte
+                        </span>
+                      )}
+                      {a.triage_tier === 'priority' && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-[#c9a84c]/25 bg-[#c9a84c]/[0.05] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#c9a84c]">
+                          <Trophy strokeWidth={1.5} className="h-3 w-3" /> Destacado entre tandas
                         </span>
                       )}
                     </div>
@@ -839,6 +904,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                         <Calendar strokeWidth={1.5} className="h-3 w-3" />
                         {new Date(a.applied_at).toLocaleDateString('es-PY')}
                       </span>
+                      {a.review_batch_number && <span>Tanda {a.review_batch_number}</span>}
                     </div>
                     {a.ai_summary && (
                       <p className="mt-1.5 text-xs font-light text-white/50 leading-relaxed line-clamp-2">{a.ai_summary}</p>
@@ -869,6 +935,12 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                       className="border-t border-white/5"
                     >
                       <div className="px-5 pb-5 pt-4 space-y-4">
+                        {a.selection_reason && (
+                          <div className="flex items-start gap-2 rounded-xl border border-white/8 bg-white/[0.02] p-3">
+                            <CheckCircle2 strokeWidth={1.5} className="mt-0.5 h-4 w-4 shrink-0 text-[#c9a84c]" />
+                            <p className="text-xs font-light leading-relaxed text-white/55">{a.selection_reason}. La decisión se confirma con revisión del CV y entrevistas.</p>
+                          </div>
+                        )}
                         {/* Scores row */}
                         {(a.ats_score !== null || a.fit_score !== null) && (
                           <div className="flex gap-4 flex-wrap">
@@ -997,6 +1069,19 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
               </motion.li>
             ))}
           </ol>
+          {hasMore && (
+            <div className="flex justify-center pt-3">
+              <button
+                type="button"
+                onClick={() => loadApplicants(page + 1, true)}
+                disabled={loadingMore}
+                className="inline-flex items-center gap-2 rounded-full border border-white/12 px-5 py-2.5 text-xs uppercase tracking-[0.14em] text-white/55 transition hover:border-white/25 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loadingMore && <Loader2 strokeWidth={1.5} className="h-4 w-4 animate-spin" />}
+                Cargar más candidatos
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -1278,8 +1363,10 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   const [comparison, setComparison] = useState<ComparisonResult | null>(null)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const operationIdRef = useRef<string | null>(null)
   const [injectCvText, setInjectCvText] = useState<string | null>(null)
   const [injectCandidateName, setInjectCandidateName] = useState<string>('')
+  const [compareError, setCompareError] = useState('')
 
   useEffect(() => {
     fetch('/.netlify/functions/validate-recruiter-token', {
@@ -1292,6 +1379,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
     const ok = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']
     if (!ok.includes(f.type)) { setError('Formato no soportado. Usá PDF, DOCX o TXT.'); return }
     if (f.size > 4 * 1024 * 1024) { setError('El archivo supera 4 MB. Comprimilo o generá una versión optimizada desde Mi Carrera en CVitae.'); return }
+    operationIdRef.current = null
     setFile(f); setResult(null); setError('')
   }
 
@@ -1300,33 +1388,29 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
     try {
       if (!cvText || cvText.trim().length < 50) throw new Error('No se pudo extraer texto del CV. Asegurate de que no sea una imagen escaneada.')
 
+      operationIdRef.current ||= pendingOperationId(
+        'single',
+        `${fileName}:${cvText.length}:${cvText.slice(0, 80)}:${cvText.slice(-80)}`,
+      )
       const res = await fetch('/.netlify/functions/analyze-cv-candidate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvText, mode: 'analyze', recruiterToken: session.token }),
-      })
-      if (!res.ok) throw new Error((await res.json()).error || 'Error en el análisis')
-      const data: ATSResult = await res.json()
-
-      const saveRes = await fetch('/.netlify/functions/validate-recruiter-token', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          token: session.token, action: 'save_analysis',
-          analysisData: {
-            candidate_name: candidateName || cvText.split('\n').find(l => l.trim().length > 2)?.trim() || null,
-            file_name: fileName,
-            ats_score: data.atsScore,
-            strengths: data.strengths,
-            critical_improvements: data.criticalImprovements,
-            vacancy_label: vacancyLabel.trim() || null,
-            raw_cv_text: cvText.substring(0, 3000),
-          },
+          cvText,
+          mode: 'analyze',
+          recruiterToken: session.token,
+          operationId: operationIdRef.current,
+          fileName,
+          jobTitle: vacancyLabel.trim() || null,
         }),
       })
-      const saveData = await saveRes.json()
-      if (!saveRes.ok || !saveData.saved) {
-        throw new Error(saveData.error || 'El análisis terminó, pero no pudo guardarse')
+      const data: ATSResult & { saved?: boolean; new_balance?: number; error?: string; retryable?: boolean } = await res.json()
+      if (!res.ok) {
+        if (data.retryable && operationIdRef.current) clearPendingOperation(operationIdRef.current)
+        throw new Error(data.error || 'Error en el análisis')
       }
-      if (saveData.new_balance !== undefined) setBalance(saveData.new_balance)
+      if (!data.saved) throw new Error('El análisis terminó, pero no pudo guardarse')
+      if (operationIdRef.current) clearPendingOperation(operationIdRef.current)
+      if (data.new_balance !== undefined) setBalance(data.new_balance)
       setResult(data); setHistoryKey(k => k + 1)
     } catch (err: any) {
       setError(err.message || 'Error inesperado')
@@ -1342,6 +1426,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   }
 
   const handleAnalyzeApplicant = (cvText: string, name: string) => {
+    operationIdRef.current = null
     setActiveTab('analyze')
     setInjectCvText(cvText)
     setInjectCandidateName(name)
@@ -1350,6 +1435,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   }
 
   const handleCompare = async (ids: string[]) => {
+    setCompareError('')
     try {
       const res = await fetch('/.netlify/functions/compare-candidates', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1358,10 +1444,10 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setComparison(data)
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { setCompareError(err.message || 'Error al comparar candidatos') }
   }
 
-  const handleReset = () => { setFile(null); setResult(null); setError(''); setVacancyLabel(''); setInjectCvText(null); setInjectCandidateName('') }
+  const handleReset = () => { operationIdRef.current = null; setFile(null); setResult(null); setError(''); setVacancyLabel(''); setInjectCvText(null); setInjectCandidateName('') }
 
   // When inject mode is active and user clicks Analizar, run directly on injected text
   const handleAnalyzeOrInject = async () => {
@@ -1373,7 +1459,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
+    <main className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
       <Helmet>
         <title>Panel Empresas | CVitae</title>
         <meta name="robots" content="noindex" />
@@ -1581,9 +1667,14 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
             ) : activeTab === 'history' ? (
               <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <HistoryPanel key={historyKey} token={session.token} onToggleStar={() => setHistoryKey(k => k + 1)} onCompare={handleCompare} />
+                {compareError && (
+                  <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-4 text-sm text-red-400">
+                    <AlertCircle strokeWidth={1.5} className="h-4 w-4 shrink-0" /> {compareError}
+                  </div>
+                )}
                 {comparison && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-8">
-                    <ComparisonResultComponent result={comparison} onClose={() => setComparison(null)} />
+                    <ComparisonResultComponent result={comparison} onClose={() => { setComparison(null); setCompareError('') }} />
                   </motion.div>
                 )}
               </motion.div>
@@ -1611,7 +1702,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
           { title: 'Construí tu shortlist', description: 'Marcá a quién contactar, entrevistar o descartar y agregá notas. El historial queda disponible para tu equipo.' },
         ]}
       />
-    </div>
+    </main>
   )
 }
 
@@ -1677,7 +1768,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
   ]
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
+    <main className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
       <Ambient />
       <Helmet>
         <title>Para Empresas | CVitae — Análisis de CVs con IA</title>
@@ -1752,6 +1843,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
                 <Key strokeWidth={1.25} className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
                 <input
                   type="text"
+                  aria-label="Token de empresa"
                   value={token}
                   onChange={e => setToken(e.target.value.toUpperCase())}
                   onKeyDown={e => e.key === 'Enter' && handleValidate()}
@@ -1783,7 +1875,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
 
             <div className="mt-8 border-t border-white/8 pt-6 text-center">
               <p className="text-xs font-light text-white/35">¿Todavía no tenés token?</p>
-              <button onClick={() => setShowVerification(value => !value)} className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-[#c9a84c] transition hover:text-[#e6cf8a]">
+              <button onClick={() => setShowVerification(value => !value)} className="mt-1.5 inline-flex min-h-11 items-center gap-1.5 px-2 text-sm text-[#c9a84c] transition hover:text-[#e6cf8a]">
                 Solicitar acceso verificado <ChevronRight strokeWidth={1.5} className={`h-3.5 w-3.5 transition ${showVerification ? 'rotate-90' : ''}`} />
               </button>
             </div>
@@ -1826,7 +1918,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
           </motion.div>
         </div>
       </section>
-    </div>
+    </main>
   )
 }
 
@@ -1852,6 +1944,6 @@ export default function Recruiters() {
     setSession(null)
   }
 
-  if (!session) return <TokenLogin onSuccess={handleLogin} />
-  return <RecruiterPanel session={session} onLogout={handleLogout} />
+  if (!session) return <><TokenLogin onSuccess={handleLogin} /><FeedbackReporter audience="b2b" feature="Acceso empresarial" className="bottom-5 right-5" /></>
+  return <><RecruiterPanel session={session} onLogout={handleLogout} /><FeedbackReporter audience="b2b" className="bottom-5 right-5" /></>
 }

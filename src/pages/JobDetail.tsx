@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link, useParams } from 'wouter'
-import { ArrowLeft, Briefcase, Building2, CalendarDays, ExternalLink, MapPin, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Briefcase, Building2, CalendarDays, ExternalLink, MapPin, ShieldCheck, Sparkles } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { supabase } from '@/lib/supabase'
 import { analytics } from '@/lib/analytics'
@@ -82,6 +82,8 @@ export default function JobDetail() {
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonical} />
+        <meta property="og:type" content="article" />
+        <meta property="og:image" content="https://cvitae.lat/og-image.jpg" />
         <script type="application/ld+json">{JSON.stringify(structuredData)}</script>
       </Helmet>
       <SiteShell>
@@ -102,7 +104,9 @@ export default function JobDetail() {
               </section>
             </div>
             <aside className="h-fit border border-white/8 bg-white/[0.018] p-5 lg:sticky lg:top-24">
-              <button onClick={apply} className="flex w-full items-center justify-center gap-2 bg-[#c9a84c] px-4 py-3 text-sm font-semibold text-[#090909] transition hover:bg-[#dfc36e]">Postular en la fuente <ExternalLink className="h-4 w-4" /></button>
+              <Link href={`/mi-carrera/postular/${job.slug}`} className="flex w-full items-center justify-center gap-2 bg-[#c9a84c] px-4 py-3 text-sm font-semibold text-[#090909] transition hover:bg-[#dfc36e]">Preparar mi postulación <Sparkles className="h-4 w-4" /></Link>
+              <button onClick={apply} className="mt-2 flex w-full items-center justify-center gap-2 border border-white/10 px-4 py-2.5 text-xs text-white/55 transition hover:border-white/25 hover:text-cream">Ir directamente a la fuente <ExternalLink className="h-3.5 w-3.5" /></button>
+              <p className="mt-3 text-[11px] leading-relaxed text-white/35">Adaptá tu CV con evidencias confirmadas y prepará el mensaje antes de abrir el formulario externo.</p>
               <div className="mt-5 space-y-3 border-t border-white/8 pt-4 text-xs leading-relaxed text-white/35">
                 <p className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />CVitae organiza la vacante; verificá condiciones y datos con la fuente original.</p>
                 <p className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Revisada {new Date(job.updated_at).toLocaleDateString('es-PY')}</p>

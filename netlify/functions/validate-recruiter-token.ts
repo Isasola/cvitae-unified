@@ -29,62 +29,12 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ valid: false, error: "Token inválido o inactivo" }) }
     }
 
-    // ─── Acción: Guardar análisis (requiere créditos) ───
+    // Legacy write path intentionally disabled. Analyses must be created by
+    // analyze-cv-candidate so reservation, persistence and ledger stay atomic.
     if (action === "save_analysis" && analysisData) {
-      if (data.token_balance <= 0) {
-        return {
-          statusCode: 200,
-          body: JSON.stringify({ error: "Sin créditos disponibles. Contactá a CVitae para recargar." }),
-        }
-      }
-
-      const nextBalance = data.token_balance - 1
-      const { data: reserved } = await supabase
-        .from("recruiter_tokens")
-        .update({ token_balance: nextBalance })
-        .eq("id", data.id)
-        .eq("token_balance", data.token_balance)
-        .select("id")
-        .maybeSingle()
-
-      if (!reserved) {
-        return {
-          statusCode: 409,
-          body: JSON.stringify({ saved: false, error: "El saldo cambió durante el análisis. Intentá guardar nuevamente." }),
-        }
-      }
-
-      const { error: insertError } = await supabase
-        .from("recruiter_analyses")
-        .insert({
-          token_id: data.id,
-          candidate_name: analysisData.candidate_name || null,
-          file_name: analysisData.file_name || null,
-          ats_score: analysisData.ats_score,
-          strengths: analysisData.strengths || [],
-          critical_improvements: analysisData.critical_improvements || [],
-          vacancy_label: analysisData.vacancy_label || null,
-          raw_cv_text: analysisData.raw_cv_text || null,
-          is_starred: false,
-          created_at: new Date().toISOString()
-        })
-
-      if (insertError) {
-        await supabase
-          .from("recruiter_tokens")
-          .update({ token_balance: data.token_balance })
-          .eq("id", data.id)
-          .eq("token_balance", nextBalance)
-
-        return {
-          statusCode: 500,
-          body: JSON.stringify({ saved: false, error: "No se pudo guardar el análisis. El crédito no fue consumido." }),
-        }
-      }
-
       return {
-        statusCode: 200,
-        body: JSON.stringify({ saved: true, new_balance: nextBalance }),
+        statusCode: 410,
+        body: JSON.stringify({ saved: false, error: "Ruta antigua deshabilitada. Actualizá la aplicación y repetí el análisis." }),
       }
     }
 
@@ -137,12 +87,32 @@ const handler: Handler = async (event) => {
         return { statusCode: 403, body: JSON.stringify({ error: "Vacante no pertenece a este token" }) }
       }
 
-      const { data: applicants } = await supabase
+      const page = Math.max(0, Math.floor(Number(body.page) || 0))
+      const pageSize = Math.min(100, Math.max(20, Math.floor(Number(body.page_size) || 60)))
+      const from = page * pageSize
+      const to = from + pageSize - 1
+      const { data: applicants, count: totalApplicants } = await supabase
         .from("vacancy_applications")
-        .select("id, name, email, cv_file_name, cv_storage_path, cv_parse_status, cover_letter, cv_text, ats_score, fit_score, recommendation, ai_summary, strengths, key_matches, key_gaps, analyzed_at, applied_at, recruiter_action, recruiter_notes")
+        .select("id, name, email, cv_file_name, cv_storage_path, cv_parse_status, cover_letter, cv_text, ats_score, fit_score, recommendation, ai_summary, strengths, key_matches, key_gaps, analyzed_at, applied_at, recruiter_action, recruiter_notes, review_status, review_batch_number, batch_selected, progressive_shortlist, progressive_rank, triage_tier, selection_reason", { count: "exact" })
         .eq("vacancy_id", body.vacancy_id)
+        .order("progressive_shortlist", { ascending: false })
+        .order("progressive_rank", { ascending: true, nullsFirst: false })
         .order("applied_at", { ascending: false })
-        .limit(100)
+        .range(from, to)
+
+      const countRows = async (configure: (query: any) => any) => {
+        const base = supabase.from("vacancy_applications").select("id", { count: "exact", head: true }).eq("vacancy_id", body.vacancy_id)
+        const { count } = await configure(base)
+        return count || 0
+      }
+      const [analyzedCount, pendingCount, manualCount, strongCount, shortlistCount, batchesResult] = await Promise.all([
+        countRows(query => query.eq("review_status", "analyzed")),
+        countRows(query => query.in("review_status", ["pending", "failed", "processing"]).not("cv_text", "is", null)),
+        countRows(query => query.is("cv_text", null)),
+        countRows(query => query.eq("triage_tier", "strong")),
+        countRows(query => query.eq("progressive_shortlist", true)),
+        supabase.from("vacancy_review_batches").select("id", { count: "exact", head: true }).eq("vacancy_id", body.vacancy_id).eq("status", "completed"),
+      ])
 
       // Enrich with B2C badges
       const emails = (applicants || []).map((a: any) => a.email).filter(Boolean)
@@ -177,7 +147,24 @@ const handler: Handler = async (event) => {
 
       return {
         statusCode: 200,
-        body: JSON.stringify({ applicants: enrichedApplicants }),
+        body: JSON.stringify({
+          applicants: enrichedApplicants,
+          pagination: {
+            page,
+            page_size: pageSize,
+            total: totalApplicants || 0,
+            has_more: from + enrichedApplicants.length < (totalApplicants || 0),
+          },
+          review: {
+            total: totalApplicants || 0,
+            analyzed: analyzedCount,
+            pending: pendingCount,
+            manual_review: manualCount,
+            strong: strongCount,
+            shortlist: shortlistCount,
+            batches_completed: batchesResult.count || 0,
+          },
+        }),
       }
     }
 

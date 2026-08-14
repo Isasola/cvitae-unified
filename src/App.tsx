@@ -14,9 +14,13 @@ import Dashboard from './hub/Dashboard'
 import ProfileBuilder from './hub/ProfileBuilder'
 import JobMatcher from './hub/JobMatcher'
 import CVVivo from './hub/CVVivo'
+import ATSDiagnostic from './hub/ATSDiagnostic'
+import CVRewrite from './hub/CVRewrite'
+import ApplicationWorkspace from './hub/ApplicationWorkspace'
 import Alertas from './hub/Alertas'
 import Configuracion from './hub/Configuracion'
 import Assessments from './hub/Assessments'
+import LearningPlan from './hub/LearningPlan'
 import Recruiters from './pages/Recruiters'
 import BatchAnalysis from './pages/BatchAnalysis'
 import VacantePage from './pages/VacantePage'
@@ -54,7 +58,12 @@ export default function App() {
       <Route path="/mi-carrera/perfil" component={ProfileBuilder} />
       <Route path="/mi-carrera/analizar" component={JobMatcher} />
       <Route path="/mi-carrera/cv" component={CVVivo} />
+      <Route path="/mi-carrera/ats" component={ATSDiagnostic} />
+      <Route path="/mi-carrera/mejorar" component={CVRewrite} />
+      <Route path="/mi-carrera/postular/:slug" component={ApplicationWorkspace} />
+      <Route path="/mi-carrera/postular" component={ApplicationWorkspace} />
       <Route path="/mi-carrera/alertas" component={Alertas} />
+      <Route path="/mi-carrera/aprender" component={LearningPlan} />
       <Route path="/mi-carrera/oportunidades"><Redirect to="/oportunidades" /></Route>
       <Route path="/mi-carrera/configuracion" component={Configuracion} />
       <Route path="/mi-carrera/verificate" component={Assessments} />

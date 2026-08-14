@@ -39,6 +39,7 @@ const footerCols = [
       { label: 'Contacto', href: 'mailto:contacto@cvitae.lat' },
       { label: 'Privacidad', href: '/privacy' },
       { label: 'Términos', href: '/terminos' },
+      { label: 'Cookies', href: '/cookies' },
     ],
   },
 ]
@@ -56,7 +57,7 @@ function Navbar() {
   return (
     <header className="border-b border-border/60 backdrop-blur-xl sticky top-0 z-30 bg-background/90">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center">
+        <Link href="/" className="flex min-h-11 items-center">
           <Logo className="text-2xl" />
         </Link>
         <nav className="hidden md:flex items-center gap-7 text-sm text-muted-foreground">
@@ -73,13 +74,13 @@ function Navbar() {
         <div className="flex items-center gap-3">
           <Link
             href="/mi-carrera"
-            className="text-xs px-3 py-1.5 rounded-md bg-gold text-ink hover:bg-gold-soft transition-colors font-medium"
+            className="inline-flex min-h-11 items-center text-xs px-3 py-1.5 rounded-md bg-gold text-ink hover:bg-gold-soft transition-colors font-medium"
           >
             Entrar
           </Link>
           <button
             type="button"
-            className="md:hidden h-9 w-9 grid place-items-center rounded-md border border-white/10 text-cream"
+            className="md:hidden h-11 w-11 grid place-items-center rounded-md border border-white/10 text-cream"
             aria-label={mobileOpen ? 'Cerrar menú' : 'Abrir menú'}
             aria-expanded={mobileOpen}
             onClick={() => setMobileOpen(v => !v)}
@@ -134,6 +135,7 @@ function NewsletterForm() {
     <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
       <input
         type="email"
+        aria-label="Email para el newsletter"
         required
         value={email}
         onChange={e => setEmail(e.target.value)}
@@ -174,7 +176,7 @@ function Footer() {
                   aria-label={label}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="h-9 w-9 grid place-items-center rounded-full border border-border/60 text-muted-foreground hover:text-gold hover:border-gold/50 transition-colors"
+                  className="h-11 w-11 grid place-items-center rounded-full border border-border/60 text-muted-foreground hover:text-gold hover:border-gold/50 transition-colors"
                 >
                   <Icon className="h-4 w-4" />
                 </a>
@@ -212,6 +214,7 @@ function Footer() {
             <span>Asunción, Paraguay</span>
             <a href="mailto:contacto@cvitae.lat" className="hover:text-cream transition-colors">contacto@cvitae.lat</a>
             <a href="https://wa.me/595992954169" target="_blank" rel="noopener noreferrer" className="hover:text-cream transition-colors">WhatsApp</a>
+            <button type="button" onClick={() => window.dispatchEvent(new Event('cvitae:open-cookie-settings'))} className="hover:text-cream transition-colors">Preferencias de cookies</button>
           </div>
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">

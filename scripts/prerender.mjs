@@ -40,7 +40,7 @@ async function prerender() {
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
   const { data: posts } = await supabase
-    .from('content_hub').select('slug, titulo, cuerpo')
+    .from('content_hub').select('slug, titulo, cuerpo, created_at, imagen_url')
     .eq('tipo', 'blog').eq('is_active', true)
 
   const blogDir = join(distDir, 'blog')
@@ -56,14 +56,26 @@ async function prerender() {
       if (!existsSync(postDir)) mkdirSync(postDir, { recursive: true })
       const excerpt = (post.cuerpo || '').replace(/[#*`>]/g, '').substring(0, 160)
       const title = post.titulo || 'Blog'
+      const datePublished = (post.created_at || '').split('T')[0] || ''
+      const imageUrl = post.imagen_url || `${SITE_URL}/og-image.jpg`
+      const ldArticle = {
+        '@context': 'https://schema.org', '@type': 'Article',
+        headline: title, description: excerpt,
+        url: `${SITE_URL}/blog/${post.slug}`,
+        datePublished,
+        image: imageUrl,
+        author: { '@type': 'Organization', name: 'CVitae', url: SITE_URL },
+        publisher: { '@type': 'Organization', name: 'CVitae', url: SITE_URL, logo: { '@type': 'ImageObject', url: `${SITE_URL}/favicon.svg` } },
+      }
       const metaTags = `<title>${title} | CVitae</title>
 <meta name="description" content="${excerpt}">
 <meta property="og:title" content="${title} | CVitae">
 <meta property="og:description" content="${excerpt}">
 <meta property="og:url" content="${SITE_URL}/blog/${post.slug}">
 <meta property="og:type" content="article">
+<meta property="og:image" content="${imageUrl}">
 <link rel="canonical" href="${SITE_URL}/blog/${post.slug}">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"${title.replace(/"/g, '\\"')}","description":"${excerpt.replace(/"/g, '\\"')}","url":"${SITE_URL}/blog/${post.slug}","publisher":{"@type":"Organization","name":"CVitae","url":"${SITE_URL}"}}</script>`
+<script type="application/ld+json">${JSON.stringify(ldArticle).replace(/</g, '\\u003c')}</script>`
       const html = templateHtml.replace(
         '<title>CVitae | Tu Agente de Carrera Inteligente para Paraguay</title>',
         metaTags
@@ -151,11 +163,40 @@ async function prerender() {
   }
 
   const staticRoutes = [
-    { path: 'empleos', title: 'Empleos en Paraguay actualizados | CVitae', desc: 'Vacantes laborales de Paraguay reunidas, deduplicadas y revisadas diariamente.' },
-    { path: 'blog', title: 'Blog de Carrera | CVitae', desc: 'Consejos y guías para impulsar tu carrera en Paraguay.' },
-    { path: 'about', title: 'Sobre CVitae | Agente de Carrera con IA', desc: 'La historia y misión de CVitae, el primer agente de carrera con IA para Paraguay.' },
-    { path: 'privacy', title: 'Política de Privacidad | CVitae', desc: 'Política de privacidad de CVitae.' },
-    { path: 'oportunidades', title: 'Oportunidades Laborales en Paraguay | CVitae', desc: 'Empleos, becas y oportunidades de crecimiento en Paraguay y Latinoamérica.' },
+    {
+      path: 'empleos',
+      title: 'Empleos en Paraguay actualizados | CVitae',
+      desc: 'Vacantes laborales de Paraguay reunidas, deduplicadas y revisadas diariamente.',
+      ld: JSON.stringify({ '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Empleos en Paraguay', url: `${SITE_URL}/empleos`, description: 'Catálogo de empleos verificados de Paraguay y Latinoamérica.', publisher: { '@type': 'Organization', name: 'CVitae', url: SITE_URL } }),
+    },
+    {
+      path: 'oportunidades',
+      title: 'Oportunidades Laborales en Paraguay | CVitae',
+      desc: 'Empleos, becas y oportunidades de crecimiento en Paraguay y Latinoamérica.',
+      ld: JSON.stringify({ '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Oportunidades en Paraguay y LATAM', url: `${SITE_URL}/oportunidades`, description: 'Becas, fellowships, aceleradoras y empleos verificados para Paraguay y Latinoamérica.', publisher: { '@type': 'Organization', name: 'CVitae', url: SITE_URL } }),
+    },
+    {
+      path: 'blog',
+      title: 'Blog de Carrera | CVitae',
+      desc: 'Consejos y guías para impulsar tu carrera en Paraguay.',
+      ld: JSON.stringify({ '@context': 'https://schema.org', '@type': 'Blog', name: 'Blog CVitae', url: `${SITE_URL}/blog`, description: 'Ideas, guías y datos sobre carrera, IA y mercado laboral en Paraguay.', publisher: { '@type': 'Organization', name: 'CVitae', url: SITE_URL } }),
+    },
+    {
+      path: 'sobre-cvitae',
+      title: 'Sobre CVitae | Agente de Carrera con IA para Paraguay',
+      desc: 'Conocé la misión de CVitae: conectar talento paraguayo con las mejores oportunidades usando inteligencia artificial.',
+      ld: JSON.stringify({ '@context': 'https://schema.org', '@type': 'AboutPage', name: 'Sobre CVitae', url: `${SITE_URL}/sobre-cvitae`, description: 'CVitae es el primer agente de carrera con IA para Paraguay y Latinoamérica. Top 100 Moonshot Paraguay 2026.', publisher: { '@type': 'Organization', name: 'CVitae', url: SITE_URL } }),
+    },
+    {
+      path: 'privacy',
+      title: 'Política de Privacidad | CVitae',
+      desc: 'Política de privacidad de CVitae.',
+    },
+    {
+      path: 'terminos',
+      title: 'Términos de Servicio | CVitae',
+      desc: 'Condiciones de uso de la plataforma CVitae.',
+    },
   ]
 
   for (const route of staticRoutes) {
@@ -163,9 +204,13 @@ async function prerender() {
     if (!existsSync(routeDir)) mkdirSync(routeDir, { recursive: true })
     const routeHtml = join(routeDir, 'index.html')
     if (!existsSync(routeHtml)) {
+      const ldTag = route.ld ? `\n<script type="application/ld+json">${route.ld}</script>` : ''
       const metaTags = `<title>${route.title}</title>
 <meta name="description" content="${route.desc}">
-<link rel="canonical" href="${SITE_URL}/${route.path}">`
+<link rel="canonical" href="${SITE_URL}/${route.path}">
+<meta property="og:title" content="${route.title}">
+<meta property="og:description" content="${route.desc}">
+<meta property="og:url" content="${SITE_URL}/${route.path}">${ldTag}`
       const html = templateHtml.replace(
         '<title>CVitae | Tu Agente de Carrera Inteligente para Paraguay</title>',
         metaTags

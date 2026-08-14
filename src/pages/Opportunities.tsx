@@ -5,6 +5,7 @@ import { ArrowRight, CalendarDays, Filter, MapPin, Search, ShieldCheck } from 'l
 import { SiteShell } from '@/components/cv/SiteShell'
 import { Eyebrow } from '@/components/cv/visuals'
 import { supabase } from '@/lib/supabase'
+import { AdSlot } from '@/components/cv/AdSlot'
 
 type Category = 'Todas' | 'Becas' | 'Financiación' | 'Programas' | 'Experiencias'
 
@@ -151,6 +152,7 @@ export default function Opportunities() {
               })}
             </section>
           )}
+          <AdSlot placement="opportunities-feed" />
         </main>
       </SiteShell>
     </>

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { AmbientSignalLines, CompatibilityTrace, Eyebrow } from '@/components/cv/visuals'
-import { supabase } from '@/lib/supabase'
+import { auth } from '@/lib/supabase'
 import { analytics } from '@/lib/analytics'
 
 const ease = [0.22, 1, 0.36, 1] as const
@@ -83,7 +83,7 @@ function Analizador() {
   const loading = step === 'extracting' || step === 'analyzing'
 
   const handleFile = (f: File) => {
-    if (f.size > 10 * 1024 * 1024) { setErrorMsg('El archivo no puede superar 10 MB.'); return }
+    if (f.size > 4 * 1024 * 1024) { setErrorMsg('El archivo no puede superar 4 MB.'); return }
     setCv(f); setErrorMsg(''); setStep('idle'); setResult(null); setCtaSent(false)
   }
 
@@ -130,10 +130,8 @@ function Analizador() {
   const handleCtaSignup = async () => {
     if (!ctaEmail.trim()) return
     try {
-      await supabase.auth.signInWithOtp({
-        email: ctaEmail.trim(),
-        options: { shouldCreateUser: true, emailRedirectTo: 'https://cvitae.lat/auth/callback' },
-      })
+      const { error } = await auth.signInWithMagicLink(ctaEmail.trim())
+      if (error) throw error
       setCtaSent(true)
     } catch {}
   }
@@ -333,10 +331,7 @@ function RegistroBlock() {
     if (!email.trim() || !file) return
     setStep('loading'); setErrorMsg('')
     try {
-      const { error: authError } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: { shouldCreateUser: true, emailRedirectTo: 'https://cvitae.lat/auth/callback' },
-      })
+      const { error: authError } = await auth.signInWithMagicLink(email.trim())
       if (authError) throw authError
       const reader = new FileReader()
       reader.onload = (e) => {

@@ -6,7 +6,15 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview --host",
-    "test:critical": "tsx scripts/verify-critical-flows.ts"
+    "staging:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-local-staging.ps1",
+    "staging:status": "npx supabase status",
+    "staging:stop": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/stop-local-staging.ps1",
+    "test:critical": "tsx scripts/verify-critical-flows.ts",
+    "test:b2b-progressive-review": "tsx scripts/verify-progressive-vacancy-review.ts",
+    "qa:b2b-fixtures": "tsx scripts/generate-b2b-pdf-fixtures.ts",
+    "test:visual": "playwright test tests/visual/",
+    "test:visual:ui": "playwright test tests/visual/ --ui",
+    "test:visual:report": "playwright show-report artifacts/visual/report"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1072.0",
@@ -74,6 +82,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.1.3",
     "@types/react": "^19.2.1",

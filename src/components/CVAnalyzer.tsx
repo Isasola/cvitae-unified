@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, Zap, Loader2, AlertTriangle, ArrowRight, Lock, CheckCircle, AlertCircle } from 'lucide-react'
 import { GlassCard, GoldButton, Badge, MatchArc } from '@/components/cvitae/UI-Elements'
 import { TetrisLoader } from '@/components/TetrisLoader'
-import { supabase } from '@/lib/supabase'  // ← IMPORTANTE: Asegurate de que esta línea esté
+import { auth } from '@/lib/supabase'
 
 interface AnalysisResult {
   success: boolean
@@ -166,13 +166,7 @@ export function CVAnalyzer() {
                   const email = (document.getElementById('analyzer-email-input') as HTMLInputElement)?.value?.trim();
                   if (!email) return;
                   try {
-                    const { error } = await supabase.auth.signInWithOtp({
-                      email,
-                      options: {
-                        shouldCreateUser: true,
-                        emailRedirectTo: 'https://cvitae.lat/auth/callback'
-                      }
-                    });
+                    const { error } = await auth.signInWithMagicLink(email);
                     if (error) throw error;
                     alert('✅ Revisá tu correo y hacé clic en el enlace mágico.');
                   } catch (err: any) {

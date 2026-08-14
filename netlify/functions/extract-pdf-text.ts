@@ -1,18 +1,46 @@
 import mammoth from "mammoth"
 import { extractPdfText } from "./lib/pdf"
+import {
+  clientIp,
+  consumeRateLimit,
+  jsonResponse,
+  rateLimitHeaders,
+  rejectInvalidOrigin,
+  securityHeaders,
+} from "./lib/b2c-security"
 
 const MAX_FILE_BYTES = 4 * 1024 * 1024
 
 export const handler = async (event: any) => {
-  const headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Content-Type": "application/json",
-  }
+  const originError = rejectInvalidOrigin(event)
+  if (originError) return originError
+  const headers = securityHeaders(event)
 
-  if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers, body: "" }
+  if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers, body: "" }
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) }
+  }
+
+  try {
+    const rateLimit = await consumeRateLimit({
+      scope: "public-cv-text-extraction",
+      subject: clientIp(event),
+      limit: 30,
+      windowSeconds: 60 * 60,
+    })
+    if (!rateLimit.allowed) {
+      return jsonResponse(
+        event,
+        429,
+        { error: "Alcanzaste el límite temporal de archivos. Volvé a intentarlo más tarde." },
+        rateLimitHeaders(rateLimit),
+      )
+    }
+  } catch (error: any) {
+    console.error("extract-cv-text rate limit error:", error?.message || error)
+    return jsonResponse(event, 503, {
+      error: "El servicio está temporalmente ocupado. Intentá nuevamente en unos minutos.",
+    })
   }
 
   try {

@@ -7,6 +7,19 @@ import { GlassCard } from '@/components/cvitae/UI-Elements'
 import { Brain, Target, Users, Sparkles, ArrowLeft } from 'lucide-react'
 
 export default function About() {
+  const orgLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    '@id': 'https://cvitae.lat/#organization',
+    name: 'CVitae',
+    url: 'https://cvitae.lat',
+    logo: { '@type': 'ImageObject', url: 'https://cvitae.lat/favicon.svg' },
+    description: 'Agente de carrera con inteligencia artificial para Paraguay y Latinoamérica. Top 100 Moonshot Paraguay 2026.',
+    foundingDate: '2024',
+    areaServed: ['Paraguay', 'Argentina', 'Uruguay', 'Bolivia', 'Latinoamérica'],
+    sameAs: ['https://www.linkedin.com/company/cvitae-py/', 'https://www.facebook.com/profile.php?id=61580756714500'],
+  })
+
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
@@ -17,6 +30,7 @@ export default function About() {
         <meta property="og:description" content="Conocé la misión de CVitae: conectar talento paraguayo con las mejores oportunidades usando IA de vanguardia." />
         <meta property="og:url" content="https://cvitae.lat/sobre-cvitae" />
         <meta property="og:type" content="website" />
+        <script type="application/ld+json">{orgLd}</script>
       </Helmet>
       <Navbar />
       <div className="pt-32 pb-20 px-4 max-w-4xl mx-auto">

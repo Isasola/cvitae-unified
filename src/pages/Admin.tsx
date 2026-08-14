@@ -76,6 +76,46 @@ interface OpportunityReview {
   created_at: string
 }
 
+interface ProductFeedback {
+  id: string
+  reference_code: string
+  audience: 'b2c' | 'b2b' | 'public'
+  category: 'bug' | 'data' | 'usability' | 'suggestion'
+  severity: 'blocking' | 'major' | 'minor' | 'suggestion'
+  status: 'new' | 'triaged' | 'in_progress' | 'resolved' | 'closed'
+  feature: string
+  message: string
+  expected_result: string | null
+  page_path: string
+  contact_email: string | null
+  context: Record<string, any>
+  admin_note: string | null
+  assigned_to: string | null
+  created_at: string
+}
+
+interface AdminMetrics {
+  usuarios: number
+  matches: number
+  oportunidades: number
+  suscriptores: number
+  usuariosHoy: number
+  usuariosAyer: number
+  usuariosEstaSemana: number
+  empresasActivas: number
+  queues: { opportunityReview: number; quarantined: number; feedbackOpen: number; recruiterReview: number }
+  growth: { day: string; userSignups: number; opportunitiesAdded: number; opportunitiesVerified: number }[]
+  generatedAt: string | null
+  timeZone: string
+}
+
+const EMPTY_ADMIN_METRICS: AdminMetrics = {
+  usuarios: 0, matches: 0, oportunidades: 0, suscriptores: 0,
+  usuariosHoy: 0, usuariosAyer: 0, usuariosEstaSemana: 0, empresasActivas: 0,
+  queues: { opportunityReview: 0, quarantined: 0, feedbackOpen: 0, recruiterReview: 0 },
+  growth: [], generatedAt: null, timeZone: 'America/Asuncion',
+}
+
 const REVIEW_CRITERIA = [
   'La fuente y el enlace de postulación son accesibles',
   'La organización o responsable es identificable',
@@ -88,6 +128,45 @@ const REVIEW_CRITERIA = [
 const CATEGORIES = ['Tecnología', 'Administración', 'Ventas', 'Marketing', 'Salud', 'Educación', 'Logística', 'Otros']
 
 const MONO = "'JetBrains Mono', 'Courier New', monospace"
+const ADMIN_PREVIEW_MODE = ['127.0.0.1', 'localhost'].includes(window.location.hostname)
+  ? new URLSearchParams(window.location.search).get('admin-preview')
+  : null
+const ADMIN_VISUAL_PREVIEW = ADMIN_PREVIEW_MODE === 'feedback' || Boolean(ADMIN_PREVIEW_MODE?.startsWith('brief'))
+const PREVIEW_GROWTH = Array.from({ length: 14 }, (_, index) => {
+  const day = new Date('2026-08-13T12:00:00')
+  day.setDate(day.getDate() - (13 - index))
+  return {
+    day: day.toISOString().slice(0, 10),
+    userSignups: [2, 4, 3, 5, 4, 7, 6, 8, 5, 9, 7, 11, 6, 9][index],
+    opportunitiesAdded: [18, 12, 27, 9, 31, 24, 16, 38, 22, 41, 29, 34, 20, 36][index],
+    opportunitiesVerified: [7, 5, 14, 8, 19, 13, 11, 22, 16, 25, 18, 21, 12, 17][index],
+  }
+})
+const BRIEF_PREVIEW_METRICS: AdminMetrics = {
+  usuarios: 482, matches: 0, oportunidades: 1264, suscriptores: 37,
+  usuariosHoy: 9, usuariosAyer: 6, usuariosEstaSemana: 55, empresasActivas: 18,
+  queues: { opportunityReview: 23, quarantined: 4, feedbackOpen: 6, recruiterReview: 2 },
+  growth: PREVIEW_GROWTH, generatedAt: '2026-08-13T21:35:00.000Z', timeZone: 'America/Asuncion',
+}
+const BRIEF_PREVIEW_EXTERNAL = {
+  google: {
+    configured: true, credentialsValid: true, analyticsConfigured: true, searchConsoleConfigured: true, fetchedAt: '2026-08-13T21:34:00.000Z', errors: [],
+    analytics: { activeUsers: 1380, newUsers: 942, sessions: 2148, screenPageViews: 5310, changes: { activeUsers: 18.4, newUsers: 22.1, sessions: 16.7, screenPageViews: 31.2 }, topChannels: [{ sessionDefaultChannelGroup: 'Organic Search', sessions: 981 }, { sessionDefaultChannelGroup: 'Direct', sessions: 612 }, { sessionDefaultChannelGroup: 'Organic Social', sessions: 308 }], topLandingPages: [{ landingPagePlusQueryString: '/oportunidades', sessions: 462 }, { landingPagePlusQueryString: '/empleos', sessions: 389 }, { landingPagePlusQueryString: '/mi-carrera', sessions: 274 }] },
+    searchConsole: { clicks: 764, impressions: 24890, ctr: 0.0307, position: 9.8, changes: { clicks: 27.3, impressions: 41.8, ctrPoints: -0.4, position: -1.2 }, topQueries: [{ query: 'becas para paraguayos 2026', clicks: 186 }, { query: 'mejorar cv ats gratis', clicks: 113 }, { query: 'empleos paraguay', clicks: 92 }], topPages: [{ page: 'https://cvitae.lat/oportunidades', clicks: 241 }, { page: 'https://cvitae.lat/empleos', clicks: 197 }, { page: 'https://cvitae.lat/blog/mejorar-cv-ats', clicks: 88 }] },
+  },
+  alerts: { configured: true, counts: { sent: 146, failed: 3, pending: 8, processing: 1 }, period: '7d' },
+}
+const BRIEF_PREVIEW_SCRAPERS: any = {
+  totalOpportunities: 1492, totalContentHub: 24, newLast24h: 36, newLast7d: 214, newToday: 36, newYesterday: 28, duplicates: 47,
+  generatedAt: '2026-08-13T21:35:00.000Z', timeZone: 'America/Asuncion', telemetryAvailable: true, telemetryError: null,
+  ingestionToday: { runs: 49, found: 184, inserted: 36, updated: 21, duplicates: 98, rejected: 29, failed: 1 },
+  runSummary: { critical: 1, blocked: 1, warning: 2, idle: 8, healthy: 37 },
+  bySource: [{ source: 'computrabajo', count: 684, lastSeen: '2026-08-13T18:10:00.000Z', newToday: 18, newYesterday: 13 }, { source: 'mef_inapp', count: 76, lastSeen: '2026-08-13T13:20:00.000Z', newToday: 6, newYesterday: 0 }, { source: 'fiuna', count: 112, lastSeen: '2026-08-12T17:30:00.000Z', newToday: 0, newYesterday: 9 }],
+  scraperRuns: [
+    { id: 'preview-1', scraper_id: 'sample_failed', scraper_name: 'Fuente oficial — muestra', status: 'failed', health_status: 'critical', productive: false, insertion_rate: 0, outcome_reason: 'La fuente respondió con timeout después de tres intentos', consecutive_problems: 2, last_productive_at: null, found_count: 0, valid_count: 0, unique_count: 0, inserted_count: 0, updated_count: 0, duplicate_count: 0, rejected_count: 0, warning_count: 0, error_count: 1, error_summary: 'Timeout', github_run_url: null, started_at: '2026-08-13T18:00:00.000Z', finished_at: '2026-08-13T18:02:00.000Z', duration_seconds: 120 },
+    { id: 'preview-2', scraper_id: 'computrabajo', scraper_name: 'Computrabajo Paraguay', status: 'healthy', health_status: 'healthy', productive: true, insertion_rate: 20, outcome_reason: 'Aportó oportunidades nuevas o actualizaciones', consecutive_problems: 0, last_productive_at: '2026-08-13T11:15:00.000Z', found_count: 90, valid_count: 82, unique_count: 75, inserted_count: 18, updated_count: 12, duplicate_count: 45, rejected_count: 8, warning_count: 0, error_count: 0, error_summary: null, github_run_url: null, started_at: '2026-08-13T11:10:00.000Z', finished_at: '2026-08-13T11:15:00.000Z', duration_seconds: 300 },
+  ],
+}
 
 // Input style shared across forms
 const inputCls = "w-full px-4 py-3 bg-transparent border border-white/[0.07] text-[#e8e8e0] text-sm placeholder-white/20 focus:outline-none focus:border-[#c9a84c]/50 transition-colors"
@@ -159,18 +238,27 @@ function SignalLines() {
 }
 
 export default function Admin() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(ADMIN_VISUAL_PREVIEW)
   const [password, setPassword] = useState('')
   const adminPasswordRef = useRef('')
-  const [activeTab, setActiveTab] = useState<'brief' | 'moderacion' | 'fuentes' | 'usuarios' | 'beta' | 'prospects' | 'contenido' | 'tokens' | 'skills'>('brief')
+  const [activeTab, setActiveTab] = useState<'brief' | 'feedback' | 'moderacion' | 'fuentes' | 'usuarios' | 'beta' | 'prospects' | 'contenido' | 'tokens' | 'skills'>(ADMIN_PREVIEW_MODE === 'feedback' ? 'feedback' : 'brief')
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const [items, setItems] = useState<ContentItem[]>([])
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [skillCandidates, setSkillCandidates] = useState<SkillCandidate[]>([])
-  const [metrics, setMetrics] = useState({ usuarios: 0, matches: 0, oportunidades: 0, suscriptores: 0, usuariosHoy: 0, usuariosAyer: 0, usuariosEstaSemana: 0, empresasActivas: 0 })
+  const [metrics, setMetrics] = useState<AdminMetrics>(ADMIN_PREVIEW_MODE?.startsWith('brief') ? BRIEF_PREVIEW_METRICS : EMPTY_ADMIN_METRICS)
+  const [externalMetrics, setExternalMetrics] = useState<any>(ADMIN_PREVIEW_MODE?.startsWith('brief') ? BRIEF_PREVIEW_EXTERNAL : null)
+  const [briefLoading, setBriefLoading] = useState(false)
+  const [briefError, setBriefError] = useState<string | null>(null)
   const [b2bProspects, setB2bProspects] = useState<any[]>([])
+  const [productFeedback, setProductFeedback] = useState<ProductFeedback[]>([])
+  const [selectedFeedback, setSelectedFeedback] = useState<ProductFeedback | null>(null)
+  const [feedbackStatus, setFeedbackStatus] = useState('all')
+  const [feedbackAudience, setFeedbackAudience] = useState('all')
+  const [feedbackNote, setFeedbackNote] = useState('')
+  const [feedbackAssignee, setFeedbackAssignee] = useState('')
   const [opportunityReviews, setOpportunityReviews] = useState<OpportunityReview[]>([])
   const [reviewSummary, setReviewSummary] = useState<Record<string, number>>({})
   const [opportunityInventory, setOpportunityInventory] = useState<{ total: number; published: number; archived: number; deleted: number; deletion_pending: number; by_type: Record<string, number> }>({ total: 0, published: 0, archived: 0, deleted: 0, deletion_pending: 0, by_type: {} })
@@ -186,6 +274,9 @@ export default function Admin() {
   const [reviewLifecycle, setReviewLifecycle] = useState('active')
   const [editingReview, setEditingReview] = useState(false)
   const [reviewEditData, setReviewEditData] = useState<Record<string, string>>({})
+  const [batchSource, setBatchSource] = useState('all')
+  const [batchAction, setBatchAction] = useState<'rejected' | 'quarantined'>('rejected')
+  const [batchLoading, setBatchLoading] = useState(false)
   const [scraperControls, setScraperControls] = useState<any[]>([])
   const [sourcePolicies, setSourcePolicies] = useState<any[]>([])
   const [sourceStats, setSourceStats] = useState<Record<string, any>>({})
@@ -220,7 +311,12 @@ export default function Admin() {
     bySource: { source: string; count: number; lastSeen: string; newToday: number; newYesterday: number }[]
     newLast24h: number
     newLast7d: number
+    newToday: number
+    newYesterday: number
     duplicates: number
+    generatedAt: string
+    timeZone: string
+    ingestionToday: { runs: number; found: number; inserted: number; updated: number; duplicates: number; rejected: number; failed: number }
     telemetryAvailable: boolean
     telemetryError: string | null
     runSummary: Record<string, number>
@@ -229,6 +325,7 @@ export default function Admin() {
       status: 'running' | 'healthy' | 'warning' | 'failed' | 'timeout'
       health_status: 'healthy' | 'idle' | 'unknown' | 'warning' | 'blocked' | 'critical'
       productive: boolean; insertion_rate: number | null
+      outcome_reason: string
       consecutive_problems: number; last_productive_at: string | null
       found_count: number | null; inserted_count: number | null
       valid_count: number | null; unique_count: number | null; updated_count: number | null
@@ -237,10 +334,11 @@ export default function Admin() {
       github_run_url: string | null; started_at: string; finished_at: string | null
       duration_seconds: number | null
     }[]
-  } | null>(null)
+  } | null>(ADMIN_PREVIEW_MODE?.startsWith('brief') ? BRIEF_PREVIEW_SCRAPERS : null)
 
   const NAV_ITEMS = [
     { id: 'brief', label: 'Brief del día', dotColor: 'bg-emerald-400', badge: null },
+    { id: 'feedback', label: 'Reportes', dotColor: 'bg-rose-300', badge: productFeedback.filter(item => !['resolved', 'closed'].includes(item.status)).length.toString() },
     { id: 'moderacion', label: 'Verificación', dotColor: 'bg-amber-300', badge: (reviewSummary.pending || 0).toString() },
     { id: 'fuentes', label: 'Fuentes y reglas', dotColor: 'bg-sky-300', badge: scraperControls.filter(item => item.collection_enabled).length.toString() },
     { id: 'usuarios', label: 'Usuarios', dotColor: 'bg-[#c9a84c]', badge: metrics.usuarios.toString() },
@@ -252,24 +350,42 @@ export default function Admin() {
   ]
 
   useEffect(() => {
+    if (ADMIN_VISUAL_PREVIEW) return
     if (isAuthenticated) {
       loadContent()
       loadSubscribers()
       loadSkillCandidates()
       loadMetrics()
+      loadExternalMetrics()
       loadTokens()
       loadBeta()
       loadScraperReport()
       loadB2bProspects()
+      loadProductFeedback()
       loadReviewSummary()
-      if (activeTab === 'moderacion') loadOpportunityReviews()
-      if (activeTab === 'fuentes') loadControlCenter()
     }
+  }, [isAuthenticated])
+
+  useEffect(() => {
+    if (ADMIN_VISUAL_PREVIEW) return
+    if (!isAuthenticated) return
+    if (activeTab === 'moderacion') loadOpportunityReviews()
+    if (activeTab === 'fuentes') loadControlCenter()
   }, [isAuthenticated, activeTab])
+
+  useEffect(() => {
+    if (isAuthenticated && activeTab === 'feedback') loadProductFeedback()
+  }, [feedbackStatus, feedbackAudience])
 
   useEffect(() => {
     if (isAuthenticated && activeTab === 'moderacion') loadOpportunityReviews()
   }, [reviewStatus, reviewSource, reviewLifecycle])
+
+  useEffect(() => {
+    if (ADMIN_PREVIEW_MODE !== 'brief-scrapers') return
+    const timer = window.setTimeout(() => document.getElementById('scraper-operations')?.scrollIntoView({ block: 'start' }), 500)
+    return () => window.clearTimeout(timer)
+  }, [])
 
   const loadContent = async () => {
     try {
@@ -306,9 +422,21 @@ export default function Admin() {
         usuariosAyer: json.usuariosAyer || 0,
         usuariosEstaSemana: json.usuariosEstaSemana || 0,
         empresasActivas: json.empresasActivas || 0,
+        queues: json.queues || EMPTY_ADMIN_METRICS.queues,
+        growth: json.growth || [],
+        generatedAt: json.generatedAt || null,
+        timeZone: json.timeZone || 'America/Asuncion',
       })
-    } catch {
-      // metrics failure is non-fatal
+    } catch (error: any) {
+      setBriefError(`Base operativa: ${error.message}`)
+    }
+  }
+
+  const loadExternalMetrics = async () => {
+    try {
+      setExternalMetrics(await adminFetch('external_metrics'))
+    } catch (error: any) {
+      setExternalMetrics({ google: { configured: false, analytics: null, searchConsole: null, errors: [`Conexión: ${error.message}`] }, alerts: { configured: false, counts: {}, error: error.message } })
     }
   }
 
@@ -317,6 +445,30 @@ export default function Admin() {
       const json = await adminFetch('list_b2b_prospects')
       setB2bProspects(json.data || [])
     } catch { /* non-fatal */ }
+  }
+
+  const loadProductFeedback = async () => {
+    try {
+      const json = await adminFetch('list_product_feedback', { status: feedbackStatus, audience: feedbackAudience })
+      setProductFeedback(json.data || [])
+      if (selectedFeedback && !(json.data || []).some((item: ProductFeedback) => item.id === selectedFeedback.id)) setSelectedFeedback(null)
+    } catch { /* migration may not be available yet */ }
+  }
+
+  const openProductFeedback = (item: ProductFeedback) => {
+    setSelectedFeedback(item)
+    setFeedbackNote(item.admin_note || '')
+    setFeedbackAssignee(item.assigned_to || '')
+  }
+
+  const updateProductFeedback = async (status: ProductFeedback['status']) => {
+    if (!selectedFeedback) return
+    try {
+      await adminFetch('update_product_feedback', { id: selectedFeedback.id, status, note: feedbackNote, assignedTo: feedbackAssignee })
+      setNotification({ type: 'success', message: `Reporte ${selectedFeedback.reference_code} actualizado` })
+      await loadProductFeedback()
+      setSelectedFeedback(current => current ? { ...current, status, admin_note: feedbackNote, assigned_to: feedbackAssignee } : current)
+    } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
   }
 
   const loadReviewSummary = async () => {
@@ -375,6 +527,18 @@ export default function Admin() {
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message })
     } finally { setLoading(false) }
+  }
+
+  const submitBatchReview = async () => {
+    if (batchSource === 'all') { setNotification({ type: 'error', message: 'Seleccioná una fuente específica para la acción en lote' }); return }
+    if (!window.confirm(`¿Marcar como "${batchAction}" todos los registros en revisión de "${batchSource}"? Esta acción se registra en auditoría y puede revertirse registro por registro.`)) return
+    setBatchLoading(true)
+    try {
+      const json = await adminFetch('batch_review_by_source', { source: batchSource, status: batchAction, note: `Acción en lote desde admin: ${batchAction}` })
+      setNotification({ type: 'success', message: `Procesados: ${json.processed}${json.skipped ? ` · Omitidos (fuente no original): ${json.skipped}` : ''}` })
+      await Promise.all([loadOpportunityReviews(), loadReviewSummary()])
+    } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
+    finally { setBatchLoading(false) }
   }
 
   const saveOpportunityEdit = async () => {
@@ -459,9 +623,16 @@ export default function Admin() {
     try {
       const json = await adminFetch('scraper_report')
       setScraperReport(json)
-    } catch {
-      // non-fatal
+    } catch (error: any) {
+      setBriefError(current => current || `Scrapers: ${error.message}`)
     }
+  }
+
+  const refreshOperationsBrief = async () => {
+    setBriefLoading(true)
+    setBriefError(null)
+    await Promise.all([loadMetrics(), loadExternalMetrics(), loadScraperReport(), loadReviewSummary(), loadProductFeedback()])
+    setBriefLoading(false)
   }
 
   const adminFetch = async (action: string, payload?: any) => {
@@ -630,9 +801,21 @@ export default function Admin() {
 
   // ── LOGIN SCREEN ──────────────────────────────────────────────────────────
 
+  const scraperCritical = (scraperReport?.runSummary.critical || 0) + (scraperReport?.runSummary.blocked || 0)
+  const alertFailures = Number(externalMetrics?.alerts?.counts?.failed || 0)
+  const operationsQueue = [
+    { id: 'scrapers', count: scraperCritical, label: 'Scrapers bloqueados o con fallo técnico', detail: 'Revisar la ejecución y la causa antes de reactivar una fuente.', tab: 'brief' as const, tone: 'red' },
+    { id: 'moderation', count: metrics.queues.opportunityReview, label: 'Oportunidades esperando verificación', detail: 'No llegan a catálogo, matching, alertas ni SEO hasta decidir.', tab: 'moderacion' as const, tone: 'amber' },
+    { id: 'quarantine', count: metrics.queues.quarantined, label: 'Oportunidades en cuarentena', detail: 'Revisar fuente, elegibilidad, vigencia o URL original.', tab: 'moderacion' as const, tone: 'red' },
+    { id: 'feedback', count: metrics.queues.feedbackOpen, label: 'Reportes de producto abiertos', detail: 'Clasificar, asignar o resolver desde el buzón de reportes.', tab: 'feedback' as const, tone: 'rose' },
+    { id: 'recruiters', count: metrics.queues.recruiterReview, label: 'Empresas esperando verificación', detail: 'El acceso B2B permanece limitado hasta revisar la empresa.', tab: 'tokens' as const, tone: 'sky' },
+    { id: 'alerts', count: alertFailures, label: 'Alertas de match fallidas en 7 días', detail: 'Revisar entregas antes de considerar saludable la automatización.', tab: 'brief' as const, tone: 'red' },
+  ].filter(item => item.count > 0)
+  const growthMaximum = Math.max(1, ...metrics.growth.flatMap(day => [day.userSignups, day.opportunitiesAdded, day.opportunitiesVerified]))
+
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#080808] flex items-center justify-center p-4">
+      <main className="min-h-screen bg-[#080808] flex items-center justify-center p-4">
         <div className="w-full max-w-sm border border-white/[0.07] p-8 bg-[#080808]">
           <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.2em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase', marginBottom: '24px' }}>
             CVITAE OPS CONSOLE
@@ -640,6 +823,7 @@ export default function Admin() {
           <form onSubmit={handleLogin} className="space-y-4">
             <input
               type="password"
+              aria-label="Contraseña de administración"
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="contraseña"
@@ -660,7 +844,7 @@ export default function Admin() {
             </div>
           )}
         </div>
-      </div>
+      </main>
     )
   }
 
@@ -731,18 +915,62 @@ export default function Admin() {
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
 
+              {/* ── PRODUCT FEEDBACK ─────────────────────────────────── */}
+              {activeTab === 'feedback' && (
+                <div>
+                  <div className="mb-6 flex items-end justify-between gap-6">
+                    <div><p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>BUZÓN OPERATIVO</p><h1 className="mt-1 text-2xl font-semibold text-[#e8e8e0]">Errores y mejoras reportadas</h1><p className="mt-2 text-sm text-white/40">Cada reporte conserva contexto técnico mínimo, referencia y trazabilidad de estado. No incluye automáticamente CVs ni contenido de postulaciones.</p></div>
+                    <button onClick={loadProductFeedback} className="border border-white/10 px-3 py-2 text-xs text-white/45 hover:text-white" style={{ fontFamily: MONO }}>↻ ACTUALIZAR</button>
+                  </div>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    <select value={feedbackStatus} onChange={event => setFeedbackStatus(event.target.value)} className="border border-white/10 bg-[#0b0b0b] px-3 py-2 text-xs text-white/60 outline-none"><option value="all">Todos los estados</option><option value="new">Nuevos</option><option value="triaged">Clasificados</option><option value="in_progress">En curso</option><option value="resolved">Resueltos</option><option value="closed">Cerrados</option></select>
+                    <select value={feedbackAudience} onChange={event => setFeedbackAudience(event.target.value)} className="border border-white/10 bg-[#0b0b0b] px-3 py-2 text-xs text-white/60 outline-none"><option value="all">B2C + B2B</option><option value="b2c">B2C</option><option value="b2b">B2B</option><option value="public">Público</option></select>
+                  </div>
+                  <div className="grid min-h-[680px] border border-white/[0.07] xl:grid-cols-[440px_1fr]">
+                    <div className="border-b border-white/[0.07] xl:border-b-0 xl:border-r">
+                      <div className="border-b border-white/[0.07] px-4 py-3 text-[10px] uppercase tracking-[0.14em] text-white/30" style={{ fontFamily: MONO }}>{productFeedback.length} reportes</div>
+                      <div className="max-h-[640px] overflow-y-auto">{productFeedback.length === 0 ? <p className="p-6 text-sm text-white/30">No hay reportes con estos filtros.</p> : productFeedback.map(item => <button key={item.id} onClick={() => openProductFeedback(item)} className={`w-full border-b border-white/[0.05] px-4 py-4 text-left transition ${selectedFeedback?.id === item.id ? 'bg-white/[0.06]' : 'hover:bg-white/[0.025]'}`}><div className="flex items-center justify-between gap-3"><span className={`h-2 w-2 rounded-full ${item.severity === 'blocking' ? 'bg-red-400' : item.severity === 'major' ? 'bg-amber-300' : item.category === 'suggestion' ? 'bg-sky-300' : 'bg-white/25'}`} /><span className="flex-1 truncate text-[10px] text-[#c9a84c]" style={{ fontFamily: MONO }}>{item.reference_code}</span><span className="text-[9px] uppercase text-white/25" style={{ fontFamily: MONO }}>{item.status.replace('_', ' ')}</span></div><p className="mt-2 truncate text-sm text-[#e8e8e0]">{item.feature}</p><p className="mt-1 line-clamp-2 text-xs leading-relaxed text-white/35">{item.message}</p><div className="mt-2 flex items-center justify-between text-[9px] uppercase tracking-wider text-white/20" style={{ fontFamily: MONO }}><span>{item.audience} · {item.category}</span><span>{new Date(item.created_at).toLocaleDateString('es-PY')}</span></div></button>)}</div>
+                    </div>
+                    <div className="p-6">{selectedFeedback ? <div><div className="flex items-start justify-between gap-5"><div><p className="text-[10px] uppercase tracking-[0.15em] text-[#c9a84c]" style={{ fontFamily: MONO }}>{selectedFeedback.reference_code}</p><h2 className="mt-2 text-xl text-[#e8e8e0]">{selectedFeedback.feature}</h2><p className="mt-1 text-xs text-white/30">{selectedFeedback.audience.toUpperCase()} · {selectedFeedback.page_path} · {new Date(selectedFeedback.created_at).toLocaleString('es-PY')}</p></div><span className="border border-white/10 px-2.5 py-1 text-[9px] uppercase text-white/40" style={{ fontFamily: MONO }}>{selectedFeedback.severity}</span></div><div className="mt-6 border-l-2 border-[#c9a84c]/35 pl-5"><p className="whitespace-pre-wrap text-sm leading-relaxed text-white/65">{selectedFeedback.message}</p>{selectedFeedback.expected_result && <div className="mt-5"><p className="text-[9px] uppercase tracking-[0.14em] text-white/25" style={{ fontFamily: MONO }}>RESULTADO ESPERADO</p><p className="mt-2 whitespace-pre-wrap text-sm text-white/45">{selectedFeedback.expected_result}</p></div>}</div><div className="mt-6 grid gap-px bg-white/[0.06] sm:grid-cols-3"><div className="bg-[#080808] p-3"><p className="text-[9px] text-white/25">CONTACTO</p><p className="mt-1 truncate text-xs text-white/50">{selectedFeedback.contact_email || 'No informado'}</p></div><div className="bg-[#080808] p-3"><p className="text-[9px] text-white/25">PANTALLA</p><p className="mt-1 text-xs text-white/50">{selectedFeedback.context?.viewport?.width || '—'} × {selectedFeedback.context?.viewport?.height || '—'}</p></div><div className="bg-[#080808] p-3"><p className="text-[9px] text-white/25">TIPO</p><p className="mt-1 text-xs uppercase text-white/50">{selectedFeedback.category}</p></div></div><div className="mt-6 grid gap-4 sm:grid-cols-2"><label><span className="text-[9px] uppercase tracking-[0.14em] text-white/25">Responsable</span><input value={feedbackAssignee} onChange={event => setFeedbackAssignee(event.target.value)} placeholder="Nombre o equipo" className={`${inputCls} mt-2`} /></label><label><span className="text-[9px] uppercase tracking-[0.14em] text-white/25">Estado</span><select value={selectedFeedback.status} onChange={event => updateProductFeedback(event.target.value as ProductFeedback['status'])} className={`${inputCls} mt-2 bg-[#0b0b0b]`}><option value="new">Nuevo</option><option value="triaged">Clasificado</option><option value="in_progress">En curso</option><option value="resolved">Resuelto</option><option value="closed">Cerrado</option></select></label></div><label className="mt-4 block"><span className="text-[9px] uppercase tracking-[0.14em] text-white/25">Nota interna</span><textarea rows={5} value={feedbackNote} onChange={event => setFeedbackNote(event.target.value)} placeholder="Diagnóstico, decisión o referencia a la corrección…" className={`${inputCls} mt-2 resize-none`} /></label><div className="mt-4 flex justify-end gap-2"><button onClick={() => updateProductFeedback('triaged')} className="border border-white/10 px-4 py-2 text-xs text-white/50">Guardar clasificación</button><button onClick={() => updateProductFeedback('resolved')} className="bg-[#c9a84c] px-4 py-2 text-xs font-medium text-black">Marcar resuelto</button></div></div> : <div className="grid h-full min-h-[560px] place-items-center text-center"><div><AlertCircle className="mx-auto h-7 w-7 text-white/15" /><p className="mt-4 text-sm text-white/30">Seleccioná un reporte para revisar su contexto y avance.</p></div></div>}</div>
+                  </div>
+                </div>
+              )}
+
               {/* ── BRIEF ──────────────────────────────────────────────── */}
               {activeTab === 'brief' && (
                 <div>
-                  <div className="mb-8">
-                    <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>
-                      BRIEF — {new Date().toLocaleDateString('es-PY', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()}
-                    </p>
-                    <h1 className="mt-1 text-2xl font-semibold text-[#e8e8e0]">Estado del sistema</h1>
+                  {ADMIN_PREVIEW_MODE === 'brief-scrapers' && <style>{`.brief-before-scrapers{display:none!important}`}</style>}
+                  {ADMIN_PREVIEW_MODE === 'brief-acquisition' && <style>{`.brief-before-scrapers:not(#acquisition-operations),#scraper-operations{display:none!important}`}</style>}
+                  <div className="brief-before-scrapers mb-8 flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>
+                        BRIEF — {new Date().toLocaleDateString('es-PY', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()}
+                      </p>
+                      <h1 className="mt-1 text-2xl font-semibold text-[#e8e8e0]">Decisiones operativas del día</h1>
+                      <p className="mt-2 text-xs text-white/30" style={{ fontFamily: MONO }}>
+                        {metrics.generatedAt ? `Base actualizada ${new Date(metrics.generatedAt).toLocaleString('es-PY')} · ${metrics.timeZone}` : 'Esperando la primera lectura de la base'}
+                      </p>
+                    </div>
+                    <button onClick={refreshOperationsBrief} disabled={briefLoading} className="border border-[#c9a84c]/30 bg-[#c9a84c]/[0.04] px-4 py-2 text-[10px] tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/10 disabled:opacity-40" style={{ fontFamily: MONO }}>
+                      {briefLoading ? 'ACTUALIZANDO…' : '↻ ACTUALIZAR BRIEF'}
+                    </button>
                   </div>
 
+                  {briefError && <div className="brief-before-scrapers mb-5 border border-red-400/20 bg-red-400/[0.04] px-4 py-3 text-xs text-red-300" style={{ fontFamily: MONO }}>{briefError}. Se conservan los últimos datos válidos.</div>}
+
+                  <section className="brief-before-scrapers mb-6 border border-white/[0.07] bg-[#080808]">
+                    <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-3">
+                      <div>
+                        <p className="text-[10px] tracking-[0.15em] text-white/35" style={{ fontFamily: MONO }}>COLA DE DECISIONES</p>
+                        <p className="mt-1 text-[10px] text-white/20" style={{ fontFamily: MONO }}>Sólo asuntos que requieren una acción humana o técnica</p>
+                      </div>
+                      <span className={`text-[10px] ${operationsQueue.length ? 'text-amber-300' : 'text-emerald-400'}`} style={{ fontFamily: MONO }}>{operationsQueue.length ? `${operationsQueue.length} FRENTES ABIERTOS` : 'SIN BLOQUEOS DETECTADOS'}</span>
+                    </div>
+                    {operationsQueue.length ? <div className="grid gap-px bg-white/[0.05] lg:grid-cols-2">{operationsQueue.map(item => <button key={item.id} onClick={() => setActiveTab(item.tab)} className="group flex bg-[#080808] p-4 text-left transition hover:bg-white/[0.025]"><span className={`mr-4 grid h-9 min-w-9 place-items-center border text-sm ${item.tone === 'red' ? 'border-red-400/25 text-red-300' : item.tone === 'amber' ? 'border-amber-300/25 text-amber-200' : item.tone === 'rose' ? 'border-rose-300/25 text-rose-200' : 'border-sky-300/25 text-sky-200'}`} style={{ fontFamily: MONO }}>{item.count}</span><span><span className="block text-sm text-[#e8e8e0]">{item.label}</span><span className="mt-1 block text-[11px] leading-relaxed text-white/30">{item.detail}</span></span><span className="ml-auto text-white/15 transition group-hover:text-[#c9a84c]">→</span></button>)}</div> : <div className="flex items-center gap-3 px-5 py-4"><span className="text-emerald-400">●</span><p className="text-sm text-white/45">No hay fallos, colas o entregas pendientes detectadas en la última lectura.</p></div>}
+                  </section>
+
                   {/* Metrics grid — row 1 */}
-                  <div className="grid grid-cols-4 gap-px bg-white/[0.07] border border-white/[0.07]">
+                  <div className="brief-before-scrapers grid grid-cols-2 gap-px border border-white/[0.07] bg-white/[0.07] xl:grid-cols-4">
                     {[
                       { label: 'USUARIOS TOTALES', value: metrics.usuarios, sub: 'en base de datos' },
                       { label: 'PRO ACTIVOS', value: metrics.suscriptores, sub: 'is_subscribed = true' },
@@ -757,7 +985,7 @@ export default function Admin() {
                     ))}
                   </div>
                   {/* Metrics grid — row 2 (deltas) */}
-                  <div className="mt-px grid grid-cols-3 gap-px bg-white/[0.07]">
+                  <div className="brief-before-scrapers mt-px grid grid-cols-1 gap-px bg-white/[0.07] sm:grid-cols-3">
                     {[
                       { label: 'USUARIOS HOY', value: metrics.usuariosHoy, delta: metrics.usuariosHoy - metrics.usuariosAyer },
                       { label: 'USUARIOS ESTA SEMANA', value: metrics.usuariosEstaSemana, delta: null },
@@ -777,8 +1005,65 @@ export default function Admin() {
                     ))}
                   </div>
 
+                  <section className="brief-before-scrapers mt-6 border border-white/[0.07] bg-[#080808]">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] px-5 py-3">
+                      <div><p className="text-[10px] tracking-[0.15em] text-white/35" style={{ fontFamily: MONO }}>CRECIMIENTO · 14 DÍAS</p><p className="mt-1 text-[9px] text-white/20" style={{ fontFamily: MONO }}>Día calendario de Paraguay · excluye usuarios de prueba</p></div>
+                      <div className="flex gap-4 text-[9px] text-white/35" style={{ fontFamily: MONO }}><span><i className="mr-1.5 inline-block h-2 w-2 bg-sky-300" />USUARIOS</span><span><i className="mr-1.5 inline-block h-2 w-2 bg-[#c9a84c]" />INGRESADAS</span><span><i className="mr-1.5 inline-block h-2 w-2 bg-emerald-400" />VERIFICADAS</span></div>
+                    </div>
+                    {metrics.growth.length ? <div className="overflow-x-auto px-4 pb-3 pt-5"><div className="flex h-40 min-w-[680px] items-end gap-2 border-b border-white/[0.06]">{metrics.growth.map(day => <div key={day.day} className="group relative flex h-full flex-1 items-end justify-center gap-[2px]" title={`${day.day}: ${day.userSignups} usuarios · ${day.opportunitiesAdded} ingresadas · ${day.opportunitiesVerified} verificadas`}><span className="w-1/4 min-w-[4px] bg-sky-300/75 transition group-hover:bg-sky-200" style={{ height: `${Math.max(day.userSignups ? 6 : 1, (day.userSignups / growthMaximum) * 118)}px` }} /><span className="w-1/4 min-w-[4px] bg-[#c9a84c]/70 transition group-hover:bg-[#e0bd59]" style={{ height: `${Math.max(day.opportunitiesAdded ? 6 : 1, (day.opportunitiesAdded / growthMaximum) * 118)}px` }} /><span className="w-1/4 min-w-[4px] bg-emerald-400/70 transition group-hover:bg-emerald-300" style={{ height: `${Math.max(day.opportunitiesVerified ? 6 : 1, (day.opportunitiesVerified / growthMaximum) * 118)}px` }} /><span className="absolute -bottom-5 text-[8px] text-white/20" style={{ fontFamily: MONO }}>{new Date(`${day.day}T12:00:00`).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit' })}</span></div>)}</div><div className="h-5" /></div> : <p className="px-5 py-6 text-xs text-white/25" style={{ fontFamily: MONO }}>La serie aparecerá al aplicar la migración operativa.</p>}
+                  </section>
+
+                  {/* Acquisition + proactive match delivery */}
+                  <div id="acquisition-operations" className="brief-before-scrapers mt-6 border border-white/[0.07]">
+                    <div className="px-5 py-3 border-b border-white/[0.07] flex items-center justify-between gap-3">
+                      <div>
+                        <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>ADQUISICIÓN Y ALERTAS</p>
+                        <p style={{ fontFamily: MONO, fontSize: '9px', color: 'rgba(232,232,224,0.22)', marginTop: 3 }}>Google: 28 días cerrados · alertas: 7 días</p>
+                      </div>
+                      <button onClick={loadExternalMetrics} className="text-[10px] text-[rgba(232,232,224,0.3)] hover:text-[#e8e8e0] border border-white/[0.07] px-2.5 py-1 transition-colors" style={{ fontFamily: MONO }}>↻ Actualizar</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-px bg-white/[0.04] xl:grid-cols-4">
+                      {[
+                        { label: 'GA4 USUARIOS', value: externalMetrics?.google?.analytics?.activeUsers, change: externalMetrics?.google?.analytics?.changes?.activeUsers, fallback: externalMetrics?.google?.analyticsConfigured ? 'Sin datos' : 'Configurar GA4', suffix: '%' },
+                        { label: 'GA4 NUEVOS', value: externalMetrics?.google?.analytics?.newUsers, change: externalMetrics?.google?.analytics?.changes?.newUsers, fallback: externalMetrics?.google?.analyticsConfigured ? 'Sin datos' : 'Configurar GA4', suffix: '%' },
+                        { label: 'GA4 SESIONES', value: externalMetrics?.google?.analytics?.sessions, change: externalMetrics?.google?.analytics?.changes?.sessions, fallback: 'Sin conexión', suffix: '%' },
+                        { label: 'GA4 VISTAS', value: externalMetrics?.google?.analytics?.screenPageViews, change: externalMetrics?.google?.analytics?.changes?.screenPageViews, fallback: 'Sin conexión', suffix: '%' },
+                        { label: 'SEARCH CLICS', value: externalMetrics?.google?.searchConsole?.clicks, change: externalMetrics?.google?.searchConsole?.changes?.clicks, fallback: externalMetrics?.google?.searchConsoleConfigured ? 'Sin datos' : 'Configurar GSC', suffix: '%' },
+                        { label: 'SEARCH IMPRESIONES', value: externalMetrics?.google?.searchConsole?.impressions, change: externalMetrics?.google?.searchConsole?.changes?.impressions, fallback: 'Sin conexión', suffix: '%' },
+                        { label: 'SEARCH CTR', value: externalMetrics?.google?.searchConsole ? `${(externalMetrics.google.searchConsole.ctr * 100).toFixed(1)}%` : null, change: externalMetrics?.google?.searchConsole?.changes?.ctrPoints, fallback: 'Sin conexión', suffix: ' pp' },
+                        { label: 'POSICIÓN MEDIA', value: externalMetrics?.google?.searchConsole?.position ? externalMetrics.google.searchConsole.position.toFixed(1) : null, change: externalMetrics?.google?.searchConsole?.changes?.position, fallback: 'Sin conexión', suffix: '' },
+                      ].map((item) => (
+                        <div key={item.label} className="bg-[#080808] px-4 py-4">
+                          <p style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.14em', color: 'rgba(232,232,224,0.25)' }}>{item.label}</p>
+                          <div className="mt-1 flex items-end justify-between gap-2"><p style={{ fontFamily: MONO, fontSize: item.value == null ? '11px' : '1.55rem', color: item.value == null ? 'rgba(232,232,224,0.3)' : '#c9a84c' }}>{item.value == null ? item.fallback : typeof item.value === 'number' ? Number(item.value).toLocaleString('es-PY') : item.value}</p>{item.change != null && <span className={`pb-0.5 text-[9px] ${item.label === 'POSICIÓN MEDIA' ? item.change <= 0 ? 'text-emerald-400' : 'text-red-300' : item.change >= 0 ? 'text-emerald-400' : 'text-red-300'}`} style={{ fontFamily: MONO }}>{item.change > 0 ? '+' : ''}{item.change}{item.suffix ?? '%'}</span>}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/[0.04] border-t border-white/[0.04]">
+                      {[
+                        ['EMAILS ENVIADOS', externalMetrics?.alerts?.counts?.sent || 0, '#34d399'],
+                        ['FALLIDOS', externalMetrics?.alerts?.counts?.failed || 0, '#f87171'],
+                        ['PENDIENTES', externalMetrics?.alerts?.counts?.pending || 0, '#fde047'],
+                        ['PROCESANDO', externalMetrics?.alerts?.counts?.processing || 0, '#60a5fa'],
+                      ].map(([label, value, color]) => (
+                        <div key={String(label)} className="bg-[#080808] px-4 py-3 flex items-center justify-between">
+                          <span style={{ fontFamily: MONO, fontSize: '9px', color: 'rgba(232,232,224,0.28)' }}>{label}</span>
+                          <span style={{ fontFamily: MONO, fontSize: '16px', color: String(color) }}>{Number(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {(externalMetrics?.google?.analytics?.topChannels?.length > 0 || externalMetrics?.google?.searchConsole?.topQueries?.length > 0) && <div className="grid gap-px border-t border-white/[0.07] bg-white/[0.05] xl:grid-cols-4">
+                      <div className="bg-[#080808] p-4"><p className="mb-3 text-[9px] tracking-[0.14em] text-white/25" style={{ fontFamily: MONO }}>CANALES GA4</p><div className="space-y-2">{(externalMetrics?.google?.analytics?.topChannels || []).slice(0, 5).map((channel: any) => <div key={channel.sessionDefaultChannelGroup} className="flex items-center justify-between gap-4 text-[10px]" style={{ fontFamily: MONO }}><span className="truncate text-white/45">{channel.sessionDefaultChannelGroup || 'Sin clasificar'}</span><span className="text-[#c9a84c]">{channel.sessions} sesiones</span></div>)}</div></div>
+                      <div className="bg-[#080808] p-4"><p className="mb-3 text-[9px] tracking-[0.14em] text-white/25" style={{ fontFamily: MONO }}>LANDING PAGES GA4</p><div className="space-y-2">{(externalMetrics?.google?.analytics?.topLandingPages || []).slice(0, 5).map((page: any) => <div key={page.landingPagePlusQueryString} className="flex items-center justify-between gap-4 text-[10px]" style={{ fontFamily: MONO }}><span className="truncate text-white/45" title={page.landingPagePlusQueryString}>{page.landingPagePlusQueryString || '/'}</span><span className="text-[#c9a84c]">{page.sessions} sesiones</span></div>)}</div></div>
+                      <div className="bg-[#080808] p-4"><p className="mb-3 text-[9px] tracking-[0.14em] text-white/25" style={{ fontFamily: MONO }}>CONSULTAS SEARCH</p><div className="space-y-2">{(externalMetrics?.google?.searchConsole?.topQueries || []).slice(0, 5).map((query: any) => <div key={query.query} className="flex items-center justify-between gap-4 text-[10px]" style={{ fontFamily: MONO }}><span className="truncate text-white/45">{query.query}</span><span className="text-[#c9a84c]">{query.clicks} clics</span></div>)}</div></div>
+                      <div className="bg-[#080808] p-4"><p className="mb-3 text-[9px] tracking-[0.14em] text-white/25" style={{ fontFamily: MONO }}>PÁGINAS SEARCH</p><div className="space-y-2">{(externalMetrics?.google?.searchConsole?.topPages || []).slice(0, 5).map((page: any) => <div key={page.page} className="flex items-center justify-between gap-4 text-[10px]" style={{ fontFamily: MONO }}><span className="truncate text-white/45" title={page.page}>{String(page.page).replace(/^https?:\/\/[^/]+/, '') || '/'}</span><span className="text-[#c9a84c]">{page.clicks} clics</span></div>)}</div></div>
+                    </div>}
+                    {externalMetrics?.google && <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/[0.06] px-5 py-3 text-[9px] text-white/25" style={{ fontFamily: MONO }}><span className={externalMetrics.google.analyticsConfigured ? 'text-emerald-400/70' : 'text-white/25'}>GA4 {externalMetrics.google.analyticsConfigured ? 'CONFIGURADO' : 'NO CONFIGURADO'}</span><span className={externalMetrics.google.searchConsoleConfigured ? 'text-emerald-400/70' : 'text-white/25'}>SEARCH CONSOLE {externalMetrics.google.searchConsoleConfigured ? 'CONFIGURADO' : 'NO CONFIGURADO'}</span>{externalMetrics.google.fetchedAt && <span>LECTURA {new Date(externalMetrics.google.fetchedAt).toLocaleString('es-PY')}</span>}<span>COMPARACIÓN: 28D VS 28D ANTERIORES</span></div>}
+                    {externalMetrics?.google?.errors?.length > 0 && <div className="border-t border-amber-400/15 bg-amber-400/[0.03] px-5 py-3 text-[10px] text-amber-300" style={{ fontFamily: MONO }}>{externalMetrics.google.errors.join(' · ')}</div>}
+                  </div>
+
                   {/* Scraper automation report */}
-                  <div className="mt-6 border border-white/[0.07]">
+                  <div id="scraper-operations" className="mt-6 scroll-mt-4 border border-white/[0.07]">
                     <div className="px-5 py-3 border-b border-white/[0.07] flex items-center justify-between">
                       <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>AUTOMATIZACIÓN — SCRAPERS</p>
                       <button
@@ -790,10 +1075,10 @@ export default function Admin() {
                     {scraperReport ? (
                       <>
                         {/* Summary row */}
-                        <div className="grid grid-cols-5 gap-px bg-white/[0.04]">
+                        <div className="grid grid-cols-2 gap-px bg-white/[0.04] xl:grid-cols-5">
                           {[
                             { label: 'TOTAL BD', value: scraperReport.totalOpportunities.toLocaleString('es-PY'), sub: 'tabla opportunities', color: '#c9a84c' },
-                            { label: 'NUEVAS HOY', value: scraperReport.newLast24h.toLocaleString('es-PY'), sub: 'desde 00:00 PY', color: '#34d399' },
+                            { label: 'NUEVAS HOY', value: scraperReport.newToday.toLocaleString('es-PY'), sub: 'día calendario PY', color: '#34d399' },
                             { label: 'NUEVAS 7D', value: scraperReport.newLast7d.toLocaleString('es-PY'), sub: 'últimos 7 días', color: '#c9a84c' },
                             { label: 'FUENTES', value: scraperReport.bySource.length.toString(), sub: 'cron nominal: 07:00 PY', color: '#c9a84c' },
                             { label: 'DUPLICADOS', value: scraperReport.duplicates.toLocaleString('es-PY'), sub: 'mismo título+empresa', color: scraperReport.duplicates > 100 ? '#f87171' : 'rgba(232,232,224,0.4)' },
@@ -804,6 +1089,17 @@ export default function Admin() {
                               <p style={{ fontFamily: MONO, fontSize: '9px', color: 'rgba(232,232,224,0.2)', marginTop: '3px' }}>{m.sub}</p>
                             </div>
                           ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-px border-t border-white/[0.04] bg-white/[0.04] sm:grid-cols-4 xl:grid-cols-7">
+                          {[
+                            ['EJECUCIONES HOY', scraperReport.ingestionToday.runs, '#e8e8e0'],
+                            ['ENCONTRADAS', scraperReport.ingestionToday.found, '#e8e8e0'],
+                            ['INSERTADAS', scraperReport.ingestionToday.inserted, '#34d399'],
+                            ['ACTUALIZADAS', scraperReport.ingestionToday.updated, '#7dd3fc'],
+                            ['DUPLICADAS', scraperReport.ingestionToday.duplicates, '#94a3b8'],
+                            ['RECHAZADAS', scraperReport.ingestionToday.rejected, '#fbbf24'],
+                            ['FALLOS', scraperReport.ingestionToday.failed, scraperReport.ingestionToday.failed ? '#f87171' : '#34d399'],
+                          ].map(([label, value, color]) => <div key={String(label)} className="bg-[#080808] px-3 py-3"><p className="text-[8px] tracking-[0.12em] text-white/25" style={{ fontFamily: MONO }}>{label}</p><p className="mt-1 text-lg" style={{ fontFamily: MONO, color: String(color) }}>{Number(value)}</p></div>)}
                         </div>
                         {/* Real execution telemetry — failures first */}
                         <div className="border-t border-white/[0.07]">
@@ -840,10 +1136,10 @@ export default function Admin() {
                                   {scraperReport.scraperRuns.map(run => {
                                     const state = {
                                       critical: { color: '#f87171', label: 'CRÍTICO' },
-                                      blocked: { color: '#fb7185', label: '0% INSERTÓ' },
+                                      blocked: { color: '#fb7185', label: 'TODO RECH.' },
                                       warning: { color: '#fde047', label: 'REVISAR' },
                                       unknown: { color: '#94a3b8', label: 'SIN MÉTRICA' },
-                                      idle: { color: '#60a5fa', label: 'SIN HALLAZGOS' },
+                                      idle: { color: '#60a5fa', label: 'SIN NOVEDADES' },
                                       healthy: { color: '#34d399', label: 'OK' },
                                     }[run.health_status]
                                     return (
@@ -862,8 +1158,8 @@ export default function Admin() {
                                         <td className="py-2.5 px-3 text-xs text-white/40">{run.duration_seconds == null ? '—' : `${run.duration_seconds}s`}</td>
                                         <td className="py-2.5 px-3 text-[10px] text-white/40 whitespace-nowrap">{new Date(run.started_at).toLocaleString('es-PY')}</td>
                                         <td className="py-2.5 px-3 max-w-[360px]">
-                                          <p className="text-[10px] text-red-300/80 line-clamp-3" style={{ fontFamily: MONO }}>{run.error_summary || (run.health_status === 'idle' ? 'Ejecutó correctamente, sin resultados nuevos' : 'Sin errores detectados')}</p>
-                                          {run.consecutive_problems > 0 && <p className="text-[9px] text-white/30" style={{ fontFamily: MONO }}>{run.consecutive_problems} ejecución(es) sin inserción confirmada</p>}
+                                          <p className={`line-clamp-3 text-[10px] ${['critical', 'blocked'].includes(run.health_status) ? 'text-red-300/80' : run.health_status === 'warning' ? 'text-amber-200/70' : 'text-white/35'}`} style={{ fontFamily: MONO }}>{run.outcome_reason}</p>
+                                          {run.consecutive_problems > 0 && <p className="text-[9px] text-white/30" style={{ fontFamily: MONO }}>{run.consecutive_problems} ejecución(es) consecutivas con error o advertencia</p>}
                                           {run.github_run_url && <a href={run.github_run_url} target="_blank" rel="noreferrer" className="text-[9px] text-[#c9a84c] hover:underline">Abrir ejecución ↗</a>}
                                         </td>
                                       </tr>
@@ -879,7 +1175,7 @@ export default function Admin() {
                           <table className="w-full border-collapse">
                             <thead>
                               <tr className="border-b border-white/[0.05]">
-                                {['', 'FUENTE', 'TOTAL', 'HOY', 'AYER', 'Δ', 'ÚLTIMA VEZ'].map((h, i) => (
+                                {['', 'FUENTE', 'TOTAL', 'HOY', 'AYER', 'Δ', 'ÚLTIMO APORTE'].map((h, i) => (
                                   <th key={i} className={`py-2 px-3 font-normal text-left tracking-widest text-[rgba(232,232,224,0.25)]`} style={{ fontFamily: MONO, fontSize: '9px' }}>{h}</th>
                                 ))}
                               </tr>
@@ -887,7 +1183,7 @@ export default function Admin() {
                             <tbody className="divide-y divide-white/[0.03]">
                               {scraperReport.bySource.map(s => {
                                 const hoursSince = (Date.now() - new Date(s.lastSeen).getTime()) / 3600000
-                                const light = hoursSince < 26 ? { color: '#34d399', label: 'OK' } : hoursSince < 50 ? { color: '#c9a84c', label: '~1d' } : { color: '#f87171', label: 'FALLA' }
+                                const light = hoursSince < 26 ? { color: '#34d399', label: 'APORTÓ HOY' } : hoursSince < 50 ? { color: '#c9a84c', label: 'ÚLTIMO APORTE ~1D' } : { color: 'rgba(232,232,224,0.22)', label: 'SIN APORTE RECIENTE; NO IMPLICA FALLO' }
                                 const delta = s.newToday - s.newYesterday
                                 return (
                                   <tr key={s.source} className="hover:bg-white/[0.02] transition-colors">
@@ -941,8 +1237,8 @@ export default function Admin() {
                         </div>
                       )}
                       <div className="px-5 py-3 flex items-center gap-3">
-                        <span className="text-emerald-400">◆</span>
-                        <span className="text-sm text-[rgba(232,232,224,0.5)]">Sistema operativo · scrapers activos · emails verificados</span>
+                        <span className={operationsQueue.length ? 'text-amber-300' : 'text-emerald-400'}>◆</span>
+                        <span className="text-sm text-[rgba(232,232,224,0.5)]">{operationsQueue.length ? `Estado parcial: ${operationsQueue.length} frente(s) requieren atención` : 'Lectura actual sin bloqueos detectados en base, scrapers o alertas'}</span>
                       </div>
                     </div>
                   </div>
@@ -1134,6 +1430,24 @@ export default function Admin() {
                       <option value="deleted">Eliminadas</option>
                     </select>
                     <button onClick={loadOpportunityReviews} className="border border-[#c9a84c]/40 px-5 text-xs text-[#c9a84c] transition hover:bg-[#c9a84c]/10" style={{ fontFamily: MONO }}>FILTRAR</button>
+                  </div>
+
+                  <div className="mb-5 border border-white/[0.07] bg-white/[0.015] p-4">
+                    <p className="mb-3 text-[10px] uppercase tracking-[0.14em] text-white/30" style={{ fontFamily: MONO }}>Acción en lote — solo rechazar o poner en cuarentena</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <select value={batchSource} onChange={e => setBatchSource(e.target.value)} className={inputCls + ' flex-1 min-w-[160px]'}>
+                        <option value="all">Seleccioná una fuente</option>
+                        {reviewSources.map(s => <option key={s.source} value={s.source}>{s.display_name || s.source}</option>)}
+                      </select>
+                      <select value={batchAction} onChange={e => setBatchAction(e.target.value as 'rejected' | 'quarantined')} className={inputCls}>
+                        <option value="rejected">Rechazar</option>
+                        <option value="quarantined">Cuarentena</option>
+                      </select>
+                      <button onClick={submitBatchReview} disabled={batchLoading || batchSource === 'all'} className="border border-red-500/30 px-5 py-2 text-xs text-red-400 transition hover:bg-red-500/10 disabled:opacity-40" style={{ fontFamily: MONO }}>
+                        {batchLoading ? 'PROCESANDO…' : 'APLICAR A REVISIÓN'}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-white/30">Solo afecta registros en estado "en revisión" o "pendiente". Las aprobaciones en lote requieren que la fuente original esté verificada y se hacen registro por registro.</p>
                   </div>
 
                   <div className="grid min-h-[620px] border border-white/[0.07] lg:grid-cols-[380px_1fr]">

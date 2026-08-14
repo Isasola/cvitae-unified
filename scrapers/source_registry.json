@@ -100,6 +100,7 @@
     },
     {
       "source_id": "mitic_opportunities",
+      "script": "scrapers/mitic_opportunities_scraper.py",
       "start_url": "https://mitic.gov.py/",
       "course_portal": "https://www.cursos.gov.py/",
       "application_portal": "https://spi.conacyt.gov.py/user",
@@ -116,6 +117,11 @@
         "official_call"
       ],
       "original_source_required": false,
+      "collection_enabled": false,
+      "catalog_enabled": false,
+      "matching_enabled": false,
+      "alerts_enabled": false,
+      "seo_enabled": false,
       "access_note": "Fuente oficial MITIC. Separar cursos permanentes de convocatorias con cierre; publicar noticias solo cuando contengan inscripción, requisitos y vigencia verificables. Nunca automatizar SPI."
     },
     {
@@ -181,6 +187,7 @@
     },
     {
       "source_id": "snj_paraguay",
+      "script": "scrapers/snj_paraguay_scraper.py",
       "start_url": "https://snj.gov.py/",
       "application_portal": "https://postulacion-becas.snj.gov.py/becas/",
       "market": "PY",
@@ -199,16 +206,28 @@
         "PY"
       ],
       "original_source_required": false,
+      "collection_enabled": false,
+      "catalog_enabled": false,
+      "matching_enabled": false,
+      "alerts_enabled": false,
+      "seo_enabled": false,
       "access_note": "Fuente oficial de la Secretaria Nacional de la Juventud. Recolectar becas, programas, formacion y convocatorias juveniles accionables con destinatarios, requisitos, plazo y postulacion verificables; excluir anuncios, resultados, renovaciones y noticias institucionales sin inscripcion abierta. No duplicar EmpleaPY Joven: enlazar la vacante original del MTESS. Premios y voluntariados quedan fuera del alcance automatico hasta revision."
     },
     {
       "source_id": "ipa_convocatorias",
+      "script": "scrapers/ipa_convocatorias_scraper.py",
       "start_url": "https://artesania.gov.py/convocatorias/",
       "secondary_url": "https://artesania.gov.py/",
       "market": "PY",
       "kind": "seed_capital",
       "source_tier": "A",
-      "status": "research_verified",
+      "status": "candidate",
+      "collection_enabled": false,
+      "require_review": true,
+      "catalog_enabled": false,
+      "matching_enabled": false,
+      "alerts_enabled": false,
+      "seo_enabled": false,
       "priority": 9,
       "priority_grade": "B+",
       "opportunity_scopes": [
@@ -225,12 +244,19 @@
     },
     {
       "source_id": "aecid_paraguay_calls",
+      "script": "scrapers/aecid_paraguay_calls_scraper.py",
       "start_url": "https://paraguay.aecid.es/convocatorias",
       "secondary_url": "https://www.aecid.gob.es/activos",
       "market": "PY",
       "kind": "consultancy",
       "source_tier": "A",
       "status": "research_verified",
+      "collection_enabled": false,
+      "require_review": true,
+      "catalog_enabled": false,
+      "matching_enabled": false,
+      "alerts_enabled": false,
+      "seo_enabled": false,
       "priority": 10,
       "priority_grade": "A+",
       "opportunity_scopes": [
@@ -338,11 +364,18 @@
     },
     {
       "source_id": "wwf_paraguay_calls",
+      "script": "scrapers/wwf_paraguay_calls_scraper.py",
       "start_url": "https://www.wwf.org.py/informate/convocatorias/",
       "market": "PY",
       "kind": "consultancy",
       "source_tier": "A",
-      "status": "research_verified",
+      "status": "candidate",
+      "collection_enabled": false,
+      "require_review": true,
+      "catalog_enabled": false,
+      "matching_enabled": false,
+      "alerts_enabled": false,
+      "seo_enabled": false,
       "priority": 15,
       "priority_grade": "A",
       "opportunity_scopes": [

@@ -6,6 +6,7 @@ import { Navbar } from '@/components/cvitae/Navbar'
 import { Footer } from '@/components/cvitae/Footer'
 import { supabase } from '@/lib/supabase'
 import ReactMarkdown from 'react-markdown'
+import { AdSlot } from '@/components/cv/AdSlot'
 
 interface BlogPost {
   id: string
@@ -50,8 +51,34 @@ export default function BlogPost() {
     </div>
   )
 
+  const canonical = `https://cvitae.lat/blog/${post.slug}`
+  const ogImage = post.imagen_url || 'https://cvitae.lat/og-image.jpg'
+  const datePublished = post.created_at?.split('T')[0] || ''
+  const excerpt = (post.cuerpo || '').replace(/[#*`_>~[\]]/g, '').substring(0, 160)
+  const articleLd = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'Article',
+    headline: post.titulo,
+    description: excerpt,
+    url: canonical,
+    datePublished,
+    image: ogImage,
+    author: { '@type': 'Organization', name: 'CVitae', url: 'https://cvitae.lat' },
+    publisher: { '@type': 'Organization', name: 'CVitae', url: 'https://cvitae.lat', logo: { '@type': 'ImageObject', url: 'https://cvitae.lat/favicon.svg' } },
+  })
+
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>{post.titulo} | CVitae</title>
+        <meta name="description" content={excerpt} />
+        <link rel="canonical" href={canonical} />
+        <meta property="og:title" content={`${post.titulo} | CVitae`} />
+        <meta property="og:description" content={excerpt} />
+        <meta property="og:url" content={canonical} />
+        <meta property="og:type" content="article" />
+        <meta property="og:image" content={ogImage} />
+        <script type="application/ld+json">{articleLd}</script>
+      </Helmet>
       <Navbar />
 
       <div className="pt-28 pb-24 px-4">
@@ -129,6 +156,7 @@ export default function BlogPost() {
             </Link>
           </div>
         </motion.article>
+        <div className="mx-auto max-w-3xl"><AdSlot placement="blog-end" /></div>
       </div>
 
       <Footer />

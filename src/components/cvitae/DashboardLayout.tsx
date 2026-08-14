@@ -1,20 +1,25 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'wouter'
-import { auth } from '@/lib/supabase'
+import { auth, supabase } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, User, Briefcase, FileText, Bell, BookOpen, Settings,
-  Menu, X, LogOut, ChevronRight, ArrowLeft, Award,
+  Menu, X, LogOut, ChevronRight, ArrowLeft, Award, FileSearch, WandSparkles, ClipboardCheck, GraduationCap,
 } from 'lucide-react'
 import { Logo } from './Logo'
 import { cn } from '@/lib/utils'
+import { FeedbackReporter } from '@/components/cv/FeedbackReporter'
 
 const sidebarLinks = [
   { href: '/mi-carrera', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/mi-carrera/perfil', label: 'Mi Perfil', icon: User },
   { href: '/mi-carrera/oportunidades', label: 'Oportunidades', icon: Briefcase },
   { href: '/mi-carrera/cv', label: 'Mi CV', icon: FileText },
+  { href: '/mi-carrera/ats', label: 'Diagnóstico ATS', icon: FileSearch },
+  { href: '/mi-carrera/mejorar', label: 'Mejorar CV', icon: WandSparkles },
+  { href: '/mi-carrera/postular', label: 'Postulaciones', icon: ClipboardCheck },
   { href: '/mi-carrera/alertas', label: 'Alertas', icon: Bell },
+  { href: '/mi-carrera/aprender', label: 'Aprender', icon: GraduationCap },
   { href: '/blog', label: 'Blog', icon: BookOpen },
 ]
 
@@ -30,9 +35,28 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [location] = useLocation()
   const [user, setUser] = useState<any>(null)
+  const [atsOpenQuestions, setAtsOpenQuestions] = useState(0)
+  const isSidebarLinkActive = (href: string) => location === href || (href !== '/mi-carrera' && location.startsWith(`${href}/`))
 
   useEffect(() => {
-    auth.getUser().then(setUser)
+    auth.getUser().then(async (nextUser) => {
+      setUser(nextUser)
+      if (!nextUser) return
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) return
+        const response = await fetch('/.netlify/functions/cv-ats-workspace', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ action: 'notification_count' }),
+        })
+        if (!response.ok) return
+        const data = await response.json()
+        setAtsOpenQuestions(Number(data.openQuestionCount || 0))
+      } catch {
+        // El contador es informativo; la navegación sigue disponible si falla.
+      }
+    })
   }, [])
 
   const handleLogout = async () => {
@@ -67,7 +91,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {sidebarLinks.map((link) => {
-            const isActive = location === link.href
+            const isActive = isSidebarLinkActive(link.href)
             return (
               <Link
                 key={link.href}
@@ -82,10 +106,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               >
                 <link.icon className={cn('w-5 h-5', isActive && 'text-gold')} />
                 <span className="font-medium">{link.label}</span>
+                {link.href === '/mi-carrera/ats' && atsOpenQuestions > 0 && (
+                  <span className="ml-auto min-w-5 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-center text-[10px] font-medium text-amber-200" aria-label={`${atsOpenQuestions} preguntas ATS pendientes`}>
+                    {atsOpenQuestions > 99 ? '99+' : atsOpenQuestions}
+                  </span>
+                )}
                 {isActive && (
                   <motion.div
                     layoutId="activeIndicator"
-                    className="ml-auto w-1.5 h-1.5 rounded-full bg-gold"
+                    className={`${link.href === '/mi-carrera/ats' && atsOpenQuestions > 0 ? '' : 'ml-auto'} w-1.5 h-1.5 rounded-full bg-gold`}
                   />
                 )}
               </Link>
@@ -166,7 +195,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               Volver al inicio
             </a>
             <h1 className="text-lg font-semibold text-white">
-              {sidebarLinks.find((l) => l.href === location)?.label || 'Dashboard'}
+              {sidebarLinks.find((link) => isSidebarLinkActive(link.href))?.label || 'Dashboard'}
             </h1>
           </div>
           <div className="flex items-center gap-4">
@@ -192,6 +221,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
         <div className="p-4 lg:p-8">{children}</div>
       </main>
+      <FeedbackReporter audience="b2c" className="bottom-20 right-5" />
     </div>
   )
 }

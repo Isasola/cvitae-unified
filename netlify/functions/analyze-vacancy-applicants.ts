@@ -1,12 +1,11 @@
-// Analiza todos los postulantes de una vacante en paralelo y genera ranking + resumen ejecutivo
-// ⚠️ Puede tardar 20-60s según volumen — mover a Lambda si hay >15 postulantes
-import { Handler } from "@netlify/functions"
-import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
-import { makeSupabaseAdmin } from "./_supabase"
+import { Handler } from '@netlify/functions'
+import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { makeSupabaseAdmin } from './_supabase'
 
-const MODEL_ID = "global.anthropic.claude-sonnet-4-6"
+const MODEL_ID = 'global.anthropic.claude-sonnet-4-6'
+const ANALYSIS_VERSION = 'vacancy-fit-v2'
 const bedrock = new BedrockRuntimeClient({
-  region: process.env.CVITAE_AWS_REGION || "us-east-1",
+  region: process.env.CVITAE_AWS_REGION || 'us-east-1',
   credentials: {
     accessKeyId: process.env.CVITAE_AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.CVITAE_AWS_SECRET_ACCESS_KEY!,
@@ -16,29 +15,28 @@ const bedrock = new BedrockRuntimeClient({
 function extractJSON(text: string): any {
   const block = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
   if (block) return JSON.parse(block[1].trim())
-  const obj = text.match(/\{[\s\S]*\}/)
-  if (obj) return JSON.parse(obj[0])
+  const object = text.match(/\{[\s\S]*\}/)
+  if (object) return JSON.parse(object[0])
   return JSON.parse(text.trim())
 }
 
 async function callBedrock(system: string, user: string, maxTokens: number): Promise<string> {
-  const cmd = new InvokeModelCommand({
+  const response = await bedrock.send(new InvokeModelCommand({
     modelId: MODEL_ID,
-    contentType: "application/json",
-    accept: "application/json",
+    contentType: 'application/json',
+    accept: 'application/json',
     body: JSON.stringify({
-      anthropic_version: "bedrock-2023-05-31",
+      anthropic_version: 'bedrock-2023-05-31',
       max_tokens: maxTokens,
       system,
-      messages: [{ role: "user", content: user }],
+      messages: [{ role: 'user', content: user }],
     }),
-  })
-  const res = await bedrock.send(cmd)
-  const parsed = JSON.parse(new TextDecoder().decode(res.body))
-  return parsed.content[0]?.text ?? ""
+  }))
+  const parsed = JSON.parse(new TextDecoder().decode(response.body))
+  return parsed.content[0]?.text ?? ''
 }
 
-const SYSTEM = "Sos un director de RRHH latinoamericano experto. Respondés ÚNICAMENTE con JSON válido y bien formateado, sin texto adicional ni markdown."
+const SYSTEM = 'Sos un director de RRHH latinoamericano experto. Respondés ÚNICAMENTE con JSON válido y bien formateado, sin texto adicional ni markdown.'
 
 async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length)
@@ -53,196 +51,189 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, task: (item: 
   return results
 }
 
-async function reserveCredits(supabase: any, tokenId: string, amount: number): Promise<{ ok: boolean; balance?: number }> {
-  if (amount <= 0) return { ok: true }
-  const { data } = await supabase
-    .from("recruiter_tokens")
-    .select("token_balance")
-    .eq("id", tokenId)
-    .single()
-  const balance = Number(data?.token_balance ?? 0)
-  if (balance < amount) return { ok: false, balance }
-  const { data: reserved } = await supabase
-    .from("recruiter_tokens")
-    .update({ token_balance: balance - amount })
-    .eq("id", tokenId)
-    .eq("token_balance", balance)
-    .select("id")
-    .maybeSingle()
-  return { ok: Boolean(reserved), balance }
-}
-
-async function refundCredits(supabase: any, tokenId: string, amount: number): Promise<void> {
-  if (amount <= 0) return
-  const { data } = await supabase
-    .from("recruiter_tokens")
-    .select("token_balance")
-    .eq("id", tokenId)
-    .single()
-  if (!data) return
-  await supabase
-    .from("recruiter_tokens")
-    .update({ token_balance: Number(data.token_balance ?? 0) + amount })
-    .eq("id", tokenId)
-}
-
 const handler: Handler = async (event) => {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
 
+  let reservedOperation: { tokenId: string; operationId: string } | null = null
   try {
-    const { token, vacancy_id, force } = JSON.parse(event.body || "{}")
-
-    if (!token?.trim() || !vacancy_id) {
-      return { statusCode: 400, body: JSON.stringify({ error: "token y vacancy_id requeridos" }) }
+    const { token, vacancy_id, operation_id } = JSON.parse(event.body || '{}')
+    if (!token?.trim() || !vacancy_id || typeof operation_id !== 'string') {
+      return { statusCode: 400, body: JSON.stringify({ error: 'token, vacancy_id y operation_id requeridos' }) }
+    }
+    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(operation_id)) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'operation_id inválido' }) }
     }
 
     const supabase = makeSupabaseAdmin()
-
-    // Validate token and ownership of vacancy
-    const { data: tokenData, error: tokenErr } = await supabase
-      .from("recruiter_tokens")
-      .select("id, token_balance")
-      .eq("access_token", token.trim())
-      .eq("is_active", true)
-      .eq("verification_status", "verified")
+    const { data: tokenData, error: tokenError } = await supabase
+      .from('recruiter_tokens')
+      .select('id, token_balance')
+      .eq('access_token', token.trim())
+      .eq('is_active', true)
+      .eq('verification_status', 'verified')
       .single()
-
-    if (tokenErr || !tokenData) {
-      return { statusCode: 403, body: JSON.stringify({ error: "Token inválido" }) }
+    if (tokenError || !tokenData) {
+      return { statusCode: 403, body: JSON.stringify({ error: 'Token inválido' }) }
     }
 
-    const { data: vacancy, error: vacErr } = await supabase
-      .from("recruiter_vacancies")
-      .select("id, title, description, requirements, company")
-      .eq("id", vacancy_id)
-      .eq("recruiter_token_id", tokenData.id)
+    const { data: vacancy, error: vacancyError } = await supabase
+      .from('recruiter_vacancies')
+      .select('id, title, description, requirements, company')
+      .eq('id', vacancy_id)
+      .eq('recruiter_token_id', tokenData.id)
       .single()
-
-    if (vacErr || !vacancy) {
-      return { statusCode: 403, body: JSON.stringify({ error: "Vacante no encontrada o sin acceso" }) }
+    if (vacancyError || !vacancy) {
+      return { statusCode: 403, body: JSON.stringify({ error: 'Vacante no encontrada o sin acceso' }) }
     }
 
-    // By default only process pending applicants. Re-analysis is explicit and charged again.
-    let applicantsQuery = supabase
-      .from("vacancy_applications")
-      .select("id, name, email, cv_text, cover_letter")
-      .eq("vacancy_id", vacancy_id)
-      .not("cv_text", "is", null)
-      .order("applied_at", { ascending: true })
-      .limit(30)
-    if (force !== true) applicantsQuery = applicantsQuery.is("analyzed_at", null)
-    const { data: applicants, error: appErr } = await applicantsQuery
-
-    if (appErr || !applicants || applicants.length === 0) {
-      return { statusCode: 200, body: JSON.stringify({ results: [], summary: null, message: "Sin postulantes con CV para analizar" }) }
+    // Queue claim and credit reservation are one transaction. Parallel clicks
+    // cannot claim or charge the same application twice.
+    const { data: claim, error: claimError } = await supabase.rpc('claim_vacancy_review_batch', {
+      p_recruiter_token_id: String(tokenData.id),
+      p_vacancy_id: vacancy_id,
+      p_operation_id: operation_id,
+    })
+    if (claimError) throw new Error(`No se pudo iniciar la tanda: ${claimError.message}`)
+    if (claim?.status === 'completed') {
+      return { statusCode: 200, body: JSON.stringify({ ...(claim.result || {}), idempotent: true, new_balance: claim.balance }) }
     }
-
-    const reservation = await reserveCredits(supabase, tokenData.id, applicants.length)
-    if (!reservation.ok) {
+    if (claim?.status === 'empty') {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ results: [], summary: null, analyzed: 0, failed: 0, complete: true, message: 'No quedan CVs pendientes de análisis', new_balance: claim.balance }),
+      }
+    }
+    if (claim?.status === 'insufficient') {
       return {
         statusCode: 402,
-        body: JSON.stringify({ error: `Necesitás ${applicants.length} créditos para analizar este lote. Saldo actual: ${reservation.balance ?? 0}.` }),
+        body: JSON.stringify({ error: `Necesitás ${claim.required ?? 1} créditos para analizar la siguiente tanda. Saldo actual: ${claim.balance ?? 0}.`, required: claim.required ?? null, new_balance: claim.balance ?? 0 }),
       }
     }
+    if (claim?.status !== 'claimed') {
+      return { statusCode: 409, body: JSON.stringify({ error: 'Esta tanda ya está en curso. Esperá unos minutos antes de reintentar.', operation_status: claim?.status || 'unknown' }) }
+    }
+    reservedOperation = { tokenId: String(tokenData.id), operationId: operation_id }
+
+    const candidateIds = Array.isArray(claim.candidate_ids) ? claim.candidate_ids : []
+    const { data: applicants, error: applicantError } = await supabase
+      .from('vacancy_applications')
+      .select('id, name, email, cv_text, cover_letter')
+      .in('id', candidateIds)
+      .eq('vacancy_id', vacancy_id)
+      .order('applied_at', { ascending: true })
+    if (applicantError || !applicants || applicants.length !== candidateIds.length) {
+      throw new Error(`No se pudo reconstruir la tanda reclamada: ${applicantError?.message || 'cantidad inconsistente'}`)
+    }
+
+    const { data: priorFinalists } = await supabase
+      .from('vacancy_applications')
+      .select('name, fit_score, ats_score, key_matches, key_gaps')
+      .eq('vacancy_id', vacancy_id)
+      .eq('progressive_shortlist', true)
+      .order('progressive_rank', { ascending: true })
+      .limit(30)
 
     const jobContext = `PUESTO: ${vacancy.title}\nEMPRESA: ${vacancy.company}\nDESCRIPCIÓN:\n${vacancy.description}\nREQUISITOS:\n${vacancy.requirements}`
-
-    // Analyze all applicants in parallel
-    const analysisResults = await mapWithConcurrency(applicants, 3, async (a) => {
+    const analyses = await mapWithConcurrency(applicants, 3, async (applicant) => {
       try {
-        const text = await callBedrock(
+        const raw = await callBedrock(
           SYSTEM,
-          `Sos un reclutador experto evaluando un CV para el siguiente puesto.\n\n${jobContext}\n\nCV DEL CANDIDATO (${a.name}):\n${(a.cv_text || "").substring(0, 4000)}${a.cover_letter ? `\n\nCARTA DE INTERÉS:\n${a.cover_letter}` : ""}\n\nEvaluá este CV en función del puesto. Respondé ÚNICAMENTE con JSON válido:\n{\n  "atsScore": <0-100, calidad general del CV>,\n  "fitScore": <0-100, adecuación específica al puesto>,\n  "recommendation": <"Llamar" si fitScore>=75, "Considerar" si fitScore>=50, "No llamar" si fitScore<50>,\n  "summary": "3-4 líneas sobre el candidato y su adecuación al puesto",\n  "strengths": ["fortaleza 1", "fortaleza 2", "fortaleza 3"],\n  "keyMatches": ["skill que tiene Y el puesto requiere", "..."],\n  "keyGaps": ["skill que el puesto requiere Y no tiene", "..."]\n}`,
-          1200
+          `Evaluá únicamente la evidencia de este CV contra el puesto. No infieras edad, género, origen, salud, situación familiar ni otra característica protegida. No inventes experiencia ni penalices datos ausentes que no sean requisitos explícitos.\n\n${jobContext}\n\nCV DEL CANDIDATO (${applicant.name}):\n${(applicant.cv_text || '').substring(0, 4000)}${applicant.cover_letter ? `\n\nCARTA DE INTERÉS:\n${applicant.cover_letter}` : ''}\n\nRespondé ÚNICAMENTE con JSON válido:\n{\n  "atsScore": <0-100, legibilidad y estructura general del CV>,\n  "fitScore": <0-100, evidencia de adecuación específica al puesto>,\n  "summary": "3-4 líneas sobre evidencia y adecuación",\n  "strengths": ["fortaleza con evidencia", "..."],\n  "keyMatches": ["requisito explícito respaldado por el CV", "..."],\n  "keyGaps": ["requisito explícito sin evidencia suficiente", "..."]\n}`,
+          1200,
         )
-        const result = extractJSON(text)
-        return { applicantId: a.id, name: a.name, email: a.email, result, ok: true }
-      } catch (e: any) {
-        console.error(`Analysis failed for ${a.name}:`, e.message)
-        return { applicantId: a.id, name: a.name, email: a.email, result: null, ok: false }
+        const result = extractJSON(raw)
+        return { applicantId: applicant.id, name: applicant.name, email: applicant.email, result, ok: true }
+      } catch (error: any) {
+        console.error(`Analysis failed for ${applicant.name}:`, error.message)
+        return { applicantId: applicant.id, name: applicant.name, email: applicant.email, result: null, ok: false }
       }
     })
+    const successful = analyses.filter((row) => row.ok && row.result)
 
-    const successful = analysisResults.filter(r => r.ok && r.result)
-
-    // Persist results to DB and refund credits for model/database failures.
-    const persisted = await Promise.all(
-      successful.map(async ({ applicantId, result }) => {
-        const { error } = await supabase
-          .from("vacancy_applications")
-          .update({
-            ats_score: result.atsScore ?? null,
-            fit_score: result.fitScore ?? null,
-            recommendation: result.recommendation ?? null,
-            ai_summary: result.summary ?? null,
-            strengths: result.strengths ?? [],
-            key_matches: result.keyMatches ?? [],
-            key_gaps: result.keyGaps ?? [],
-            analyzed_at: new Date().toISOString(),
-          })
-          .eq("id", applicantId)
-        return { applicantId, ok: !error }
-      })
-    )
-    const persistedResults = successful.filter((candidate) => persisted.some((row) => row.applicantId === candidate.applicantId && row.ok))
-    const persistedCount = persistedResults.length
-    await refundCredits(supabase, tokenData.id, applicants.length - persistedCount)
-
-    // Build executive summary over all results
     let summary = null
-    if (persistedResults.length >= 2) {
-      const ranked = persistedResults
-        .filter(r => r.result?.fitScore !== undefined)
-        .sort((a, b) => (b.result.fitScore ?? 0) - (a.result.fitScore ?? 0))
-
-      const candidatesText = ranked
-        .map((r, i) =>
-          `${i + 1}. ${r.name} | Fit: ${r.result.fitScore}/100 | ATS: ${r.result.atsScore}/100 | Decisión: ${r.result.recommendation}\n   Matches: ${(r.result.keyMatches || []).join(", ") || "—"}\n   Gaps: ${(r.result.keyGaps || []).join(", ") || "—"}`
-        )
-        .join("\n\n")
-
+    if (successful.length >= 2) {
+      const ranked = [...successful].sort((a, b) => (b.result.fitScore ?? 0) - (a.result.fitScore ?? 0))
+      const currentText = ranked.map((row, index) =>
+        `${index + 1}. ${row.name} | Fit: ${row.result.fitScore}/100 | ATS: ${row.result.atsScore}/100\nMatches: ${(row.result.keyMatches || []).join(', ') || '—'}\nBrechas: ${(row.result.keyGaps || []).join(', ') || '—'}`
+      ).join('\n\n')
+      const previousText = (priorFinalists || []).length > 0
+        ? (priorFinalists || []).map((row: any, index: number) =>
+            `${index + 1}. ${row.name} | Fit: ${row.fit_score}/100 | ATS: ${row.ats_score}/100\nMatches: ${(row.key_matches || []).join(', ') || '—'}\nBrechas: ${(row.key_gaps || []).join(', ') || '—'}`
+          ).join('\n\n')
+        : 'Primera tanda: todavía no hay finalistas anteriores.'
       try {
-        const summaryText = await callBedrock(
+        summary = extractJSON(await callBedrock(
           SYSTEM,
-          `Sos el director de RRHH que acaba de revisar ${ranked.length} candidatos para: "${vacancy.title}" en ${vacancy.company}.\n\n${jobContext}\n\nRESULTADOS (ordenados por fit):\n${candidatesText}\n\nRespondé ÚNICAMENTE con JSON:\n{\n  "executiveSummary": "Diagnóstico general del pool en 3-4 oraciones. ¿Es un pool fuerte o débil? ¿Hay candidatos claros o el fit es mediocre en general?",\n  "topPick": "Nombre del candidato #1 y por qué es la elección clara (2 oraciones)",\n  "callList": ["nombre 1", "nombre 2", "nombre 3"],\n  "redFlag": "Si hay algo preocupante del pool o de algún candidato que el cliente debe saber, mencionalo. Si no hay, dejá null.",\n  "nextStep": "Recomendación concreta de qué hacer ahora: entrevistar a X y Y esta semana, pedir referencia de Z, etc."\n}`,
-          1200
-        )
-        summary = extractJSON(summaryText)
-      } catch (e: any) {
-        console.error("Summary generation failed:", e.message)
+          `Revisaste una nueva tanda de ${ranked.length} candidatos para "${vacancy.title}" en ${vacancy.company}.\n\n${jobContext}\n\nNUEVA TANDA:\n${currentText}\n\nFINALISTAS DE TANDAS ANTERIORES:\n${previousText}\n\nCompará la nueva tanda con los finalistas anteriores. Conservá como recomendables a todos los perfiles fuertes; admití empates y no sugieras rechazo automático. Respondé con JSON:\n{\n  "executiveSummary": "comparación del pool en 3-4 oraciones",\n  "topPick": "perfiles prioritarios y por qué, admitiendo varios fuertes",\n  "callList": ["todos los nombres fuertes que conviene entrevistar"],\n  "redFlag": "alerta verificable o null",\n  "nextStep": "siguiente paso de entrevistas y verificación humana; el ranking no decide la contratación"\n}`,
+          1200,
+        ))
+      } catch (error: any) {
+        console.error('Summary generation failed:', error.message)
       }
     }
 
-    // Return ranked results
-    const ranked = persistedResults
-      .map(r => ({
-        applicantId: r.applicantId,
-        name: r.name,
-        email: r.email,
-        atsScore: r.result.atsScore,
-        fitScore: r.result.fitScore,
-        recommendation: r.result.recommendation,
-        summary: r.result.summary,
-        strengths: r.result.strengths || [],
-        keyMatches: r.result.keyMatches || [],
-        keyGaps: r.result.keyGaps || [],
-      }))
-      .sort((a, b) => (b.fitScore ?? 0) - (a.fitScore ?? 0))
+    const ranked = successful.map((row) => ({
+      applicantId: row.applicantId,
+      name: row.name,
+      email: row.email,
+      atsScore: row.result.atsScore,
+      fitScore: row.result.fitScore,
+      recommendation: (row.result.fitScore ?? 0) >= 75 ? 'Llamar' : (row.result.fitScore ?? 0) >= 50 ? 'Considerar' : 'Revisado',
+      summary: row.result.summary,
+      strengths: row.result.strengths || [],
+      keyMatches: row.result.keyMatches || [],
+      keyGaps: row.result.keyGaps || [],
+    })).sort((a, b) => (b.fitScore ?? 0) - (a.fitScore ?? 0))
+
+    const responsePayload = {
+      results: ranked,
+      summary,
+      analyzed: successful.length,
+      failed: applicants.length - successful.length,
+      batchNumber: claim.batch_number,
+    }
+    const databaseResults = successful.map((row) => ({
+      applicant_id: row.applicantId,
+      ats_score: row.result.atsScore ?? null,
+      fit_score: row.result.fitScore ?? null,
+      ai_summary: row.result.summary ?? null,
+      strengths: row.result.strengths ?? [],
+      key_matches: row.result.keyMatches ?? [],
+      key_gaps: row.result.keyGaps ?? [],
+      analysis_model: MODEL_ID,
+      analysis_version: ANALYSIS_VERSION,
+    }))
+    const { data: settlement, error: settlementError } = await supabase.rpc('settle_vacancy_review_batch', {
+      p_recruiter_token_id: String(tokenData.id),
+      p_operation_id: operation_id,
+      p_results: databaseResults,
+      p_response: responsePayload,
+      p_summary: summary,
+    })
+    if (settlementError || settlement?.status !== 'completed') {
+      throw new Error(`No se pudo cerrar la tanda: ${settlementError?.message || settlement?.status || 'unknown'}`)
+    }
+    reservedOperation = null
 
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        results: ranked,
-        summary,
-        analyzed: persistedResults.length,
-        failed: applicants.length - persistedResults.length,
-      }),
+      body: JSON.stringify({ ...(settlement.result || responsePayload), new_balance: settlement.balance, charged: settlement.charged, refunded: settlement.refunded }),
     }
-  } catch (err: any) {
-    console.error("analyze-vacancy-applicants error:", err.message)
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) }
+  } catch (error: any) {
+    let operationStatus: string | null = null
+    if (reservedOperation) {
+      const { data: refund, error: refundError } = await makeSupabaseAdmin().rpc('refund_vacancy_review_batch', {
+        p_recruiter_token_id: reservedOperation.tokenId,
+        p_operation_id: reservedOperation.operationId,
+        p_error_summary: String(error?.message || error).slice(0, 1000),
+      })
+      if (refundError) console.error('vacancy batch refund error:', refundError.message)
+      operationStatus = refund?.status || null
+    }
+    console.error('analyze-vacancy-applicants error:', error.message)
+    return { statusCode: 500, body: JSON.stringify({ error: error.message, operation_status: operationStatus, retryable: operationStatus === 'refunded' }) }
   }
 }
 

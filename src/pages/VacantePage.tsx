@@ -245,13 +245,33 @@ export default function VacantePage() {
   }
 
   const pageTitle = vacancy?.title || (slug ? slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'Vacante')
+  const canonical = `https://cvitae.lat/vacante/${slug}`
+  const metaDescription = vacancy
+    ? `${vacancy.title} en ${vacancy.company} — ${vacancy.location}. Postulá directamente desde CVitae.`
+    : `Postulá a ${pageTitle}. Tu perfil queda guardado en CVitae para futuras búsquedas.`
+  const structuredData = vacancy ? JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'JobPosting',
+    title: vacancy.title,
+    description: vacancy.description,
+    hiringOrganization: { '@type': 'Organization', name: vacancy.company },
+    jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: vacancy.location, addressCountry: 'PY' } },
+    employmentType: vacancy.modality,
+    directApply: true,
+    url: canonical,
+  }) : null
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
       <Ambient />
       <Helmet>
         <title>{pageTitle} · CVitae</title>
-        <meta name="description" content={`Postulá a ${pageTitle}. Tu perfil queda guardado en CVitae para futuras búsquedas.`} />
+        <meta name="description" content={metaDescription} />
+        <link rel="canonical" href={canonical} />
+        <meta property="og:title" content={`${pageTitle} · CVitae`} />
+        <meta property="og:description" content={metaDescription} />
+        <meta property="og:url" content={canonical} />
+        <meta property="og:type" content="article" />
+        {structuredData && <script type="application/ld+json">{structuredData}</script>}
       </Helmet>
 
       {/* Top bar */}

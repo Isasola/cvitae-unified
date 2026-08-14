@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link, useParams } from 'wouter'
-import { ArrowLeft, Building2, CalendarDays, ExternalLink, MapPin, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Building2, CalendarDays, ExternalLink, MapPin, ShieldCheck, Sparkles } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { supabase } from '@/lib/supabase'
 import { analytics } from '@/lib/analytics'
@@ -70,6 +70,18 @@ export default function OpportunityDetail() {
   const description = `${type} de ${clean(item.organization) || 'una organización verificada'}. Revisá elegibilidad, fecha y postulación en CVitae.`
   const canonical = `https://cvitae.lat/oportunidades/${item.slug}`
   const funding = item.funding_amount ? `${item.currency || ''} ${Number(item.funding_amount).toLocaleString('es-PY')}`.trim() : clean(item.funding_type)
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': ['scholarship', 'fellowship', 'grant', 'research_funding'].includes(item.opportunity_type || '') ? 'Scholarship' : 'JobPosting',
+    name: clean(item.title),
+    description: clean(item.description) || description,
+    url: canonical,
+    datePosted: item.updated_at,
+    validThrough: item.deadline || undefined,
+    hiringOrganization: { '@type': 'Organization', name: clean(item.organization) || 'Organización verificada' },
+    jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: clean(item.location) || eligibility || 'Paraguay', addressCountry: 'PY' } },
+    directApply: false,
+  }
 
   const apply = () => {
     analytics.applyClicked(item.id, item.source || 'unknown')
@@ -85,6 +97,9 @@ export default function OpportunityDetail() {
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonical} />
+        <meta property="og:type" content="article" />
+        <meta property="og:image" content="https://cvitae.lat/og-image.jpg" />
+        <script type="application/ld+json">{JSON.stringify(structuredData)}</script>
       </Helmet>
       <SiteShell>
         <main className="mx-auto max-w-5xl px-6 py-12 sm:py-16">
@@ -114,7 +129,9 @@ export default function OpportunityDetail() {
             </div>
 
             <aside className="h-fit border border-white/8 bg-white/[0.018] p-5 lg:sticky lg:top-24">
-              <button onClick={apply} className="flex w-full items-center justify-center gap-2 bg-[#c9a84c] px-4 py-3 text-sm font-semibold text-[#090909] transition hover:bg-[#dfc36e]">Abrir postulación <ExternalLink className="h-4 w-4" /></button>
+              <Link href={`/mi-carrera/postular/${item.slug}`} className="flex w-full items-center justify-center gap-2 bg-[#c9a84c] px-4 py-3 text-sm font-semibold text-[#090909] transition hover:bg-[#dfc36e]">Preparar mi postulación <Sparkles className="h-4 w-4" /></Link>
+              <button onClick={apply} className="mt-2 flex w-full items-center justify-center gap-2 border border-white/10 px-4 py-2.5 text-xs text-white/55 transition hover:border-white/25 hover:text-cream">Ir directamente al sitio <ExternalLink className="h-3.5 w-3.5" /></button>
+              <p className="mt-3 text-[11px] leading-relaxed text-white/35">Podés adaptar tu CV con evidencias reales, preparar el mensaje y revisar brechas antes de abrir el formulario oficial.</p>
               <div className="mt-5 space-y-3 border-t border-white/8 pt-4 text-xs leading-relaxed text-white/35">
                 <p className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />Esta ficha pasó por revisión, pero las bases de la organización son siempre la referencia final.</p>
                 <p>Revisada {new Date(item.updated_at).toLocaleDateString('es-PY')}</p>

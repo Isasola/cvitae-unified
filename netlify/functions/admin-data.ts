@@ -1,8 +1,30 @@
 import { Handler } from "@netlify/functions"
 import { makeSupabaseAdmin } from "./_supabase"
+import { getGoogleReportingMetrics } from "./lib/google-reporting"
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
 if (!ADMIN_PASSWORD) throw new Error("ADMIN_PASSWORD env var not configured")
+
+const OPERATIONS_TIME_ZONE = "America/Asuncion"
+
+export function zonedDayStart(value: Date, timeZone = OPERATIONS_TIME_ZONE): Date {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  })
+  const numericParts = (date: Date) => Object.fromEntries(
+    formatter.formatToParts(date).filter(part => part.type !== "literal").map(part => [part.type, Number(part.value)]),
+  ) as Record<string, number>
+  const local = numericParts(value)
+  const localMidnightAsUtc = Date.UTC(local.year, local.month - 1, local.day)
+  let target = localMidnightAsUtc
+  for (let iteration = 0; iteration < 2; iteration++) {
+    const represented = numericParts(new Date(target))
+    const representedAsUtc = Date.UTC(represented.year, represented.month - 1, represented.day, represented.hour, represented.minute, represented.second)
+    target = localMidnightAsUtc - (representedAsUtc - target)
+  }
+  return new Date(target)
+}
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
@@ -46,32 +68,62 @@ const handler: Handler = async (event) => {
     }
 
     if (action === "metrics") {
-      const now = new Date()
-      const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
-      const yesterdayStart = new Date(todayStart); yesterdayStart.setDate(yesterdayStart.getDate() - 1)
-      const weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - 7)
-
-      const [usersRes, oppsRes, subsRes, todayRes, yesterdayRes, weekRes, b2bRes] = await Promise.all([
-        supabase.from("user_master_profiles").select("id", { count: "exact", head: true }),
-        supabase.from("content_hub").select("id", { count: "exact", head: true }).eq("is_active", true).eq("tipo", "oportunidad"),
-        supabase.from("user_master_profiles").select("id", { count: "exact", head: true }).eq("is_subscribed", true),
-        supabase.from("user_master_profiles").select("id", { count: "exact", head: true }).gte("created_at", todayStart.toISOString()),
-        supabase.from("user_master_profiles").select("id", { count: "exact", head: true }).gte("created_at", yesterdayStart.toISOString()).lt("created_at", todayStart.toISOString()),
-        supabase.from("user_master_profiles").select("id", { count: "exact", head: true }).gte("created_at", weekStart.toISOString()),
-        supabase.from("recruiter_tokens").select("id", { count: "exact", head: true }).eq("is_active", true),
+      const [usersRes, oppsRes, subsRes, b2bRes, reviewRes, quarantinedRes, feedbackRes, recruiterReviewRes, growthRes] = await Promise.all([
+        supabase.from("user_master_profiles").select("id", { count: "exact", head: true }).eq("is_test", false),
+        supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("is_active", true).eq("verification_status", "verified").is("deleted_at", null),
+        supabase.from("user_master_profiles").select("id", { count: "exact", head: true }).eq("is_subscribed", true).eq("is_test", false),
+        supabase.from("recruiter_tokens").select("id", { count: "exact", head: true }).eq("is_active", true).eq("verification_status", "verified"),
+        supabase.from("opportunities").select("id", { count: "exact", head: true }).in("verification_status", ["pending", "in_review"]).is("deleted_at", null),
+        supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("verification_status", "quarantined").is("deleted_at", null),
+        supabase.from("product_feedback").select("id", { count: "exact", head: true }).in("status", ["new", "triaged", "in_progress"]),
+        supabase.from("recruiter_tokens").select("id", { count: "exact", head: true }).in("verification_status", ["pending", "in_review"]),
+        supabase.rpc("admin_daily_growth", { p_days: 14 }),
       ])
+      const required = [usersRes, oppsRes, subsRes, b2bRes, reviewRes, quarantinedRes, feedbackRes, recruiterReviewRes, growthRes]
+      const failed = required.find(result => result.error)
+      if (failed?.error) throw failed.error
+      const growth = (growthRes.data || []).map((row: any) => ({
+        day: row.day,
+        userSignups: Number(row.user_signups || 0),
+        opportunitiesAdded: Number(row.opportunities_added || 0),
+        opportunitiesVerified: Number(row.opportunities_verified || 0),
+      }))
+      const today = growth[growth.length - 1] || { userSignups: 0 }
+      const yesterday = growth[growth.length - 2] || { userSignups: 0 }
+      const lastSeven = growth.slice(-7)
       return {
         statusCode: 200,
         body: JSON.stringify({
           usuarios: usersRes.count || 0,
           oportunidades: oppsRes.count || 0,
           suscriptores: subsRes.count || 0,
-          usuariosHoy: todayRes.count || 0,
-          usuariosAyer: yesterdayRes.count || 0,
-          usuariosEstaSemana: weekRes.count || 0,
+          usuariosHoy: today.userSignups,
+          usuariosAyer: yesterday.userSignups,
+          usuariosEstaSemana: lastSeven.reduce((total: number, row: any) => total + row.userSignups, 0),
           empresasActivas: b2bRes.count || 0,
+          queues: {
+            opportunityReview: reviewRes.count || 0,
+            quarantined: quarantinedRes.count || 0,
+            feedbackOpen: feedbackRes.count || 0,
+            recruiterReview: recruiterReviewRes.count || 0,
+          },
+          growth,
+          generatedAt: new Date().toISOString(),
+          timeZone: "America/Asuncion",
         }),
       }
+    }
+
+    if (action === "external_metrics") {
+      const alertStatuses = ["pending", "processing", "sent", "failed", "suppressed"]
+      const alertSince = new Date(Date.now() - 7 * 86400000).toISOString()
+      const [google, ...alertResults] = await Promise.all([
+        getGoogleReportingMetrics().catch((error: any) => ({ configured: true, analytics: null, searchConsole: null, errors: [error.message] })),
+        ...alertStatuses.map(status => supabase.from("match_alert_deliveries").select("id", { count: "exact", head: true }).eq("status", status).gte("created_at", alertSince)),
+      ])
+      const alerts = Object.fromEntries(alertStatuses.map((status, index) => [status, alertResults[index].count || 0]))
+      const alertErrors = alertResults.map(result => result.error?.message).filter(Boolean)
+      return { statusCode: 200, body: JSON.stringify({ google, alerts: { configured: alertErrors.length === 0, counts: alerts, error: alertErrors.join(" · ") || null, period: "7d" } }) }
     }
 
     if (action === "list_b2b_prospects") {
@@ -79,6 +131,19 @@ const handler: Handler = async (event) => {
         .from("b2b_prospects")
         .select("*")
         .order("created_at", { ascending: false })
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify({ data: data || [] }) }
+    }
+
+    if (action === "list_product_feedback") {
+      const status = String(payload?.status || "all")
+      const audience = String(payload?.audience || "all")
+      let query = supabase.from("product_feedback")
+        .select("id,reference_code,audience,category,severity,status,feature,message,expected_result,page_path,user_id,recruiter_token_id,contact_email,context,admin_note,assigned_to,triaged_at,resolved_at,created_at,updated_at")
+        .order("created_at", { ascending: false }).limit(200)
+      if (status !== "all") query = query.eq("status", status)
+      if (audience !== "all") query = query.eq("audience", audience)
+      const { data, error } = await query
       if (error) throw error
       return { statusCode: 200, body: JSON.stringify({ data: data || [] }) }
     }
@@ -161,10 +226,8 @@ const handler: Handler = async (event) => {
       const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
       const since7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-      // today = from midnight local PY time (UTC-4)
-      const todayStart = new Date(now)
-      todayStart.setUTCHours(4, 0, 0, 0) // midnight PY = 04:00 UTC
-      if (now.getUTCHours() < 4) todayStart.setUTCDate(todayStart.getUTCDate() - 1)
+      // Business-day boundaries follow the IANA timezone instead of a fixed UTC offset.
+      const todayStart = zonedDayStart(now)
       const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000)
 
       const [totalOppsRes, totalChRes, new24hRes, new7dRes, bySourceRes, todayRes, yesterdayRes, duplicatesRes, runsRes] = await Promise.all([
@@ -224,8 +287,14 @@ const handler: Handler = async (event) => {
         const latest = history[0]
         const found = latest.found_count
         const inserted = latest.inserted_count
-        const productive = typeof inserted === "number" && inserted > 0
-        const rejectedAll = typeof found === "number" && found > 0 && inserted === 0
+        const updated = latest.updated_count
+        const duplicates = latest.duplicate_count
+        const rejected = latest.rejected_count
+        const productive = (typeof inserted === "number" && inserted > 0) || (typeof updated === "number" && updated > 0)
+        const allDuplicates = typeof found === "number" && found > 0 && inserted === 0 && updated === 0
+          && typeof duplicates === "number" && duplicates >= (latest.unique_count || found)
+        const rejectedAll = typeof found === "number" && found > 0 && inserted === 0 && updated === 0
+          && typeof rejected === "number" && rejected >= found
         const noResults = found === 0 && inserted === 0
         const noCounters = found == null && inserted == null
         const healthStatus = ["failed", "timeout"].includes(latest.status)
@@ -234,19 +303,28 @@ const handler: Handler = async (event) => {
             ? "blocked"
             : latest.error_count > 0 || latest.status === "warning"
               ? "warning"
-              : noResults
+              : noResults || allDuplicates
                 ? "idle"
                 : noCounters
                   ? "unknown"
                   : "healthy"
         const consecutiveProblems = history.findIndex(run =>
-          run.status === "healthy" && typeof run.inserted_count === "number" && run.inserted_count > 0
+          !["failed", "timeout", "warning"].includes(run.status) && !(run.error_count > 0)
         )
-        const lastProductiveRun = history.find(run => typeof run.inserted_count === "number" && run.inserted_count > 0)
+        const lastProductiveRun = history.find(run => (run.inserted_count || 0) > 0 || (run.updated_count || 0) > 0)
+        const outcomeReason = healthStatus === "critical" ? (latest.error_summary || "La ejecución terminó con un error técnico")
+          : healthStatus === "blocked" ? "Encontró registros, pero todos fueron rechazados"
+            : healthStatus === "warning" ? (latest.error_summary || "Terminó con advertencias que requieren revisión")
+              : noResults ? "Ejecutó correctamente y la fuente no publicó resultados"
+                : allDuplicates ? "Ejecutó correctamente; todo lo encontrado ya existía"
+                  : noCounters ? "Ejecutó, pero todavía no emite contadores estructurados"
+                    : productive ? "Aportó oportunidades nuevas o actualizaciones"
+                      : "Ejecución correcta, sin cambios en la base"
         return {
           ...latest,
           health_status: healthStatus,
           productive,
+          outcome_reason: outcomeReason,
           insertion_rate: typeof found === "number" && found > 0 && typeof inserted === "number"
             ? Math.round((inserted / found) * 1000) / 10
             : null,
@@ -271,6 +349,17 @@ const handler: Handler = async (event) => {
         acc[run.health_status] = (acc[run.health_status] || 0) + 1
         return acc
       }, {} as Record<string, number>)
+      const runsToday = (runsRes.data || []).filter((run: any) => new Date(run.started_at) >= todayStart)
+      const ingestionToday = runsToday.reduce((summary: Record<string, number>, run: any) => {
+        summary.runs++
+        summary.found += Number(run.found_count || 0)
+        summary.inserted += Number(run.inserted_count || 0)
+        summary.updated += Number(run.updated_count || 0)
+        summary.duplicates += Number(run.duplicate_count || 0)
+        summary.rejected += Number(run.rejected_count || 0)
+        if (["failed", "timeout"].includes(run.status)) summary.failed++
+        return summary
+      }, { runs: 0, found: 0, inserted: 0, updated: 0, duplicates: 0, rejected: 0, failed: 0 })
 
       return {
         statusCode: 200,
@@ -279,11 +368,16 @@ const handler: Handler = async (event) => {
           totalContentHub: totalChRes.count || 0,
           newLast24h: new24hRes.count || 0,
           newLast7d: new7dRes.count || 0,
+          newToday: Object.values(todayMap).reduce((total, value) => total + value, 0),
+          newYesterday: Object.values(yesterdayMap).reduce((total, value) => total + value, 0),
           duplicates: (duplicatesRes.data as any)?.[0]?.duplicate_count || 0,
           bySource,
           scraperRuns,
           runSummary,
+          ingestionToday,
           telemetryAvailable: !runsRes.error,
+          generatedAt: now.toISOString(),
+          timeZone: OPERATIONS_TIME_ZONE,
           telemetryError: runsRes.error ? "La telemetría todavía no está disponible" : null,
         }),
       }
@@ -460,6 +554,21 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
+    if (action === "update_product_feedback") {
+      if (!payload?.id || !["new", "triaged", "in_progress", "resolved", "closed"].includes(payload.status)) {
+        return { statusCode: 400, body: JSON.stringify({ error: "Estado de reporte inválido" }) }
+      }
+      const { error } = await supabase.rpc("update_product_feedback", {
+        p_feedback_id: payload.id,
+        p_status: payload.status,
+        p_note: String(payload.note || "").slice(0, 3000),
+        p_assigned_to: String(payload.assignedTo || "").slice(0, 120),
+        p_actor: "admin",
+      })
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
     if (action === "toggle_subscribed") {
       if (!payload?.userId) return { statusCode: 400, body: JSON.stringify({ error: "userId requerido" }) }
       const { userId, value } = payload
@@ -491,6 +600,76 @@ const handler: Handler = async (event) => {
         .eq("id", id)
       if (error) throw error
       return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
+    if (action === "batch_review_by_source") {
+      const allowed = ["rejected", "quarantined"]
+      const batchVerify = payload?.status === "verified"
+      if (!payload?.source || (!batchVerify && !allowed.includes(payload.status))) {
+        return { statusCode: 400, body: JSON.stringify({ error: "source y status (verified | rejected | quarantined) requeridos" }) }
+      }
+      const source = String(payload.source)
+      const status = String(payload.status) as "verified" | "rejected" | "quarantined"
+      const note = String(payload.note || "").trim().slice(0, 1000) || null
+      const features = payload.features && typeof payload.features === "object" ? payload.features : {}
+      const fromStatuses: string[] = Array.isArray(payload.from_statuses) ? payload.from_statuses.map(String) : ["in_review", "pending"]
+      const maxBatch = Math.min(Number(payload.limit) || 200, 500)
+      const reviewedAt = new Date().toISOString()
+
+      const { data: candidates, error: fetchError } = await supabase
+        .from("opportunities")
+        .select("id,source_authority,original_source_verified,verification_status")
+        .eq("source", source)
+        .in("verification_status", fromStatuses)
+        .is("deleted_at", null)
+        .limit(maxBatch)
+      if (fetchError) throw fetchError
+      if (!candidates || candidates.length === 0) {
+        return { statusCode: 200, body: JSON.stringify({ ok: true, processed: 0, skipped: 0, message: "No hay registros elegibles para ese filtro" }) }
+      }
+
+      let toProcess = candidates
+      let skipped = 0
+      if (status === "verified") {
+        const eligible = candidates.filter(c => c.source_authority === "original" || c.original_source_verified)
+        skipped = candidates.length - eligible.length
+        toProcess = eligible
+        if (eligible.length === 0) {
+          return { statusCode: 409, body: JSON.stringify({ error: "Ningún registro de esta fuente tiene fuente original verificada. Verificá manualmente antes de aprobar en lote.", skipped: candidates.length }) }
+        }
+      }
+
+      const ids = toProcess.map(c => c.id)
+      const verified = status === "verified"
+      const { error: updateError } = await supabase
+        .from("opportunities")
+        .update({
+          verification_status: status,
+          verification_note: note,
+          reviewed_at: reviewedAt,
+          reviewed_by: "admin_batch",
+          is_active: verified,
+          catalog_eligible: verified && features.catalog !== false,
+          match_eligible: verified && features.matching !== false,
+          alerts_eligible: verified && features.alerts !== false,
+          seo_eligible: verified && features.seo !== false,
+          policy_overrides: verified ? features : {},
+        })
+        .in("id", ids)
+      if (updateError) throw updateError
+
+      const auditRows = ids.map(id => ({
+        opportunity_id: id,
+        previous_status: candidates.find(c => c.id === id)?.verification_status || "unknown",
+        new_status: status,
+        criteria: ["batch_review"],
+        note: note || `Revisión en lote — fuente: ${source}`,
+        actor: "admin_batch",
+      }))
+      const { error: auditError } = await supabase.from("opportunity_review_events").insert(auditRows)
+      if (auditError) throw auditError
+
+      return { statusCode: 200, body: JSON.stringify({ ok: true, processed: ids.length, skipped, reviewed_at: reviewedAt }) }
     }
 
     return { statusCode: 400, body: JSON.stringify({ error: "Acción desconocida" }) }

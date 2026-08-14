@@ -117,8 +117,19 @@ export default function ProfileBuilder() {
   const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > 4 * 1024 * 1024) {
+      setAnalyzeError('El archivo no puede superar 4 MB.')
+      e.target.value = ''
+      return
+    }
     setAnalyzing(true); setAnalyzeError(null)
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Tu sesión expiró. Volvé a ingresar.')
+      const authenticatedHeaders = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      }
       let text = ''
       if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
         const reader = new FileReader()
@@ -128,7 +139,7 @@ export default function ProfileBuilder() {
           reader.readAsDataURL(file)
         })
         const res = await fetch('/.netlify/functions/extract-pdf-text', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: authenticatedHeaders,
           body: JSON.stringify({ pdfBase64: base64 }),
         })
         if (!res.ok) throw new Error('Error extrayendo texto del PDF')
@@ -146,11 +157,22 @@ export default function ProfileBuilder() {
       }
 
       const analyzeRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: authenticatedHeaders,
         body: JSON.stringify({ cvText: text, mode: 'extract' }),
       })
       if (!analyzeRes.ok) throw new Error('Error analizando el CV')
       const extracted = await analyzeRes.json()
+
+      const evidenceRes = await fetch('/.netlify/functions/cv-workspace', {
+        method: 'POST',
+        headers: authenticatedHeaders,
+        body: JSON.stringify({
+          action: 'import_extraction',
+          extracted,
+          sourceFileName: file.name,
+        }),
+      })
+      if (!evidenceRes.ok) throw new Error('No pudimos preparar las evidencias del CV para tu revisión')
 
       analytics.cvAnalyzed('profile_builder')
       setFormData(prev => ({
@@ -159,7 +181,9 @@ export default function ProfileBuilder() {
         professional_title: extracted.professional_title || prev.professional_title,
         location: extracted.location || prev.location,
         seniority: extracted.seniority || prev.seniority,
-        summary: extracted.experience?.[0]?.achievements?.join('. ') || prev.summary,
+        // Los logros extraídos se guardan como evidencia pendiente. Nunca se
+        // convierten automáticamente en el resumen del perfil.
+        summary: prev.summary,
         skills: extracted.skills?.length > 0 ? extracted.skills : prev.skills,
         cursos: extracted.education?.map((e: any) => `${e.degree} — ${e.institution}`).filter(Boolean) || prev.cursos,
       }))
@@ -196,8 +220,7 @@ export default function ProfileBuilder() {
     if (!user) return
     setSaving(true)
     try {
-      const payload = {
-        user_id: user.id,
+      const profileContent = {
         full_name: formData.full_name,
         professional_title: formData.professional_title,
         summary: formData.summary,
@@ -211,8 +234,8 @@ export default function ProfileBuilder() {
         },
       }
       const { error } = existingProfileId
-        ? await supabase.from('user_master_profiles').update(payload).eq('id', existingProfileId)
-        : await supabase.from('user_master_profiles').insert(payload)
+        ? await supabase.from('user_master_profiles').update(profileContent).eq('id', existingProfileId).eq('user_id', user.id)
+        : await supabase.from('user_master_profiles').insert({ ...profileContent, user_id: user.id })
       if (error) throw error
       setSaved(true)
       setTimeout(() => setLocation('/mi-carrera'), 1500)

@@ -29,3 +29,8 @@ supabase/.temp/
 *-server.log
 audit-redesign-*.png
 tmp/
+
+# Playwright
+artifacts/visual/
+playwright-report/
+test-results/

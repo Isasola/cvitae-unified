@@ -5,6 +5,7 @@ import { Briefcase, MapPin, Search, SlidersHorizontal } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { Eyebrow } from '@/components/cv/visuals'
 import { supabase } from '@/lib/supabase'
+import { AdSlot } from '@/components/cv/AdSlot'
 
 interface Job {
   id: string
@@ -139,6 +140,7 @@ export default function Jobs() {
               ))}
             </section>
           )}
+          <AdSlot placement="jobs-feed" />
         </main>
       </SiteShell>
     </>

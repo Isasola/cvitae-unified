@@ -2,6 +2,14 @@
 import { Handler } from "@netlify/functions"
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
 import { makeSupabaseAdmin } from "./_supabase"
+import {
+  authenticatedUser,
+  consumeRateLimit,
+  jsonResponse,
+  rateLimitHeaders,
+  rejectInvalidOrigin,
+  securityHeaders,
+} from "./lib/b2c-security"
 
 // AWS Bedrock requires the version suffix for Claude Haiku 4.5 inference profiles.
 const MODEL_ID_EXTRACT = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
@@ -13,6 +21,8 @@ const bedrockClient = new BedrockRuntimeClient({
     secretAccessKey: process.env.CVITAE_AWS_SECRET_ACCESS_KEY!,
   },
 })
+
+const OPERATION_ID_RE = /^[A-Za-z0-9._:-]{8,128}$/
 
 function extractJSON(text: string): any {
   const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
@@ -40,22 +50,54 @@ async function invokeModel(system: string, userPrompt: string, maxTokens: number
 }
 
 const handler: Handler = async (event) => {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
+  const originError = rejectInvalidOrigin(event)
+  if (originError) return originError
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 204, headers: securityHeaders(event), body: "" }
   }
-  let reservedRecruiter: { id: string; token_balance: number } | null = null
+  if (event.httpMethod !== "POST") {
+    return jsonResponse(event, 405, { error: "Método no permitido" })
+  }
+  let reservedRecruiter: { id: string; operationId: string; balance: number } | null = null
   try {
-    const { cvText, mode, jobTitle, jobDescription, recruiterToken, fileName } = JSON.parse(event.body || "{}")
+    const { cvText, mode, jobTitle, jobDescription, recruiterToken, fileName, operationId } = JSON.parse(event.body || "{}")
+    const recruiterMode = mode === 'analyze' || mode === 'batch_analyze'
+    if (!recruiterMode) {
+      if (mode != null && mode !== 'extract' && mode !== 'b2c_analyze') {
+        return jsonResponse(event, 400, { error: "Modo de análisis inválido" })
+      }
+      const authResult = await authenticatedUser(event)
+      if (!authResult.user) {
+        return jsonResponse(event, 401, { error: authResult.error })
+      }
+      const rateLimit = await consumeRateLimit({
+        scope: "b2c-authenticated-cv-analysis",
+        subject: authResult.user.id,
+        limit: 12,
+        windowSeconds: 60 * 60,
+      })
+      if (!rateLimit.allowed) {
+        return jsonResponse(
+          event,
+          429,
+          { error: "Alcanzaste el límite temporal de análisis. Volvé a intentarlo más tarde." },
+          rateLimitHeaders(rateLimit),
+        )
+      }
+    }
     if (!cvText?.trim()) {
-      return { statusCode: 400, body: JSON.stringify({ error: "CV text is required" }) }
+      return jsonResponse(event, 400, { error: "El texto del CV es obligatorio" })
     }
     if (cvText.trim().length > 50_000) {
-      return { statusCode: 400, body: JSON.stringify({ error: "El texto del CV supera el límite permitido" }) }
+      return jsonResponse(event, 413, { error: "El texto del CV supera el límite permitido" })
     }
 
     if (mode === 'analyze' || mode === 'batch_analyze') {
       if (!recruiterToken?.trim()) {
-        return { statusCode: 401, body: JSON.stringify({ error: "Token de empresa requerido" }) }
+        return jsonResponse(event, 401, { error: "Token de empresa requerido" })
+      }
+      if (typeof operationId !== 'string' || !OPERATION_ID_RE.test(operationId)) {
+        return jsonResponse(event, 400, { error: "operation_id inválido o ausente" })
       }
       const { data: recruiter } = await makeSupabaseAdmin()
         .from("recruiter_tokens")
@@ -65,32 +107,33 @@ const handler: Handler = async (event) => {
         .eq("verification_status", "verified")
         .single()
       if (!recruiter) {
-        return { statusCode: 403, body: JSON.stringify({ error: "Token de empresa inválido o inactivo" }) }
+        return jsonResponse(event, 403, { error: "Token de empresa inválido o inactivo" })
       }
-      if ((recruiter.token_balance ?? 0) <= 0) {
-        return { statusCode: 402, body: JSON.stringify({ error: "Sin créditos disponibles" }) }
+      const { data: reservation, error: reservationError } = await makeSupabaseAdmin().rpc(
+        "reserve_recruiter_credit",
+        {
+          p_recruiter_token_id: String(recruiter.id),
+          p_operation_id: operationId,
+          p_amount: 1,
+          p_metadata: { mode, file_name: fileName || null, vacancy_label: jobTitle || null },
+        },
+      )
+      if (reservationError) throw new Error(`No se pudo reservar el crédito: ${reservationError.message}`)
+      if (reservation?.status === 'completed') {
+        return jsonResponse(event, 200, {
+          ...(reservation.result || {}), saved: true, idempotent: true, new_balance: reservation.balance,
+        })
       }
-    }
-
-    if (mode === 'batch_analyze' && recruiterToken?.trim()) {
-      const { data: recruiter } = await makeSupabaseAdmin()
-        .from("recruiter_tokens")
-        .select("id, token_balance")
-        .eq("access_token", recruiterToken.trim())
-        .eq("is_active", true)
-        .eq("verification_status", "verified")
-        .single()
-      if (!recruiter) return { statusCode: 403, body: JSON.stringify({ error: "Token invÃ¡lido" }) }
-      const balance = Number(recruiter.token_balance ?? 0)
-      const { data: reserved } = await makeSupabaseAdmin()
-        .from("recruiter_tokens")
-        .update({ token_balance: balance - 1 })
-        .eq("id", recruiter.id)
-        .eq("token_balance", balance)
-        .select("id, token_balance")
-        .maybeSingle()
-      if (!reserved) return { statusCode: 409, body: JSON.stringify({ error: "El saldo cambiÃ³ durante el anÃ¡lisis. IntentÃ¡ nuevamente." }) }
-      reservedRecruiter = { id: recruiter.id, token_balance: balance - 1 }
+      if (reservation?.status === 'insufficient') {
+        return jsonResponse(event, 402, { error: "Sin créditos disponibles", new_balance: reservation.balance })
+      }
+      if (reservation?.status !== 'reserved') {
+        return jsonResponse(event, 409, {
+          error: "Esta operación ya está en curso o fue cerrada. Verificá el historial antes de reintentar.",
+          operation_status: reservation?.status || 'unknown',
+        })
+      }
+      reservedRecruiter = { id: String(recruiter.id), operationId, balance: Number(reservation.balance) }
     }
 
     let prompt = ""
@@ -154,36 +197,56 @@ ${cvText}`
       mode === 'extract' ? MODEL_ID_EXTRACT : MODEL_ID_ANALYZE
     )
     const result = extractJSON(responseText)
-    if (mode === 'batch_analyze' && reservedRecruiter) {
-      const { error: insertError } = await makeSupabaseAdmin()
-        .from("recruiter_analyses")
-        .insert({
-          token_id: reservedRecruiter.id,
-          candidate_name: result.candidateName || fileName || null,
-          file_name: fileName || null,
-          ats_score: result.atsScore ?? result.fitScore ?? null,
-          strengths: result.strengths || [],
-          critical_improvements: result.criticalImprovements || [],
-          vacancy_label: jobTitle || null,
-          raw_cv_text: cvText,
-          is_starred: false,
-          created_at: new Date().toISOString(),
-        })
-      if (insertError) throw insertError
-      return { statusCode: 200, body: JSON.stringify({ ...result, saved: true, new_balance: reservedRecruiter.token_balance }) }
+    if (reservedRecruiter) {
+      const { data: completion, error: completionError } = await makeSupabaseAdmin().rpc(
+        "complete_recruiter_credit_operation",
+        {
+          p_recruiter_token_id: reservedRecruiter.id,
+          p_operation_id: reservedRecruiter.operationId,
+          p_analysis: {
+            candidate_name: result.candidateName || fileName || null,
+            file_name: fileName || null,
+            ats_score: result.atsScore ?? result.fitScore ?? null,
+            strengths: result.strengths || [],
+            critical_improvements: result.criticalImprovements || [],
+            vacancy_label: jobTitle || null,
+            raw_cv_text: cvText,
+          },
+          p_result: result,
+        },
+      )
+      if (completionError || completion?.status !== 'completed') {
+        throw new Error(`No se pudo completar la operación: ${completionError?.message || completion?.status || 'unknown'}`)
+      }
+      return jsonResponse(event, 200, {
+        ...(completion.result || result), saved: true, new_balance: completion.balance,
+      })
     }
-    return { statusCode: 200, body: JSON.stringify(result) }
+    return jsonResponse(event, 200, result)
 
   } catch (error: any) {
+    let refundStatus: string | null = null
     if (reservedRecruiter) {
-      await makeSupabaseAdmin()
-        .from("recruiter_tokens")
-        .update({ token_balance: reservedRecruiter.token_balance + 1 })
-        .eq("id", reservedRecruiter.id)
-        .eq("token_balance", reservedRecruiter.token_balance)
+      const { data: refund, error: refundError } = await makeSupabaseAdmin().rpc(
+        "refund_recruiter_credit_operation",
+        {
+          p_recruiter_token_id: reservedRecruiter.id,
+          p_operation_id: reservedRecruiter.operationId,
+          p_error_summary: String(error?.message || error).slice(0, 1000),
+        },
+      )
+      if (refundError) console.error("recruiter credit refund error:", refundError.message)
+      refundStatus = refund?.status || null
     }
     console.error("analyze-cv-candidate error:", error.message)
-    return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
+    const unavailable = String(error?.message || "").startsWith("Rate limit unavailable")
+    return jsonResponse(event, unavailable ? 503 : 500, {
+      error: unavailable
+        ? "El servicio está temporalmente ocupado. Intentá nuevamente en unos minutos."
+        : "No pudimos completar el análisis. Si se reservó un crédito, el sistema intentó devolverlo.",
+      operation_status: refundStatus,
+      retryable: unavailable || refundStatus === 'refunded',
+    })
   }
 }
 

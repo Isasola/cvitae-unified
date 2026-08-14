@@ -87,6 +87,10 @@ export function Footer() {
               className="text-white/60 hover:text-gold transition-colors">
               WhatsApp
             </a>
+            <span className="hidden md:block">•</span>
+            <button type="button" onClick={() => window.dispatchEvent(new Event('cvitae:open-cookie-settings'))} className="text-white/60 hover:text-gold transition-colors">
+              Preferencias de cookies
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

@@ -4,6 +4,7 @@ import { Link } from 'wouter'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, BellOff, MapPin, Briefcase, ExternalLink, Loader2, CheckCircle2, Sparkles } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
+import { ProductGuide } from '@/components/cv/ProductGuide'
 import { auth, supabase } from '@/lib/supabase'
 
 const ease = [0.22, 1, 0.36, 1] as const
@@ -21,40 +22,12 @@ interface Opportunity {
   matchReasons: string[]
 }
 
-interface ProfileData {
-  habilidades?: string[]
-  seniority?: string
-  location?: string
-}
-
 function cleanText(text: string): string {
   return text
     .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
     .replace(/â€™/g, "'").replace(/â€œ/g, '"').replace(/â€/g, '"').replace(/â€"/g, '–').replace(/â€"/g, '—')
     .replace(/Ã©/g, 'é').replace(/Ã¡/g, 'á').replace(/Ã­/g, 'í').replace(/Ã³/g, 'ó').replace(/Ãº/g, 'ú')
     .replace(/[\u{0080}-\u{009F}]/gu, '').trim()
-}
-
-function scoreMatch(opp: any, skills: string[], rubro?: string): { score: number; reasons: string[] } {
-  const reasons: string[] = []
-  let score = 0
-
-  const oppText = [
-    opp.title,
-    opp.rubro,
-    ...(opp.tags || []),
-  ].join(' ').toLowerCase()
-
-  skills.forEach(skill => {
-    const normalized = skill.toLowerCase().replace(/[^a-z0-9]/g, '')
-    if (oppText.includes(skill.toLowerCase()) || oppText.includes(normalized)) {
-      score += 20
-      reasons.push(skill)
-    }
-  })
-
-  // Cap at 95
-  return { score: Math.min(score, 95), reasons }
 }
 
 function OpportunityCard({ opp }: { opp: Opportunity }) {
@@ -115,6 +88,7 @@ export default function Alertas() {
   const [loading, setLoading] = useState(true)
   const [subscribed, setSubscribed] = useState(false)
   const [toggling, setToggling] = useState(false)
+  const [toggleError, setToggleError] = useState('')
   const [noProfile, setNoProfile] = useState(false)
 
   useEffect(() => {
@@ -124,55 +98,51 @@ export default function Alertas() {
 
       const { data: prof } = await supabase
         .from('user_master_profiles')
-        .select('id, full_name, profile_data, is_subscribed, email')
+        .select('id, full_name, profile_data, match_alerts_enabled, email')
         .eq('user_id', u.id)
         .maybeSingle()
 
       if (!prof) { setNoProfile(true); setLoading(false); return }
 
       setProfile(prof)
-      setSubscribed(!!prof.is_subscribed)
+      setSubscribed(!!prof.match_alerts_enabled)
 
-      const profileData: ProfileData = prof.profile_data || {}
-      const skills: string[] = profileData.habilidades || []
+      const skills: string[] = prof.profile_data?.habilidades || []
 
       if (skills.length === 0) { setLoading(false); return }
 
-      // Fetch recent opportunities and score them
-      const { data: opps } = await supabase
-        .from('opportunities')
-        .select('id, title, organization, location, type, rubro, tags, application_url')
-        .eq('is_active' as any, true)
-        .eq('verification_status' as any, 'verified')
-        .eq('alerts_eligible' as any, true)
-        .is('deleted_at' as any, null)
-        .limit(100)
-        .order('created_at', { ascending: false })
+      const { data: result, error: matchError } = await supabase.functions.invoke('match-batch', {
+        body: { mode: 'alerts' },
+      })
+      if (matchError) throw matchError
 
-      const allOpps = opps || []
-      const scored: Opportunity[] = allOpps
-        .map((o: any) => {
-          const { score, reasons } = scoreMatch(o, skills)
-          return { ...o, matchScore: score, matchReasons: reasons }
-        })
-        .filter((o: any) => o.matchScore >= 20)
-        .sort((a: any, b: any) => b.matchScore - a.matchScore)
-        .slice(0, 20)
-
-      setMatches(scored)
+      setMatches((result?.matches || []).map((match: any) => ({
+        id: match.id,
+        title: match.titulo,
+        organization: match.organization,
+        location: match.ubicacion,
+        type: match.categoria,
+        rubro: match.categoria,
+        tags: match.vacancySkills || [],
+        application_url: match.application_url,
+        matchScore: match.finalScore,
+        matchReasons: match.matchedSkills || [],
+      })))
       setLoading(false)
-    })
+    }).catch(() => setLoading(false))
   }, [])
 
   const toggleSubscription = async () => {
     if (!profile) return
     setToggling(true)
     const newVal = !subscribed
-    await supabase
+    setToggleError('')
+    const { error } = await supabase
       .from('user_master_profiles')
-      .update({ is_subscribed: newVal })
+      .update({ match_alerts_enabled: newVal })
       .eq('id', profile.id)
-    setSubscribed(newVal)
+    if (error) setToggleError('No pudimos guardar tu preferencia. Intentá nuevamente.')
+    else setSubscribed(newVal)
     setToggling(false)
   }
 
@@ -191,7 +161,7 @@ export default function Alertas() {
           </div>
           <h1 className="font-display text-3xl text-white">Oportunidades para <em className="italic font-normal">tu perfil</em>.</h1>
           <p className="mt-2 text-sm font-light text-white/50 max-w-lg">
-            Basado en tus habilidades, esto es lo que encontramos hoy. Activá las alertas por email para recibir actualizaciones semanales.
+            Basado en tus habilidades, esto es lo que encontramos hoy. Activá las alertas para recibir por email los matches nuevos realmente altos.
           </p>
         </div>
 
@@ -217,7 +187,7 @@ export default function Alertas() {
                 <p className="text-xs font-light text-white/40">
                   {subscribed
                     ? `Recibirás novedades en ${profile.email || user?.email || 'tu email'}`
-                    : 'Activá para recibir un resumen semanal de matches'
+                    : 'Activá para recibir oportunidades verificadas con match muy alto'
                   }
                 </p>
               </div>
@@ -236,6 +206,7 @@ export default function Alertas() {
             </button>
           </motion.div>
         )}
+        {toggleError && <p className="mb-6 text-sm text-red-400" role="alert">{toggleError}</p>}
 
         {/* Content */}
         {loading ? (
@@ -291,6 +262,15 @@ export default function Alertas() {
           </AnimatePresence>
         )}
       </div>
+      <ProductGuide
+        storageKey="b2c_alerts_v1"
+        label="Alertas"
+        steps={[
+          { title: 'Activá el permiso', description: 'CVitae sólo envía avisos si activás las alertas. Podés desactivarlas en cualquier momento desde esta pantalla.' },
+          { title: 'Recibí sólo matches muy altos', description: 'El correo se reserva para oportunidades verificadas que superan tu umbral; cada oportunidad se envía una sola vez.' },
+          { title: 'Mantené tu perfil al día', description: 'Tus habilidades, título y ubicación cambian el resultado. Revisalos si los avisos dejan de ser relevantes.' },
+        ]}
+      />
     </DashboardLayout>
   )
 }

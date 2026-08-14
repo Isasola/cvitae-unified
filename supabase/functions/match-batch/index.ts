@@ -1,9 +1,61 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  buildDictionary,
+  careerBonus,
+  calculateLocationScore,
+  calculateSkillScore,
+  calculateSeniorityScore,
+  calculateTitleScore,
+  extractSkills,
+  isEligibleForProfile,
+  isTender,
+  normalize,
+  rankOpportunities,
+  sameSkill,
+  toStrings,
+} from '../_shared/matching.ts'
 
-const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Content-Type': 'application/json',
+const DEFAULT_SITE_URL = 'https://cvitae.lat'
+const LOCAL_ORIGINS = new Set([
+  'http://127.0.0.1:5173', 'http://localhost:5173',
+  'http://127.0.0.1:8888', 'http://localhost:8888',
+  'http://127.0.0.1:3000', 'http://localhost:3000',
+])
+
+function configuredOrigins(): Set<string> {
+  const origins = new Set(LOCAL_ORIGINS)
+  origins.add(DEFAULT_SITE_URL)
+  for (const value of [Deno.env.get('SITE_URL'), Deno.env.get('URL')]) {
+    if (!value) continue
+    try { origins.add(new URL(value).origin) } catch { /* ignore malformed values */ }
+  }
+  return origins
+}
+
+function requestCors(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') || ''
+  const allowed = origin && configuredOrigins().has(origin) ? origin : DEFAULT_SITE_URL
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Cache-Control': 'private, no-store',
+    'Content-Type': 'application/json; charset=utf-8',
+    'Vary': 'Origin',
+    'X-Content-Type-Options': 'nosniff',
+  }
+}
+
+function originAllowed(req: Request): boolean {
+  const origin = req.headers.get('Origin') || ''
+  return !origin || configuredOrigins().has(origin)
+}
+
+async function hashedRateLimitSubject(scope: string, subject: string): Promise<string> {
+  const salt = Deno.env.get('CVITAE_RATE_LIMIT_SALT') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!salt) throw new Error('Rate limit salt is not configured')
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${scope}:${subject}`))
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
 const supabase = createClient(
@@ -11,225 +63,23 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 )
 
-const STOP_WORDS = new Set([
-  'para', 'como', 'desde', 'hasta', 'sobre', 'entre', 'empresa', 'empleo',
-  'trabajo', 'puesto', 'vacante', 'buscamos', 'requiere', 'requisitos',
-  'experiencia', 'conocimientos', 'paraguay', 'asuncion', 'remoto',
-  'the', 'and', 'with', 'from', 'your', 'role', 'job', 'work',
-])
-
-const SKILL_ALIASES: Record<string, string[]> = {
-  'JavaScript': ['javascript', 'js', 'ecmascript'],
-  'TypeScript': ['typescript', 'ts'],
-  'React': ['react', 'reactjs', 'react.js'],
-  'Angular': ['angular', 'angularjs'],
-  'Vue.js': ['vue', 'vuejs', 'vue.js'],
-  'Node.js': ['node', 'nodejs', 'node.js'],
-  'Python': ['python', 'django', 'flask', 'fastapi'],
-  'Java': ['java', 'spring', 'spring boot'],
-  'C# / .NET': ['c#', '.net', 'dotnet', 'asp.net'],
-  'PHP': ['php', 'laravel', 'symfony'],
-  'SQL': ['sql', 'postgresql', 'postgres', 'mysql', 'sql server', 'oracle'],
-  'Excel': ['excel', 'microsoft excel', 'hojas de calculo'],
-  'Power BI': ['power bi', 'powerbi', 'dax'],
-  'Tableau': ['tableau'],
-  'AWS': ['aws', 'amazon web services'],
-  'Azure': ['azure', 'microsoft azure'],
-  'Google Cloud': ['gcp', 'google cloud'],
-  'Docker': ['docker', 'contenedores'],
-  'Kubernetes': ['kubernetes', 'k8s'],
-  'Git': ['git', 'github', 'gitlab', 'control de versiones'],
-  'Linux': ['linux', 'ubuntu'],
-  'Figma': ['figma'],
-  'UX/UI': ['ux', 'ui', 'ux/ui', 'experiencia de usuario', 'interfaz de usuario'],
-  'SEO': ['seo', 'search engine optimization'],
-  'Google Ads': ['google ads', 'adwords', 'sem'],
-  'Meta Ads': ['meta ads', 'facebook ads', 'instagram ads'],
-  'Marketing digital': ['marketing digital', 'digital marketing'],
-  'Ventas': ['ventas', 'sales', 'comercial'],
-  'Atención al cliente': ['atencion al cliente', 'customer service', 'customer support'],
-  'Contabilidad': ['contabilidad', 'contable', 'accounting'],
-  'Finanzas': ['finanzas', 'financiero', 'finance'],
-  'Recursos Humanos': ['recursos humanos', 'rrhh', 'human resources', 'talent acquisition'],
-  'Gestión de proyectos': ['gestion de proyectos', 'project management', 'scrum', 'agile'],
-  'Inglés': ['ingles', 'english'],
-}
-
-const SENIORITY_RANK: Record<string, number> = {
-  pasante: 0, trainee: 0, becario: 0, junior: 1, jr: 1,
-  semissenior: 2, ssr: 2, mid: 2, pleno: 2, senior: 3, sr: 3,
-  lead: 4, techlead: 4, director: 5, gerente: 5, manager: 5,
-}
-
-let dictionaryCache: { loadedAt: number; entries: Array<[string, string[]]> } | null = null
-
-function normalize(value: unknown): string {
-  return String(value ?? '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9+#.]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function stripHtml(value: unknown): string {
-  return String(value ?? '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&(?:nbsp|amp|lt|gt);/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function toStrings(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean)
-  if (typeof value === 'string') {
-    return value.split(/[,;|]/).map((item) => item.trim()).filter(Boolean)
-  }
-  return []
-}
-
-function isEligibleForProfile(opp: any, profileLocation: string): boolean {
-  const declared = [...toStrings(opp.eligible_countries), ...toStrings(opp.eligible_regions)]
-    .map((value) => normalize(value))
-    .filter(Boolean)
-  if (!declared.length) return true
-
-  const profile = normalize(`${profileLocation} paraguay py latinoamerica latino america latam sudamerica south america`)
-  return declared.some((value) =>
-    value === 'py' || value.includes('paraguay') || value.includes('latam') ||
-    value.includes('latin america') || value.includes('latinoamerica') ||
-    value.includes('south america') || value.includes('sudamerica') ||
-    value.includes('worldwide') || value.includes('all countr') ||
-    profile.includes(value)
-  )
-}
-
-function isTender(opp: any): boolean {
-  return opp.opportunity_type === 'tender' ||
-    /(^|\s)(tender|licitacion|licitaciones|llamado a licitacion)(\s|$)/i.test(
-      normalize(`${opp.title ?? ''} ${opp.type ?? ''} ${opp.opportunity_kind ?? ''} ${opp.rubro ?? ''}`)
-    )
-}
-
-function sameSkill(left: string, right: string): boolean {
-  const a = normalize(left)
-  const b = normalize(right)
-  if (!a || !b) return false
-  return a === b || (a.length >= 4 && b.length >= 4 && (a.includes(b) || b.includes(a)))
-}
-
-async function getSkillDictionary(): Promise<Array<[string, string[]]>> {
-  if (dictionaryCache && Date.now() - dictionaryCache.loadedAt < 10 * 60_000) {
-    return dictionaryCache.entries
-  }
-
-  const entries = new Map<string, string[]>()
-  Object.entries(SKILL_ALIASES).forEach(([canonical, aliases]) => {
-    entries.set(canonical, [canonical, ...aliases])
-  })
-
+async function getSkillDictionary() {
   const { data } = await supabase.from('skill_dictionary').select('canonical_name, variants')
+  const extra: Array<[string, string[]]> = []
   for (const row of data ?? []) {
     const canonical = String(row.canonical_name ?? '').trim()
     if (!canonical) continue
-    entries.set(canonical, [canonical, ...toStrings(row.variants), ...(entries.get(canonical) ?? [])])
+    const variants = Array.isArray(row.variants) ? row.variants.map(String) : []
+    extra.push([canonical, variants])
   }
-
-  dictionaryCache = { loadedAt: Date.now(), entries: [...entries.entries()] }
-  return dictionaryCache.entries
-}
-
-function extractSkills(opp: any, dictionary: Array<[string, string[]]>): string[] {
-  const explicit = toStrings(opp.tags)
-    .filter((tag) => normalize(tag).length >= 2)
-    .filter((tag) => !STOP_WORDS.has(normalize(tag)))
-
-  const searchable = normalize([
-    opp.title,
-    opp.rubro,
-    opp.type,
-    stripHtml(opp.description),
-    explicit.join(' '),
-  ].filter(Boolean).join(' | '))
-
-  const detected = dictionary
-    .filter(([, aliases]) => aliases.some((alias) => {
-      const term = normalize(alias)
-      if (!term) return false
-      return new RegExp(`(^|\\s)${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`, 'i').test(searchable)
-    }))
-    .map(([canonical]) => canonical)
-
-  const meaningfulExplicit = explicit.filter((tag) => {
-    const words = normalize(tag).split(' ')
-    return words.length <= 4 && words.every((word) => word.length > 1 && !STOP_WORDS.has(word))
-  })
-
-  return [...new Set([...detected, ...meaningfulExplicit])].slice(0, 16)
-}
-
-function calculateSkillScore(profileSkills: string[], vacancySkills: string[]): number {
-  if (!vacancySkills.length) return profileSkills.length ? 45 : 30
-  if (!profileSkills.length) return 15
-  const matchedVacancy = vacancySkills.filter((skill) => profileSkills.some((own) => sameSkill(own, skill)))
-  const matchedProfile = profileSkills.filter((skill) => vacancySkills.some((required) => sameSkill(skill, required)))
-  const vacancyCoverage = matchedVacancy.length / vacancySkills.length
-  const profileEvidence = matchedProfile.length / Math.min(Math.max(profileSkills.length, 1), 10)
-  return Math.round(Math.min(1, vacancyCoverage * 0.75 + profileEvidence * 0.25) * 100)
-}
-
-function tokenSet(value: unknown): Set<string> {
-  return new Set(normalize(value).split(' ').filter((word) => word.length >= 3 && !STOP_WORDS.has(word)))
-}
-
-function calculateTitleScore(profileTitle: string, opp: any): number {
-  const profileTokens = tokenSet(profileTitle)
-  if (!profileTokens.size) return 45
-  const opportunityTokens = tokenSet(`${opp.title ?? ''} ${opp.rubro ?? ''} ${opp.type ?? ''}`)
-  const hits = [...profileTokens].filter((token) => opportunityTokens.has(token)).length
-  if (!hits) return 25
-  return Math.min(100, 45 + Math.round((hits / profileTokens.size) * 55))
-}
-
-function calculateSeniorityScore(profileSeniority: string, vacancyText: string): number {
-  const profileRank = SENIORITY_RANK[normalize(profileSeniority).replace(/\s/g, '')] ?? 2
-  const normalizedVacancy = normalize(vacancyText).replace(/\s/g, '')
-  let vacancyRank = 2
-  for (const [key, rank] of Object.entries(SENIORITY_RANK)) {
-    if (normalizedVacancy.includes(key)) {
-      vacancyRank = rank
-      break
-    }
-  }
-  const difference = Math.abs(profileRank - vacancyRank)
-  return [100, 78, 52, 28, 12][Math.min(difference, 4)]
-}
-
-function calculateLocationScore(profileLocation: string, vacancyLocation: string): number {
-  const profile = normalize(profileLocation)
-  const vacancy = normalize(vacancyLocation)
-  if (!vacancy || !profile) return 65
-  if (/(remoto|remote|hibrido|hybrid)/.test(vacancy)) return 95
-  if (profile === vacancy || profile.includes(vacancy) || vacancy.includes(profile)) return 100
-  const paraguay = ['paraguay', 'asuncion', 'central', 'san lorenzo', 'luque', 'capiata', 'py']
-  if (paraguay.some((item) => profile.includes(item)) && paraguay.some((item) => vacancy.includes(item))) return 78
-  return 35
-}
-
-function careerBonus(route: string, opp: any): number {
-  const normalizedRoute = normalize(route).replace(/\s/g, '')
-  const text = normalize(`${opp.title ?? ''} ${opp.type ?? ''} ${opp.rubro ?? ''} ${opp.location ?? ''}`)
-  if (normalizedRoute === 'remoto' && /(remoto|remote)/.test(text)) return 8
-  if (normalizedRoute === 'becaposgrado' && /(beca|posgrado|maestria|doctorado)/.test(text)) return 10
-  if (normalizedRoute === 'organismos' && /(ong|organismo|naciones unidas|bid|oea|pnud)/.test(text)) return 8
-  if (normalizedRoute === 'emprendimiento' && /(startup|emprendimiento|innovacion)/.test(text)) return 7
-  if (normalizedRoute === 'empleolocal' && /(paraguay|asuncion|central)/.test(text)) return 5
-  return 0
+  return buildDictionary(extra)
 }
 
 async function generateProfileEmbedding(profileText: string): Promise<number[] | null> {
   if (!profileText.trim()) return null
+  // DISABLE_EMBEDDINGS=true permite correr la función local sin el modelo gte-small
+  // (evita WORKER_LIMIT en el edge runtime de Docker con CPU restringida)
+  if (Deno.env.get('DISABLE_EMBEDDINGS') === 'true') return null
   try {
     // @ts-ignore Supabase Edge Runtime API
     const session = new Supabase.ai.Session('gte-small')
@@ -242,21 +92,46 @@ async function generateProfileEmbedding(profileText: string): Promise<number[] |
 }
 
 Deno.serve(async (req) => {
+  const cors = requestCors(req)
+  if (!originAllowed(req)) {
+    return new Response(JSON.stringify({ error: 'Origen no permitido' }), { status: 403, headers: cors })
+  }
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: cors })
   }
 
   try {
+    const requestBody = await req.json().catch(() => ({}))
+    const requestMode = requestBody?.mode === 'alerts' ? 'alerts' : 'default'
     const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
     const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Sesión inválida o expirada' }), { status: 401, headers: cors })
     }
 
+    const scope = 'b2c-opportunity-matching'
+    const { data: rateRows, error: rateError } = await supabase.rpc('consume_api_rate_limit', {
+      p_scope: scope,
+      p_subject_hash: await hashedRateLimitSubject(scope, user.id),
+      p_limit: 30,
+      p_window_seconds: 60 * 60,
+    })
+    if (rateError) {
+      console.error('match-batch rate limit unavailable:', rateError.message)
+      return new Response(JSON.stringify({ error: 'El servicio está temporalmente ocupado.' }), { status: 503, headers: cors })
+    }
+    const rate = Array.isArray(rateRows) ? rateRows[0] : rateRows
+    if (!rate?.allowed) {
+      return new Response(JSON.stringify({ error: 'Alcanzaste el límite temporal de actualizaciones.' }), {
+        status: 429,
+        headers: { ...cors, 'Retry-After': String(rate?.retry_after_seconds || 60), 'X-RateLimit-Remaining': '0' },
+      })
+    }
+
     const { data: profile, error: profileError } = await supabase
       .from('user_master_profiles')
-      .select('professional_title, profile_data, is_subscribed')
+      .select('professional_title, profile_data, is_subscribed, match_alerts_enabled')
       .eq('user_id', user.id)
       .maybeSingle()
 
@@ -267,6 +142,7 @@ Deno.serve(async (req) => {
         profileSkills: [],
         missingSkills: [],
         is_subscribed: false,
+        match_alerts_enabled: false,
         reason: 'profile_missing',
       }), { headers: cors })
     }
@@ -278,9 +154,9 @@ Deno.serve(async (req) => {
     const profileTitle = String(profile.professional_title ?? '')
     const dictionary = await getSkillDictionary()
 
-    const { data: opportunities, error: opportunitiesError } = await supabase
+    let opportunitiesQuery = supabase
       .from('opportunities')
-      .select('id, slug, title, organization, location, rubro, tags, description, application_url, type, opportunity_type, opportunity_kind, eligible_countries, eligible_regions, source, deadline, created_at')
+      .select('id, slug, title, organization, location, rubro, tags, description, application_url, type, opportunity_type, opportunity_kind, eligible_countries, eligible_regions, source, deadline, created_at, is_active, verification_status, match_eligible, archived_at, deleted_at')
       .eq('is_active', true)
       .eq('verification_status', 'verified')
       .eq('match_eligible', true)
@@ -290,27 +166,20 @@ Deno.serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(300)
 
-    if (opportunitiesError) throw opportunitiesError
-    const eligibleOpportunities = (opportunities ?? []).filter((opp) =>
-      !isTender(opp) && isEligibleForProfile(opp, profileLocation)
-    )
-    if (!eligibleOpportunities.length) {
-      return new Response(JSON.stringify({
-        matches: [],
-        profileSkills,
-        missingSkills: [],
-        is_subscribed: profile.is_subscribed ?? false,
-        reason: 'no_active_opportunities',
-      }), { headers: cors })
+    if (requestMode === 'alerts') {
+      opportunitiesQuery = opportunitiesQuery.eq('alerts_eligible', true)
     }
 
-    const profileText = [
-      profileTitle,
-      profileSeniority,
-      profileSkills.join(', '),
-      careerRoute,
-      profileLocation,
-    ].filter(Boolean).join(' | ')
+    const { data: opportunities, error: opportunitiesError } = await opportunitiesQuery
+    if (opportunitiesError) throw opportunitiesError
+
+    const profileInput = {
+      professional_title: profileTitle,
+      profile_data: { habilidades: profileSkills, seniority: profileSeniority, location: profileLocation, career_route: careerRoute },
+    }
+
+    const profileText = [profileTitle, profileSeniority, profileSkills.join(', '), careerRoute, profileLocation]
+      .filter(Boolean).join(' | ')
     const embedding = await generateProfileEmbedding(profileText)
     const similarities = new Map<string, number>()
 
@@ -330,44 +199,50 @@ Deno.serve(async (req) => {
       await supabase.from('user_master_profiles').update({ embedding }).eq('user_id', user.id)
     }
 
-    const ranked = eligibleOpportunities.map((opp) => {
-      const vacancySkills = extractSkills(opp, dictionary)
-      const skillsScore = calculateSkillScore(profileSkills, vacancySkills)
-      const titleScore = calculateTitleScore(profileTitle, opp)
-      const seniorityScore = calculateSeniorityScore(profileSeniority, `${opp.title ?? ''} ${opp.rubro ?? ''} ${opp.description ?? ''}`)
-      const locationScore = calculateLocationScore(profileLocation, opp.location ?? '')
-      const similarity = similarities.get(String(opp.id))
-      const semanticScore = similarity == null ? 50 : Math.round(similarity * 100)
-      const hasSemantic = similarity != null
-      const weighted = hasSemantic
-        ? semanticScore * 0.30 + skillsScore * 0.32 + titleScore * 0.18 + seniorityScore * 0.10 + locationScore * 0.10
-        : skillsScore * 0.42 + titleScore * 0.25 + seniorityScore * 0.16 + locationScore * 0.17
-      const finalScore = Math.max(20, Math.min(99, Math.round(weighted + careerBonus(careerRoute, opp))))
-      const matchedSkills = vacancySkills.filter((skill) => profileSkills.some((own) => sameSkill(own, skill)))
-      const missingSkills = vacancySkills.filter((skill) => !profileSkills.some((own) => sameSkill(own, skill)))
+    const { eligible: eligibleOpportunities, ranked: baseRanked } = rankOpportunities(
+      profileInput,
+      opportunities ?? [],
+      dictionary,
+    )
 
-      return {
-        id: opp.id,
-        slug: opp.slug ?? opp.id,
-        titulo: opp.title ?? '',
-        categoria: opp.rubro ?? opp.opportunity_type ?? opp.type ?? 'Oportunidad',
-        ubicacion: opp.location ?? '',
-        organization: opp.organization ?? '',
-        application_url: opp.application_url ?? '',
-        skillsScore,
-        titleScore,
-        seniorityScore,
-        locationScore,
-        semanticScore: hasSemantic ? semanticScore : null,
-        finalScore,
-        vacancySkills,
-        matchedSkills,
-        missingSkills,
-        source: opp.source ?? '',
-      }
-    })
-      .sort((a, b) => b.finalScore - a.finalScore)
-      .slice(0, 20)
+    if (!eligibleOpportunities.length) {
+      return new Response(JSON.stringify({
+        matches: [],
+        profileSkills,
+        missingSkills: [],
+        is_subscribed: profile.is_subscribed ?? false,
+        match_alerts_enabled: profile.match_alerts_enabled ?? false,
+        reason: 'no_active_opportunities',
+      }), { headers: cors })
+    }
+
+    // Re-score with semantic similarity when available
+    const ranked = baseRanked.map((item) => {
+      const similarity = similarities.get(String(item.id))
+      if (similarity == null) return { ...item, semanticScore: null }
+      const semanticScore = Math.round(similarity * 100)
+      const weighted = semanticScore * 0.30 + item.skillsScore * 0.32 + item.titleScore * 0.18 + item.seniorityScore * 0.10 + item.locationScore * 0.10
+      const finalScore = Math.max(20, Math.min(99, Math.round(weighted + careerBonus(careerRoute, item))))
+      return { ...item, semanticScore, finalScore }
+    }).sort((a, b) => b.finalScore - a.finalScore).slice(0, 20).map((item) => ({
+      id: item.id,
+      slug: (item as any).slug ?? item.id,
+      titulo: item.title ?? '',
+      categoria: item.rubro ?? item.opportunity_type ?? item.type ?? 'Oportunidad',
+      ubicacion: item.location ?? '',
+      organization: item.organization ?? '',
+      application_url: (item as any).application_url ?? '',
+      skillsScore: item.skillsScore,
+      titleScore: item.titleScore,
+      seniorityScore: item.seniorityScore,
+      locationScore: item.locationScore,
+      semanticScore: (item as any).semanticScore ?? null,
+      finalScore: item.finalScore,
+      vacancySkills: item.vacancySkills,
+      matchedSkills: item.matchedSkills,
+      missingSkills: item.missingSkills,
+      source: (item as any).source ?? '',
+    }))
 
     const missingFrequency = new Map<string, { skill: string; count: number; score: number }>()
     ranked.slice(0, 10).forEach((match, index) => {
@@ -389,6 +264,7 @@ Deno.serve(async (req) => {
       profileSkills,
       missingSkills,
       is_subscribed: profile.is_subscribed ?? false,
+      match_alerts_enabled: profile.match_alerts_enabled ?? false,
       meta: {
         activeOpportunities: eligibleOpportunities.length,
         vectorCandidates: similarities.size,

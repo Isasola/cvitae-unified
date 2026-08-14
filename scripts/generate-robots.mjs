@@ -11,22 +11,32 @@ const robots = `User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /auth/callback
-Disallow: /mi-carrera/configuracion
+Disallow: /mi-carrera/
 
 User-agent: GPTBot
 Allow: /
+Disallow: /admin
+Disallow: /mi-carrera/
 
 User-agent: ChatGPT-User
 Allow: /
+Disallow: /admin
+Disallow: /mi-carrera/
 
 User-agent: Claude-Web
 Allow: /
+Disallow: /admin
+Disallow: /mi-carrera/
 
 User-agent: PerplexityBot
 Allow: /
+Disallow: /admin
+Disallow: /mi-carrera/
 
 User-agent: Googlebot
 Allow: /
+Disallow: /admin
+Disallow: /mi-carrera/
 Crawl-delay: 1
 
 Sitemap: https://cvitae.lat/sitemap.xml

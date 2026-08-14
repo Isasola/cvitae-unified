@@ -1,5 +1,13 @@
 import { Handler } from "@netlify/functions"
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
+import {
+  clientIp,
+  consumeRateLimit,
+  jsonResponse,
+  rateLimitHeaders,
+  rejectInvalidOrigin,
+  securityHeaders,
+} from "./lib/b2c-security"
 
 // AWS Bedrock requires the version suffix for Claude Haiku 4.5 inference profiles.
 const MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
@@ -11,22 +19,8 @@ const bedrockClient = new BedrockRuntimeClient({
   },
 })
 
-// In-memory rate limit: 10 requests/hour per IP
-const ipCounts = new Map<string, { count: number; resetAt: number }>()
 const RATE_LIMIT = 10
-const WINDOW_MS = 60 * 60 * 1000
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now()
-  const entry = ipCounts.get(ip)
-  if (!entry || now > entry.resetAt) {
-    ipCounts.set(ip, { count: 1, resetAt: now + WINDOW_MS })
-    return true
-  }
-  if (entry.count >= RATE_LIMIT) return false
-  entry.count++
-  return true
-}
+const WINDOW_SECONDS = 60 * 60
 
 function extractJSON(text: string): any {
   const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
@@ -54,22 +48,37 @@ async function invokeModel(system: string, userPrompt: string): Promise<string> 
 }
 
 const handler: Handler = async (event) => {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
+  const originError = rejectInvalidOrigin(event)
+  if (originError) return originError
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 204, headers: securityHeaders(event), body: "" }
   }
-
-  const ip = event.headers["x-forwarded-for"]?.split(",")[0]?.trim() || "unknown"
-  if (!checkRateLimit(ip)) {
-    return {
-      statusCode: 429,
-      body: JSON.stringify({ error: "Límite de análisis alcanzado. Volvé en una hora." }),
-    }
+  if (event.httpMethod !== "POST") {
+    return jsonResponse(event, 405, { error: "Método no permitido" })
   }
 
   try {
+    const rateLimit = await consumeRateLimit({
+      scope: "b2c-public-cv-analysis",
+      subject: clientIp(event),
+      limit: RATE_LIMIT,
+      windowSeconds: WINDOW_SECONDS,
+    })
+    if (!rateLimit.allowed) {
+      return jsonResponse(
+        event,
+        429,
+        { error: "Límite de análisis alcanzado. Volvé a intentarlo más tarde." },
+        rateLimitHeaders(rateLimit),
+      )
+    }
+
     const { cvText } = JSON.parse(event.body || "{}")
     if (!cvText?.trim() || cvText.trim().length < 50) {
-      return { statusCode: 400, body: JSON.stringify({ error: "El texto del CV es muy corto o está vacío." }) }
+      return jsonResponse(event, 400, { error: "El texto del CV es muy corto o está vacío." })
+    }
+    if (cvText.trim().length > 50_000) {
+      return jsonResponse(event, 413, { error: "El texto del CV supera el límite permitido." })
     }
 
     const prompt = `Analizá el siguiente CV como experto en reclutamiento y empleabilidad en Latinoamérica.
@@ -96,14 +105,15 @@ Respondé ÚNICAMENTE con JSON válido con esta estructura exacta:
     )
 
     const result = extractJSON(responseText)
-    return {
-      statusCode: 200,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify(result),
-    }
+    return jsonResponse(event, 200, result)
   } catch (error: any) {
     console.error("analyze-cv-public error:", error.message)
-    return { statusCode: 500, body: JSON.stringify({ error: "Error al analizar el CV. Intentá de nuevo." }) }
+    const unavailable = String(error?.message || "").startsWith("Rate limit unavailable")
+    return jsonResponse(event, unavailable ? 503 : 500, {
+      error: unavailable
+        ? "El servicio está temporalmente ocupado. Intentá nuevamente en unos minutos."
+        : "Error al analizar el CV. Intentá de nuevo.",
+    })
   }
 }
 

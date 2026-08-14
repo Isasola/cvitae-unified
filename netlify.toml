@@ -21,6 +21,12 @@
 [functions."compare-candidates"]
   timeout = 30
 
+[functions."analyze-vacancy-applicants"]
+  timeout = 30
+
+[functions."send-high-match-alerts"]
+  timeout = 30
+
 [functions."analyze-recruiters-batch"]
   timeout = 26
 

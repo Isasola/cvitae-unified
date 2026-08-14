@@ -12,15 +12,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 })
 
 const getSiteUrl = () => {
-  if (import.meta.env.PROD) return 'https://cvitae.lat'
-  return 'http://localhost:5173'
+  if (typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+    return window.location.origin
+  }
+  return 'https://cvitae.lat'
 }
 
 export const auth = {
   signInWithMagicLink: async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
-      email,
+      email: email.trim().toLowerCase(),
       options: {
+        shouldCreateUser: true,
         emailRedirectTo: `${getSiteUrl()}/auth/callback`,
       },
     })
