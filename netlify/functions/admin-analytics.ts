@@ -1,10 +1,68 @@
 import { makeSupabaseAdmin } from './_supabase'
 import { createSign } from 'crypto'
 
-const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
-const GA4_API = 'https://analyticsdata.googleapis.com/v1beta/properties'
-const TOKEN_URL = 'https://oauth2.googleapis.com/token'
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const GEMINI_API   = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+const GA4_API      = 'https://analyticsdata.googleapis.com/v1beta/properties'
+const GSC_API      = 'https://www.googleapis.com/webmasters/v3/sites'
+const TOKEN_URL    = 'https://oauth2.googleapis.com/token'
 const GA4_PROPERTY = '529848293'
+const GSC_SITE     = 'https://cvitae.lat/'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface GeminiSignal {
+  type: 'green' | 'yellow' | 'red' | 'blue' | 'purple'
+  title: string
+  detail: string
+  confidence: 'high' | 'medium' | 'low'
+  sources: string[]
+}
+
+interface GeminiRecommendation {
+  priority: 'high' | 'medium' | 'low'
+  title: string
+  evidence: string
+  impact: string
+  effort: 'low' | 'medium' | 'high'
+}
+
+interface GeminiQuickWin {
+  query: string
+  position: number
+  impressions: number
+  ctr_pct: number
+  recommendation: string
+}
+
+interface GeminiBlogInsight {
+  identifier: string
+  insight: string
+  confidence: 'high' | 'medium' | 'low'
+}
+
+interface GeminiLinkedInPick {
+  title: string
+  reason: string
+}
+
+interface GeminiResult {
+  executive_summary: string
+  signals: GeminiSignal[]
+  recommendations: GeminiRecommendation[]
+  seo_quick_wins: GeminiQuickWin[]
+  blog_insights: GeminiBlogInsight[]
+  linkedin_picks: GeminiLinkedInPick[]
+  answer: string | null
+}
+
+interface Anomaly {
+  type: string
+  message: string
+  severity: 'high' | 'medium' | 'low'
+  data?: Record<string, any>
+}
 
 // ── Google Service Account JWT auth ──────────────────────────────────────────
 
@@ -19,7 +77,7 @@ async function getGoogleAccessToken(saJson: string): Promise<string | null> {
   let sa: any
   try { sa = JSON.parse(saJson) } catch { return null }
 
-  const now = Math.floor(Date.now() / 1000)
+  const now     = Math.floor(Date.now() / 1000)
   const header  = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
   const payload = base64url(JSON.stringify({
     iss: sa.client_email,
@@ -27,11 +85,14 @@ async function getGoogleAccessToken(saJson: string): Promise<string | null> {
     aud: TOKEN_URL,
     iat: now,
     exp: now + 3600,
-    scope: 'https://www.googleapis.com/auth/analytics.readonly',
+    scope: [
+      'https://www.googleapis.com/auth/analytics.readonly',
+      'https://www.googleapis.com/auth/webmasters.readonly',
+    ].join(' '),
   }))
 
   const unsigned = `${header}.${payload}`
-  const signer = createSign('RSA-SHA256')
+  const signer   = createSign('RSA-SHA256')
   signer.update(unsigned)
   const jwt = `${unsigned}.${base64url(signer.sign(sa.private_key))}`
 
@@ -47,6 +108,8 @@ async function getGoogleAccessToken(saJson: string): Promise<string | null> {
   return (await res.json()).access_token ?? null
 }
 
+// ── GA4 helpers ───────────────────────────────────────────────────────────────
+
 async function ga4Report(token: string, body: object): Promise<any> {
   const res = await fetch(`${GA4_API}/${GA4_PROPERTY}:runReport`, {
     method: 'POST',
@@ -56,20 +119,236 @@ async function ga4Report(token: string, body: object): Promise<any> {
   return res.ok ? res.json() : null
 }
 
-function extractGA4Value(report: any, rowIndex: number, metricIndex: number): number {
-  return Number(report?.rows?.[rowIndex]?.metricValues?.[metricIndex]?.value ?? 0)
+// When multiple dateRanges are used without other dimensions, GA4 auto-adds a
+// `dateRange` dimension. Each row has dimensionValues[0].value = "date_range_N".
+function findOverviewRow(report: any, rangeIndex: number): any {
+  return (report?.rows ?? []).find(
+    (r: any) => r.dimensionValues?.[0]?.value === `date_range_${rangeIndex}`,
+  )
+}
+
+function parseOverviewRow(report: any, rangeIndex: number) {
+  const row = findOverviewRow(report, rangeIndex)
+  const v   = (i: number) => Number(row?.metricValues?.[i]?.value ?? 0)
+  return {
+    sessions:             v(0),
+    active_users:         v(1),
+    pageviews:            v(2),
+    new_users:            v(3),
+    bounce_rate:          Number((v(4) * 100).toFixed(1)),
+    avg_session_duration: Number(v(5).toFixed(1)),
+  }
+}
+
+// ── Search Console helpers ────────────────────────────────────────────────────
+
+async function gscQuery(token: string, body: object): Promise<any> {
+  const encodedSite = encodeURIComponent(GSC_SITE)
+  const res = await fetch(`${GSC_API}/${encodedSite}/searchAnalytics/query`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (res.status === 403) return { blocked: true }
+  return res.ok ? res.json() : null
+}
+
+// ── Anomaly detection ─────────────────────────────────────────────────────────
+
+function detectAnomalies(params: {
+  todaySessions: number
+  sessions7d: number
+  countries7d: Array<{ country: string; sessions: number }>
+  countriesPrev7d: Array<{ country: string; sessions: number }>
+  sourcesCurr: Array<{ channel: string; sessions: number }>
+  sourcesPrev: Array<{ channel: string; sessions: number }>
+  gscRows: any[]
+  topPages7d: Array<{ path: string; sessions: number }>
+}): Anomaly[] {
+  const anomalies: Anomaly[] = []
+  const dailyAvg7d = params.sessions7d / 7
+
+  // 1. Spike / drop: today vs daily avg of 7d
+  if (dailyAvg7d > 0) {
+    const ratio = params.todaySessions / dailyAvg7d
+    if (ratio > 1.5) {
+      anomalies.push({
+        type: 'spike',
+        message: `Spike de tráfico hoy: ${params.todaySessions} sesiones (${(ratio * 100).toFixed(0)}% del promedio 7d de ${dailyAvg7d.toFixed(0)})`,
+        severity: 'high',
+        data: { today: params.todaySessions, daily_avg_7d: Number(dailyAvg7d.toFixed(1)), ratio: Number(ratio.toFixed(2)) },
+      })
+    } else if (ratio < 0.4) {
+      anomalies.push({
+        type: 'drop',
+        message: `Caída de tráfico hoy: ${params.todaySessions} sesiones (${(ratio * 100).toFixed(0)}% del promedio 7d de ${dailyAvg7d.toFixed(0)})`,
+        severity: 'high',
+        data: { today: params.todaySessions, daily_avg_7d: Number(dailyAvg7d.toFixed(1)), ratio: Number(ratio.toFixed(2)) },
+      })
+    }
+  }
+
+  // 2. New country: in 7d but not in prev 7d, sessions >= 3
+  const prevCountrySet = new Set(params.countriesPrev7d.map(c => c.country))
+  for (const c of params.countries7d) {
+    if (!prevCountrySet.has(c.country) && c.sessions >= 3) {
+      anomalies.push({
+        type: 'new_country',
+        message: `Nuevo país en tráfico: ${c.country} con ${c.sessions} sesiones esta semana`,
+        severity: 'medium',
+        data: { country: c.country, sessions: c.sessions },
+      })
+    }
+  }
+
+  // 3. Organic growth: this week vs prev >30%
+  const organicCurr = params.sourcesCurr.find(s => /organic/i.test(s.channel))?.sessions ?? 0
+  const organicPrev = params.sourcesPrev.find(s => /organic/i.test(s.channel))?.sessions ?? 0
+  if (organicPrev > 0 && organicCurr > organicPrev * 1.3) {
+    const pct = (((organicCurr - organicPrev) / organicPrev) * 100).toFixed(0)
+    anomalies.push({
+      type: 'organic_growth',
+      message: `Crecimiento orgánico: ${organicCurr} sesiones esta semana vs ${organicPrev} la anterior (+${pct}%)`,
+      severity: 'medium',
+      data: { curr: organicCurr, prev: organicPrev },
+    })
+  }
+
+  // 4. Quick win SEO: position 4-15, impressions >=50, CTR <4% (max 2)
+  let qwCount = 0
+  for (const q of params.gscRows) {
+    if (qwCount >= 2) break
+    const pos = Number(q.position ?? 99)
+    const imp = Number(q.impressions ?? 0)
+    const ctr = Number(q.ctr ?? 0) * 100
+    if (pos >= 4 && pos <= 15 && imp >= 50 && ctr < 4) {
+      anomalies.push({
+        type: 'quick_win_seo',
+        message: `Quick win SEO: "${q.keys?.[0]}" — pos ${pos.toFixed(1)}, ${imp} imp., CTR ${ctr.toFixed(1)}%`,
+        severity: 'low',
+        data: { query: q.keys?.[0], position: Number(pos.toFixed(1)), impressions: imp, ctr: Number(ctr.toFixed(2)) },
+      })
+      qwCount++
+    }
+  }
+
+  // 5. Blog receiving organic: /blog/ path with sessions >2
+  for (const p of params.topPages7d) {
+    if (p.path.includes('/blog/') && p.sessions > 2) {
+      anomalies.push({
+        type: 'blog_organic',
+        message: `Página de blog con tráfico orgánico: ${p.path} — ${p.sessions} sesiones`,
+        severity: 'low',
+        data: { path: p.path, sessions: p.sessions },
+      })
+    }
+  }
+
+  return anomalies
 }
 
 // ── Gemini ────────────────────────────────────────────────────────────────────
 
-async function callGemini(apiKey: string, prompt: string): Promise<string> {
-  const res = await fetch(`${GEMINI_API}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-  })
-  if (!res.ok) return ''
-  return (await res.json())?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+const GEMINI_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    executive_summary: { type: 'STRING' },
+    signals: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          type:       { type: 'STRING', enum: ['green', 'yellow', 'red', 'blue', 'purple'] },
+          title:      { type: 'STRING' },
+          detail:     { type: 'STRING' },
+          confidence: { type: 'STRING', enum: ['high', 'medium', 'low'] },
+          sources:    { type: 'ARRAY', items: { type: 'STRING' } },
+        },
+        required: ['type', 'title', 'detail', 'confidence', 'sources'],
+      },
+    },
+    recommendations: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          priority: { type: 'STRING', enum: ['high', 'medium', 'low'] },
+          title:    { type: 'STRING' },
+          evidence: { type: 'STRING' },
+          impact:   { type: 'STRING' },
+          effort:   { type: 'STRING', enum: ['low', 'medium', 'high'] },
+        },
+        required: ['priority', 'title', 'evidence', 'impact', 'effort'],
+      },
+    },
+    seo_quick_wins: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          query:          { type: 'STRING' },
+          position:       { type: 'NUMBER' },
+          impressions:    { type: 'INTEGER' },
+          ctr_pct:        { type: 'NUMBER' },
+          recommendation: { type: 'STRING' },
+        },
+        required: ['query', 'position', 'impressions', 'ctr_pct', 'recommendation'],
+      },
+    },
+    blog_insights: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          identifier: { type: 'STRING' },
+          insight:    { type: 'STRING' },
+          confidence: { type: 'STRING', enum: ['high', 'medium', 'low'] },
+        },
+        required: ['identifier', 'insight', 'confidence'],
+      },
+    },
+    linkedin_picks: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          title:  { type: 'STRING' },
+          reason: { type: 'STRING' },
+        },
+        required: ['title', 'reason'],
+      },
+    },
+    answer: { type: 'STRING', nullable: true },
+  },
+  required: ['executive_summary', 'signals', 'recommendations', 'seo_quick_wins', 'blog_insights', 'linkedin_picks', 'answer'],
+}
+
+async function callGemini(apiKey: string, prompt: string): Promise<GeminiResult | null> {
+  try {
+    const res = await fetch(`${GEMINI_API}?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: GEMINI_SCHEMA,
+          temperature: 0.4,
+        },
+      }),
+    })
+    if (!res.ok) return null
+    const raw = (await res.json())?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    if (!raw) return null
+    try {
+      return JSON.parse(raw) as GeminiResult
+    } catch {
+      const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim()
+      return JSON.parse(clean) as GeminiResult
+    }
+  } catch {
+    return null
+  }
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -82,16 +361,23 @@ export default async function handler(req: Request) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  const supabase = makeSupabaseAdmin()
+  const supabase  = makeSupabaseAdmin()
   const geminiKey = process.env.GEMINI_API_KEY
   const saJson    = process.env.GOOGLE_SERVICE_ACCOUNT_JSON ?? ''
 
+  let body: any = {}
+  try { body = await req.json() } catch { /* empty body */ }
+  const question: string | null           = body.question ?? null
+  const mode: 'standard' | 'launch'      = body.mode === 'launch' ? 'launch' : 'standard'
+  const launchEvents: any[]               = body.launchEvents ?? []
+
   try {
-    const now = new Date()
+    const now     = new Date()
     const today   = now.toISOString().split('T')[0]
     const weekAgo = new Date(now.getTime() - 7  * 86400_000).toISOString()
+    const gsc28dAgo = new Date(now.getTime() - 28 * 86400_000).toISOString().split('T')[0]
 
-    // ── Supabase metrics ──────────────────────────────────────────────────────
+    // ── Supabase ──────────────────────────────────────────────────────────────
     const [
       usersTotal, usersWeek,
       opportunitiesActive, opportunitiesBySource, opportunitiesByType,
@@ -116,22 +402,32 @@ export default async function handler(req: Request) {
 
     const byType: Record<string, number> = {}
     for (const row of opportunitiesByType.data ?? []) {
-      const t = String(row.opportunity_type || row.type || 'other')
+      const t = String(row.opportunity_type || (row as any).type || 'other')
       byType[t] = (byType[t] || 0) + 1
     }
 
-    // ── GA4 metrics ───────────────────────────────────────────────────────────
-    let ga4: any = null
-    const accessToken = saJson ? await getGoogleAccessToken(saJson) : null
+    // ── GA4 (all reports in parallel) ─────────────────────────────────────────
+    let ga4Data: any    = null
+    let ga4Available    = false
+    const accessToken   = saJson ? await getGoogleAccessToken(saJson) : null
 
     if (accessToken) {
-      const [overviewReport, pagesReport, sourcesReport] = await Promise.all([
-        // Overview: 3 date ranges × 5 metrics (returns 3 rows, one per range)
+      const [
+        overviewReport,
+        dailyTrendReport,
+        countries7dReport,
+        countriesPrev7dReport,
+        topPages7dReport,
+        sources7dReport,
+        sourcesPrev7dReport,
+      ] = await Promise.all([
+        // Overview — 4 date ranges; GA4 auto-adds dateRange dimension
         ga4Report(accessToken, {
           dateRanges: [
-            { startDate: '30daysAgo', endDate: 'today' },
-            { startDate: '7daysAgo',  endDate: 'today' },
-            { startDate: 'today',     endDate: 'today' },
+            { startDate: 'today',     endDate: 'today' },      // date_range_0
+            { startDate: 'yesterday', endDate: 'yesterday' },  // date_range_1
+            { startDate: '7daysAgo',  endDate: 'today' },      // date_range_2
+            { startDate: '14daysAgo', endDate: '8daysAgo' },   // date_range_3
           ],
           metrics: [
             { name: 'sessions' },
@@ -139,117 +435,304 @@ export default async function handler(req: Request) {
             { name: 'screenPageViews' },
             { name: 'newUsers' },
             { name: 'bounceRate' },
+            { name: 'averageSessionDuration' },
           ],
         }),
-        // Top pages last 30 days
+        // Daily trend 30d
         ga4Report(accessToken, {
           dateRanges: [{ startDate: '30daysAgo', endDate: 'today' }],
-          dimensions: [{ name: 'pagePath' }],
-          metrics: [{ name: 'screenPageViews' }, { name: 'activeUsers' }],
-          orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
-          limit: 10,
-        }),
-        // Traffic sources last 30 days
-        ga4Report(accessToken, {
-          dateRanges: [{ startDate: '30daysAgo', endDate: 'today' }],
-          dimensions: [{ name: 'sessionDefaultChannelGrouping' }],
+          dimensions: [{ name: 'date' }],
           metrics: [{ name: 'sessions' }, { name: 'activeUsers' }],
+          orderBys: [{ dimension: { dimensionName: 'date' }, desc: false }],
+          limit: 31,
+        }),
+        // Countries 7d
+        ga4Report(accessToken, {
+          dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
+          dimensions: [{ name: 'country' }],
+          metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'newUsers' }],
           orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
-          limit: 8,
+          limit: 15,
+        }),
+        // Countries prev 7d (for new-country detection)
+        ga4Report(accessToken, {
+          dateRanges: [{ startDate: '14daysAgo', endDate: '8daysAgo' }],
+          dimensions: [{ name: 'country' }],
+          metrics: [{ name: 'sessions' }],
+          orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+          limit: 15,
+        }),
+        // Top pages 7d
+        ga4Report(accessToken, {
+          dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
+          dimensions: [{ name: 'pagePath' }],
+          metrics: [
+            { name: 'sessions' },
+            { name: 'activeUsers' },
+            { name: 'screenPageViews' },
+            { name: 'averageSessionDuration' },
+          ],
+          orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+          limit: 20,
+        }),
+        // Sources 7d
+        ga4Report(accessToken, {
+          dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
+          dimensions: [{ name: 'sessionDefaultChannelGrouping' }],
+          metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'newUsers' }],
+          orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+        }),
+        // Sources prev 7d (for organic-growth delta)
+        ga4Report(accessToken, {
+          dateRanges: [{ startDate: '14daysAgo', endDate: '8daysAgo' }],
+          dimensions: [{ name: 'sessionDefaultChannelGrouping' }],
+          metrics: [{ name: 'sessions' }],
+          orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
         }),
       ])
 
-      const parseOverviewRow = (rowIdx: number) => ({
-        sessions:   extractGA4Value(overviewReport, rowIdx, 0),
-        users:      extractGA4Value(overviewReport, rowIdx, 1),
-        pageviews:  extractGA4Value(overviewReport, rowIdx, 2),
-        new_users:  extractGA4Value(overviewReport, rowIdx, 3),
-        bounce_rate: Number((extractGA4Value(overviewReport, rowIdx, 4) * 100).toFixed(1)),
-      })
+      const overview = {
+        today:     parseOverviewRow(overviewReport, 0),
+        yesterday: parseOverviewRow(overviewReport, 1),
+        last_7d:   parseOverviewRow(overviewReport, 2),
+        prev_7d:   parseOverviewRow(overviewReport, 3),
+      }
 
-      const topPages = (pagesReport?.rows ?? []).map((row: any) => ({
-        path:      row.dimensionValues?.[0]?.value ?? '',
-        pageviews: Number(row.metricValues?.[0]?.value ?? 0),
-        users:     Number(row.metricValues?.[1]?.value ?? 0),
+      const daily_trend = (dailyTrendReport?.rows ?? []).map((row: any) => ({
+        date:         row.dimensionValues?.[0]?.value ?? '',
+        sessions:     Number(row.metricValues?.[0]?.value ?? 0),
+        active_users: Number(row.metricValues?.[1]?.value ?? 0),
       }))
 
-      const trafficSources = (sourcesReport?.rows ?? []).map((row: any) => ({
+      const countries_7d = (countries7dReport?.rows ?? []).map((row: any) => ({
+        country:      row.dimensionValues?.[0]?.value ?? '',
+        sessions:     Number(row.metricValues?.[0]?.value ?? 0),
+        active_users: Number(row.metricValues?.[1]?.value ?? 0),
+        new_users:    Number(row.metricValues?.[2]?.value ?? 0),
+      }))
+
+      const countries_prev_7d = (countriesPrev7dReport?.rows ?? []).map((row: any) => ({
+        country:  row.dimensionValues?.[0]?.value ?? '',
+        sessions: Number(row.metricValues?.[0]?.value ?? 0),
+      }))
+
+      const top_pages_7d = (topPages7dReport?.rows ?? []).map((row: any) => ({
+        path:         row.dimensionValues?.[0]?.value ?? '',
+        sessions:     Number(row.metricValues?.[0]?.value ?? 0),
+        active_users: Number(row.metricValues?.[1]?.value ?? 0),
+        pageviews:    Number(row.metricValues?.[2]?.value ?? 0),
+        avg_duration: Number(Number(row.metricValues?.[3]?.value ?? 0).toFixed(1)),
+      }))
+
+      const sources_7d = (sources7dReport?.rows ?? []).map((row: any) => ({
+        channel:      row.dimensionValues?.[0]?.value ?? '',
+        sessions:     Number(row.metricValues?.[0]?.value ?? 0),
+        active_users: Number(row.metricValues?.[1]?.value ?? 0),
+        new_users:    Number(row.metricValues?.[2]?.value ?? 0),
+      }))
+
+      const sources_prev_7d = (sourcesPrev7dReport?.rows ?? []).map((row: any) => ({
         channel:  row.dimensionValues?.[0]?.value ?? '',
         sessions: Number(row.metricValues?.[0]?.value ?? 0),
-        users:    Number(row.metricValues?.[1]?.value ?? 0),
       }))
 
-      ga4 = {
-        last_30_days: parseOverviewRow(0),
-        last_7_days:  parseOverviewRow(1),
-        today:        parseOverviewRow(2),
-        top_pages:    topPages,
-        traffic_sources: trafficSources,
+      ga4Data      = { overview, daily_trend, countries_7d, countries_prev_7d, top_pages_7d, sources_7d, sources_prev_7d }
+      ga4Available = true
+    }
+
+    // ── Search Console ────────────────────────────────────────────────────────
+    let gscData: any  = null
+    let gscAvailable  = false
+    let gscBlocked    = false
+
+    if (accessToken) {
+      const [queriesResult, pagesResult] = await Promise.all([
+        gscQuery(accessToken, {
+          startDate: gsc28dAgo,
+          endDate:   today,
+          dimensions: ['query'],
+          rowLimit: 50,
+        }),
+        gscQuery(accessToken, {
+          startDate: gsc28dAgo,
+          endDate:   today,
+          dimensions: ['page'],
+          rowLimit: 20,
+        }),
+      ])
+
+      if (queriesResult?.blocked || pagesResult?.blocked) {
+        gscBlocked = true
+        gscData    = { blocked: true }
+      } else {
+        const gscRows  = queriesResult?.rows ?? []
+        const gscPages = pagesResult?.rows ?? []
+
+        // Quick wins: position 4-15, impressions >= 30
+        const quick_wins = gscRows
+          .filter((q: any) => {
+            const pos = Number(q.position ?? 99)
+            const imp = Number(q.impressions ?? 0)
+            return pos >= 4 && pos <= 15 && imp >= 30
+          })
+          .slice(0, 10)
+          .map((q: any) => ({
+            query:       q.keys?.[0] ?? '',
+            position:    Number(Number(q.position ?? 0).toFixed(1)),
+            impressions: Number(q.impressions ?? 0),
+            clicks:      Number(q.clicks ?? 0),
+            ctr_pct:     Number((Number(q.ctr ?? 0) * 100).toFixed(2)),
+          }))
+
+        gscData      = { queries: gscRows, pages: gscPages, quick_wins }
+        gscAvailable = true
       }
     }
 
-    const metrics = {
-      users: { total: usersTotal.count ?? 0, week: usersWeek.count ?? 0 },
-      opportunities: {
-        active: opportunitiesActive.count ?? 0,
-        by_source: topSources,
-        by_type: Object.entries(byType).sort((a, b) => b[1] - a[1]).slice(0, 8),
-        recent: recentOpportunities.data ?? [],
-      },
-      blog: { posts: blogPosts.data ?? [] },
-      b2b: { tokens: b2bTokens.data ?? [] },
-      ga4,
+    // ── Anomaly detection (deterministic, before Gemini) ──────────────────────
+    const anomalies: Anomaly[] = ga4Available
+      ? detectAnomalies({
+          todaySessions:   ga4Data.overview.today.sessions,
+          sessions7d:      ga4Data.overview.last_7d.sessions,
+          countries7d:     ga4Data.countries_7d,
+          countriesPrev7d: ga4Data.countries_prev_7d,
+          sourcesCurr:     ga4Data.sources_7d,
+          sourcesPrev:     ga4Data.sources_prev_7d,
+          gscRows:         gscAvailable ? (gscData.queries ?? []) : [],
+          topPages7d:      ga4Data.top_pages_7d,
+        })
+      : []
+
+    // ── Launch monitor ────────────────────────────────────────────────────────
+    let launchMonitor: any = null
+    if (mode === 'launch' && ga4Available) {
+      const currentHour     = Math.max(new Date().getUTCHours(), 1)
+      const hourlyToday     = ga4Data.overview.today.sessions / currentHour
+      const hourlyBaseline  = ga4Data.overview.last_7d.sessions / (7 * 24)
+      launchMonitor = {
+        hourly_rate_today:    Number(hourlyToday.toFixed(2)),
+        hourly_rate_baseline: Number(hourlyBaseline.toFixed(2)),
+        multiplier:           hourlyBaseline > 0 ? Number((hourlyToday / hourlyBaseline).toFixed(2)) : null,
+        current_hour_utc:     currentHour,
+        events:               launchEvents,
+      }
     }
 
-    // ── Gemini insights ───────────────────────────────────────────────────────
-    let insights: string | null = null
-    let blogIdeas: string[] = []
+    // ── Dataset ───────────────────────────────────────────────────────────────
+    const dataset = {
+      generated_at: now.toISOString(),
+      mode,
+      supabase: {
+        users: {
+          total:        usersTotal.count ?? 0,
+          new_this_week: usersWeek.count ?? 0,
+        },
+        opportunities: {
+          active_verified: opportunitiesActive.count ?? 0,
+          top_sources:     topSources,
+          by_type:         Object.entries(byType).sort((a, b) => b[1] - a[1]).slice(0, 8),
+          recent_titles:   (recentOpportunities.data ?? []).map((r: any) => r.title),
+        },
+        blog: {
+          posts: (blogPosts.data ?? []).map((p: any) => ({
+            slug:       p.slug,
+            titulo:     p.titulo,
+            categoria:  p.categoria,
+            created_at: p.created_at,
+          })),
+        },
+        b2b: {
+          active_tokens: b2bTokens.data?.length ?? 0,
+        },
+      },
+      ga4:           ga4Data,
+      gsc:           gscData,
+      anomalies,
+      launch_monitor: launchMonitor,
+    }
+
+    // ── Gemini ────────────────────────────────────────────────────────────────
+    let geminiResult: GeminiResult | null = null
 
     if (geminiKey) {
-      const ga4Summary = ga4
-        ? `Tráfico real GA4 (últimos 30 días): ${ga4.last_30_days.sessions} sesiones, ${ga4.last_30_days.users} usuarios activos, ${ga4.last_30_days.pageviews} pageviews, ${ga4.last_30_days.new_users} usuarios nuevos, bounce rate ${ga4.last_30_days.bounce_rate}%.
-Últimos 7 días: ${ga4.last_7_days.sessions} sesiones, ${ga4.last_7_days.users} usuarios.
-Hoy: ${ga4.today.sessions} sesiones.
-Top páginas: ${ga4.top_pages.slice(0, 5).map((p: any) => `${p.path}(${p.pageviews}pv)`).join(', ')}.
-Fuentes de tráfico: ${ga4.traffic_sources.map((s: any) => `${s.channel}(${s.sessions})`).join(', ')}.`
-        : 'GA4 no disponible.'
+      // Reduce dataset for the prompt — no private data (no emails, IPs, CVs)
+      const ga4Summary = ga4Available ? {
+        today_sessions:      ga4Data.overview.today.sessions,
+        yesterday_sessions:  ga4Data.overview.yesterday.sessions,
+        last_7d:             ga4Data.overview.last_7d,
+        prev_7d_sessions:    ga4Data.overview.prev_7d.sessions,
+        top_pages:           ga4Data.top_pages_7d.slice(0, 8).map((p: any) => ({ path: p.path, sessions: p.sessions })),
+        sources:             ga4Data.sources_7d,
+        top_countries:       ga4Data.countries_7d.slice(0, 5),
+      } : null
 
-      const prompt = `Sos el analista interno de CVitae, una plataforma de carrera para Paraguay y LatAm.
+      const gscSummary = gscAvailable
+        ? {
+            top_queries: (gscData.queries ?? []).slice(0, 20).map((q: any) => ({
+              query:       q.keys?.[0],
+              position:    Number(Number(q.position).toFixed(1)),
+              impressions: q.impressions,
+              ctr_pct:     Number((q.ctr * 100).toFixed(2)),
+            })),
+            quick_wins:  gscData.quick_wins?.slice(0, 5) ?? [],
+          }
+        : (gscBlocked ? 'blocked' : null)
 
-Métricas actuales (fecha: ${today}):
-- Usuarios registrados en BD: ${metrics.users.total} total, ${metrics.users.week} nuevos esta semana
-- Oportunidades activas verificadas: ${metrics.opportunities.active}
-- Top fuentes: ${topSources.map(([s, n]) => `${s}(${n})`).join(', ')}
-- Tipos: ${Object.entries(byType).map(([t, n]) => `${t}(${n})`).join(', ')}
-- Blog posts: ${metrics.blog.posts.length}
-- Empresas B2B: ${metrics.b2b.tokens.length}
-${ga4Summary}
-
-Posts actuales: ${metrics.blog.posts.map((p: any) => p.titulo).join('; ')}
-
-Dá un análisis en 3 puntos:
-1. Qué está funcionando bien
-2. Qué mejorar urgente (basado en datos reales si hay GA4)
-3. Qué contenido de blog escribir para atraer más usuarios (3 títulos concretos, distintos a los que ya existen)
-
-Respondé en español, tono directo. Formato exacto:
-ESTADO: [un párrafo]
-URGENTE: [bullet 1] | [bullet 2] | [bullet 3]
-BLOG IDEAS: [título 1] | [título 2] | [título 3]`
-
-      const raw = await callGemini(geminiKey, prompt)
-      if (raw) {
-        insights = raw
-        const blogLine = raw.split('\n').find(l => l.startsWith('BLOG IDEAS:'))
-        if (blogLine) {
-          blogIdeas = blogLine.replace('BLOG IDEAS:', '').trim().split('|').map(s => s.trim()).filter(Boolean)
-        }
+      const reducedDataset = {
+        date: today,
+        supabase: {
+          users:         dataset.supabase.users,
+          opportunities: {
+            active_verified: dataset.supabase.opportunities.active_verified,
+            top_sources:     topSources,
+            by_type:         Object.entries(byType).sort((a, b) => b[1] - a[1]).slice(0, 6),
+          },
+          blog_titles: (blogPosts.data ?? []).map((p: any) => p.titulo),
+          b2b_active_tokens: b2bTokens.data?.length ?? 0,
+        },
+        ga4:       ga4Summary,
+        gsc:       gscSummary,
+        anomalies: anomalies.map(a => ({ type: a.type, message: a.message, severity: a.severity })),
       }
+
+      const questionBlock = question
+        ? `\n\nPREGUNTA DEL OPERADOR: ${question}\nResponder en el campo "answer".`
+        : ''
+
+      const prompt = `Sos el analista interno del Growth Intelligence Center de CVitae (plataforma de carrera para Paraguay y LatAm).
+Fecha de análisis: ${today}. Modo: ${mode}.
+
+Datos del sistema (JSON sin datos personales):
+${JSON.stringify(reducedDataset, null, 2)}
+
+Reglas de respuesta:
+- Responder SIEMPRE en español
+- signals: máximo 5. Verde=positivo, rojo=alerta, amarillo=atención, azul=informativo, morado=oportunidad
+- recommendations: máximo 3, ordenadas de mayor a menor priority
+- seo_quick_wins: máximo 3, solo si hay datos reales en gsc.quick_wins — si gsc es "blocked" o null, dejar array vacío
+- linkedin_picks: 2-3 oportunidades del catálogo para publicar en el bot de LinkedIn de CVitae (título corto + razón de impacto)
+- confidence bajo si la muestra es pequeña (menos de 100 sesiones o menos de 7 días de datos)
+- No inventar causalidades sin evidencia en los datos
+- answer: null si no hay pregunta del operador${questionBlock}`
+
+      geminiResult = await callGemini(geminiKey, prompt)
     }
 
-    return new Response(JSON.stringify({ metrics, insights, blogIdeas, generatedAt: now.toISOString() }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    // ── Response ──────────────────────────────────────────────────────────────
+    return new Response(
+      JSON.stringify({
+        dataset,
+        gemini: geminiResult,
+        meta: {
+          ga4_available:    ga4Available,
+          gsc_available:    gscAvailable,
+          gemini_available: !!geminiResult,
+          mode,
+          generated_at:     now.toISOString(),
+        },
+      }),
+      { headers: { 'Content-Type': 'application/json' } },
+    )
   } catch (err: any) {
     console.error('admin-analytics error:', err)
     return new Response(JSON.stringify({ error: err?.message ?? 'Internal error' }), { status: 500 })

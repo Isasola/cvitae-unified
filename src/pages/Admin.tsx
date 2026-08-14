@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle, AlertCircle, X, Eye, EyeOff, Edit, Trash2, Save, Plus, RefreshCw } from 'lucide-react'
+import AdminGrowthCenter from '@/components/admin/AdminGrowthCenter'
 
 interface ContentItem {
   id?: string
@@ -2206,135 +2207,7 @@ export default function Admin() {
 
               {/* ── SKILLS IA ───────────────────────────────────────────── */}
               {activeTab === 'analytics' && (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>MÉTRICAS + IA</p>
-                      <h2 className="text-xl text-[#e8e8e0] mt-0.5">Analytics del Producto</h2>
-                    </div>
-                    <button
-                      onClick={loadAnalytics}
-                      disabled={analyticsLoading}
-                      className="flex items-center gap-2 text-xs border border-white/[0.07] text-[rgba(232,232,224,0.5)] px-3 py-1.5 hover:border-[#c9a84c]/40 hover:text-[#c9a84c] transition-colors disabled:opacity-40"
-                      style={{ fontFamily: MONO }}
-                    >
-                      <RefreshCw size={11} className={analyticsLoading ? 'animate-spin' : ''} />
-                      {analyticsLoading ? 'CARGANDO...' : 'ACTUALIZAR'}
-                    </button>
-                  </div>
-
-                  {analyticsError && (
-                    <div className="border border-red-500/30 bg-red-500/[0.05] px-4 py-3 text-sm text-red-400" style={{ fontFamily: MONO }}>{analyticsError}</div>
-                  )}
-
-                  {analyticsLoading && !analyticsData && (
-                    <div className="flex items-center justify-center py-16 text-[rgba(232,232,224,0.3)]" style={{ fontFamily: MONO, fontSize: '12px' }}>
-                      Analizando métricas con Gemini...
-                    </div>
-                  )}
-
-                  {analyticsData && (
-                    <>
-                      {/* Stats grid */}
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                        {[
-                          { label: 'USUARIOS TOTALES', value: analyticsData.metrics.users.total, sub: `+${analyticsData.metrics.users.week} esta semana`, color: '#c9a84c' },
-                          { label: 'OPORTUNIDADES ACTIVAS', value: analyticsData.metrics.opportunities.active, sub: 'verificadas', color: '#86efac' },
-                          { label: 'BLOG POSTS', value: analyticsData.metrics.blog.posts.length, sub: 'publicados', color: 'rgba(232,232,224,0.5)' },
-                          { label: 'EMPRESAS B2B', value: analyticsData.metrics.b2b.tokens.length, sub: 'registradas', color: '#93c5fd' },
-                        ].map(stat => (
-                          <div key={stat.label} className="border border-white/[0.07] p-4">
-                            <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>{stat.label}</p>
-                            <p className="text-3xl mt-2" style={{ color: stat.color, fontFamily: MONO }}>{stat.value}</p>
-                            <p style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.25)', marginTop: '2px' }}>{stat.sub}</p>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Top sources */}
-                      <div className="border border-white/[0.07]">
-                        <div className="px-4 py-3 border-b border-white/[0.07]">
-                          <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>TOP FUENTES DE OPORTUNIDADES</p>
-                        </div>
-                        <div className="divide-y divide-white/[0.04]">
-                          {(analyticsData.metrics.opportunities.by_source as [string, number][]).map(([src, cnt]) => {
-                            const max = (analyticsData.metrics.opportunities.by_source as [string, number][])[0]?.[1] || 1
-                            return (
-                              <div key={src} className="flex items-center gap-3 px-4 py-2.5">
-                                <span className="w-32 text-[11px] text-[#e8e8e0] truncate" style={{ fontFamily: MONO }}>{src}</span>
-                                <div className="flex-1 bg-white/[0.04] h-1.5">
-                                  <div className="h-1.5 bg-[#c9a84c]/60" style={{ width: `${(cnt / max) * 100}%` }} />
-                                </div>
-                                <span className="text-[11px] text-[rgba(232,232,224,0.4)]" style={{ fontFamily: MONO }}>{cnt}</span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Gemini insights */}
-                      {analyticsData.insights && (
-                        <div className="border border-[#c9a84c]/20 bg-[#c9a84c]/[0.03] p-5 space-y-4">
-                          <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: '#c9a84c', textTransform: 'uppercase' }}>ANÁLISIS GEMINI</p>
-                          <div className="space-y-2">
-                            {analyticsData.insights.split('\n').filter(Boolean).map((line, i) => {
-                              const isHeader = line.startsWith('ESTADO:') || line.startsWith('URGENTE:') || line.startsWith('BLOG IDEAS:')
-                              if (isHeader) {
-                                const [hdr, ...rest] = line.split(':')
-                                const colorMap: Record<string, string> = { ESTADO: '#86efac', URGENTE: '#fca5a5', 'BLOG IDEAS': '#93c5fd' }
-                                return (
-                                  <div key={i}>
-                                    <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.12em', color: colorMap[hdr] || '#c9a84c', textTransform: 'uppercase', marginBottom: '4px' }}>{hdr}</p>
-                                    <p className="text-sm text-[rgba(232,232,224,0.65)] leading-relaxed">{rest.join(':').trim()}</p>
-                                  </div>
-                                )
-                              }
-                              return null
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Blog ideas */}
-                      {analyticsData.blogIdeas.length > 0 && (
-                        <div className="border border-white/[0.07]">
-                          <div className="px-4 py-3 border-b border-white/[0.07]">
-                            <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>IDEAS DE CONTENIDO SUGERIDAS</p>
-                          </div>
-                          <div className="divide-y divide-white/[0.04]">
-                            {analyticsData.blogIdeas.map((idea, i) => (
-                              <div key={i} className="flex items-start gap-3 px-4 py-3">
-                                <span style={{ fontFamily: MONO, fontSize: '11px', color: '#c9a84c', minWidth: '20px' }}>0{i + 1}</span>
-                                <p className="text-sm text-[rgba(232,232,224,0.65)]">{idea}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Recent blog posts */}
-                      {analyticsData.metrics.blog.posts.length > 0 && (
-                        <div className="border border-white/[0.07]">
-                          <div className="px-4 py-3 border-b border-white/[0.07]">
-                            <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>POSTS ACTUALES</p>
-                          </div>
-                          <div className="divide-y divide-white/[0.04]">
-                            {analyticsData.metrics.blog.posts.map((post: any) => (
-                              <div key={post.id} className="flex items-center justify-between px-4 py-2.5">
-                                <p className="text-sm text-[rgba(232,232,224,0.6)] truncate max-w-sm">{post.titulo}</p>
-                                <span style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.25)' }}>{new Date(post.created_at).toLocaleDateString('es-PY')}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <p style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.2)', textAlign: 'right' }}>
-                        Generado: {new Date(analyticsData.generatedAt).toLocaleString('es-PY')}
-                      </p>
-                    </>
-                  )}
-                </div>
+                <AdminGrowthCenter adminPassword={adminPasswordRef.current} />
               )}
 
               {activeTab === 'skills' && (
