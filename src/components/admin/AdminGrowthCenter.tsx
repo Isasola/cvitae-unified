@@ -1,8 +1,28 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Component, type ReactNode } from 'react'
 import {
   RefreshCw, Zap, TrendingUp, Globe, FileText,
   Search, MessageSquare, ChevronDown, ChevronUp, Plus, X, Linkedin
 } from 'lucide-react'
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  componentDidCatch(error: Error) { console.error('[GrowthCenter]', error) }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 24, fontFamily: "'JetBrains Mono', 'Courier New', monospace", color: '#fca5a5', border: '1px solid rgba(252,165,165,0.2)', margin: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Error en Growth Intelligence</div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>{this.state.error.message}</div>
+          <button onClick={() => this.setState({ error: null })} style={{ marginTop: 12, fontSize: 11, color: '#fca5a5', cursor: 'pointer', background: 'none', border: '1px solid rgba(252,165,165,0.3)', padding: '4px 12px' }}>
+            Reintentar
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const MONO = "'JetBrains Mono', 'Courier New', monospace"
 
@@ -196,7 +216,7 @@ function SectionLabel({ text }: { text: string }) {
   )
 }
 
-export default function AdminGrowthCenter({ adminPassword }: Props) {
+function AdminGrowthCenter({ adminPassword }: Props) {
   const [data, setData] = useState<GrowthResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -246,12 +266,23 @@ export default function AdminGrowthCenter({ adminPassword }: Props) {
     const cached = localStorage.getItem(CACHE_KEY)
     const ts = localStorage.getItem(CACHE_TS_KEY)
     if (cached && ts) {
-      const age = Date.now() - new Date(ts).getTime()
-      const ttl = launchMode ? TTL_LAUNCH : TTL_STANDARD
-      if (age < ttl) {
-        setData(JSON.parse(cached))
-        setCachedAt(ts)
-        return
+      try {
+        const parsedCache = JSON.parse(cached)
+        if (parsedCache?.dataset !== undefined) {
+          const age = Date.now() - new Date(ts).getTime()
+          const ttl = launchMode ? TTL_LAUNCH : TTL_STANDARD
+          if (age < ttl) {
+            setData(parsedCache)
+            setCachedAt(ts)
+            return
+          }
+        } else {
+          localStorage.removeItem(CACHE_KEY)
+          localStorage.removeItem(CACHE_TS_KEY)
+        }
+      } catch {
+        localStorage.removeItem(CACHE_KEY)
+        localStorage.removeItem(CACHE_TS_KEY)
       }
     }
     fetchData(launchMode ? 'launch' : 'standard', parsed)
@@ -799,13 +830,13 @@ export default function AdminGrowthCenter({ adminPassword }: Props) {
                       },
                       {
                         label: 'Bounce rate',
-                        today: ga4?.today.bounce_rate != null ? fmtPct(ga4.today.bounce_rate) : undefined,
+                        today: ga4?.today.bounce_rate != null ? `${ga4.today.bounce_rate.toFixed(1)}%` : undefined,
                         yday:
                           ga4?.yesterday.bounce_rate != null
-                            ? fmtPct(ga4.yesterday.bounce_rate)
+                            ? `${ga4.yesterday.bounce_rate.toFixed(1)}%`
                             : undefined,
                         week:
-                          ga4?.last_7d.bounce_rate != null ? fmtPct(ga4.last_7d.bounce_rate) : undefined,
+                          ga4?.last_7d.bounce_rate != null ? `${ga4.last_7d.bounce_rate.toFixed(1)}%` : undefined,
                         prev: undefined,
                         isRate: true,
                       },
@@ -1358,5 +1389,13 @@ export default function AdminGrowthCenter({ adminPassword }: Props) {
         </>
       )}
     </div>
+  )
+}
+
+export default function AdminGrowthCenterSafe(props: Props) {
+  return (
+    <ErrorBoundary>
+      <AdminGrowthCenter {...props} />
+    </ErrorBoundary>
   )
 }

@@ -365,6 +365,39 @@ async function callGemini(apiKey: string, prompt: string): Promise<GeminiResult 
   }
 }
 
+function computePct(curr: number, prev: number): number | null {
+  if (prev <= 0) return null
+  return Number((((curr - prev) / prev) * 100).toFixed(1))
+}
+
+function buildBlogPages(
+  topPages: any[],
+  posts: any[],
+  gscPages: any[],
+): any[] {
+  return topPages
+    .filter(p => String(p.path).includes('/blog/'))
+    .map(p => {
+      const slug  = String(p.path).replace(/^\/blog\//, '').replace(/\/$/, '')
+      const post  = posts.find((b: any) => b.slug === slug)
+      const gscPg = gscPages.find((g: any) =>
+        String(g.keys?.[0] ?? '').endsWith(p.path) ||
+        String(g.keys?.[0] ?? '').includes(p.path)
+      )
+      return {
+        path:     p.path,
+        sessions: p.sessions,
+        ...(post ? { titulo: post.titulo, slug: post.slug } : {}),
+        ...(gscPg ? {
+          gsc_impressions: Number(gscPg.impressions ?? 0),
+          gsc_clicks:      Number(gscPg.clicks ?? 0),
+          gsc_ctr:         Number(gscPg.ctr ?? 0),
+          gsc_position:    Number(Number(gscPg.position ?? 0).toFixed(1)),
+        } : {}),
+      }
+    })
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export default async function handler(req: Request) {
@@ -381,28 +414,29 @@ export default async function handler(req: Request) {
 
   let body: any = {}
   try { body = await req.json() } catch { /* empty body */ }
-  const question: string | null           = body.question ?? null
-  const mode: 'standard' | 'launch'      = body.mode === 'launch' ? 'launch' : 'standard'
-  const launchEvents: any[]               = body.launchEvents ?? []
+  const question: string | null      = body.question ?? null
+  const mode: 'standard' | 'launch' = body.mode === 'launch' ? 'launch' : 'standard'
+  const launchEvents: any[]          = body.launchEvents ?? []
 
   try {
-    const now     = new Date()
-    const today   = now.toISOString().split('T')[0]
-    const weekAgo = new Date(now.getTime() - 7  * 86400_000).toISOString()
+    const now       = new Date()
+    const today     = now.toISOString().split('T')[0]
+    const weekAgo   = new Date(now.getTime() - 7  * 86400_000).toISOString()
     const gsc28dAgo = new Date(now.getTime() - 28 * 86400_000).toISOString().split('T')[0]
 
     // ── Supabase ──────────────────────────────────────────────────────────────
     const [
       usersTotal, usersWeek,
-      opportunitiesActive, opportunitiesBySource, opportunitiesByType,
-      recentOpportunities, blogPosts, b2bTokens,
+      opportunitiesActive, inReviewCount,
+      opportunitiesBySource, opportunitiesByType,
+      blogPosts, b2bTokens,
     ] = await Promise.all([
       supabase.from('user_master_profiles').select('id', { count: 'exact', head: true }),
       supabase.from('user_master_profiles').select('id', { count: 'exact', head: true }).gte('created_at', weekAgo),
       supabase.from('opportunities').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('verification_status', 'verified'),
+      supabase.from('opportunities').select('id', { count: 'exact', head: true }).eq('verification_status', 'in_review'),
       supabase.from('opportunities').select('source').eq('is_active', true).eq('verification_status', 'verified'),
       supabase.from('opportunities').select('opportunity_type, type').eq('is_active', true).eq('verification_status', 'verified'),
-      supabase.from('opportunities').select('title, source, created_at, opportunity_type').eq('is_active', true).gte('created_at', weekAgo).order('created_at', { ascending: false }).limit(10),
       supabase.from('content_hub').select('id, titulo, slug, categoria, created_at').eq('tipo', 'blog').eq('is_active', true).order('created_at', { ascending: false }).limit(10),
       supabase.from('recruiter_tokens').select('id, company_name, created_at, credits_remaining').order('created_at', { ascending: false }).limit(20),
     ])
@@ -421,9 +455,9 @@ export default async function handler(req: Request) {
     }
 
     // ── GA4 (all reports in parallel) ─────────────────────────────────────────
-    let ga4Data: any    = null
-    let ga4Available    = false
-    const accessToken   = saJson ? await getGoogleAccessToken(saJson) : null
+    let ga4Raw: any  = null
+    let ga4Available = false
+    const accessToken = saJson ? await getGoogleAccessToken(saJson) : null
 
     if (accessToken) {
       const [
@@ -435,24 +469,18 @@ export default async function handler(req: Request) {
         sources7dReport,
         sourcesPrev7dReport,
       ] = await Promise.all([
-        // Overview — 4 date ranges; GA4 auto-adds dateRange dimension
         ga4Report(accessToken, {
           dateRanges: [
-            { startDate: 'today',     endDate: 'today' },      // date_range_0
-            { startDate: 'yesterday', endDate: 'yesterday' },  // date_range_1
-            { startDate: '7daysAgo',  endDate: 'today' },      // date_range_2
-            { startDate: '14daysAgo', endDate: '8daysAgo' },   // date_range_3
+            { startDate: 'today',     endDate: 'today' },
+            { startDate: 'yesterday', endDate: 'yesterday' },
+            { startDate: '7daysAgo',  endDate: 'today' },
+            { startDate: '14daysAgo', endDate: '8daysAgo' },
           ],
           metrics: [
-            { name: 'sessions' },
-            { name: 'activeUsers' },
-            { name: 'screenPageViews' },
-            { name: 'newUsers' },
-            { name: 'bounceRate' },
-            { name: 'averageSessionDuration' },
+            { name: 'sessions' }, { name: 'activeUsers' }, { name: 'screenPageViews' },
+            { name: 'newUsers' }, { name: 'bounceRate' }, { name: 'averageSessionDuration' },
           ],
         }),
-        // Daily trend 30d
         ga4Report(accessToken, {
           dateRanges: [{ startDate: '30daysAgo', endDate: 'today' }],
           dimensions: [{ name: 'date' }],
@@ -460,7 +488,6 @@ export default async function handler(req: Request) {
           orderBys: [{ dimension: { dimensionName: 'date' }, desc: false }],
           limit: 31,
         }),
-        // Countries 7d
         ga4Report(accessToken, {
           dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
           dimensions: [{ name: 'country' }],
@@ -468,7 +495,6 @@ export default async function handler(req: Request) {
           orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
           limit: 15,
         }),
-        // Countries prev 7d (for new-country detection)
         ga4Report(accessToken, {
           dateRanges: [{ startDate: '14daysAgo', endDate: '8daysAgo' }],
           dimensions: [{ name: 'country' }],
@@ -476,27 +502,22 @@ export default async function handler(req: Request) {
           orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
           limit: 15,
         }),
-        // Top pages 7d
         ga4Report(accessToken, {
           dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
           dimensions: [{ name: 'pagePath' }],
           metrics: [
-            { name: 'sessions' },
-            { name: 'activeUsers' },
-            { name: 'screenPageViews' },
-            { name: 'averageSessionDuration' },
+            { name: 'sessions' }, { name: 'activeUsers' },
+            { name: 'screenPageViews' }, { name: 'averageSessionDuration' },
           ],
           orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
           limit: 20,
         }),
-        // Sources 7d
         ga4Report(accessToken, {
           dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
           dimensions: [{ name: 'sessionDefaultChannelGrouping' }],
           metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'newUsers' }],
           orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
         }),
-        // Sources prev 7d (for organic-growth delta)
         ga4Report(accessToken, {
           dateRanges: [{ startDate: '14daysAgo', endDate: '8daysAgo' }],
           dimensions: [{ name: 'sessionDefaultChannelGrouping' }],
@@ -505,32 +526,19 @@ export default async function handler(req: Request) {
         }),
       ])
 
-      const overview = {
-        today:     parseOverviewRow(overviewReport, 0),
-        yesterday: parseOverviewRow(overviewReport, 1),
-        last_7d:   parseOverviewRow(overviewReport, 2),
-        prev_7d:   parseOverviewRow(overviewReport, 3),
-      }
-
-      const daily_trend = (dailyTrendReport?.rows ?? []).map((row: any) => ({
-        date:         row.dimensionValues?.[0]?.value ?? '',
-        sessions:     Number(row.metricValues?.[0]?.value ?? 0),
-        active_users: Number(row.metricValues?.[1]?.value ?? 0),
-      }))
-
-      const countries_7d = (countries7dReport?.rows ?? []).map((row: any) => ({
+      const countries7d = (countries7dReport?.rows ?? []).map((row: any) => ({
         country:      row.dimensionValues?.[0]?.value ?? '',
         sessions:     Number(row.metricValues?.[0]?.value ?? 0),
         active_users: Number(row.metricValues?.[1]?.value ?? 0),
         new_users:    Number(row.metricValues?.[2]?.value ?? 0),
       }))
 
-      const countries_prev_7d = (countriesPrev7dReport?.rows ?? []).map((row: any) => ({
+      const countriesPrev7d = (countriesPrev7dReport?.rows ?? []).map((row: any) => ({
         country:  row.dimensionValues?.[0]?.value ?? '',
         sessions: Number(row.metricValues?.[0]?.value ?? 0),
       }))
 
-      const top_pages_7d = (topPages7dReport?.rows ?? []).map((row: any) => ({
+      const topPages7d = (topPages7dReport?.rows ?? []).map((row: any) => ({
         path:         row.dimensionValues?.[0]?.value ?? '',
         sessions:     Number(row.metricValues?.[0]?.value ?? 0),
         active_users: Number(row.metricValues?.[1]?.value ?? 0),
@@ -538,175 +546,206 @@ export default async function handler(req: Request) {
         avg_duration: Number(Number(row.metricValues?.[3]?.value ?? 0).toFixed(1)),
       }))
 
-      const sources_7d = (sources7dReport?.rows ?? []).map((row: any) => ({
+      const sources7d = (sources7dReport?.rows ?? []).map((row: any) => ({
         channel:      row.dimensionValues?.[0]?.value ?? '',
         sessions:     Number(row.metricValues?.[0]?.value ?? 0),
         active_users: Number(row.metricValues?.[1]?.value ?? 0),
         new_users:    Number(row.metricValues?.[2]?.value ?? 0),
       }))
 
-      const sources_prev_7d = (sourcesPrev7dReport?.rows ?? []).map((row: any) => ({
+      const sourcesPrev7d = (sourcesPrev7dReport?.rows ?? []).map((row: any) => ({
         channel:  row.dimensionValues?.[0]?.value ?? '',
         sessions: Number(row.metricValues?.[0]?.value ?? 0),
       }))
 
-      ga4Data      = { overview, daily_trend, countries_7d, countries_prev_7d, top_pages_7d, sources_7d, sources_prev_7d }
+      const dailyTrend = (dailyTrendReport?.rows ?? []).map((row: any) => ({
+        date:     row.dimensionValues?.[0]?.value ?? '',
+        sessions: Number(row.metricValues?.[0]?.value ?? 0),
+        users:    Number(row.metricValues?.[1]?.value ?? 0),
+      }))
+
+      ga4Raw       = { overviewReport, dailyTrend, countries7d, countriesPrev7d, topPages7d, sources7d, sourcesPrev7d }
       ga4Available = true
     }
 
     // ── Search Console ────────────────────────────────────────────────────────
-    let gscData: any  = null
-    let gscAvailable  = false
-    let gscBlocked    = false
+    let gscRaw: any  = null
+    let gscAvailable = false
+    let gscBlocked   = false
 
     if (accessToken) {
       const [queriesResult, pagesResult] = await Promise.all([
-        gscQuery(accessToken, {
-          startDate: gsc28dAgo,
-          endDate:   today,
-          dimensions: ['query'],
-          rowLimit: 50,
-        }),
-        gscQuery(accessToken, {
-          startDate: gsc28dAgo,
-          endDate:   today,
-          dimensions: ['page'],
-          rowLimit: 20,
-        }),
+        gscQuery(accessToken, { startDate: gsc28dAgo, endDate: today, dimensions: ['query'], rowLimit: 50 }),
+        gscQuery(accessToken, { startDate: gsc28dAgo, endDate: today, dimensions: ['page'],  rowLimit: 20 }),
       ])
 
       if (queriesResult?.blocked || pagesResult?.blocked) {
         gscBlocked = true
-        gscData    = { blocked: true }
       } else {
         const gscRows  = queriesResult?.rows ?? []
-        const gscPages = pagesResult?.rows ?? []
-
-        // Quick wins: position 4-15, impressions >= 30
-        const quick_wins = gscRows
-          .filter((q: any) => {
-            const pos = Number(q.position ?? 99)
-            const imp = Number(q.impressions ?? 0)
-            return pos >= 4 && pos <= 15 && imp >= 30
-          })
-          .slice(0, 10)
-          .map((q: any) => ({
-            query:       q.keys?.[0] ?? '',
-            position:    Number(Number(q.position ?? 0).toFixed(1)),
-            impressions: Number(q.impressions ?? 0),
-            clicks:      Number(q.clicks ?? 0),
-            ctr_pct:     Number((Number(q.ctr ?? 0) * 100).toFixed(2)),
-          }))
-
-        gscData      = { queries: gscRows, pages: gscPages, quick_wins }
+        const gscPages = pagesResult?.rows  ?? []
+        const quickWins = gscRows.filter((q: any) => {
+          const pos = Number(q.position ?? 99)
+          const imp = Number(q.impressions ?? 0)
+          return pos >= 4 && pos <= 15 && imp >= 30
+        }).slice(0, 10)
+        gscRaw       = { queries: gscRows, pages: gscPages, quickWins }
         gscAvailable = true
       }
     }
 
-    // ── Anomaly detection (deterministic, before Gemini) ──────────────────────
+    // ── Anomaly detection ─────────────────────────────────────────────────────
     const anomalies: Anomaly[] = ga4Available
       ? detectAnomalies({
-          todaySessions:   ga4Data.overview.today.sessions,
-          sessions7d:      ga4Data.overview.last_7d.sessions,
-          countries7d:     ga4Data.countries_7d,
-          countriesPrev7d: ga4Data.countries_prev_7d,
-          sourcesCurr:     ga4Data.sources_7d,
-          sourcesPrev:     ga4Data.sources_prev_7d,
-          gscRows:         gscAvailable ? (gscData.queries ?? []) : [],
-          topPages7d:      ga4Data.top_pages_7d,
+          todaySessions:   parseOverviewRow(ga4Raw.overviewReport, 0).sessions,
+          sessions7d:      parseOverviewRow(ga4Raw.overviewReport, 2).sessions,
+          countries7d:     ga4Raw.countries7d,
+          countriesPrev7d: ga4Raw.countriesPrev7d,
+          sourcesCurr:     ga4Raw.sources7d,
+          sourcesPrev:     ga4Raw.sourcesPrev7d,
+          gscRows:         gscAvailable ? (gscRaw.queries ?? []) : [],
+          topPages7d:      ga4Raw.topPages7d,
         })
       : []
 
-    // ── Launch monitor ────────────────────────────────────────────────────────
-    let launchMonitor: any = null
-    if (mode === 'launch' && ga4Available) {
-      const currentHour     = Math.max(new Date().getUTCHours(), 1)
-      const hourlyToday     = ga4Data.overview.today.sessions / currentHour
-      const hourlyBaseline  = ga4Data.overview.last_7d.sessions / (7 * 24)
-      launchMonitor = {
-        hourly_rate_today:    Number(hourlyToday.toFixed(2)),
-        hourly_rate_baseline: Number(hourlyBaseline.toFixed(2)),
-        multiplier:           hourlyBaseline > 0 ? Number((hourlyToday / hourlyBaseline).toFixed(2)) : null,
-        current_hour_utc:     currentHour,
-        events:               launchEvents,
-      }
-    }
+    // ── Build dataset matching frontend GrowthResponse type ───────────────────
+    const todayM  = ga4Available ? parseOverviewRow(ga4Raw.overviewReport, 0) : null
+    const ydayM   = ga4Available ? parseOverviewRow(ga4Raw.overviewReport, 1) : null
+    const last7M  = ga4Available ? parseOverviewRow(ga4Raw.overviewReport, 2) : null
+    const prev7M  = ga4Available ? parseOverviewRow(ga4Raw.overviewReport, 3) : null
 
-    // ── Dataset ───────────────────────────────────────────────────────────────
+    const ga4Section = ga4Available ? {
+      today:         todayM!,
+      yesterday:     ydayM!,
+      last_7d:       last7M!,
+      prev_7d:       prev7M!,
+      vs_prev_7d_pct: computePct(last7M!.sessions, prev7M!.sessions),
+      top_countries: ga4Raw.countries7d.slice(0, 10).map((c: any) => {
+        const prev = ga4Raw.countriesPrev7d.find((p: any) => p.country === c.country)
+        return {
+          country:       c.country,
+          sessions:      c.sessions,
+          users:         c.active_users,
+          new_users:     c.new_users,
+          prev_sessions: prev?.sessions ?? 0,
+          delta_pct:     computePct(c.sessions, prev?.sessions ?? 0),
+        }
+      }),
+      traffic_sources: ga4Raw.sources7d.map((s: any) => {
+        const prev = ga4Raw.sourcesPrev7d.find((p: any) => p.channel === s.channel)
+        return {
+          channel:       s.channel,
+          sessions:      s.sessions,
+          users:         s.active_users,
+          new_users:     s.new_users,
+          prev_sessions: prev?.sessions ?? 0,
+          delta_pct:     computePct(s.sessions, prev?.sessions ?? 0),
+        }
+      }),
+      top_pages: ga4Raw.topPages7d.slice(0, 15).map((p: any) => ({
+        path:             p.path,
+        sessions:         p.sessions,
+        users:            p.active_users,
+        pageviews:        p.pageviews,
+        avg_duration_sec: p.avg_duration,
+      })),
+      blog_pages:        buildBlogPages(ga4Raw.topPages7d, blogPosts.data ?? [], gscRaw?.pages ?? []),
+      daily_trend_last7: ga4Raw.dailyTrend.slice(-7),
+    } : null
+
+    const gscSection = gscBlocked
+      ? { blocked: true }
+      : gscAvailable
+        ? {
+            queries: (gscRaw.queries ?? []).slice(0, 30).map((q: any) => ({
+              query:       q.keys?.[0] ?? '',
+              clicks:      Number(q.clicks ?? 0),
+              impressions: Number(q.impressions ?? 0),
+              ctr:         Number(q.ctr ?? 0),
+              position:    Number(Number(q.position ?? 0).toFixed(1)),
+            })),
+            quick_wins: (gscRaw.quickWins ?? []).map((q: any) => ({
+              query:       q.keys?.[0] ?? '',
+              clicks:      Number(q.clicks ?? 0),
+              impressions: Number(q.impressions ?? 0),
+              ctr:         Number(q.ctr ?? 0),
+              position:    Number(Number(q.position ?? 0).toFixed(1)),
+            })),
+            top_pages_by_impressions: (gscRaw.pages ?? []).slice(0, 10).map((p: any) => ({
+              page:        p.keys?.[0] ?? '',
+              clicks:      Number(p.clicks ?? 0),
+              impressions: Number(p.impressions ?? 0),
+              ctr:         Number(p.ctr ?? 0),
+              position:    Number(Number(p.position ?? 0).toFixed(1)),
+            })),
+          }
+        : null
+
     const dataset = {
-      generated_at: now.toISOString(),
+      date: today,
       mode,
-      supabase: {
-        users: {
-          total:        usersTotal.count ?? 0,
-          new_this_week: usersWeek.count ?? 0,
-        },
-        opportunities: {
-          active_verified: opportunitiesActive.count ?? 0,
-          top_sources:     topSources,
-          by_type:         Object.entries(byType).sort((a, b) => b[1] - a[1]).slice(0, 8),
-          recent_titles:   (recentOpportunities.data ?? []).map((r: any) => r.title),
-        },
-        blog: {
-          posts: (blogPosts.data ?? []).map((p: any) => ({
-            slug:       p.slug,
-            titulo:     p.titulo,
-            categoria:  p.categoria,
-            created_at: p.created_at,
-          })),
-        },
-        b2b: {
-          active_tokens: b2bTokens.data?.length ?? 0,
-        },
+      cvitae_db: {
+        registered_users:     usersTotal.count    ?? 0,
+        new_users_7d:         usersWeek.count     ?? 0,
+        active_opportunities: opportunitiesActive.count ?? 0,
+        in_review_count:      inReviewCount.count ?? 0,
+        blog_posts: (blogPosts.data ?? []).map((p: any) => ({
+          titulo: p.titulo, slug: p.slug, fecha: p.created_at,
+        })),
+        b2b_companies: b2bTokens.data?.length ?? 0,
+        top_sources:   topSources,
       },
-      ga4:           ga4Data,
-      gsc:           gscData,
+      ga4:            ga4Section,
+      search_console: gscSection,
       anomalies,
-      launch_monitor: launchMonitor,
+      launch_events:  launchEvents,
     }
 
     // ── Gemini ────────────────────────────────────────────────────────────────
     let geminiResult: GeminiResult | null = null
 
     if (geminiKey) {
-      // Reduce dataset for the prompt — no private data (no emails, IPs, CVs)
       const ga4Summary = ga4Available ? {
-        today_sessions:      ga4Data.overview.today.sessions,
-        yesterday_sessions:  ga4Data.overview.yesterday.sessions,
-        last_7d:             ga4Data.overview.last_7d,
-        prev_7d_sessions:    ga4Data.overview.prev_7d.sessions,
-        top_pages:           ga4Data.top_pages_7d.slice(0, 8).map((p: any) => ({ path: p.path, sessions: p.sessions })),
-        sources:             ga4Data.sources_7d,
-        top_countries:       ga4Data.countries_7d.slice(0, 5),
+        today_sessions:     todayM!.sessions,
+        yesterday_sessions: ydayM!.sessions,
+        last_7d:            last7M!,
+        prev_7d_sessions:   prev7M!.sessions,
+        top_pages:          ga4Raw.topPages7d.slice(0, 8).map((p: any) => ({ path: p.path, sessions: p.sessions })),
+        sources:            ga4Raw.sources7d,
+        top_countries:      ga4Raw.countries7d.slice(0, 5),
       } : null
 
       const gscSummary = gscAvailable
         ? {
-            top_queries: (gscData.queries ?? []).slice(0, 20).map((q: any) => ({
+            top_queries: (gscRaw.queries ?? []).slice(0, 20).map((q: any) => ({
               query:       q.keys?.[0],
               position:    Number(Number(q.position).toFixed(1)),
               impressions: q.impressions,
               ctr_pct:     Number((q.ctr * 100).toFixed(2)),
             })),
-            quick_wins:  gscData.quick_wins?.slice(0, 5) ?? [],
+            quick_wins: (gscRaw.quickWins ?? []).slice(0, 5).map((q: any) => ({
+              query:       q.keys?.[0],
+              position:    Number(Number(q.position).toFixed(1)),
+              impressions: q.impressions,
+              ctr_pct:     Number((q.ctr * 100).toFixed(2)),
+            })),
           }
         : (gscBlocked ? 'blocked' : null)
 
       const reducedDataset = {
         date: today,
-        supabase: {
-          users:         dataset.supabase.users,
-          opportunities: {
-            active_verified: dataset.supabase.opportunities.active_verified,
-            top_sources:     topSources,
-            by_type:         Object.entries(byType).sort((a, b) => b[1] - a[1]).slice(0, 6),
-          },
-          blog_titles: (blogPosts.data ?? []).map((p: any) => p.titulo),
-          b2b_active_tokens: b2bTokens.data?.length ?? 0,
+        users:             { total: usersTotal.count ?? 0, new_this_week: usersWeek.count ?? 0 },
+        opportunities:     {
+          active_verified:  opportunitiesActive.count ?? 0,
+          in_review:        inReviewCount.count ?? 0,
+          top_sources:      topSources.slice(0, 6),
+          by_type:          Object.entries(byType).sort((a, b) => b[1] - a[1]).slice(0, 6),
         },
-        ga4:       ga4Summary,
-        gsc:       gscSummary,
-        anomalies: anomalies.map(a => ({ type: a.type, message: a.message, severity: a.severity })),
+        blog_titles:        (blogPosts.data ?? []).map((p: any) => p.titulo),
+        b2b_active_tokens:  b2bTokens.data?.length ?? 0,
+        ga4:                ga4Summary,
+        gsc:                gscSummary,
+        anomalies:          anomalies.map(a => ({ type: a.type, message: a.message, severity: a.severity })),
       }
 
       const questionBlock = question

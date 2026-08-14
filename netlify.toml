@@ -30,6 +30,9 @@
 [functions."analyze-recruiters-batch"]
   timeout = 26
 
+[functions."admin-analytics"]
+  timeout = 30
+
 [functions."cv-ats-workspace"]
   timeout = 30
 
