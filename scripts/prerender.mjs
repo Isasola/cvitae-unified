@@ -18,7 +18,7 @@ async function prerender() {
   }
   const templateHtml = readFileSync(join(distDir, 'index.html'), 'utf-8')
 
-  const homeFallback = `<main aria-label="CVitae">
+  const homeFallback = `<main aria-label="CVitae" data-prerender>
   <section>
     <p>Gratis · Paraguay y Latinoamérica</p>
     <h1>Analizá tu CV gratis. Después, encontrá el trabajo que te corresponde.</h1>

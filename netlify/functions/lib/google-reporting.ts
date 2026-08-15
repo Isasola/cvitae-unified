@@ -195,8 +195,8 @@ export async function getGoogleReportingMetrics(): Promise<any> {
   if (reportCache && reportCache.expiresAt > Date.now()) return { ...reportCache.value, cached: true }
 
   const rawAccount = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
-  const propertyId = process.env.GA4_PROPERTY_ID
-  const siteUrl = process.env.SEARCH_CONSOLE_SITE_URL
+  const propertyId = process.env.GA4_PROPERTY_ID || '529848293'
+  const siteUrl = process.env.SEARCH_CONSOLE_SITE_URL || 'https://cvitae.lat/'
   const configured = Boolean(rawAccount && (propertyId || siteUrl))
   if (!configured) {
     return {

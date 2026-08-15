@@ -753,9 +753,9 @@ export default async function handler(req: Request) {
         anomalies:          anomalies.map(a => ({ type: a.type, message: a.message, severity: a.severity })),
       }
 
-      const questionBlock = question
-        ? `\n\nPREGUNTA DEL OPERADOR: ${question}\nResponder en el campo "answer".`
-        : ''
+      const answerRule = question
+        ? `- answer: OBLIGATORIO responder la siguiente pregunta del operador con análisis detallado basado en los datos: "${question}"`
+        : `- answer: DEJAR COMO STRING VACÍO "" (no hay pregunta del operador)`
 
       const prompt = `Sos el analista interno del Growth Intelligence Center de CVitae (plataforma de carrera para Paraguay y LatAm).
 Fecha de análisis: ${today}. Modo: ${mode}.
@@ -771,7 +771,7 @@ Reglas de respuesta:
 - linkedin_picks: 2-3 oportunidades del catálogo para publicar en el bot de LinkedIn de CVitae (título corto + razón de impacto)
 - confidence bajo si la muestra es pequeña (menos de 100 sesiones o menos de 7 días de datos)
 - No inventar causalidades sin evidencia en los datos
-- answer: string vacío ("") si no hay pregunta del operador${questionBlock}`
+${answerRule}`
 
       geminiResult = await callGemini(geminiKey, prompt)
     }

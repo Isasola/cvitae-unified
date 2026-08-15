@@ -286,6 +286,8 @@ export default function Admin() {
   const [sourcePolicies, setSourcePolicies] = useState<any[]>([])
   const [sourceStats, setSourceStats] = useState<Record<string, any>>({})
   const [selectedControl, setSelectedControl] = useState<{ kind: 'scraper' | 'source'; data: any } | null>(null)
+  const [controlSaved, setControlSaved] = useState(false)
+  const [controlFormValues, setControlFormValues] = useState<Record<string, any>>({})
 
   const [formData, setFormData] = useState<ContentItem>({
     titulo: '', slug: '', cuerpo: '', categoria: 'Tecnología', imagen_url: '',
@@ -642,6 +644,8 @@ export default function Admin() {
     }
     await adminFetch('update_scraper_control', { scraper_id: scraperId, data })
     setSelectedControl(current => current?.kind === 'scraper' && current.data.scraper_id === scraperId ? { ...current, data: { ...current.data, ...data } } : current)
+    setControlSaved(true)
+    setTimeout(() => setControlSaved(false), 2500)
     await loadControlCenter()
   }
 
@@ -650,6 +654,8 @@ export default function Admin() {
     if (data.trust_level === 'blocked' && !window.confirm('Bloquear la fuente enviará los registros nuevos a cuarentena. Los datos existentes se conservarán. ¿Continuar?')) return
     await adminFetch('update_source_policy', { source, data })
     setSelectedControl(current => current?.kind === 'source' && current.data.source === source ? { ...current, data: { ...current.data, ...data } } : current)
+    setControlSaved(true)
+    setTimeout(() => setControlSaved(false), 2500)
     await loadControlCenter()
   }
 
@@ -1385,7 +1391,7 @@ export default function Admin() {
                       </div>
                       <div className="max-h-[340px] overflow-y-auto">
                         {scraperControls.map(control => (
-                          <button key={control.scraper_id} onClick={() => setSelectedControl({ kind: 'scraper', data: control })} className={`flex w-full items-center gap-3 border-b border-white/[0.05] px-4 py-3 text-left transition ${selectedControl?.kind === 'scraper' && selectedControl.data.scraper_id === control.scraper_id ? 'bg-white/[0.06]' : 'hover:bg-white/[0.025]'}`}>
+                          <button key={control.scraper_id} onClick={() => { setSelectedControl({ kind: 'scraper', data: control }); setControlFormValues({ max_items_per_run: control.max_items_per_run ?? 100, max_runtime_seconds: control.max_runtime_seconds ?? 300, consecutive_failures_before_pause: control.consecutive_failures_before_pause ?? 5, allowed_country_codes_str: (control.allowed_country_codes || []).join(', ') }) }} className={`flex w-full items-center gap-3 border-b border-white/[0.05] px-4 py-3 text-left transition ${selectedControl?.kind === 'scraper' && selectedControl.data.scraper_id === control.scraper_id ? 'bg-white/[0.06]' : 'hover:bg-white/[0.025]'}`}>
                             <span className={`h-2 w-2 shrink-0 rounded-full ${control.collection_enabled ? 'bg-emerald-400' : 'bg-white/15'}`} />
                             <span className="min-w-0 flex-1"><span className="block truncate text-sm text-[#e8e8e0]">{control.scraper_name}</span><span className="block truncate text-[10px] text-white/25" style={{ fontFamily: MONO }}>{control.scraper_id} · {control.audit_status || control.quality_status || 'untested'}</span></span>
                             <span className="text-[9px] uppercase text-white/25" style={{ fontFamily: MONO }}>{control.require_review ? 'revisa' : 'directo'}</span>
@@ -1398,7 +1404,7 @@ export default function Admin() {
                       <div className="max-h-[340px] overflow-y-auto">
                         {sourcePolicies.map(source => {
                           const stats = sourceStats[source.source] || {}
-                          return <button key={source.source} onClick={() => setSelectedControl({ kind: 'source', data: source })} className={`flex w-full items-center gap-3 border-b border-white/[0.05] px-4 py-3 text-left transition ${selectedControl?.kind === 'source' && selectedControl.data.source === source.source ? 'bg-white/[0.06]' : 'hover:bg-white/[0.025]'}`}>
+                          return <button key={source.source} onClick={() => { setSelectedControl({ kind: 'source', data: source }); setControlFormValues({ max_items_per_day: source.max_items_per_day ?? 500, retention_days: source.retention_days ?? 30, allowed_country_codes_str: (source.allowed_country_codes || []).join(', ') }) }} className={`flex w-full items-center gap-3 border-b border-white/[0.05] px-4 py-3 text-left transition ${selectedControl?.kind === 'source' && selectedControl.data.source === source.source ? 'bg-white/[0.06]' : 'hover:bg-white/[0.025]'}`}>
                             <span className={`h-2 w-2 shrink-0 rounded-full ${source.trust_level === 'trusted' ? 'bg-emerald-400' : source.trust_level === 'blocked' ? 'bg-red-400' : 'bg-amber-300'}`} />
                             <span className="min-w-0 flex-1"><span className="block truncate text-sm text-[#e8e8e0]">{source.display_name}</span><span className="block text-[10px] text-white/25" style={{ fontFamily: MONO }}>{stats.verified || 0} verificadas · {stats.pending || 0} pendientes</span></span>
                             <span className="text-[9px] uppercase text-white/25" style={{ fontFamily: MONO }}>{source.trust_level}</span>
@@ -1412,9 +1418,14 @@ export default function Admin() {
                         <div className="flex min-h-[580px] items-center justify-center text-center"><div className="max-w-md"><AlertCircle className="mx-auto h-7 w-7 text-white/20" /><p className="mt-4 text-[#e8e8e0]">Elegí un ejecutor o una fuente.</p><p className="mt-2 text-sm leading-relaxed text-white/35">El panel explicará qué controla cada permiso antes de aplicarlo.</p></div></div>
                       ) : selectedControl.kind === 'scraper' ? (
                         <div key={selectedControl.data.scraper_id}>
-                          <p className="text-[10px] uppercase tracking-[0.15em] text-[#c9a84c]" style={{ fontFamily: MONO }}>EJECUTOR</p>
-                          <h3 className="mt-2 text-2xl text-[#e8e8e0]">{selectedControl.data.scraper_name}</h3>
-                          <p className="mt-1 text-xs text-white/30" style={{ fontFamily: MONO }}>{selectedControl.data.script_path}</p>
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-[0.15em] text-[#c9a84c]" style={{ fontFamily: MONO }}>EJECUTOR</p>
+                              <h3 className="mt-2 text-2xl text-[#e8e8e0]">{selectedControl.data.scraper_name}</h3>
+                              <p className="mt-1 text-xs text-white/30" style={{ fontFamily: MONO }}>{selectedControl.data.script_path}</p>
+                            </div>
+                            {controlSaved && <span className="mt-1 shrink-0 rounded border border-emerald-500/30 bg-emerald-500/[0.08] px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-emerald-400" style={{ fontFamily: MONO }}>✓ Guardado</span>}
+                          </div>
                           <div className="mt-6 border border-white/[0.07] bg-white/[0.015] p-4">
                             <div className="flex flex-wrap items-center justify-between gap-3"><span className="text-[10px] uppercase tracking-[0.14em] text-[#c9a84c]" style={{ fontFamily: MONO }}>Auditoría real · {selectedControl.data.audit_status || 'sin probar'}</span><span className="text-[10px] text-white/30" style={{ fontFamily: MONO }}>{selectedControl.data.last_audited_at ? new Date(selectedControl.data.last_audited_at).toLocaleString('es-PY') : 'Sin fecha'}</span></div>
                             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">{[['Encontradas', selectedControl.data.audit_found_count], ['Válidas', selectedControl.data.audit_valid_count], ['Únicas muestra', selectedControl.data.audit_unique_count], ['Revisadas', selectedControl.data.audit_sample_count]].map(([label, value]) => <div key={String(label)}><span className="block text-xl text-[#e8e8e0]">{value ?? '—'}</span><span className="text-[9px] uppercase tracking-[0.1em] text-white/30" style={{ fontFamily: MONO }}>{label}</span></div>)}</div>
@@ -1428,16 +1439,22 @@ export default function Admin() {
                             ].map(([key, title, description]) => <label key={key} className="flex cursor-pointer items-center justify-between gap-6 py-4"><span><span className="block text-sm text-[#e8e8e0]">{title}</span><span className="mt-1 block text-xs text-white/35">{description}</span></span><input type="checkbox" checked={!!selectedControl.data[key]} onChange={() => updateScraperControl(selectedControl.data.scraper_id, { [key]: !selectedControl.data[key] })} className="h-5 w-9 shrink-0 appearance-none rounded-full border border-white/15 bg-white/5 transition before:block before:h-4 before:w-4 before:rounded-full before:bg-white/30 before:transition checked:border-emerald-400/40 checked:bg-emerald-400/10 checked:before:translate-x-4 checked:before:bg-emerald-400" /></label>)}
                           </div>
                           <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                            {[['max_items_per_run', 'Máximo por corrida', 1, 5000], ['max_runtime_seconds', 'Tiempo máximo (s)', 30, 3600], ['consecutive_failures_before_pause', 'Fallas antes de pausar', 1, 20]].map(([key, label, min, max]) => <label key={String(key)} className="text-[10px] uppercase tracking-[0.1em] text-white/35">{label}<input type="number" min={Number(min)} max={Number(max)} defaultValue={selectedControl.data[String(key)]} onBlur={event => updateScraperControl(selectedControl.data.scraper_id, { [String(key)]: Number(event.target.value) })} className={`${inputCls} mt-2`} /></label>)}
+                            {[['max_items_per_run', 'Máximo por corrida', 1, 5000], ['max_runtime_seconds', 'Tiempo máximo (s)', 30, 3600], ['consecutive_failures_before_pause', 'Fallas antes de pausar', 1, 20]].map(([key, label, min, max]) => <label key={String(key)} className="text-[10px] uppercase tracking-[0.1em] text-white/35">{label}<input type="number" min={Number(min)} max={Number(max)} value={String(controlFormValues[String(key)] ?? '')} onChange={event => setControlFormValues(v => ({ ...v, [String(key)]: event.target.value }))} onBlur={event => updateScraperControl(selectedControl.data.scraper_id, { [String(key)]: Number(event.target.value) })} className={`${inputCls} mt-2`} /></label>)}
                           </div>
-                          <label className="mt-5 block text-[10px] uppercase tracking-[0.1em] text-white/35">Países permitidos<input defaultValue={(selectedControl.data.allowed_country_codes || []).join(', ')} onBlur={event => updateScraperControl(selectedControl.data.scraper_id, { allowed_country_codes: event.target.value.split(',').map(item => item.trim().toUpperCase()).filter(Boolean) })} className={`${inputCls} mt-2`} /></label>
+                          <label className="mt-5 block text-[10px] uppercase tracking-[0.1em] text-white/35">Países permitidos<input value={controlFormValues.allowed_country_codes_str ?? ''} onChange={event => setControlFormValues(v => ({ ...v, allowed_country_codes_str: event.target.value }))} onBlur={event => updateScraperControl(selectedControl.data.scraper_id, { allowed_country_codes: event.target.value.split(',').map(item => item.trim().toUpperCase()).filter(Boolean) })} className={`${inputCls} mt-2`} /></label>
+                          <p className="mt-4 border-l-2 border-white/[0.07] pl-3 text-[10px] leading-relaxed text-white/25" style={{ fontFamily: MONO }}>Los cambios aplican en el próximo ciclo de GitHub Actions. El toggle <span className="text-white/40">Ejecutar automáticamente</span> es el control principal.</p>
                           {selectedControl.data.paused_reason && <p className="mt-5 border-l-2 border-amber-300/40 pl-3 text-xs leading-relaxed text-amber-100/60">Pausa: {selectedControl.data.paused_reason}</p>}
                         </div>
                       ) : (
                         <div key={selectedControl.data.source}>
-                          <p className="text-[10px] uppercase tracking-[0.15em] text-[#c9a84c]" style={{ fontFamily: MONO }}>POLÍTICA DE FUENTE</p>
-                          <h3 className="mt-2 text-2xl text-[#e8e8e0]">{selectedControl.data.display_name}</h3>
-                          <p className="mt-1 text-xs text-white/30" style={{ fontFamily: MONO }}>{selectedControl.data.source}</p>
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-[0.15em] text-[#c9a84c]" style={{ fontFamily: MONO }}>POLÍTICA DE FUENTE</p>
+                              <h3 className="mt-2 text-2xl text-[#e8e8e0]">{selectedControl.data.display_name}</h3>
+                              <p className="mt-1 text-xs text-white/30" style={{ fontFamily: MONO }}>{selectedControl.data.source}</p>
+                            </div>
+                            {controlSaved && <span className="mt-1 shrink-0 rounded border border-emerald-500/30 bg-emerald-500/[0.08] px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-emerald-400" style={{ fontFamily: MONO }}>✓ Guardado</span>}
+                          </div>
                           <div className="mt-6 grid gap-3 sm:grid-cols-[180px_1fr]">
                             <label className="text-[10px] uppercase tracking-[0.1em] text-white/35">Nivel de confianza<select value={selectedControl.data.trust_level} onChange={event => updateSourcePolicy(selectedControl.data.source, { trust_level: event.target.value })} className={`${inputCls} mt-2`}><option value="review">Requiere revisión</option><option value="trusted">Confiable</option><option value="blocked">Bloqueada</option></select></label>
                             <div className="border border-white/[0.07] px-4 py-3 text-xs leading-relaxed text-white/40">“Confiable” no habilita todo por sí solo. Los permisos de distribución siguen siendo independientes y visibles abajo.</div>
@@ -1453,10 +1470,10 @@ export default function Admin() {
                             ].map(([key, title, description]) => <label key={key} className="flex cursor-pointer items-center justify-between gap-6 py-3.5"><span><span className="block text-sm text-[#e8e8e0]">{title}</span><span className="mt-0.5 block text-xs text-white/35">{description}</span></span><input type="checkbox" checked={!!selectedControl.data[key]} onChange={() => updateSourcePolicy(selectedControl.data.source, { [key]: !selectedControl.data[key] })} className="h-5 w-9 shrink-0 appearance-none rounded-full border border-white/15 bg-white/5 transition before:block before:h-4 before:w-4 before:rounded-full before:bg-white/30 before:transition checked:border-[#c9a84c]/45 checked:bg-[#c9a84c]/10 checked:before:translate-x-4 checked:before:bg-[#c9a84c]" /></label>)}
                           </div>
                           <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                            <label className="text-[10px] uppercase tracking-[0.1em] text-white/35">Máximo diario<input type="number" min="1" max="5000" defaultValue={selectedControl.data.max_items_per_day} onBlur={event => updateSourcePolicy(selectedControl.data.source, { max_items_per_day: Number(event.target.value) })} className={`${inputCls} mt-2`} /></label>
-                            <label className="text-[10px] uppercase tracking-[0.1em] text-white/35">Retención (días)<input type="number" min="1" max="365" defaultValue={selectedControl.data.retention_days} onBlur={event => updateSourcePolicy(selectedControl.data.source, { retention_days: Number(event.target.value) })} className={`${inputCls} mt-2`} /></label>
+                            <label className="text-[10px] uppercase tracking-[0.1em] text-white/35">Máximo diario<input type="number" min="1" max="5000" value={String(controlFormValues.max_items_per_day ?? '')} onChange={event => setControlFormValues(v => ({ ...v, max_items_per_day: event.target.value }))} onBlur={event => updateSourcePolicy(selectedControl.data.source, { max_items_per_day: Number(event.target.value) })} className={`${inputCls} mt-2`} /></label>
+                            <label className="text-[10px] uppercase tracking-[0.1em] text-white/35">Retención (días)<input type="number" min="1" max="365" value={String(controlFormValues.retention_days ?? '')} onChange={event => setControlFormValues(v => ({ ...v, retention_days: event.target.value }))} onBlur={event => updateSourcePolicy(selectedControl.data.source, { retention_days: Number(event.target.value) })} className={`${inputCls} mt-2`} /></label>
                           </div>
-                          <label className="mt-5 block text-[10px] uppercase tracking-[0.1em] text-white/35">Países permitidos<input defaultValue={(selectedControl.data.allowed_country_codes || []).join(', ')} onBlur={event => updateSourcePolicy(selectedControl.data.source, { allowed_country_codes: event.target.value.split(',').map(item => item.trim().toUpperCase()).filter(Boolean) })} className={`${inputCls} mt-2`} /></label>
+                          <label className="mt-5 block text-[10px] uppercase tracking-[0.1em] text-white/35">Países permitidos<input value={controlFormValues.allowed_country_codes_str ?? ''} onChange={event => setControlFormValues(v => ({ ...v, allowed_country_codes_str: event.target.value }))} onBlur={event => updateSourcePolicy(selectedControl.data.source, { allowed_country_codes: event.target.value.split(',').map(item => item.trim().toUpperCase()).filter(Boolean) })} className={`${inputCls} mt-2`} /></label>
                         </div>
                       )}
                     </div>
