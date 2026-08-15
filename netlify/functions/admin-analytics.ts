@@ -3,7 +3,8 @@ import { createSign } from 'crypto'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const GEMINI_API   = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+const GEMINI_MODEL = 'gemini-3.5-flash-lite'
+const GEMINI_API   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 const GA4_API      = 'https://analyticsdata.googleapis.com/v1beta/properties'
 const GSC_API      = 'https://www.googleapis.com/webmasters/v3/sites'
 const TOKEN_URL    = 'https://oauth2.googleapis.com/token'
@@ -54,7 +55,7 @@ interface GeminiResult {
   seo_quick_wins: GeminiQuickWin[]
   blog_insights: GeminiBlogInsight[]
   linkedin_picks: GeminiLinkedInPick[]
-  answer: string | null
+  answer: string
 }
 
 interface Anomaly {
@@ -263,6 +264,12 @@ function detectAnomalies(params: {
 
 // ── Gemini ────────────────────────────────────────────────────────────────────
 
+interface GeminiFailure {
+  code: 'http_error' | 'empty_response' | 'invalid_json' | 'exception'
+  message: string
+  httpStatus?: number
+}
+
 const GEMINI_SCHEMA = {
   type: 'OBJECT',
   properties: {
@@ -302,7 +309,7 @@ const GEMINI_SCHEMA = {
         properties: {
           query:          { type: 'STRING' },
           position:       { type: 'NUMBER' },
-          impressions:    { type: 'INTEGER' },
+          impressions:    { type: 'NUMBER' },
           ctr_pct:        { type: 'NUMBER' },
           recommendation: { type: 'STRING' },
         },
@@ -337,7 +344,7 @@ const GEMINI_SCHEMA = {
   required: ['executive_summary', 'signals', 'recommendations', 'seo_quick_wins', 'blog_insights', 'linkedin_picks', 'answer'],
 }
 
-async function callGemini(apiKey: string, prompt: string): Promise<GeminiResult | null> {
+async function callGemini(apiKey: string, prompt: string): Promise<GeminiResult | GeminiFailure> {
   try {
     const res = await fetch(`${GEMINI_API}?key=${apiKey}`, {
       method: 'POST',
@@ -347,26 +354,34 @@ async function callGemini(apiKey: string, prompt: string): Promise<GeminiResult 
         generationConfig: {
           responseMimeType: 'application/json',
           responseSchema: GEMINI_SCHEMA,
-          temperature: 0.4,
         },
       }),
     })
     if (!res.ok) {
       const errText = await res.text()
-      console.error(`[Gemini] HTTP ${res.status}:`, errText)
-      return null
+      console.error(`[Gemini] HTTP ${res.status} model=${GEMINI_MODEL}:`, errText.substring(0, 400))
+      return { code: 'http_error', message: `HTTP ${res.status}`, httpStatus: res.status }
     }
-    const raw = (await res.json())?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-    if (!raw) { console.error('[Gemini] respuesta vacía'); return null }
+    const json = await res.json()
+    const raw: string = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    if (!raw) {
+      console.error('[Gemini] respuesta vacía. finishReason:', json?.candidates?.[0]?.finishReason)
+      return { code: 'empty_response', message: 'Gemini no devolvió contenido' }
+    }
     try {
       return JSON.parse(raw) as GeminiResult
     } catch {
       const clean = raw.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim()
-      return JSON.parse(clean) as GeminiResult
+      try {
+        return JSON.parse(clean) as GeminiResult
+      } catch {
+        console.error('[Gemini] JSON inválido:', raw.substring(0, 200))
+        return { code: 'invalid_json', message: 'Respuesta de Gemini no es JSON válido' }
+      }
     }
-  } catch (e) {
-    console.error('[Gemini] excepción:', e)
-    return null
+  } catch (e: any) {
+    console.error('[Gemini] excepción:', e?.message)
+    return { code: 'exception', message: e?.message ?? 'Error interno al llamar Gemini' }
   }
 }
 
@@ -708,8 +723,13 @@ export default async function handler(req: Request) {
 
     // ── Gemini ────────────────────────────────────────────────────────────────
     let geminiResult: GeminiResult | null = null
+    let geminiErrorCode: string | null = null
+    let geminiErrorMessage: string | null = null
 
-    if (geminiKey) {
+    if (!geminiKey) {
+      geminiErrorCode = 'no_key'
+      geminiErrorMessage = 'GEMINI_API_KEY no configurada en el servidor'
+    } else {
       const ga4Summary = ga4Available ? {
         today_sessions:     todayM!.sessions,
         yesterday_sessions: ydayM!.sessions,
@@ -773,7 +793,13 @@ Reglas de respuesta:
 - No inventar causalidades sin evidencia en los datos
 ${answerRule}`
 
-      geminiResult = await callGemini(geminiKey, prompt)
+      const callResult = await callGemini(geminiKey, prompt)
+      if ('code' in callResult) {
+        geminiErrorCode = callResult.code
+        geminiErrorMessage = callResult.message
+      } else {
+        geminiResult = callResult
+      }
     }
 
     // ── Response ──────────────────────────────────────────────────────────────
@@ -782,11 +808,13 @@ ${answerRule}`
         dataset,
         gemini: geminiResult,
         meta: {
-          ga4_available:    ga4Available,
-          gsc_available:    gscAvailable,
-          gemini_available: !!geminiResult,
+          ga4_available:        ga4Available,
+          gsc_available:        gscAvailable,
+          gemini_available:     !!geminiResult,
+          gemini_error_code:    geminiErrorCode,
+          gemini_error_message: geminiErrorMessage,
           mode,
-          generated_at:     now.toISOString(),
+          generated_at:         now.toISOString(),
         },
       }),
       { headers: { 'Content-Type': 'application/json' } },

@@ -137,12 +137,14 @@ type GrowthResponse = {
       confidence: ConfidenceLevel
     }>
     linkedin_picks: Array<{ title: string; reason: string }>
-    answer: string | null
+    answer: string
   } | null
   meta: {
     ga4_available: boolean
     gsc_available: boolean
     gemini_available: boolean
+    gemini_error_code: string | null
+    gemini_error_message: string | null
     mode: string
     generated_at: string
   }
@@ -223,6 +225,7 @@ function AdminGrowthCenter({ adminPassword }: Props) {
   const [question, setQuestion] = useState('')
   const [questionLoading, setQuestionLoading] = useState(false)
   const [answer, setAnswer] = useState<string | null>(null)
+  const [answerError, setAnswerError] = useState<string | null>(null)
   const [launchMode, setLaunchMode] = useState(false)
   const [launchEvents, setLaunchEvents] = useState<LaunchEvent[]>([])
   const [newEventLabel, setNewEventLabel] = useState('')
@@ -247,8 +250,16 @@ function AdminGrowthCenter({ adminPassword }: Props) {
         setData(json)
         const now = new Date().toISOString()
         setCachedAt(now)
-        localStorage.setItem(CACHE_KEY, JSON.stringify(json))
-        localStorage.setItem(CACHE_TS_KEY, now)
+        const isProviderError = !json.meta.gemini_available &&
+          json.meta.gemini_error_code !== null &&
+          json.meta.gemini_error_code !== 'no_key'
+        if (isProviderError) {
+          localStorage.removeItem(CACHE_KEY)
+          localStorage.removeItem(CACHE_TS_KEY)
+        } else {
+          localStorage.setItem(CACHE_KEY, JSON.stringify(json))
+          localStorage.setItem(CACHE_TS_KEY, now)
+        }
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Error desconocido')
       } finally {
@@ -296,6 +307,7 @@ function AdminGrowthCenter({ adminPassword }: Props) {
     if (!question.trim()) return
     setQuestionLoading(true)
     setAnswer(null)
+    setAnswerError(null)
     try {
       const res = await fetch('/.netlify/functions/admin-analytics', {
         method: 'POST',
@@ -311,10 +323,26 @@ function AdminGrowthCenter({ adminPassword }: Props) {
       })
       if (!res.ok) throw new Error(`Error ${res.status}`)
       const json: GrowthResponse = await res.json()
-      const ans = json.gemini?.answer
-      setAnswer(ans && ans.trim() ? ans : 'Sin respuesta disponible')
+      if (!json.meta.gemini_available) {
+        const code = json.meta.gemini_error_code
+        const msg = json.meta.gemini_error_message
+        if (code === 'no_key') {
+          setAnswerError('Gemini no está configurado en el servidor (falta GEMINI_API_KEY)')
+        } else if (code === 'http_error') {
+          setAnswerError(`Gemini devolvió un error — ${msg ?? 'intenta de nuevo'}`)
+        } else if (code === 'empty_response') {
+          setAnswerError('Gemini no generó respuesta para esta consulta — intentá reformular la pregunta')
+        } else if (code === 'invalid_json') {
+          setAnswerError('Gemini respondió en formato inválido — intentá de nuevo')
+        } else {
+          setAnswerError(msg ?? 'Gemini no disponible')
+        }
+      } else {
+        const ans = json.gemini?.answer ?? ''
+        setAnswer(ans.trim() ? ans : 'Gemini no incluyó respuesta a la pregunta')
+      }
     } catch (e: unknown) {
-      setAnswer(`Error: ${e instanceof Error ? e.message : 'desconocido'}`)
+      setAnswerError(e instanceof Error ? e.message : 'Error desconocido al contactar el servidor')
     } finally {
       setQuestionLoading(false)
     }
@@ -1335,6 +1363,22 @@ function AdminGrowthCenter({ adminPassword }: Props) {
               {questionLoading && (
                 <div style={{ fontFamily: MONO, fontSize: 12, color: 'rgba(232,232,224,0.5)' }}>
                   Consultando datos reales...
+                </div>
+              )}
+              {answerError && (
+                <div
+                  className="rounded border p-4 mt-2"
+                  style={{ borderColor: 'rgba(252,165,165,0.3)', background: 'rgba(252,165,165,0.04)' }}
+                >
+                  <div style={{ fontFamily: MONO, fontSize: 12, color: '#fca5a5', marginBottom: 8 }}>
+                    {answerError}
+                  </div>
+                  <button
+                    onClick={handleQuestion}
+                    style={{ fontFamily: MONO, fontSize: 11, color: 'rgba(252,165,165,0.7)', cursor: 'pointer', background: 'none', border: '1px solid rgba(252,165,165,0.25)', padding: '3px 10px' }}
+                  >
+                    Reintentar
+                  </button>
                 </div>
               )}
               {answer && (
