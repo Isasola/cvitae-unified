@@ -1,6 +1,7 @@
 import { Handler } from "@netlify/functions"
 import { makeSupabaseAdmin } from "./_supabase"
 import { getGoogleReportingMetrics } from "./lib/google-reporting"
+import { runSeoPipeline } from "./lib/seo-pipeline-runner"
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
 if (!ADMIN_PASSWORD) throw new Error("ADMIN_PASSWORD env var not configured")
@@ -460,6 +461,13 @@ const handler: Handler = async (event) => {
         actor: "admin",
       })
       if (auditError) throw auditError
+      // Fire SEO pipeline after approval — failures never block the approve response
+      if (verified && process.env.SEO_PIPELINE_V2 === "true") {
+        const dryRun = process.env.SEO_DRY_RUN !== "false"
+        runSeoPipeline(supabase, payload.id, dryRun).catch(err =>
+          console.error("[seo-pipeline] fire-and-forget error", payload.id, err?.message)
+        )
+      }
       return { statusCode: 200, body: JSON.stringify({ ok: true, reviewed_at: reviewedAt }) }
     }
 

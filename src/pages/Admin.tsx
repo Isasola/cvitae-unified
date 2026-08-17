@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { safeExternalUrl } from '@/lib/safe-url'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle, AlertCircle, X, Eye, EyeOff, Edit, Trash2, Save, Plus, RefreshCw } from 'lucide-react'
 import AdminGrowthCenter from '@/components/admin/AdminGrowthCenter'
+import AdminSeoControlCenter from '@/components/admin/AdminSeoControlCenter'
 
 interface ContentItem {
   id?: string
@@ -242,7 +244,7 @@ export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(ADMIN_VISUAL_PREVIEW)
   const [password, setPassword] = useState('')
   const adminPasswordRef = useRef('')
-  const [activeTab, setActiveTab] = useState<'brief' | 'feedback' | 'moderacion' | 'fuentes' | 'usuarios' | 'beta' | 'prospects' | 'contenido' | 'tokens' | 'skills' | 'analytics'>(ADMIN_PREVIEW_MODE === 'feedback' ? 'feedback' : 'brief')
+  const [activeTab, setActiveTab] = useState<'brief' | 'feedback' | 'moderacion' | 'fuentes' | 'usuarios' | 'beta' | 'prospects' | 'contenido' | 'tokens' | 'skills' | 'analytics' | 'seo'>(ADMIN_PREVIEW_MODE === 'feedback' ? 'feedback' : 'brief')
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -359,6 +361,7 @@ export default function Admin() {
     { id: 'tokens', label: 'Tokens B2B', dotColor: 'bg-white/30', badge: null },
     { id: 'skills', label: 'Skills IA', dotColor: 'bg-amber-400', badge: null },
     { id: 'analytics', label: 'Analytics', dotColor: 'bg-sky-300', badge: null },
+    { id: 'seo', label: 'SEO', dotColor: 'bg-[#c9a84c]', badge: null },
   ]
 
   useEffect(() => {
@@ -1640,8 +1643,8 @@ export default function Admin() {
                               {selectedReview.deadline && <span className="border border-white/10 px-2 py-1 text-white/45">cierra {new Date(selectedReview.deadline).toLocaleDateString('es-PY')}</span>}
                             </div>
                             <p className="mt-2 text-sm text-white/50">{selectedReview.organization || 'Organización no informada'} · {selectedReview.location || 'Sin ubicación'}</p>
-                            <a href={selectedReview.application_url} target="_blank" rel="noreferrer" className="mt-4 inline-flex text-xs text-[#c9a84c] hover:underline">Abrir enlace recolectado ↗</a>
-                            {selectedReview.original_source_url && <a href={selectedReview.original_source_url} target="_blank" rel="noreferrer" className="ml-4 mt-4 inline-flex text-xs text-emerald-300/70 hover:underline">Abrir fuente original ↗</a>}
+                            <a href={safeExternalUrl(selectedReview.application_url)} target="_blank" rel="noreferrer" className="mt-4 inline-flex text-xs text-[#c9a84c] hover:underline">Abrir enlace recolectado ↗</a>
+                            {selectedReview.original_source_url && <a href={safeExternalUrl(selectedReview.original_source_url)} target="_blank" rel="noreferrer" className="ml-4 mt-4 inline-flex text-xs text-emerald-300/70 hover:underline">Abrir fuente original ↗</a>}
                             <button onClick={() => setEditingReview(value => !value)} className="ml-4 text-xs text-white/45 transition hover:text-white">{editingReview ? 'Cancelar edición' : 'Editar datos'}</button>
                           </div>
 
@@ -2225,6 +2228,10 @@ export default function Admin() {
               {/* ── SKILLS IA ───────────────────────────────────────────── */}
               {activeTab === 'analytics' && (
                 <AdminGrowthCenter adminPassword={adminPasswordRef.current} />
+              )}
+
+              {activeTab === 'seo' && (
+                <AdminSeoControlCenter adminPassword={adminPasswordRef.current} />
               )}
 
               {activeTab === 'skills' && (
