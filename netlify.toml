@@ -53,6 +53,13 @@
   to = "/index.html"
   status = 200
 
+# Dynamic sitemap — always serve fresh from Netlify function (force overrides static dist/sitemap.xml)
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+  force = true
+
 # Dynamic routes: if no prerendered file exists, return real 404 (not Soft 404)
 # When a prerendered file exists in dist/, Netlify serves it directly (these rules never fire)
 [[redirects]]
@@ -84,6 +91,7 @@
     X-XSS-Protection = "1; mode=block"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com https://partner.googleadservices.com https://tpc.googlesyndication.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; font-src 'self' data:; frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; object-src 'none'; base-uri 'self'"
 
 [[headers]]
   for = "/index.html"
