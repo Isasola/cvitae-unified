@@ -31,8 +31,17 @@ Profesionales paraguayos y latinoamericanos en búsqueda activa o pasiva de empl
 
 ## Tecnología
 
-React SPA, Netlify Functions, AWS Bedrock (Claude Sonnet para análisis), Supabase, scrapers propios de portales laborales paraguayos e internacionales.
+React SPA con pre-render estático, Netlify Functions, AWS Bedrock (Claude Sonnet para análisis de CV, Claude Haiku para sugerencias), Supabase Postgres, scrapers propios de portales laborales paraguayos e internacionales.
+
+## Datos estructurados
+
+Las páginas de empleos emiten JSON-LD con schema JobPosting cuando los datos están completos. Las páginas de blog emiten schema Article. La página principal emite Organization, WebSite y FAQPage.
 
 ## Contexto
 
 CVitae fue reconocida como Top 100 Moonshot Paraguay 2026. El producto está en producción desde 2024 con usuarios activos en Paraguay, Argentina y Uruguay.
+
+## Descubrimiento
+
+- Sitemap: https://cvitae.lat/sitemap.xml
+- Robots: https://cvitae.lat/robots.txt
