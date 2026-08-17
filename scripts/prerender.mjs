@@ -157,12 +157,61 @@ async function prerender() {
     }
   }
 
+  // Non-job opportunities from opportunities table (scholarship, fellowship, training, etc.)
+  // Prerender their /oportunidades/ pages; skip if content_hub already generated one for the slug
+  const { data: nonJobOpps } = await supabase
+    .from('opportunities')
+    .select('slug,title,organization,location,description,opportunity_type,deadline,updated_at')
+    .eq('is_active', true)
+    .eq('verification_status', 'verified')
+    .eq('catalog_eligible', true)
+    .not('opportunity_type', 'in', '(job,internship,consultancy)')
+    .is('deleted_at', null)
+    .not('slug', 'is', null)
+    .limit(200)
+
+  if (nonJobOpps) {
+    for (const opp of nonJobOpps) {
+      if (!isSafeRouteSegment(opp.slug)) {
+        console.warn(`Se omite oportunidad con slug inseguro: ${opp.slug}`)
+        continue
+      }
+      const oppDir = join(oppsDir, opp.slug)
+      // Don't overwrite a page already generated from content_hub
+      if (existsSync(join(oppDir, 'index.html'))) continue
+      mkdirSync(oppDir, { recursive: true })
+      const title = (opp.title || '').trim()
+      if (!title) continue
+      const desc = (opp.description || `${title} en ${opp.location || 'Paraguay'}.`).replace(/[#*`>]/g, '').substring(0, 160)
+      const canonical = `${SITE_URL}/oportunidades/${opp.slug}`
+      const SCHOLARSHIP_TYPES = ['scholarship', 'fellowship', 'grant', 'research_funding']
+      const ldType = SCHOLARSHIP_TYPES.includes(opp.opportunity_type) ? 'Scholarship' : 'LearningResource'
+      const ld = {
+        '@context': 'https://schema.org', '@type': ldType,
+        name: title, description: desc, url: canonical,
+        ...(opp.deadline ? { validThrough: opp.deadline } : {}),
+        ...(opp.organization ? { provider: { '@type': 'Organization', name: opp.organization } } : {}),
+      }
+      const metaTags = `<title>${escapeHtml(title)} | CVitae</title>
+<meta name="description" content="${escapeHtml(desc)}">
+<meta property="og:title" content="${escapeHtml(title)} | CVitae">
+<meta property="og:description" content="${escapeHtml(desc)}">
+<meta property="og:url" content="${canonical}">
+<link rel="canonical" href="${canonical}">
+<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`
+      writeFileSync(join(oppDir, 'index.html'), templateHtml.replace(
+        '<title>CVitae | Tu Agente de Carrera Inteligente para Paraguay</title>', metaTags
+      ))
+    }
+  }
+
   const { data: jobs } = await supabase
     .from('opportunities')
     .select('slug,title,organization,location,description,created_at,updated_at,type')
     .eq('is_active', true)
     .eq('verification_status', 'verified')
-    .eq('seo_eligible', true)
+    .eq('catalog_eligible', true)
+    .in('opportunity_type', ['job', 'internship', 'consultancy'])
     .is('deleted_at', null)
     .not('slug', 'is', null)
     .order('updated_at', { ascending: false })
