@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, AlertCircle, CheckCircle2, Clock, Search, Play, ChevronDown, ChevronUp } from 'lucide-react'
+import { RefreshCw, AlertCircle, CheckCircle2, Clock, Search, Play, ChevronDown, ChevronUp, Sparkles, Check, X, Pencil } from 'lucide-react'
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace'
 const API_BASE = '/.netlify/functions'
@@ -29,6 +29,18 @@ interface Summary {
   flags: Record<string, boolean>
 }
 
+interface SuggestionItem {
+  id: string
+  opportunity_id: string
+  field: string
+  current_value: string | null
+  suggested_value: string
+  confidence: number
+  evidence: string | null
+  source: string
+  status: 'pending' | 'accepted' | 'edited' | 'ignored'
+}
+
 type Filter = 'all' | 'eligible' | 'review' | 'blocked' | 'unchecked'
 
 const STATUS_STYLE: Record<string, { label: string; color: string; dot: string }> = {
@@ -56,6 +68,11 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
   const [runningBulk, setRunningBulk] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [lastBulkResult, setLastBulkResult] = useState<string | null>(null)
+  const [suggestions, setSuggestions] = useState<Record<string, SuggestionItem[]>>({})
+  const [loadingSugg, setLoadingSugg] = useState<Record<string, boolean>>({})
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [batchAccepting, setBatchAccepting] = useState(false)
 
   const load = useCallback(async (f: Filter = filter) => {
     setLoading(true)
@@ -111,6 +128,88 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
   const toggleExpand = (id: string) =>
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
 
+  const loadSuggestions = async (oppId: string) => {
+    setLoadingSugg(prev => ({ ...prev, [oppId]: true }))
+    try {
+      const res = await fetch(`${API_BASE}/admin-seo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify({ action: 'get_suggestions', opportunityId: oppId }),
+      })
+      const data = await res.json()
+      setSuggestions(prev => ({ ...prev, [oppId]: data.suggestions || [] }))
+    } finally {
+      setLoadingSugg(prev => ({ ...prev, [oppId]: false }))
+    }
+  }
+
+  const generateSuggestions = async (oppId: string) => {
+    setLoadingSugg(prev => ({ ...prev, [oppId]: true }))
+    try {
+      await fetch(`${API_BASE}/admin-seo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify({ action: 'generate_suggestions', opportunityId: oppId }),
+      })
+      await loadSuggestions(oppId)
+    } finally {
+      setLoadingSugg(prev => ({ ...prev, [oppId]: false }))
+    }
+  }
+
+  const acceptSuggestion = async (suggId: string, oppId: string) => {
+    await fetch(`${API_BASE}/admin-seo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ action: 'accept_suggestion', suggestionId: suggId }),
+    })
+    setSuggestions(prev => ({
+      ...prev,
+      [oppId]: (prev[oppId] || []).filter(s => s.id !== suggId),
+    }))
+  }
+
+  const editSuggestion = async (suggId: string, oppId: string, newValue: string) => {
+    await fetch(`${API_BASE}/admin-seo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ action: 'edit_suggestion', suggestionId: suggId, newValue }),
+    })
+    setEditingId(null)
+    setSuggestions(prev => ({
+      ...prev,
+      [oppId]: (prev[oppId] || []).filter(s => s.id !== suggId),
+    }))
+  }
+
+  const ignoreSuggestion = async (suggId: string, oppId: string) => {
+    await fetch(`${API_BASE}/admin-seo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ action: 'ignore_suggestion', suggestionId: suggId }),
+    })
+    setSuggestions(prev => ({
+      ...prev,
+      [oppId]: (prev[oppId] || []).filter(s => s.id !== suggId),
+    }))
+  }
+
+  const batchAcceptSafe = async () => {
+    setBatchAccepting(true)
+    try {
+      const res = await fetch(`${API_BASE}/admin-seo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify({ action: 'batch_accept_safe' }),
+      })
+      const data = await res.json()
+      setLastBulkResult(`Batch-accept: ${data.accepted} aceptadas, ${data.skipped} omitidas (solo campos seguros, conf ≥ 0.95)`)
+      setSuggestions({})
+    } finally {
+      setBatchAccepting(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -133,6 +232,14 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
             className="flex items-center gap-2 border border-[#c9a84c]/40 bg-[#c9a84c]/10 px-3 py-2 text-xs text-[#c9a84c] transition hover:bg-[#c9a84c]/20 disabled:opacity-40"
           >
             <Play className="h-3.5 w-3.5" /> Correr pipeline en pendientes
+          </button>
+          <button
+            onClick={batchAcceptSafe}
+            disabled={batchAccepting}
+            className="flex items-center gap-2 border border-emerald-400/30 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-300 transition hover:bg-emerald-400/10 disabled:opacity-40"
+            title="Acepta sugerencias con conf ≥ 0.95 en campos seguros (title, employmentType, modality)"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" /> Batch-accept seguro
           </button>
         </div>
       </div>
@@ -254,15 +361,92 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
                   </div>
 
                   {/* Actions */}
-                  <button
-                    onClick={() => runPipeline(item.id)}
-                    disabled={runningId === item.id}
-                    className="shrink-0 border border-white/10 px-3 py-1.5 text-[10px] text-white/45 transition hover:border-white/25 hover:text-cream disabled:opacity-40"
-                    title="Correr pipeline SEO"
-                  >
-                    {runningId === item.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-                  </button>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      onClick={() => { loadSuggestions(item.id); setExpanded(prev => ({ ...prev, [item.id]: true })) }}
+                      disabled={loadingSugg[item.id]}
+                      className="border border-white/10 px-3 py-1.5 text-[10px] text-white/45 transition hover:border-white/25 hover:text-cream disabled:opacity-40"
+                      title="Ver/actualizar sugerencias AI"
+                    >
+                      {loadingSugg[item.id] ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    </button>
+                    <button
+                      onClick={() => runPipeline(item.id)}
+                      disabled={runningId === item.id}
+                      className="border border-white/10 px-3 py-1.5 text-[10px] text-white/45 transition hover:border-white/25 hover:text-cream disabled:opacity-40"
+                      title="Correr pipeline SEO"
+                    >
+                      {runningId === item.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                    </button>
+                  </div>
                 </div>
+                {/* AI Suggestions panel */}
+                {isExpanded && (
+                  <div className="border-t border-white/[0.06] bg-white/[0.01] px-4 pb-4 pt-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-[10px] uppercase tracking-wider text-white/30">Sugerencias AI</p>
+                      <button
+                        onClick={() => generateSuggestions(item.id)}
+                        disabled={loadingSugg[item.id]}
+                        className="flex items-center gap-1 text-[10px] text-[#c9a84c]/70 hover:text-[#c9a84c] disabled:opacity-40"
+                      >
+                        <Sparkles className="h-3 w-3" /> Generar nuevas
+                      </button>
+                    </div>
+                    {!suggestions[item.id] ? (
+                      <p className="text-[11px] text-white/20">Cargando… o presioná ✦ para generar.</p>
+                    ) : suggestions[item.id].length === 0 ? (
+                      <p className="text-[11px] text-white/20">Sin sugerencias pendientes.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {suggestions[item.id].map(sug => (
+                          <li key={sug.id} className="rounded border border-white/[0.06] bg-[#060606] p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[10px] text-white/40" style={{ fontFamily: MONO }}>{sug.field}</span>
+                                  <span className={`text-[10px] ${sug.confidence >= 0.95 ? 'text-emerald-300' : sug.confidence >= 0.80 ? 'text-amber-200' : 'text-white/40'}`} style={{ fontFamily: MONO }}>
+                                    {Math.round(sug.confidence * 100)}%
+                                  </span>
+                                  <span className="text-[10px] text-white/25" style={{ fontFamily: MONO }}>{sug.source}</span>
+                                </div>
+                                {sug.current_value && (
+                                  <p className="mt-1 text-[11px] text-white/30 line-through">{sug.current_value}</p>
+                                )}
+                                {editingId === sug.id ? (
+                                  <input
+                                    value={editValue}
+                                    onChange={e => setEditValue(e.target.value)}
+                                    className="mt-1 w-full border border-white/15 bg-[#0a0a0a] px-2 py-1 text-xs text-cream outline-none focus:border-[#c9a84c]/40"
+                                  />
+                                ) : (
+                                  <p className="mt-1 text-sm text-cream">{sug.suggested_value}</p>
+                                )}
+                                {sug.evidence && (
+                                  <p className="mt-1 text-[10px] italic text-white/25">"{sug.evidence.slice(0, 120)}"</p>
+                                )}
+                              </div>
+                              <div className="flex shrink-0 gap-1">
+                                {editingId === sug.id ? (
+                                  <>
+                                    <button onClick={() => editSuggestion(sug.id, item.id, editValue)} className="border border-emerald-400/25 p-1.5 text-emerald-300 hover:bg-emerald-400/10"><Check className="h-3 w-3" /></button>
+                                    <button onClick={() => setEditingId(null)} className="border border-white/10 p-1.5 text-white/40 hover:text-white/60"><X className="h-3 w-3" /></button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button onClick={() => acceptSuggestion(sug.id, item.id)} className="border border-emerald-400/25 p-1.5 text-emerald-300 hover:bg-emerald-400/10" title="Aceptar"><Check className="h-3 w-3" /></button>
+                                    <button onClick={() => { setEditingId(sug.id); setEditValue(sug.suggested_value) }} className="border border-white/10 p-1.5 text-white/45 hover:text-cream" title="Editar"><Pencil className="h-3 w-3" /></button>
+                                    <button onClick={() => ignoreSuggestion(sug.id, item.id)} className="border border-white/10 p-1.5 text-white/45 hover:text-red-400" title="Ignorar"><X className="h-3 w-3" /></button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}

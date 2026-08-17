@@ -7,7 +7,11 @@
 import type { Handler } from '@netlify/functions'
 import { makeSupabaseAdmin } from './_supabase'
 import { runSeoPipeline } from './lib/seo-pipeline-runner'
+import { generateAndPersistSuggestions } from './lib/seo-suggestions'
 import { serverSeoFlags } from '../../src/lib/seo/flags'
+
+const BATCH_ACCEPT_SAFE_FIELDS = new Set(['title', 'employmentType', 'modality'])
+const BATCH_ACCEPT_MIN_CONFIDENCE = 0.95
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
 
@@ -156,6 +160,129 @@ const handler: Handler = async (event) => {
       })).sort((a, b) => b.total - a.total)
 
       return { statusCode: 200, body: JSON.stringify({ sources }) }
+    }
+
+    // ── AI Suggestions ──────────────────────────────────────────────────────────
+
+    // Generate suggestions for one opportunity
+    if (action === 'generate_suggestions' && body.opportunityId) {
+      const dryRun = flags.SEO_DRY_RUN
+      const result = await generateAndPersistSuggestions(supabase, body.opportunityId, dryRun)
+      return { statusCode: 200, body: JSON.stringify(result) }
+    }
+
+    // Get pending suggestions for an opportunity
+    if (action === 'get_suggestions' && body.opportunityId) {
+      const { data, error } = await supabase
+        .from('seo_suggestions')
+        .select('*')
+        .eq('opportunity_id', body.opportunityId)
+        .eq('status', 'pending')
+        .order('confidence', { ascending: false })
+      if (error) return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
+      return { statusCode: 200, body: JSON.stringify({ suggestions: data || [] }) }
+    }
+
+    // Accept a single suggestion (applies suggested_value to the opportunity field)
+    if (action === 'accept_suggestion' && body.suggestionId) {
+      const { data: sug, error: fetchErr } = await supabase
+        .from('seo_suggestions')
+        .select('*')
+        .eq('id', body.suggestionId)
+        .eq('status', 'pending')
+        .maybeSingle()
+      if (fetchErr || !sug) return { statusCode: 404, body: JSON.stringify({ error: 'Suggestion not found' }) }
+
+      // Apply to opportunity
+      const { error: applyErr } = await supabase
+        .from('opportunities')
+        .update({ [sug.field]: sug.suggested_value })
+        .eq('id', sug.opportunity_id)
+      if (applyErr) return { statusCode: 500, body: JSON.stringify({ error: applyErr.message }) }
+
+      // Mark accepted
+      await supabase.from('seo_suggestions').update({
+        status: 'accepted',
+        applied_value: sug.suggested_value,
+        reviewed_by: 'admin',
+        reviewed_at: new Date().toISOString(),
+      }).eq('id', body.suggestionId)
+
+      return { statusCode: 200, body: JSON.stringify({ ok: true, field: sug.field, applied: sug.suggested_value }) }
+    }
+
+    // Edit a suggestion (apply custom value instead of suggested)
+    if (action === 'edit_suggestion' && body.suggestionId && body.newValue !== undefined) {
+      const { data: sug, error: fetchErr } = await supabase
+        .from('seo_suggestions')
+        .select('*')
+        .eq('id', body.suggestionId)
+        .eq('status', 'pending')
+        .maybeSingle()
+      if (fetchErr || !sug) return { statusCode: 404, body: JSON.stringify({ error: 'Suggestion not found' }) }
+
+      const { error: applyErr } = await supabase
+        .from('opportunities')
+        .update({ [sug.field]: body.newValue })
+        .eq('id', sug.opportunity_id)
+      if (applyErr) return { statusCode: 500, body: JSON.stringify({ error: applyErr.message }) }
+
+      await supabase.from('seo_suggestions').update({
+        status: 'edited',
+        applied_value: body.newValue,
+        reviewed_by: 'admin',
+        reviewed_at: new Date().toISOString(),
+      }).eq('id', body.suggestionId)
+
+      return { statusCode: 200, body: JSON.stringify({ ok: true, field: sug.field, applied: body.newValue }) }
+    }
+
+    // Ignore a suggestion
+    if (action === 'ignore_suggestion' && body.suggestionId) {
+      await supabase.from('seo_suggestions').update({
+        status: 'ignored',
+        reviewed_by: 'admin',
+        reviewed_at: new Date().toISOString(),
+      }).eq('id', body.suggestionId).eq('status', 'pending')
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
+    // Batch-accept — only safe fields with confidence >= 0.95
+    if (action === 'batch_accept_safe') {
+      const { data: pending, error: fetchErr } = await supabase
+        .from('seo_suggestions')
+        .select('*')
+        .eq('status', 'pending')
+        .gte('confidence', BATCH_ACCEPT_MIN_CONFIDENCE)
+
+      if (fetchErr) return { statusCode: 500, body: JSON.stringify({ error: fetchErr.message }) }
+      if (!pending || pending.length === 0) {
+        return { statusCode: 200, body: JSON.stringify({ accepted: 0, skipped: 0, message: 'No eligible suggestions' }) }
+      }
+
+      let accepted = 0
+      let skipped = 0
+      for (const sug of pending) {
+        if (!BATCH_ACCEPT_SAFE_FIELDS.has(sug.field)) { skipped++; continue }
+
+        const { error: applyErr } = await supabase
+          .from('opportunities')
+          .update({ [sug.field]: sug.suggested_value })
+          .eq('id', sug.opportunity_id)
+
+        if (applyErr) { skipped++; continue }
+
+        await supabase.from('seo_suggestions').update({
+          status: 'accepted',
+          applied_value: sug.suggested_value,
+          reviewed_by: 'admin:batch',
+          reviewed_at: new Date().toISOString(),
+        }).eq('id', sug.id)
+
+        accepted++
+      }
+
+      return { statusCode: 200, body: JSON.stringify({ accepted, skipped, total: pending.length }) }
     }
 
     return { statusCode: 400, body: JSON.stringify({ error: 'Unknown action' }) }
