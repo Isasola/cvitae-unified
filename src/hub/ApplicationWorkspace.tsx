@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { auth, supabase } from '@/lib/supabase'
+import { safeExternalUrl } from '@/lib/safe-url'
 import { analytics } from '@/lib/analytics'
 
 type CvVersion = {
@@ -206,7 +207,7 @@ export default function ApplicationWorkspace() {
 
   const openOfficialApplication = async () => {
     if (!selectedWorkspace) return
-    const destination = selectedWorkspace.application_url_snapshot
+    const destination = safeExternalUrl(selectedWorkspace.application_url_snapshot)
     const popup = window.open('', '_blank')
     if (popup) {
       popup.opener = null

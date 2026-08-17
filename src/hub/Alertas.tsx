@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link } from 'wouter'
+import { safeExternalUrl } from '@/lib/safe-url'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, BellOff, MapPin, Briefcase, ExternalLink, Loader2, CheckCircle2, Sparkles } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
@@ -68,7 +69,7 @@ function OpportunityCard({ opp }: { opp: Opportunity }) {
             <p className="text-[10px] uppercase tracking-[0.15em] text-white/30">match</p>
           </div>
           <a
-            href={opp.application_url}
+            href={safeExternalUrl(opp.application_url)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/50 transition hover:border-[#c9a84c]/40 hover:text-[#c9a84c]"
