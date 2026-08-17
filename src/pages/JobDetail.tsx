@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link, useParams } from 'wouter'
+import { toGoogleEmploymentType } from '@/lib/seo/employment-type'
+import { safeExternalUrl } from '@/lib/safe-url'
 import { ArrowLeft, Briefcase, Building2, CalendarDays, ExternalLink, MapPin, ShieldCheck, Sparkles } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { supabase } from '@/lib/supabase'
@@ -55,22 +57,34 @@ export default function JobDetail() {
   const title = `${clean(job.title)} | CVitae`
   const description = `${clean(job.title)} en ${clean(job.organization) || 'Paraguay'}. Consultá los detalles y postulá desde la fuente original.`
   const canonical = `https://cvitae.lat/empleos/${job.slug}`
-  const structuredData = {
+
+  // Only emit JobPosting when required fields are present — never emit with synthetic fallbacks
+  const realDescription = clean(job.description)
+  const realOrg = clean(job.organization)
+  const canEmitJobPosting = realDescription.length >= 50 && realOrg.length > 0
+
+  const structuredData = canEmitJobPosting ? {
     '@context': 'https://schema.org',
     '@type': 'JobPosting',
     title: clean(job.title),
-    description: clean(job.description) || description,
+    description: realDescription,
     datePosted: job.created_at,
-    employmentType: clean(job.type) || undefined,
-    hiringOrganization: { '@type': 'Organization', name: clean(job.organization) || 'Empresa no informada' },
+    employmentType: toGoogleEmploymentType(job.type) ?? undefined,
+    hiringOrganization: { '@type': 'Organization', name: realOrg },
     jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: clean(job.location) || 'Paraguay', addressCountry: 'PY' } },
     directApply: false,
     url: canonical,
+  } : {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: clean(job.title),
+    url: canonical,
+    description,
   }
 
   const apply = () => {
     analytics.applyClicked(job.id, job.source || 'unknown')
-    window.open(job.application_url, '_blank', 'noopener,noreferrer')
+    window.open(safeExternalUrl(job.application_url), '_blank', 'noopener,noreferrer')
   }
 
   return (

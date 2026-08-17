@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link, useParams } from 'wouter'
+import { toGoogleEmploymentType } from '@/lib/seo/employment-type'
+import { safeExternalUrl } from '@/lib/safe-url'
 import { ArrowLeft, Building2, CalendarDays, ExternalLink, MapPin, ShieldCheck, Sparkles } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { supabase } from '@/lib/supabase'
@@ -12,6 +14,7 @@ interface Opportunity {
   title: string
   organization: string | null
   location: string | null
+  type: string | null
   description: string | null
   opportunity_type: string | null
   application_url: string
@@ -44,7 +47,7 @@ export default function OpportunityDetail() {
     if (!slug) return
     supabase
       .from('opportunities')
-      .select('id,slug,title,organization,location,description,opportunity_type,application_url,source,deadline,funding_type,funding_amount,currency,fully_funded,eligible_countries,eligible_regions,education_level,updated_at')
+      .select('id,slug,title,organization,location,type,description,opportunity_type,application_url,source,deadline,funding_type,funding_amount,currency,fully_funded,eligible_countries,eligible_regions,education_level,updated_at')
       .eq('slug', slug)
       .eq('is_active', true)
       .eq('verification_status', 'verified')
@@ -68,24 +71,60 @@ export default function OpportunityDetail() {
   const eligibility = [...(item.eligible_countries || []), ...(item.eligible_regions || [])].join(', ')
   const title = `${clean(item.title)} | CVitae`
   const description = `${type} de ${clean(item.organization) || 'una organización verificada'}. Revisá elegibilidad, fecha y postulación en CVitae.`
-  const canonical = `https://cvitae.lat/oportunidades/${item.slug}`
   const funding = item.funding_amount ? `${item.currency || ''} ${Number(item.funding_amount).toLocaleString('es-PY')}`.trim() : clean(item.funding_type)
-  const structuredData = {
-    '@context': 'https://schema.org',
-    '@type': ['scholarship', 'fellowship', 'grant', 'research_funding'].includes(item.opportunity_type || '') ? 'Scholarship' : 'JobPosting',
-    name: clean(item.title),
-    description: clean(item.description) || description,
-    url: canonical,
-    datePosted: item.updated_at,
-    validThrough: item.deadline || undefined,
-    hiringOrganization: { '@type': 'Organization', name: clean(item.organization) || 'Organización verificada' },
-    jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: clean(item.location) || eligibility || 'Paraguay', addressCountry: 'PY' } },
-    directApply: false,
+  const SCHOLARSHIP_TYPES = ['scholarship', 'fellowship', 'grant', 'research_funding']
+  const JOB_TYPES = ['job', 'internship', 'consultancy', 'empleo']
+  const isJobPosting = !SCHOLARSHIP_TYPES.includes(item.opportunity_type || '')
+  // For JobPosting use canonical /empleos/ if it's a job type, otherwise /oportunidades/
+  const isJobType = JOB_TYPES.includes(item.opportunity_type || '')
+  const canonicalUrl = isJobType
+    ? `https://cvitae.lat/empleos/${item.slug}`
+    : `https://cvitae.lat/oportunidades/${item.slug}`
+  const realDescription = clean(item.description)
+  const realOrg = clean(item.organization)
+  // JobPosting requires real description + real org — never emit with synthetic fallbacks
+  const canEmitJobPosting = isJobPosting && realDescription.length >= 50 && realOrg.length > 0
+
+  let structuredData: Record<string, unknown>
+  if (canEmitJobPosting) {
+    const googleEmploymentType = toGoogleEmploymentType(item.type)
+    structuredData = {
+      '@context': 'https://schema.org',
+      '@type': 'JobPosting',
+      title: clean(item.title),
+      description: realDescription,
+      url: canonicalUrl,
+      datePosted: item.updated_at,
+      validThrough: item.deadline || undefined,
+      hiringOrganization: { '@type': 'Organization', name: realOrg },
+      jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: clean(item.location) || eligibility || 'Paraguay', addressCountry: 'PY' } },
+      directApply: false,
+      ...(googleEmploymentType ? { employmentType: googleEmploymentType } : {}),
+    }
+  } else if (!isJobPosting) {
+    structuredData = {
+      '@context': 'https://schema.org',
+      '@type': 'Scholarship',
+      name: clean(item.title),
+      description: realDescription || description,
+      url: canonicalUrl,
+      validThrough: item.deadline || undefined,
+      provider: { '@type': 'Organization', name: realOrg || 'Organización verificada' },
+    }
+  } else {
+    // Job type but missing required fields — fall back to WebPage
+    structuredData = {
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: clean(item.title),
+      url: canonicalUrl,
+      description,
+    }
   }
 
   const apply = () => {
     analytics.applyClicked(item.id, item.source || 'unknown')
-    window.open(item.application_url, '_blank', 'noopener,noreferrer')
+    window.open(safeExternalUrl(item.application_url), '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -93,10 +132,10 @@ export default function OpportunityDetail() {
       <Helmet>
         <title>{title}</title>
         <meta name="description" content={description} />
-        <link rel="canonical" href={canonical} />
+        <link rel="canonical" href={canonicalUrl} />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
-        <meta property="og:url" content={canonical} />
+        <meta property="og:url" content={canonicalUrl} />
         <meta property="og:type" content="article" />
         <meta property="og:image" content="https://cvitae.lat/og-image.jpg" />
         <script type="application/ld+json">{JSON.stringify(structuredData)}</script>

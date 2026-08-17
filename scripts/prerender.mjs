@@ -11,6 +11,26 @@ const escapeHtml = value => String(value || '').replace(/[&<>"']/g, character =>
 }[character]))
 const isSafeRouteSegment = value => /^[a-z0-9][a-z0-9._-]*$/i.test(String(value || ''))
 
+// Valid Google Jobs employmentType values only — no raw Spanish strings
+const EMPLOYMENT_TYPE_MAPPING = {
+  'tiempo completo': 'FULL_TIME', 'full time': 'FULL_TIME', 'full-time': 'FULL_TIME',
+  'medio tiempo': 'PART_TIME', 'part time': 'PART_TIME', 'part-time': 'PART_TIME',
+  'jornada parcial': 'PART_TIME',
+  'freelance': 'CONTRACTOR', 'contratista': 'CONTRACTOR', 'contractor': 'CONTRACTOR',
+  'temporal': 'TEMPORARY', 'temporary': 'TEMPORARY',
+  'pasantia': 'INTERN', 'pasantía': 'INTERN', 'internship': 'INTERN', 'intern': 'INTERN',
+  'practicante': 'INTERN', 'trainee': 'INTERN',
+  'voluntario': 'VOLUNTEER', 'voluntariado': 'VOLUNTEER', 'volunteer': 'VOLUNTEER',
+  'otro': 'OTHER', 'other': 'OTHER',
+}
+const GOOGLE_ET_VALID = new Set(['FULL_TIME','PART_TIME','CONTRACTOR','TEMPORARY','INTERN','VOLUNTEER','PER_DIEM','OTHER'])
+const toGoogleEmploymentType = raw => {
+  if (!raw) return undefined
+  const n = String(raw).trim().toLowerCase()
+  if (GOOGLE_ET_VALID.has(n.toUpperCase())) return n.toUpperCase()
+  return EMPLOYMENT_TYPE_MAPPING[n] ?? undefined
+}
+
 async function prerender() {
   if (!existsSync(join(distDir, 'index.html'))) {
     console.error('dist/index.html no existe.')
@@ -32,6 +52,21 @@ async function prerender() {
   <nav aria-label="Secciones principales"><a href="/oportunidades">Oportunidades</a> · <a href="/blog">Blog</a> · <a href="/sobre-cvitae">Sobre CVitae</a></nav>
 </main>`
   writeFileSync(join(distDir, 'index.html'), templateHtml.replace('<div id="root"></div>', `<div id="root">${homeFallback}</div>`))
+
+  // Generate 404.html (always, even without Supabase credentials)
+  const notFoundHtml = templateHtml
+    .replace(
+      '<title>CVitae | Tu Agente de Carrera Inteligente para Paraguay</title>',
+      `<title>Página no encontrada | CVitae</title>
+<meta name="description" content="La página que buscás no existe en CVitae.">
+<link rel="canonical" href="${SITE_URL}">
+<meta name="robots" content="noindex,nofollow">`
+    )
+    .replace(
+      '<div id="root"></div>',
+      `<div id="root"><main style="min-height:60vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;font-family:system-ui;color:#e8e8e0;background:#111;gap:1rem"><h1 style="font-size:2rem;font-weight:700">404</h1><p style="color:#ffffff60">Esta página no existe o fue removida.</p><a href="/" style="color:#c9a84c;text-decoration:none;font-size:.875rem">← Volver al inicio</a></main></div>`
+    )
+  writeFileSync(join(distDir, '404.html'), notFoundHtml)
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     console.warn('Variables de Supabase no definidas: home estática generada; se omiten rutas dinámicas.')
@@ -103,7 +138,11 @@ async function prerender() {
       const oppDir = join(oppsDir, opp.slug)
       if (!existsSync(oppDir)) mkdirSync(oppDir, { recursive: true })
       const excerpt = (opp.cuerpo || '').replace(/[#*`>]/g, '').substring(0, 160)
-      const title = opp.titulo || 'Oportunidad'
+      const title = (opp.titulo || '').trim()
+      if (!title) {
+        console.warn(`Se omite oportunidad sin título: ${opp.slug}`)
+        continue
+      }
       const metaTags = `<title>${title} | CVitae</title>
 <meta name="description" content="${excerpt || `${title} en ${opp.ubicacion || 'Paraguay'}.`}">
 <meta property="og:title" content="${title} | CVitae">
@@ -140,15 +179,26 @@ async function prerender() {
       }
       const jobDir = join(jobsDir, job.slug)
       if (!existsSync(jobDir)) mkdirSync(jobDir, { recursive: true })
-      const title = job.title || 'Empleo en Paraguay'
+      const title = (job.title || '').trim()
+      if (!title) {
+        console.warn(`Se omite empleo sin título: ${job.slug}`)
+        continue
+      }
       const description = (job.description || `${title} en ${job.location || 'Paraguay'}.`).replace(/[#*`>]/g, '').substring(0, 160)
       const canonical = `${SITE_URL}/empleos/${job.slug}`
-      const structuredData = {
+      // Only emit JobPosting when required fields are real — never with synthetic fallbacks
+      const realDesc = (job.description || '').trim()
+      const realOrg = (job.organization || '').trim()
+      const canEmitJobPosting = realDesc.length >= 50 && realOrg.length > 0
+      const structuredData = canEmitJobPosting ? {
         '@context': 'https://schema.org', '@type': 'JobPosting', title,
-        description: job.description || description, datePosted: job.created_at,
-        hiringOrganization: { '@type': 'Organization', name: job.organization || 'Empresa no informada' },
+        description: realDesc, datePosted: job.created_at,
+        hiringOrganization: { '@type': 'Organization', name: realOrg },
         jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: job.location || 'Paraguay', addressCountry: 'PY' } },
-        employmentType: job.type || undefined, directApply: false, url: canonical,
+        employmentType: toGoogleEmploymentType(job.type), directApply: false, url: canonical,
+      } : {
+        '@context': 'https://schema.org', '@type': 'WebPage',
+        name: title, url: canonical, description,
       }
       const metaTags = `<title>${escapeHtml(title)} | CVitae</title>
 <meta name="description" content="${escapeHtml(description)}">
