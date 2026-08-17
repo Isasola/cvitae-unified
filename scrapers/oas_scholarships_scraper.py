@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from urllib.parse import urljoin
+from urllib.parse import urljoin, quote
 
 import requests
 from bs4 import BeautifulSoup
@@ -73,7 +73,8 @@ def parse(page: str, base_url: str = START_URL) -> list[dict]:
         if SKIP_RE.search(text):
             continue
 
-        full_url = urljoin(base_url, href)
+        # Percent-encode spaces in href (OAS PDFs often have spaces in filenames)
+        full_url = urljoin(base_url, quote(href, safe='/:?=&#%@'))
         if not full_url.startswith(("https://", "http://")):
             continue
         if full_url in seen or full_url == base_url:

@@ -139,6 +139,9 @@ def normalize_opportunity(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, s
         return None, "title vacío"
     if GENERIC_TITLES.search(item["title"]):
         return None, "título genérico o de navegación"
+    if " " in item["application_url"]:
+        from urllib.parse import quote as _url_quote
+        item["application_url"] = _url_quote(item["application_url"], safe='/:?=&#%@+')
     if not item["application_url"].startswith(("https://", "http://")):
         return None, "application_url inválida"
     item["slug"] = _text(item.get("slug"), 120) or _slug(item["title"], item["application_url"])
