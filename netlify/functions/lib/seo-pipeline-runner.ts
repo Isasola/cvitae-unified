@@ -9,6 +9,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizeOpportunity, type RawOpportunity } from '../../../src/lib/seo/normalize'
 import { validateEligibility } from '../../../src/lib/seo/eligibility'
+import { enqueueIndexingEvent } from './indexing-queue'
 
 const FETCH_SELECT = [
   'id', 'slug', 'title', 'description', 'organization', 'location', 'country_code',
@@ -80,6 +81,19 @@ export async function runSeoPipeline(
     }
 
     console.log('[seo-pipeline] ok', opportunityId, eligibility.seoStatus, eligibility.jobpostingValidity)
+
+    // Enqueue indexing event — fire-and-forget, never blocks pipeline
+    if (eligibility.seoStatus === 'eligible' && raw.slug) {
+      const oppType = (raw as any).opportunity_type
+      const urlPrefix = ['job', 'internship', 'consultancy'].includes(oppType) ? 'empleos' : 'oportunidades'
+      enqueueIndexingEvent({
+        url: `https://cvitae.lat/${urlPrefix}/${raw.slug}`,
+        opportunityId,
+        eventType: 'URL_UPDATED',
+        supabase,
+      }).catch(err => console.error('[seo-pipeline] indexing-queue error', err?.message))
+    }
+
     return {
       ok: true,
       dryRun: false,
