@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams, useLocation } from 'wouter'
+import { Helmet } from 'react-helmet-async'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Calendar, Tag } from 'lucide-react'
 import { Navbar } from '@/components/cvitae/Navbar'
 import { Footer } from '@/components/cvitae/Footer'
 import { supabase } from '@/lib/supabase'
 import ReactMarkdown from 'react-markdown'
+import rehypeSanitize from 'rehype-sanitize'
 import { AdSlot } from '@/components/cv/AdSlot'
 
 interface BlogPost {
@@ -139,7 +141,7 @@ export default function BlogPost() {
             prose-a:text-gold prose-a:no-underline hover:prose-a:underline
             prose-hr:border-white/10 prose-hr:my-8
           ">
-            <ReactMarkdown>{post.cuerpo}</ReactMarkdown>
+            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{post.cuerpo}</ReactMarkdown>
           </div>
 
           {/* Footer CTA */}
