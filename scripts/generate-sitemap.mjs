@@ -32,15 +32,17 @@ async function generate() {
     .order('created_at', { ascending: false })
     .limit(200)
 
+  const nowIso = new Date().toISOString()
   const { data: jobs } = await supabase
-    .from('opportunities').select('slug, updated_at')
+    .from('opportunities').select('slug, updated_at, opportunity_type, deadline')
     .eq('is_active', true)
     .eq('verification_status', 'verified')
-    .eq('seo_eligible', true)
+    .eq('catalog_eligible', true)
     .is('deleted_at', null)
+    .is('archived_at', null)
     .not('slug', 'is', null)
     .order('updated_at', { ascending: false })
-    .limit(1000)
+    .limit(2000)
 
   const { data: vacancies } = await supabase
     .from('recruiter_vacancies').select('slug, updated_at')
@@ -76,9 +78,19 @@ async function generate() {
     sitemap += `  <url>\n    <loc>${SITE_URL}/oportunidades/${opp.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.6</priority>\n  </url>\n`
   })
 
+  const JOB_TYPES = new Set(['job', 'internship', 'consultancy'])
+  const seenSlugs = new Set()
   jobs?.forEach(job => {
+    if (!job.slug) return
+    if (job.deadline && job.deadline < nowIso) return // expired
+    const isJob = JOB_TYPES.has(job.opportunity_type || '')
+    const prefix = isJob ? '/empleos' : '/oportunidades'
+    const key = `${prefix}/${job.slug}`
+    if (seenSlugs.has(key)) return
+    seenSlugs.add(key)
     const lastmod = job.updated_at?.split('T')[0] || today
-    sitemap += `  <url>\n    <loc>${SITE_URL}/empleos/${job.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.8</priority>\n  </url>\n`
+    const priority = isJob ? '0.8' : '0.7'
+    sitemap += `  <url>\n    <loc>${SITE_URL}${key}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${priority}</priority>\n  </url>\n`
   })
 
   vacancies?.forEach(v => {
