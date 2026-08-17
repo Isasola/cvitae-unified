@@ -38,7 +38,7 @@ function Hero() {
             {['CV', 'Perfil entendido', 'Matches', 'Próxima acción'].map((step, index) => (
               <li key={step} className="flex items-center gap-3 text-[11px] uppercase tracking-[0.12em] text-cream">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-gold/70 bg-[#0a0a0a] text-gold shadow-[0_0_12px_rgba(201,168,76,0.4)]">
-                  <span className="font-display text-base font-bold">{index + 1}</span>
+                  <span className="font-display text-base font-bold leading-none">{index + 1}</span>
                 </span>
                 {step}
               </li>
