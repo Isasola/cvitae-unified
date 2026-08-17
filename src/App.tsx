@@ -1,4 +1,5 @@
 import { Route, Switch, Redirect } from 'wouter'
+import { ErrorBoundary } from './components/cv/ErrorBoundary'
 import LandingPage from './pages/LandingPage'
 import About from './pages/About'
 import Privacy from './pages/Privacy'
@@ -31,6 +32,7 @@ import JobDetail from './pages/JobDetail'
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <Switch>
       <Route path="/" component={LandingPage} />
       <Route path="/auth/callback" component={AuthCallback} />
@@ -69,5 +71,6 @@ export default function App() {
       <Route path="/mi-carrera/verificate" component={Assessments} />
       <Route component={NotFound} />
     </Switch>
+    </ErrorBoundary>
   )
 }

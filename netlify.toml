@@ -53,6 +53,24 @@
   to = "/index.html"
   status = 200
 
+# Dynamic routes: if no prerendered file exists, return real 404 (not Soft 404)
+# When a prerendered file exists in dist/, Netlify serves it directly (these rules never fire)
+[[redirects]]
+  from = "/oportunidades/:slug"
+  to = "/404.html"
+  status = 404
+
+[[redirects]]
+  from = "/empleos/:slug"
+  to = "/404.html"
+  status = 404
+
+[[redirects]]
+  from = "/blog/:slug"
+  to = "/404.html"
+  status = 404
+
+# SPA fallback for all other app routes (auth, hub, admin, etc.)
 [[redirects]]
   from = "/*"
   to = "/index.html"
