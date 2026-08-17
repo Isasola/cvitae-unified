@@ -30,7 +30,12 @@ export function zonedDayStart(value: Date, timeZone = OPERATIONS_TIME_ZONE): Dat
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
 
-  const { password, action, payload } = JSON.parse(event.body || "{}")
+  const headerPassword = event.headers['x-admin-password'] || event.headers['authorization']?.replace('Bearer ', '')
+  let body: Record<string, any> = {}
+  try { body = JSON.parse(event.body || '{}') } catch { /* empty ok */ }
+  const { action, payload } = body
+  // body.password is DEPRECATED — new callers must use x-admin-password header
+  const password = headerPassword || body.password
 
   if (password !== ADMIN_PASSWORD) {
     return { statusCode: 401, body: JSON.stringify({ error: "No autorizado" }) }

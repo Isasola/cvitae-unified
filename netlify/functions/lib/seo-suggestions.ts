@@ -2,7 +2,7 @@
  * SEO Suggestions Engine — Phase 6
  *
  * Pipeline: deterministic rules → parser → only ambiguous fields → Bedrock
- * Safe fields for suggestions: title, employmentType, modality, city, organization
+ * Safe fields for suggestions: title, employmentType, city, organization
  * NEVER suggest: salary, streetAddress, postalCode, deadline, invented company
  * All suggestions require evidence from the source content.
  */
@@ -12,7 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 const MODEL_HAIKU = 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
 
-const SAFE_FIELDS_FOR_BATCH = new Set(['title', 'employmentType', 'modality'])
+const SAFE_FIELDS_FOR_BATCH = new Set(['title', 'employmentType'])
 const FORBIDDEN_FIELDS = new Set(['salary', 'streetAddress', 'postalCode', 'deadline', 'wage'])
 
 interface RawOpp {
@@ -73,12 +73,6 @@ const EMPLOYMENT_TYPE_KEYWORDS: Array<[RegExp, string]> = [
   [/\bvoluntar[io]\b|\bvolunteer\b/i, 'VOLUNTEER'],
 ]
 
-const MODALITY_KEYWORDS: Array<[RegExp, string]> = [
-  [/\bremoto\b|\bremote\b|\bwork from home\b|\bdesde casa\b/i, 'remote'],
-  [/\bh[íi]brido\b|\bhybrid\b/i, 'hybrid'],
-  [/\bpresencial\b|\bon.?site\b|\ben.?oficina\b/i, 'onsite'],
-]
-
 // Deterministic suggestions that don't need AI
 function deterministic(opp: RawOpp): Suggestion[] {
   const suggestions: Suggestion[] = []
@@ -99,21 +93,6 @@ function deterministic(opp: RawOpp): Suggestion[] {
         })
         break
       }
-    }
-  }
-
-  // Modality from description
-  for (const [regex, value] of MODALITY_KEYWORDS) {
-    if (regex.test(text)) {
-      suggestions.push({
-        field: 'modality',
-        current_value: null,
-        suggested_value: value,
-        confidence: 0.88,
-        evidence: `Keyword match in description: "${regex.source}"`,
-        source: 'deterministic',
-      })
-      break
     }
   }
 

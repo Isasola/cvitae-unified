@@ -10,8 +10,39 @@ import { runSeoPipeline } from './lib/seo-pipeline-runner'
 import { generateAndPersistSuggestions } from './lib/seo-suggestions'
 import { serverSeoFlags } from '../../src/lib/seo/flags'
 
-const BATCH_ACCEPT_SAFE_FIELDS = new Set(['title', 'employmentType', 'modality'])
+// Mapping: suggestion.field (conceptual) → real opportunities column name.
+// Only fields listed here can ever be applied to the DB.
+// `employmentType` → `type` (DB column that stores the employment type string)
+// `modality` intentionally OMITTED — no column exists in opportunities (remote is boolean, lossy)
+// `country` → `country_code` — validated to 2-letter ISO before write
+// `region` → `department` — stores PY administrative department
+const SUGGESTION_FIELD_MAP: Record<string, string> = {
+  title: 'title',
+  organization: 'organization',
+  city: 'city',
+  employmentType: 'type',
+  country: 'country_code',
+  region: 'department',
+}
+
+// Fields safe for batch-accept (high-confidence auto-accept); value validation applies.
+// `organization` intentionally EXCLUDED — AI inference cannot be code-guaranteed; manual review required.
+// `employmentType` kept but deterministic confidence (0.90) never reaches the 0.95 threshold in practice.
+const BATCH_ACCEPT_SAFE_FIELDS = new Set(['title', 'city', 'employmentType'])
 const BATCH_ACCEPT_MIN_CONFIDENCE = 0.95
+
+function validateSuggestionValue(field: string, value: string): string | null {
+  const trimmed = String(value || '').trim()
+  if (!trimmed) return null
+  if (field === 'country' && !/^[A-Z]{2}$/.test(trimmed.toUpperCase())) return null
+  if (field === 'title' && trimmed.length < 3) return null
+  if (trimmed.length > 500) return null
+  return field === 'country' ? trimmed.toUpperCase() : trimmed
+}
+
+function resolveColumn(field: string): string | null {
+  return SUGGESTION_FIELD_MAP[field] ?? null
+}
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
 
@@ -193,10 +224,15 @@ const handler: Handler = async (event) => {
         .maybeSingle()
       if (fetchErr || !sug) return { statusCode: 404, body: JSON.stringify({ error: 'Suggestion not found' }) }
 
-      // Apply to opportunity
+      const col = resolveColumn(sug.field)
+      if (!col) return { statusCode: 400, body: JSON.stringify({ error: `Field '${sug.field}' is not an appliable suggestion field` }) }
+      const safeValue = validateSuggestionValue(sug.field, sug.suggested_value)
+      if (!safeValue) return { statusCode: 400, body: JSON.stringify({ error: `Value for '${sug.field}' failed validation` }) }
+
+      // Apply to opportunity using the real column name (never [sug.field] directly)
       const { error: applyErr } = await supabase
         .from('opportunities')
-        .update({ [sug.field]: sug.suggested_value })
+        .update({ [col]: safeValue })
         .eq('id', sug.opportunity_id)
       if (applyErr) return { statusCode: 500, body: JSON.stringify({ error: applyErr.message }) }
 
@@ -221,9 +257,14 @@ const handler: Handler = async (event) => {
         .maybeSingle()
       if (fetchErr || !sug) return { statusCode: 404, body: JSON.stringify({ error: 'Suggestion not found' }) }
 
+      const col = resolveColumn(sug.field)
+      if (!col) return { statusCode: 400, body: JSON.stringify({ error: `Field '${sug.field}' is not an appliable suggestion field` }) }
+      const safeValue = validateSuggestionValue(sug.field, String(body.newValue ?? ''))
+      if (!safeValue) return { statusCode: 400, body: JSON.stringify({ error: `Value for '${sug.field}' failed validation` }) }
+
       const { error: applyErr } = await supabase
         .from('opportunities')
-        .update({ [sug.field]: body.newValue })
+        .update({ [col]: safeValue })
         .eq('id', sug.opportunity_id)
       if (applyErr) return { statusCode: 500, body: JSON.stringify({ error: applyErr.message }) }
 
@@ -265,9 +306,13 @@ const handler: Handler = async (event) => {
       for (const sug of pending) {
         if (!BATCH_ACCEPT_SAFE_FIELDS.has(sug.field)) { skipped++; continue }
 
+        const col = resolveColumn(sug.field)
+        const safeValue = col ? validateSuggestionValue(sug.field, sug.suggested_value) : null
+        if (!col || !safeValue) { skipped++; continue }
+
         const { error: applyErr } = await supabase
           .from('opportunities')
-          .update({ [sug.field]: sug.suggested_value })
+          .update({ [col]: safeValue })
           .eq('id', sug.opportunity_id)
 
         if (applyErr) { skipped++; continue }

@@ -726,8 +726,8 @@ export default function Admin() {
     try {
       res = await fetch('/.netlify/functions/admin-data', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPasswordRef.current, action, payload: payload ?? null }),
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPasswordRef.current ?? '' },
+        body: JSON.stringify({ action, payload: payload ?? null }),
       })
     } catch {
       throw new Error('Sin conexión con el servidor')
