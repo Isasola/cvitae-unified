@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useParams, useLocation } from 'wouter'
 import { Helmet } from 'react-helmet-async'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Calendar, Tag } from 'lucide-react'
+import { ArrowLeft, Calendar, Clock, Tag } from 'lucide-react'
 import { Navbar } from '@/components/cvitae/Navbar'
 import { Footer } from '@/components/cvitae/Footer'
 import { supabase } from '@/lib/supabase'
@@ -83,9 +83,9 @@ export default function BlogPost() {
       </Helmet>
       <Navbar />
 
-      <div className="pt-28 pb-24 px-4">
+      <div className="pt-28 pb-24 px-4 sm:px-6">
         {/* Back nav */}
-        <div className="max-w-3xl mx-auto mb-10">
+        <div className="max-w-[820px] mx-auto mb-10">
           <Link href="/blog" className="inline-flex items-center gap-2 text-sm text-white/40 hover:text-white transition-colors">
             <ArrowLeft size={14} /> Volver al blog
           </Link>
@@ -95,31 +95,35 @@ export default function BlogPost() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="max-w-3xl mx-auto"
+          className="max-w-[820px] mx-auto"
         >
           {/* Header */}
-          <header className="mb-10">
-            <div className="flex items-center gap-3 mb-5 text-xs text-white/40">
-              <span className="inline-flex items-center gap-1.5 border border-gold/30 text-gold px-2.5 py-1 rounded-full text-[11px] uppercase tracking-wider">
+          <header className="mb-12">
+            <div className="flex flex-wrap items-center gap-3 mb-6 text-xs text-white/40">
+              <span className="inline-flex items-center gap-1.5 border border-gold/30 text-gold px-3 py-1 text-[11px] uppercase tracking-wider">
                 <Tag size={10} />{post.categoria}
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Calendar size={12} />
                 {new Date(post.created_at).toLocaleDateString('es-PY', { year: 'numeric', month: 'long', day: 'numeric' })}
               </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock size={12} />
+                {Math.max(1, Math.ceil((post.cuerpo || '').trim().split(/\s+/).length / 200))} min de lectura
+              </span>
             </div>
 
-            <h1 className="font-display text-4xl sm:text-5xl leading-[1.1] tracking-tight text-white mb-6">
+            <h1 className="font-display text-4xl sm:text-[3rem] leading-[1.1] tracking-tight text-white mb-7">
               {post.titulo}
             </h1>
 
             {/* Decorative separator */}
-            <div className="h-px bg-gradient-to-r from-gold/30 via-gold/10 to-transparent mb-8" />
+            <div className="h-px bg-gradient-to-r from-gold/40 via-gold/15 to-transparent" />
           </header>
 
           {/* Cover image */}
           {post.imagen_url && (
-            <div className="aspect-video w-full mb-10 rounded-2xl overflow-hidden border border-white/5">
+            <div className="aspect-video w-full mb-12 overflow-hidden border border-white/8">
               <img src={post.imagen_url} alt={post.titulo} className="w-full h-full object-cover" />
             </div>
           )}
@@ -128,37 +132,40 @@ export default function BlogPost() {
           <div className="
             prose max-w-none
             prose-headings:font-display prose-headings:text-white prose-headings:font-bold prose-headings:tracking-tight
-            prose-h2:text-2xl prose-h2:mt-10 prose-h2:mb-4
-            prose-h3:text-xl prose-h3:mt-8 prose-h3:mb-3
-            prose-p:text-white/70 prose-p:leading-[1.8] prose-p:text-[15px] prose-p:mb-5
-            prose-li:text-white/70 prose-li:text-[15px] prose-li:leading-relaxed
-            prose-ul:my-4 prose-ul:pl-6 prose-ol:my-4 prose-ol:pl-6
+            prose-h2:text-[1.5rem] prose-h2:mt-14 prose-h2:mb-5 prose-h2:pb-3 prose-h2:border-b prose-h2:border-gold/15
+            prose-h3:text-[1.2rem] prose-h3:mt-10 prose-h3:mb-4 prose-h3:text-white/90
+            prose-p:text-white/75 prose-p:leading-[1.9] prose-p:text-base prose-p:mb-6
+            prose-li:text-white/75 prose-li:text-base prose-li:leading-[1.8] prose-li:mb-1
+            prose-ul:my-6 prose-ul:pl-6 prose-ol:my-6 prose-ol:pl-6
             prose-strong:text-white prose-strong:font-semibold
             prose-em:text-white/80
-            prose-blockquote:border-l-gold/50 prose-blockquote:border-l-2 prose-blockquote:pl-5 prose-blockquote:py-1 prose-blockquote:text-white/55 prose-blockquote:italic prose-blockquote:not-italic
-            prose-code:text-gold/80 prose-code:bg-white/5 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-mono
-            prose-pre:bg-white/[0.04] prose-pre:border prose-pre:border-white/10 prose-pre:rounded-xl prose-pre:p-5
+            prose-blockquote:border-l-[3px] prose-blockquote:border-l-gold/60 prose-blockquote:pl-6 prose-blockquote:py-2 prose-blockquote:my-8 prose-blockquote:text-white/60 prose-blockquote:bg-white/[0.02]
+            prose-code:text-gold/80 prose-code:bg-white/5 prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.875em] prose-code:font-mono
+            prose-pre:bg-white/[0.04] prose-pre:border prose-pre:border-white/10 prose-pre:p-5 prose-pre:overflow-x-auto
             prose-a:text-gold prose-a:no-underline hover:prose-a:underline
-            prose-hr:border-white/10 prose-hr:my-8
+            prose-hr:border-white/8 prose-hr:my-12
+            prose-img:my-8 prose-img:w-full prose-img:border prose-img:border-white/8
           ">
             <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{post.cuerpo}</ReactMarkdown>
           </div>
 
           {/* Footer CTA */}
-          <div className="mt-14 pt-8 border-t border-white/8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-white/30 mb-1">¿Te resultó útil?</p>
-              <p className="text-sm text-white/50">Compartilo con alguien que lo necesite.</p>
+          <div className="mt-16 pt-10 border-t border-white/8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-white/25 mb-1.5">¿Te resultó útil?</p>
+                <p className="text-sm text-white/50">Compartilo con alguien que lo necesite.</p>
+              </div>
+              <Link
+                href="/blog"
+                className="inline-flex items-center gap-2 border border-white/10 px-5 py-2.5 text-sm text-white/60 transition hover:border-gold/40 hover:text-white"
+              >
+                <ArrowLeft size={14} /> Ver más artículos
+              </Link>
             </div>
-            <Link
-              href="/blog"
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-5 py-2.5 text-sm text-white/60 transition hover:border-white/30 hover:text-white"
-            >
-              <ArrowLeft size={14} /> Ver más artículos
-            </Link>
           </div>
         </motion.article>
-        <div className="mx-auto max-w-3xl"><AdSlot placement="blog-end" /></div>
+        <div className="mx-auto max-w-[820px] mt-14"><AdSlot placement="blog-end" /></div>
       </div>
 
       <Footer />
