@@ -4,6 +4,7 @@ import time
 import os
 import re
 import json
+import html as html_mod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from opportunity_sink import OpportunitySink
@@ -77,49 +78,82 @@ def fetch(url):
         return ""
 
 
+def _strip_html(text):
+    """Remove HTML tags and decode entities from a string."""
+    text = re.sub(r"<[^>]+>", " ", text or "")
+    text = html_mod.unescape(text)
+    return re.sub(r" {2,}", " ", text).strip()
+
+
 def fetch_detail(url):
     """Fetch a job detail page to get description and company name.
+    Computrabajo renders its pages as SPAs — the visible HTML lacks the job body.
+    The real content lives in an application/ld+json <script> with @type:JobPosting.
+    CSS selectors are kept as fallbacks for edge cases.
     Never invents data — returns empty strings when not found."""
-    html = fetch(url)
-    if not html:
+    raw_html = fetch(url)
+    if not raw_html:
         return {"description": "", "organization": ""}
 
-    soup = BeautifulSoup(html, "html.parser")
-
-    # Extract job description from detail page
+    soup = BeautifulSoup(raw_html, "html.parser")
     description = ""
-    for sel in [
-        "div#offerDec",
-        "div.offerDesc",
-        "div[data-qa='job-description']",
-        "section.boxDescription",
-        "div.js-description",
-        "div[class*='description']",
-    ]:
-        el = soup.select_one(sel)
-        if el:
-            for tag in el.find_all(["script", "style"]):
-                tag.decompose()
-            text = el.get_text(separator="\n", strip=True)
-            if len(text) > 50:
-                description = text[:3000]
+    organization = ""
+
+    # Primary: extract from JSON-LD JobPosting (works on JS-rendered pages where HTML body is empty)
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string or "")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        items = data.get("@graph", [data]) if isinstance(data, dict) else []
+        for item in items:
+            if item.get("@type") != "JobPosting":
+                continue
+            raw_desc = item.get("description", "")
+            if raw_desc:
+                desc = _strip_html(raw_desc)[:3000]
+                if len(desc) > 50:
+                    description = desc
+            org_data = item.get("hiringOrganization", {})
+            if isinstance(org_data, dict):
+                organization = org_data.get("name", "").strip()
+            elif isinstance(org_data, str):
+                organization = org_data.strip()
+            if description:
                 break
 
-    # Extract company name — try detail page first, then listing-page fallbacks
-    organization = ""
-    # Company with a Computrabajo profile link
-    company_el = soup.select_one("h2 a[href*='/empresas/'], a.it_bold[href*='/empresas/']")
-    if company_el:
-        organization = company_el.get_text(strip=True)
-    else:
-        # Company without a profile (confidential or small employer)
-        for sel in ["p.dFlex > a", "div[class*='company'] a", "h3 a[href*='empresa']", "p.fs16 a"]:
+    # Fallback: CSS selectors for description (legacy layout / non-SPA pages)
+    if not description:
+        for sel in [
+            "div#offerDec",
+            "div.offerDesc",
+            "div[data-qa='job-description']",
+            "section.boxDescription",
+            "div.js-description",
+            "div[class*='description']",
+        ]:
             el = soup.select_one(sel)
             if el:
-                text = el.get_text(strip=True)
-                if text and len(text) > 1:
-                    organization = text
+                for tag in el.find_all(["script", "style"]):
+                    tag.decompose()
+                text = el.get_text(separator="\n", strip=True)
+                if len(text) > 50:
+                    description = text[:3000]
                     break
+
+    # Fallback: CSS selectors for organization
+    if not organization:
+        company_el = soup.select_one("h2 a[href*='/empresas/'], a.it_bold[href*='/empresas/']")
+        if company_el:
+            organization = company_el.get_text(strip=True)
+        else:
+            for sel in ["p.dFlex > a", "div[class*='company'] a", "h3 a[href*='empresa']", "p.fs16 a"]:
+                el = soup.select_one(sel)
+                if el:
+                    text = el.get_text(strip=True)
+                    if text and len(text) > 1:
+                        organization = text
+                        break
 
     return {"description": description, "organization": organization}
 
