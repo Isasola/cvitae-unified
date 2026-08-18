@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import WebSocket from 'ws'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { join } from 'path'
 
@@ -373,7 +374,7 @@ async function prerender() {
     return
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { realtime: { transport: WebSocket } })
 
   let posts = [], jobs = [], nonJobOpps = [], contentHubOpps = []
   try {
