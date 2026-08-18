@@ -83,7 +83,7 @@ export default function OpportunityDetail() {
   const realDescription = clean(item.description)
   const realOrg = clean(item.organization)
   // JobPosting requires real description + real org — never emit with synthetic fallbacks
-  const canEmitJobPosting = isJobPosting && realDescription.length >= 50 && realOrg.length > 0
+  const canEmitJobPosting = isJobPosting && realDescription.length >= 100 && realOrg.length > 0
 
   let structuredData: Record<string, unknown>
   if (canEmitJobPosting) {

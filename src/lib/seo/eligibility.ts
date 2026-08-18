@@ -75,8 +75,8 @@ export function validateEligibility(opp: NormalizedOpportunity): EligibilityResu
   if (!opp.description) {
     issues.push({ field: 'description', reason: 'Sin descripción — Google Jobs requiere descripción', severity: 'warning' })
     missingFields.push('description')
-  } else if (opp.description.length < 50) {
-    issues.push({ field: 'description', reason: 'Descripción muy corta (< 50 caracteres)', severity: 'warning' })
+  } else if (opp.description.length < 100) {
+    issues.push({ field: 'description', reason: 'Descripción muy corta (< 100 caracteres)', severity: 'warning' })
   }
   if (!opp.organization) {
     issues.push({ field: 'organization', reason: 'Sin organización / empresa', severity: 'warning' })
@@ -110,7 +110,7 @@ function computeJobPostingValidity(
 
   // Required Google Jobs fields for a valid JobPosting
   const hasTitle = !!opp.title
-  const hasDescription = !!opp.description && opp.description.length >= 50
+  const hasDescription = !!opp.description && opp.description.length >= 100
   const hasOrganization = !!opp.organization
   const hasLocation = !!opp.addressLocality
 

@@ -34,7 +34,7 @@ export const handler: Handler = async () => {
     // Blog posts from content_hub
     const { data: blogPosts } = await supabase
       .from("content_hub")
-      .select("slug, updated_at, created_at")
+      .select("slug, created_at")
       .eq("tipo", "blog")
       .eq("is_active", true)
       .not("slug", "is", null)
@@ -80,7 +80,7 @@ export const handler: Handler = async () => {
       if (!post.slug) continue
       if (seenBlogSlugs.has(post.slug)) continue
       seenBlogSlugs.add(post.slug)
-      const lastmod = (post.updated_at || post.created_at || today).split("T")[0]
+      const lastmod = (post.created_at || today).split("T")[0]
       sitemap += urlEntry(`${SITE_URL}/blog/${post.slug}`, lastmod, "weekly", "0.6")
     }
 

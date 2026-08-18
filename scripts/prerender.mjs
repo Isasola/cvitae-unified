@@ -217,7 +217,7 @@ ${snapshotNav()}
 }
 
 function empleosIndexSnapshotContent(jobs) {
-  const items = (jobs || []).slice(0, 50).map(j => {
+  const items = (jobs || []).slice(0, 150).map(j => {
     const meta = [j.organization, j.city || j.location].filter(Boolean).join(' · ')
     return `<li style="border-bottom:1px solid rgba(255,255,255,.06);padding:1.1rem 0">
   <a href="/empleos/${escapeHtml(j.slug)}" style="color:#e8e8e0;text-decoration:none;display:block">
@@ -237,7 +237,7 @@ ${snapshotNav()}
 }
 
 function oportunidadesIndexSnapshotContent(opps) {
-  const items = (opps || []).slice(0, 50).map(o => {
+  const items = (opps || []).slice(0, 150).map(o => {
     const meta = [o.organization, o.city || o.location].filter(Boolean).join(' · ')
     return `<li style="border-bottom:1px solid rgba(255,255,255,.06);padding:1.1rem 0">
   <a href="/oportunidades/${escapeHtml(o.slug)}" style="color:#e8e8e0;text-decoration:none;display:block">
@@ -480,7 +480,7 @@ async function prerender() {
     const descExcerpt = description.replace(/[#*`>]/g, '').substring(0, 160) || `${title} en ${job.location || 'Paraguay'}.`
     const canonical = `${SITE_URL}/empleos/${job.slug}`
     const realOrg = (job.organization || '').trim()
-    const canEmitJobPosting = description.length >= 50 && realOrg.length > 0
+    const canEmitJobPosting = description.length >= 100 && realOrg.length > 0
     const ld = canEmitJobPosting ? {
       '@context': 'https://schema.org', '@type': 'JobPosting', title,
       description, datePosted: job.created_at,

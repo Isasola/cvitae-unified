@@ -52,17 +52,30 @@ function parseHtml(html) {
 async function getHtmlLive(path) {
   const { default: https } = await import('https')
   const { default: http } = await import('http')
-  const url = `${BASE_URL}${path}`
-  return new Promise((resolve, reject) => {
-    const client = url.startsWith('https') ? https : http
-    const req = client.get(url, { headers: { 'User-Agent': 'CVitaeHTMLChecker/1.0' } }, (res) => {
-      let data = ''
-      res.on('data', chunk => { data += chunk })
-      res.on('end', () => resolve({ status: res.statusCode, html: data, url }))
+
+  async function fetchWithRedirects(targetUrl, depth = 0) {
+    if (depth > 5) throw new Error('Too many redirects')
+    return new Promise((resolve, reject) => {
+      const client = targetUrl.startsWith('https') ? https : http
+      const req = client.get(targetUrl, { headers: { 'User-Agent': 'CVitaeHTMLChecker/1.0' } }, (res) => {
+        if (res.statusCode >= 301 && res.statusCode <= 308 && res.headers.location) {
+          const redirectUrl = res.headers.location.startsWith('http')
+            ? res.headers.location
+            : `${BASE_URL}${res.headers.location}`
+          res.resume()
+          resolve(fetchWithRedirects(redirectUrl, depth + 1))
+          return
+        }
+        let data = ''
+        res.on('data', chunk => { data += chunk })
+        res.on('end', () => resolve({ status: res.statusCode, html: data, url: targetUrl }))
+      })
+      req.on('error', reject)
+      req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')) })
     })
-    req.on('error', reject)
-    req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')) })
-  })
+  }
+
+  return fetchWithRedirects(`${BASE_URL}${path}`)
 }
 
 function getHtmlLocal(path) {

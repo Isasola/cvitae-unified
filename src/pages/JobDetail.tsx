@@ -61,7 +61,7 @@ export default function JobDetail() {
   // Only emit JobPosting when required fields are present — never emit with synthetic fallbacks
   const realDescription = clean(job.description)
   const realOrg = clean(job.organization)
-  const canEmitJobPosting = realDescription.length >= 50 && realOrg.length > 0
+  const canEmitJobPosting = realDescription.length >= 100 && realOrg.length > 0
 
   const structuredData = canEmitJobPosting ? {
     '@context': 'https://schema.org',
