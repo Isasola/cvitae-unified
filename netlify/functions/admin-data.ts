@@ -741,7 +741,7 @@ const handler: Handler = async (event) => {
       if (payload.mode === "preview") {
         const { data: candidates, error: candError } = await supabase
           .from("opportunities")
-          .select("id,slug,title,description,organization,location,city,type,opportunity_type,opportunity_kind,application_url,deadline,source,is_active,verification_status,deleted_at,archived_at,created_at")
+          .select("id,slug,title,description,organization,location,city,type,opportunity_type,opportunity_kind,application_url,deadline,source,source_authority,original_source_verified,is_active,verification_status,deleted_at,archived_at,created_at")
           .in("verification_status", ["pending", "in_review"])
           .eq("is_active", false)
           .is("deleted_at", null)
@@ -758,6 +758,13 @@ const handler: Handler = async (event) => {
             is_active: c.is_active, verification_status: c.verification_status,
             deleted_at: c.deleted_at, archived_at: c.archived_at, created_at: c.created_at,
           })
+          // Authority gate: original source must be verified regardless of classifier trust
+          const authoritySafe = c.source_authority === "original" || c.original_source_verified === true
+          if (cls.publicationDecision === "AUTO_APPROVE" && !authoritySafe) {
+            cls.reasons.push({ code: "AUTHORITY_UNVERIFIED", message: "Fuente no verificada en origen — requiere revisión manual", severity: "review" as const })
+            return { id: c.id, title: c.title, source: c.source,
+              publicationDecision: "REVIEW" as const, reasons: cls.reasons }
+          }
           return { id: c.id, title: c.title, source: c.source,
             publicationDecision: cls.publicationDecision, reasons: cls.reasons }
         })
@@ -786,7 +793,7 @@ const handler: Handler = async (event) => {
       // Re-fetch current DB state — never trust caller-provided classification data
       const { data: freshRecords, error: fetchErr } = await supabase
         .from("opportunities")
-        .select("id,slug,title,description,organization,location,city,type,opportunity_type,opportunity_kind,application_url,deadline,source,is_active,verification_status,deleted_at,archived_at,created_at")
+        .select("id,slug,title,description,organization,location,city,type,opportunity_type,opportunity_kind,application_url,deadline,source,source_authority,original_source_verified,is_active,verification_status,deleted_at,archived_at,created_at")
         .in("id", candidateIds)
         .in("verification_status", ["pending", "in_review"])
         .eq("is_active", false)
@@ -797,6 +804,9 @@ const handler: Handler = async (event) => {
       const confirmed: string[] = []
       const skipped: string[] = []
       for (const c of (freshRecords || [])) {
+        // Authority gate: skip if source is unverified — regardless of classifier output
+        const authoritySafe = c.source_authority === "original" || c.original_source_verified === true
+        if (!authoritySafe) { skipped.push(c.id); continue }
         // Re-classify against current data — skip if no longer AUTO_APPROVE
         const reCheck = classifyOpportunity({
           id: c.id, slug: c.slug, title: c.title, description: c.description,
@@ -813,7 +823,7 @@ const handler: Handler = async (event) => {
           verification_note: "Auto-aprobado por clasificador determinístico — fuente confiable, campos requeridos completos",
           reviewed_at: now, reviewed_by: "system",
           is_active: true, catalog_eligible: true, match_eligible: true,
-          alerts_eligible: true, seo_eligible: true, original_source_verified: true,
+          alerts_eligible: true, seo_eligible: true,
           policy_overrides: {},
         }
         const { error: updateErr } = await supabase.from("opportunities").update(reviewUpdate).eq("id", c.id)
