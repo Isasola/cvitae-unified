@@ -24,6 +24,7 @@ VITE_SUPABASE_URL=*.txt
 __pycache__/
 *.py[cod]
 supabase/.temp/
+graphify-out/
 
 # Local visual test output
 *-server.log

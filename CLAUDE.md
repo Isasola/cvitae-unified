@@ -77,3 +77,47 @@ supabase/            # Migrations SQL
 - Ver `.claude/agents/backend.md` para functions, variables de entorno y patrones de IA
 - Ver `.claude/agents/supabase.md` para schema, Edge Functions y gotchas de BD
 - Ver `README.md` para estrategia de negocio, flujos y pendientes técnicos
+
+## graphify
+
+Knowledge graph at graphify-out/ (AST-only, auto-rebuilt post-commit/post-checkout, no LLM cost).
+
+Navigation order — follow strictly:
+1. `graphify query "<question>"` — BFS traversal, returns scoped subgraph
+2. `graphify path "<A>" "<B>"` — shortest path between two nodes
+3. `graphify explain "<concept>"` — focused explanation of a node
+4. Targeted source read of the 1-3 files the graph identifies
+5. `graphify-out/wiki/index.md` or `GRAPH_REPORT.md` — ONLY if steps 1-3 cannot provide enough broad context
+
+NEVER: read `graphify-out/graph.json` directly (thousands of tokens, no value over CLI).
+After modifying code: `graphify update .` to keep graph current.
+
+## Token Policy
+
+For architecture/recon questions:
+1. Graphify query first.
+2. Read only identified files/functions.
+3. Do not re-audit stable subsystems.
+4. Do not reread historical session logs unless required.
+5. Prefer targeted reads over full-file reads.
+6. Do not load all docs/ai/ files automatically — read only the one relevant to the task.
+7. Stop exploration once dependencies are sufficiently mapped.
+
+## Task Collision Protocol
+
+Before modifying code, declare:
+- **SCOPE**: what is being changed
+- **DO-NOT-TOUCH**: neighboring systems
+- **ACCEPTANCE CRITERIA**: when to stop
+
+If a problem outside scope is found: **REPORT ONLY**.
+Fix automatically only if P0: data loss, security compromise, production outage, direct regression from current task.
+
+Applies especially to: SEO ≠ MATCHING ≠ CATALOG ≠ PUBLICATION ≠ JOBPOSTING ≠ SCRAPER
+
+## Knowledge Layer
+
+docs/ai/SYSTEM_CONTRACTS.md  — pipeline invariants, matching flags, subsystem separation
+docs/ai/KNOWN_FAILURE_MODES.md  — failure catalog with root causes and DO-NOTs
+docs/ai/OPERATIONS.md  — deploy model, build commands, env layers, graphify ops
+docs/ai/SESSION_HANDOFF.md  — current state snapshot (dated), pending work, start-up checklist
