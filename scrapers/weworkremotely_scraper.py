@@ -95,6 +95,7 @@ def extract_job(item, rubro):
         "title": title,
         "organization": company,
         "location": "Remote",
+        "remote": True,
         "rubro": rubro,
         "type": "Remoto",
         "description": description[:600],

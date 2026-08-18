@@ -100,9 +100,9 @@ def update_control_quality(scraper_id: str, status: str, summary: dict | None, e
     inserted = summary.get("inserted") if summary else None
     quality = (
         "broken" if status in {"failed", "timeout"}
+        else "healthy" if isinstance(inserted, int) and inserted > 0
         else "degraded" if status == "warning"
         else "unproductive" if found == 0
-        else "healthy" if isinstance(inserted, int) and inserted > 0
         else "degraded"
     )
     base = os.environ["SUPABASE_URL"].rstrip("/") + "/rest/v1/scraper_controls"

@@ -241,7 +241,7 @@ jobs:
         continue-on-error: true
 
       - name: OAS/OEA Scholarships — becas grado y posgrado LATAM
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'oas_scholarships' }}
         run: python scripts/run_scraper_monitored.py oas_scholarships oas_scholarships scrapers/oas_scholarships_scraper.py
         continue-on-error: true
 
@@ -251,12 +251,12 @@ jobs:
         continue-on-error: true
 
       - name: Erasmus Mundus — maestrías con beca completa en Europa
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'erasmus_mundus' }}
         run: python scripts/run_scraper_monitored.py erasmus_mundus erasmus_mundus scrapers/erasmus_mundus_scraper.py
         continue-on-error: true
 
       - name: Coimbra Group — investigación y movilidad en Europa para LATAM
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'coimbra_group' }}
         run: python scripts/run_scraper_monitored.py coimbra_group coimbra_group scrapers/coimbra_group_scraper.py
         continue-on-error: true
 
@@ -271,7 +271,7 @@ jobs:
         continue-on-error: true
 
       - name: Chevening — maestrías financiadas en UK para Paraguay
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'chevening' }}
         run: python scripts/run_scraper_monitored.py chevening chevening scrapers/chevening_scholarships_scraper.py
         continue-on-error: true
 
@@ -296,7 +296,7 @@ jobs:
         continue-on-error: true
 
       - name: SNJ Paraguay — becas y programas juveniles
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'snj_paraguay' }}
         run: python scripts/run_scraper_monitored.py snj_paraguay snj_paraguay scrapers/snj_paraguay_scraper.py
         continue-on-error: true
 
@@ -311,7 +311,7 @@ jobs:
         continue-on-error: true
 
       - name: MITIC Paraguay — capacitación y tecnología
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'mitic_opportunities' }}
         run: python scripts/run_scraper_monitored.py mitic_opportunities mitic_opportunities scrapers/mitic_opportunities_scraper.py
         continue-on-error: true
 
@@ -371,7 +371,7 @@ jobs:
         continue-on-error: true
 
       - name: CIRD — consultorías y proyectos de cooperación PY
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'cird_competitions_tenders' }}
         run: python scripts/run_scraper_monitored.py cird_competitions_tenders cird_competitions scrapers/cird_competitions_scraper.py
         continue-on-error: true
 

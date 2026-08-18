@@ -62,6 +62,8 @@ def _type(text: str) -> tuple[str, str] | None:
         return "exchange_program", "intercambio"
     if any(term in folded for term in ("curso", "taller", "capacitacion", "formacion")):
         return "training", "curso"
+    if any(term in folded for term in ("programa", "proyecto", "pasantia")):
+        return "training", "programa"
     return None
 
 

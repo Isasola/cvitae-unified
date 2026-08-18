@@ -128,6 +128,10 @@ def main():
             if not title:
                 continue
 
+            company = job.get("companyName", "").strip()
+            if company.lower() in {"name", "", "n/a", "-", "employer", "company"}:
+                continue
+
             total_found += 1
             salary = ""
             min_s = job.get("minSalary")
@@ -142,8 +146,9 @@ def main():
             cats = job.get("categories") or job.get("parentCategories") or []
             payload = {
                 "title": title,
-                "organization": job.get("companyName", ""),
+                "organization": company,
                 "location": "Remote",
+                "remote": True,
                 "rubro": get_rubro(title, cats),
                 "type": "Remoto",
                 "description": (salary + "\n" + strip_html(job.get("description") or job.get("excerpt", "")))[:600],
