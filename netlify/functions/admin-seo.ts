@@ -9,6 +9,7 @@ import { makeSupabaseAdmin } from './_supabase'
 import { runSeoPipeline } from './lib/seo-pipeline-runner'
 import { generateAndPersistSuggestions } from './lib/seo-suggestions'
 import { serverSeoFlags } from '../../src/lib/seo/flags'
+import { classifyOpportunity } from '../../src/lib/seo/classify'
 
 // Mapping: suggestion.field (conceptual) → real opportunities column name.
 // Only fields listed here can ever be applied to the DB.
@@ -85,10 +86,10 @@ const handler: Handler = async (event) => {
       flags,
     }
 
-    // Per-item details
+    // Per-item details — include fields needed for classifyOpportunity
     let query = supabase
       .from('opportunities')
-      .select('id,slug,title,organization,source,opportunity_type,type,seo_status,jobposting_validity,seo_issues,seo_missing_fields,seo_checked_at,verification_status,is_active,deleted_at')
+      .select('id,slug,title,description,organization,city,location,application_url,deadline,source,opportunity_type,opportunity_kind,type,seo_status,jobposting_validity,seo_issues,seo_missing_fields,seo_checked_at,verification_status,is_active,deleted_at,archived_at,created_at')
       .order('seo_checked_at', { ascending: false, nullsFirst: false })
       .limit(limit)
 
@@ -103,7 +104,32 @@ const handler: Handler = async (event) => {
       return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
     }
 
-    return { statusCode: 200, body: JSON.stringify({ summary, items: items || [] }) }
+    // Enrich each item with a fresh classifyOpportunity result (deterministic, no DB write)
+    const enriched = (items || []).map(item => ({
+      ...item,
+      classification: classifyOpportunity({
+        id: item.id,
+        slug: item.slug,
+        title: item.title,
+        description: (item as any).description,
+        organization: item.organization,
+        location: (item as any).location,
+        city: (item as any).city,
+        type: item.type,
+        opportunity_type: item.opportunity_type,
+        opportunity_kind: (item as any).opportunity_kind,
+        application_url: (item as any).application_url,
+        deadline: (item as any).deadline,
+        source: item.source,
+        is_active: item.is_active,
+        verification_status: item.verification_status,
+        deleted_at: item.deleted_at,
+        archived_at: (item as any).archived_at,
+        created_at: (item as any).created_at,
+      }),
+    }))
+
+    return { statusCode: 200, body: JSON.stringify({ summary, items: enriched }) }
   }
 
   // ─── POST: run pipeline ────────────────────────────────────────────────────
@@ -328,6 +354,29 @@ const handler: Handler = async (event) => {
       }
 
       return { statusCode: 200, body: JSON.stringify({ accepted, skipped, total: pending.length }) }
+    }
+
+    // Fetch recent Google indexing queue entries (including dry-run)
+    if (action === 'google_queue_recent') {
+      const { data: entries, error: qErr } = await supabase
+        .from('google_indexing_queue')
+        .select('id,url,event_type,status,dry_run,created_at')
+        .order('created_at', { ascending: false })
+        .limit(20)
+      if (qErr) return { statusCode: 500, body: JSON.stringify({ error: qErr.message }) }
+      return { statusCode: 200, body: JSON.stringify({ entries: entries || [] }) }
+    }
+
+    // Classify a single opportunity on demand (read-only, no DB write)
+    if (action === 'classify_opportunity' && body.opportunityId) {
+      const { data: raw, error: fetchErr } = await supabase
+        .from('opportunities')
+        .select('id,slug,title,description,organization,city,location,application_url,deadline,source,opportunity_type,opportunity_kind,type,is_active,verification_status,deleted_at,archived_at,created_at')
+        .eq('id', body.opportunityId)
+        .maybeSingle()
+      if (fetchErr || !raw) return { statusCode: 404, body: JSON.stringify({ error: 'Not found' }) }
+      const result = classifyOpportunity(raw as any)
+      return { statusCode: 200, body: JSON.stringify(result) }
     }
 
     return { statusCode: 400, body: JSON.stringify({ error: 'Unknown action' }) }

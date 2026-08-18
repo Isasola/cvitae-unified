@@ -41,6 +41,19 @@ export const handler: Handler = async () => {
       .order("created_at", { ascending: false })
       .limit(500)
 
+    // Legacy oportunidades from content_hub — KEEP only: active, not expired, has content
+    // Audit result (2026-08-18): 1,701 total, 1,379 expired, only ~51 qualify as KEEP
+    // Filter: fecha_vencimiento NULL (no deadline = evergreen) OR still in future
+    const { data: legacyOpps } = await supabase
+      .from("content_hub")
+      .select("slug, created_at, cuerpo")
+      .in("tipo", ["oportunidad", "empleo", "beca"])
+      .eq("is_active", true)
+      .not("slug", "is", null)
+      .or(`fecha_vencimiento.is.null,fecha_vencimiento.gte.${today}`)
+      .order("created_at", { ascending: false })
+      .limit(300)
+
     let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n'
     sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
 
@@ -84,10 +97,23 @@ export const handler: Handler = async () => {
       sitemap += urlEntry(`${SITE_URL}/blog/${post.slug}`, lastmod, "weekly", "0.6")
     }
 
+    // Legacy content_hub oportunidades — KEEP only: not expired + body ≥ 100 chars
+    // Thin content is excluded (crawled-not-indexed risk)
+    const seenLegacySlugs = new Set<string>()
+    for (const opp of legacyOpps || []) {
+      if (!opp.slug) continue
+      if (!opp.cuerpo || opp.cuerpo.length < 100) continue
+      const key = `/oportunidades/${opp.slug}`
+      if (seenSlugs.has(key) || seenLegacySlugs.has(opp.slug)) continue
+      seenLegacySlugs.add(opp.slug)
+      const lastmod = (opp.created_at || today).split("T")[0]
+      sitemap += urlEntry(`${SITE_URL}${key}`, lastmod, "monthly", "0.5")
+    }
+
     sitemap += "</urlset>"
 
-    const totalUrls = staticPages.length + seenSlugs.size + seenBlogSlugs.size
-    console.log(`[sitemap] generated ${totalUrls} URLs (${seenSlugs.size} opps, ${seenBlogSlugs.size} blog)`)
+    const totalUrls = staticPages.length + seenSlugs.size + seenBlogSlugs.size + seenLegacySlugs.size
+    console.log(`[sitemap] generated ${totalUrls} URLs (${seenSlugs.size} opps, ${seenBlogSlugs.size} blog, ${seenLegacySlugs.size} legacy)`)
 
     return {
       statusCode: 200,

@@ -2,6 +2,8 @@ import { Handler } from "@netlify/functions"
 import { makeSupabaseAdmin } from "./_supabase"
 import { getGoogleReportingMetrics } from "./lib/google-reporting"
 import { runSeoPipeline } from "./lib/seo-pipeline-runner"
+import { classifyOpportunity } from "../../src/lib/seo/classify"
+import { enqueueIndexingEvent } from "./lib/indexing-queue"
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
 if (!ADMIN_PASSWORD) throw new Error("ADMIN_PASSWORD env var not configured")
@@ -490,7 +492,7 @@ const handler: Handler = async (event) => {
       if (!payload?.id || !["archive", "request_delete", "confirm_delete", "cancel_delete", "restore"].includes(payload.mode)) return { statusCode: 400, body: JSON.stringify({ error: "Acción inválida" }) }
       const now = new Date().toISOString()
       const { data: current, error: currentError } = await supabase.from("opportunities")
-        .select("id,deletion_review_status").eq("id", payload.id).single()
+        .select("id,slug,opportunity_type,deletion_review_status").eq("id", payload.id).single()
       if (currentError || !current) throw currentError || new Error("Oportunidad no encontrada")
       if (payload.mode === "confirm_delete" && current.deletion_review_status !== "pending") {
         return { statusCode: 409, body: JSON.stringify({ error: "Primero debés solicitar y revisar la eliminación" }) }
@@ -506,6 +508,16 @@ const handler: Handler = async (event) => {
               : { archived_at: null, deleted_at: null, deletion_reason: null, deletion_review_status: null, deletion_requested_at: null, deletion_requested_by: null, deletion_reviewed_at: null, deletion_reviewed_by: null, verification_status: "in_review", is_active: false, catalog_eligible: false, match_eligible: false, alerts_eligible: false, seo_eligible: false }
       const { error } = await supabase.from("opportunities").update(update).eq("id", payload.id)
       if (error) throw error
+      if ((payload.mode === "archive" || payload.mode === "confirm_delete") && (current as any).slug) {
+        const oppType = (current as any).opportunity_type
+        const urlPrefix = ["job", "internship", "consultancy"].includes(oppType) ? "empleos" : "oportunidades"
+        enqueueIndexingEvent({
+          url: `https://cvitae.lat/${urlPrefix}/${(current as any).slug}`,
+          opportunityId: payload.id,
+          eventType: "URL_DELETED",
+          supabase,
+        }).catch(err => console.error("[lifecycle] URL_DELETED enqueue error", err?.message))
+      }
       return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
@@ -717,6 +729,116 @@ const handler: Handler = async (event) => {
         }
       }
       return { statusCode: 200, body: JSON.stringify({ eligible, ineligible }) }
+    }
+
+    if (action === "auto_approve_classified") {
+      if (!["preview", "confirm"].includes(payload?.mode)) {
+        return { statusCode: 400, body: JSON.stringify({ error: "mode debe ser 'preview' o 'confirm'" }) }
+      }
+      const BATCH_LIMIT = 25
+      const now = new Date().toISOString()
+
+      if (payload.mode === "preview") {
+        const { data: candidates, error: candError } = await supabase
+          .from("opportunities")
+          .select("id,slug,title,description,organization,location,city,type,opportunity_type,opportunity_kind,application_url,deadline,source,is_active,verification_status,deleted_at,archived_at,created_at")
+          .in("verification_status", ["pending", "in_review"])
+          .eq("is_active", false)
+          .is("deleted_at", null)
+          .is("archived_at", null)
+          .limit(BATCH_LIMIT)
+        if (candError) throw candError
+
+        const evaluated = (candidates || []).map((c: any) => {
+          const cls = classifyOpportunity({
+            id: c.id, slug: c.slug, title: c.title, description: c.description,
+            organization: c.organization, location: c.location, city: c.city,
+            type: c.type, opportunity_type: c.opportunity_type, opportunity_kind: c.opportunity_kind,
+            application_url: c.application_url, deadline: c.deadline, source: c.source,
+            is_active: c.is_active, verification_status: c.verification_status,
+            deleted_at: c.deleted_at, archived_at: c.archived_at, created_at: c.created_at,
+          })
+          return { id: c.id, title: c.title, source: c.source,
+            publicationDecision: cls.publicationDecision, reasons: cls.reasons }
+        })
+
+        const autoApproveIds = evaluated.filter(e => e.publicationDecision === "AUTO_APPROVE").map(e => e.id)
+        return { statusCode: 200, body: JSON.stringify({
+          evaluated: evaluated.length,
+          autoApprove: autoApproveIds.length,
+          review: evaluated.filter(e => e.publicationDecision === "REVIEW").length,
+          blocked: evaluated.filter(e => e.publicationDecision === "BLOCK").length,
+          batchLimit: BATCH_LIMIT,
+          autoApproveIds,
+          items: evaluated,
+        }) }
+      }
+
+      // confirm — only processes IDs from the preview; re-fetches and re-classifies each
+      const rawIds = Array.isArray(payload.candidateIds) ? payload.candidateIds : []
+      const candidateIds = rawIds
+        .filter((id: any) => typeof id === "string" && id.trim())
+        .slice(0, BATCH_LIMIT)
+      if (!candidateIds.length) {
+        return { statusCode: 400, body: JSON.stringify({ error: "candidateIds vacío o inválido" }) }
+      }
+
+      // Re-fetch current DB state — never trust caller-provided classification data
+      const { data: freshRecords, error: fetchErr } = await supabase
+        .from("opportunities")
+        .select("id,slug,title,description,organization,location,city,type,opportunity_type,opportunity_kind,application_url,deadline,source,is_active,verification_status,deleted_at,archived_at,created_at")
+        .in("id", candidateIds)
+        .in("verification_status", ["pending", "in_review"])
+        .eq("is_active", false)
+        .is("deleted_at", null)
+        .is("archived_at", null)
+      if (fetchErr) throw fetchErr
+
+      const confirmed: string[] = []
+      const skipped: string[] = []
+      for (const c of (freshRecords || [])) {
+        // Re-classify against current data — skip if no longer AUTO_APPROVE
+        const reCheck = classifyOpportunity({
+          id: c.id, slug: c.slug, title: c.title, description: c.description,
+          organization: c.organization, location: c.location, city: c.city,
+          type: c.type, opportunity_type: c.opportunity_type, opportunity_kind: c.opportunity_kind,
+          application_url: c.application_url, deadline: c.deadline, source: c.source,
+          is_active: c.is_active, verification_status: c.verification_status,
+          deleted_at: c.deleted_at, archived_at: c.archived_at, created_at: c.created_at,
+        })
+        if (reCheck.publicationDecision !== "AUTO_APPROVE") { skipped.push(c.id); continue }
+        const reviewUpdate: Record<string, any> = {
+          verification_status: "verified", verification_score: null,
+          verification_reasons: ["auto_classify"],
+          verification_note: "Auto-aprobado por clasificador determinístico — fuente confiable, campos requeridos completos",
+          reviewed_at: now, reviewed_by: "system",
+          is_active: true, catalog_eligible: true, match_eligible: true,
+          alerts_eligible: true, seo_eligible: true, original_source_verified: true,
+          policy_overrides: {},
+        }
+        const { error: updateErr } = await supabase.from("opportunities").update(reviewUpdate).eq("id", c.id)
+        if (updateErr) { skipped.push(c.id); continue }
+        await supabase.from("opportunity_review_events").insert({
+          opportunity_id: c.id,
+          previous_status: c.verification_status,
+          new_status: "verified",
+          criteria: ["auto_classify"],
+          note: "Auto-aprobado por clasificador determinístico",
+          actor: "system",
+        })
+        if (process.env.SEO_PIPELINE_V2 === "true") {
+          const dryRun = process.env.SEO_DRY_RUN !== "false"
+          runSeoPipeline(supabase, c.id, dryRun).catch(err =>
+            console.error("[auto-approve] seo-pipeline error", c.id, err?.message)
+          )
+        }
+        confirmed.push(c.id)
+      }
+      // IDs sent by client but not found/eligible in DB = also skipped
+      const notFound = candidateIds.filter((id: string) => !freshRecords?.some((r: any) => r.id === id))
+      return { statusCode: 200, body: JSON.stringify({
+        confirmed: confirmed.length, skipped: skipped.length + notFound.length,
+      }) }
     }
 
     return { statusCode: 400, body: JSON.stringify({ error: "Acción desconocida" }) }

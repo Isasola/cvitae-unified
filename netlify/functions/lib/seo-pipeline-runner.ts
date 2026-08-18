@@ -9,11 +9,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizeOpportunity, type RawOpportunity } from '../../../src/lib/seo/normalize'
 import { validateEligibility } from '../../../src/lib/seo/eligibility'
+import { classifyOpportunity } from '../../../src/lib/seo/classify'
 import { enqueueIndexingEvent } from './indexing-queue'
 
 const FETCH_SELECT = [
   'id', 'slug', 'title', 'description', 'organization', 'location', 'country_code',
-  'city', 'type', 'opportunity_type', 'application_url', 'deadline',
+  'city', 'type', 'opportunity_type', 'opportunity_kind', 'application_url', 'deadline',
   'source', 'is_active', 'verification_status', 'catalog_eligible',
   'seo_eligible', 'deleted_at', 'archived_at', 'created_at', 'updated_at',
 ].join(',')
@@ -26,6 +27,8 @@ export interface PipelineResult {
   jobpostingValidity?: string
   missingFields?: string[]
   issueCount?: number
+  publicationDecision?: 'AUTO_APPROVE' | 'REVIEW' | 'BLOCK'
+  classificationReasons?: Array<{ code: string; message: string; evidence?: string; severity: string }>
   error?: string
 }
 
@@ -49,24 +52,67 @@ export async function runSeoPipeline(
     const normalized = normalizeOpportunity(raw as RawOpportunity)
     const eligibility = validateEligibility(normalized)
 
+    // Quality gate — classify is authoritative for BLOCK/REVIEW decisions.
+    // BLOCK overrides any eligibility result; REVIEW downgrades eligible → review.
+    // classify never promotes: if eligibility says review, classify can't make it eligible.
+    const classification = classifyOpportunity({
+      id: raw.id,
+      slug: (raw as any).slug,
+      title: (raw as any).title,
+      description: (raw as any).description,
+      organization: (raw as any).organization,
+      location: (raw as any).location,
+      city: (raw as any).city,
+      type: (raw as any).type,
+      opportunity_type: (raw as any).opportunity_type,
+      opportunity_kind: (raw as any).opportunity_kind,
+      application_url: (raw as any).application_url,
+      deadline: (raw as any).deadline,
+      source: (raw as any).source,
+      is_active: (raw as any).is_active,
+      verification_status: (raw as any).verification_status,
+      deleted_at: (raw as any).deleted_at,
+      archived_at: (raw as any).archived_at,
+      created_at: (raw as any).created_at,
+    })
+
+    let effectiveSeoStatus = eligibility.seoStatus
+    if (classification.publicationDecision === 'BLOCK') {
+      effectiveSeoStatus = 'blocked'
+    } else if (classification.publicationDecision === 'REVIEW' && effectiveSeoStatus === 'eligible') {
+      effectiveSeoStatus = 'review'
+    }
+
+    let effectiveJpValidity = eligibility.jobpostingValidity
+    if (classification.jobPostingDecision === 'SKIP' && effectiveJpValidity === 'valid') {
+      effectiveJpValidity = 'incomplete'
+    }
+
     const patch = {
-      seo_status: eligibility.seoStatus,
-      jobposting_validity: eligibility.jobpostingValidity,
+      seo_status: effectiveSeoStatus,
+      jobposting_validity: effectiveJpValidity,
       seo_issues: eligibility.issues,
       seo_missing_fields: eligibility.missingFields,
       seo_checked_at: new Date().toISOString(),
     }
 
     if (dryRun) {
-      console.log('[seo-pipeline] DRY RUN', { id: opportunityId, seo_status: patch.seo_status, jobposting_validity: patch.jobposting_validity })
+      console.log('[seo-pipeline] DRY RUN', {
+        id: opportunityId,
+        seo_status: patch.seo_status,
+        jobposting_validity: patch.jobposting_validity,
+        publicationDecision: classification.publicationDecision,
+      })
       return {
         ok: true,
         dryRun: true,
         opportunityId,
-        seoStatus: eligibility.seoStatus,
-        jobpostingValidity: eligibility.jobpostingValidity,
+        seoStatus: effectiveSeoStatus,
+        jobpostingValidity: effectiveJpValidity,
         missingFields: eligibility.missingFields,
         issueCount: eligibility.issues.length,
+        publicationDecision: classification.publicationDecision,
+        classificationReasons: classification.reasons,
       }
     }
 
@@ -80,14 +126,14 @@ export async function runSeoPipeline(
       return { ok: false, dryRun: false, opportunityId, error: updateError.message }
     }
 
-    console.log('[seo-pipeline] ok', opportunityId, eligibility.seoStatus, eligibility.jobpostingValidity)
+    console.log('[seo-pipeline] ok', opportunityId, effectiveSeoStatus, effectiveJpValidity, classification.publicationDecision)
 
     // Enqueue indexing event — fire-and-forget, never blocks pipeline
-    if (eligibility.seoStatus === 'eligible' && raw.slug) {
+    if (effectiveSeoStatus === 'eligible' && (raw as any).slug) {
       const oppType = (raw as any).opportunity_type
       const urlPrefix = ['job', 'internship', 'consultancy'].includes(oppType) ? 'empleos' : 'oportunidades'
       enqueueIndexingEvent({
-        url: `https://cvitae.lat/${urlPrefix}/${raw.slug}`,
+        url: `https://cvitae.lat/${urlPrefix}/${(raw as any).slug}`,
         opportunityId,
         eventType: 'URL_UPDATED',
         supabase,
@@ -98,10 +144,12 @@ export async function runSeoPipeline(
       ok: true,
       dryRun: false,
       opportunityId,
-      seoStatus: eligibility.seoStatus,
-      jobpostingValidity: eligibility.jobpostingValidity,
+      seoStatus: effectiveSeoStatus,
+      jobpostingValidity: effectiveJpValidity,
       missingFields: eligibility.missingFields,
       issueCount: eligibility.issues.length,
+      publicationDecision: classification.publicationDecision,
+      classificationReasons: classification.reasons,
     }
   } catch (err: any) {
     // Pipeline must never break callers

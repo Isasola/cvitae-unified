@@ -395,9 +395,11 @@ async function prerender() {
         .is('deleted_at', null).not('slug', 'is', null)
         .limit(200),
       supabase.from('content_hub')
-        .select('slug,titulo,cuerpo,categoria,ubicacion')
+        .select('slug,titulo,cuerpo,categoria,ubicacion,fecha_vencimiento')
         .in('tipo', ['oportunidad', 'empleo', 'beca'])
-        .eq('is_active', true).order('created_at', { ascending: false }).limit(100),
+        .eq('is_active', true)
+        .or(`fecha_vencimiento.is.null,fecha_vencimiento.gte.${new Date().toISOString().split('T')[0]}`)
+        .order('created_at', { ascending: false }).limit(100),
     ])
   } catch (err) {
     console.error('[prerender] Supabase fetch error:', err?.message)
@@ -556,6 +558,7 @@ async function prerender() {
     if (!opp.slug || !isSafeRouteSegment(opp.slug) || writtenOppSlugs.has(opp.slug)) continue
     const title = (opp.titulo || '').trim()
     if (!title) { console.warn('Skip content_hub opp without title:', opp.slug); continue }
+    if (!opp.cuerpo || opp.cuerpo.length < 100) continue
     const excerpt = (opp.cuerpo || '').replace(/[#*`>]/g, '').substring(0, 160)
     const canonical = `${SITE_URL}/oportunidades/${opp.slug}`
     const metaTags = `<title>${escapeHtml(title)} | CVitae</title>

@@ -17,6 +17,19 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: path.resolve(__dirname, 'index.html'),
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          // PDF generation — only loaded in CV/application hub routes
+          if (id.includes('jspdf') || id.includes('pdfjs')) return 'vendor-pdf'
+          // Supabase client
+          if (id.includes('@supabase')) return 'vendor-supabase'
+          // Core React runtime — tiny, keep in main
+          if (id.includes('react/') || id.includes('react-dom/')) return 'vendor-react'
+          // Everything else — shared vendor chunk
+          return 'vendor'
+        },
+      },
     },
   },
   server: {
