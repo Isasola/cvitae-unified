@@ -10,6 +10,15 @@ if (!ADMIN_PASSWORD) throw new Error("ADMIN_PASSWORD env var not configured")
 
 const OPERATIONS_TIME_ZONE = "America/Asuncion"
 
+// These real users must never be marked as test data.
+// IDs verified from production audit 2026-08-19.
+const PROTECTED_REAL_USERS = new Set([
+  "e49a4c2b-8a7e-4d60-845b-c383472012a3", // profile.id: Rosarito Godoy
+  "d5892885-2337-4437-a98b-2f8e2878ddca", // auth.id: Rosarito Godoy
+  "cff71c8d-8de9-487e-af01-57cbe53390f3", // profile.id: Marcelo Vázquez
+  "49ae16ef-2680-4cb2-a709-1deab4a328f3", // auth.id: Marcelo Vázquez
+])
+
 export function zonedDayStart(value: Date, timeZone = OPERATIONS_TIME_ZONE): Date {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone, year: "numeric", month: "2-digit", day: "2-digit",
@@ -391,6 +400,120 @@ const handler: Handler = async (event) => {
       }
     }
 
+    if (action === "founding_beta_stats") {
+      const [totalRes, activeRes, enrollmentsRes] = await Promise.all([
+        supabase.from("founding_beta_enrollments").select("id", { count: "exact", head: true }).eq("program", "founding_50"),
+        supabase.from("founding_beta_enrollments").select("id", { count: "exact", head: true })
+          .in("status", ["accepted", "active"]).eq("program", "founding_50"),
+        supabase.from("founding_beta_enrollments")
+          .select("id, user_id, email, status, offered_at, accepted_at, activated_at, benefit_end, dismissed_count, created_at")
+          .eq("program", "founding_50")
+          .order("created_at", { ascending: false })
+          .limit(100),
+      ])
+      if (enrollmentsRes.error) throw enrollmentsRes.error
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          program: "founding_50",
+          limit: 50,
+          total_enrolled: totalRes.count || 0,
+          total_active: activeRes.count || 0,
+          slots_remaining: Math.max(0, 50 - (activeRes.count || 0)),
+          enrollments: enrollmentsRes.data || [],
+        })
+      }
+    }
+
+    if (action === "list_users_v2") {
+      const limit = Math.min(Number(payload?.limit) || 50, 200)
+      const offset = Number(payload?.offset) || 0
+      const isTest = payload?.is_test === true ? true : payload?.is_test === false ? false : undefined
+      const lifecycle = payload?.lifecycle ? String(payload.lifecycle) : undefined
+
+      let query = supabase
+        .from("user_master_profiles")
+        .select("id, user_id, full_name, email, is_subscribed, is_test, lifecycle_state, ttfv_seconds, first_value_event, created_at, updated_at", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1)
+
+      if (typeof isTest === "boolean") query = query.eq("is_test", isTest)
+      if (lifecycle) query = query.eq("lifecycle_state", lifecycle)
+
+      const { data: profiles, error, count } = await query
+      if (error) throw error
+
+      // Enrich with founding beta status
+      const userIds = (profiles || []).map((p: any) => p.user_id).filter(Boolean)
+      const { data: enrollments } = userIds.length > 0
+        ? await supabase.from("founding_beta_enrollments").select("user_id, status, accepted_at, benefit_end").in("user_id", userIds)
+        : { data: [] }
+
+      const enrollmentMap = new Map((enrollments || []).map((e: any) => [e.user_id, e]))
+
+      const enriched = (profiles || []).map((p: any) => ({
+        ...p,
+        founding_beta: enrollmentMap.get(p.user_id) || null,
+      }))
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ data: enriched, count: count || 0, offset, limit })
+      }
+    }
+
+    if (action === "user_detail") {
+      if (!payload?.profileId) return { statusCode: 400, body: JSON.stringify({ error: "profileId requerido" }) }
+      const profileId = String(payload.profileId)
+
+      const { data: profile, error: profileError } = await supabase
+        .from("user_master_profiles")
+        .select("*")
+        .eq("id", profileId)
+        .single()
+      if (profileError || !profile) return { statusCode: 404, body: JSON.stringify({ error: "Perfil no encontrado" }) }
+
+      const userId = (profile as any).user_id
+
+      // Resolve canonical auth email (profile.email may be null — auth.users is authoritative)
+      let authEmail: string | null = null
+      if (!(profile as any).email) {
+        const { data: authUser } = await supabase.auth.admin.getUserById(userId)
+        authEmail = authUser?.user?.email || null
+      }
+
+      const [foundingRes, eventsRes, emailsRes, acquisitionRes] = await Promise.all([
+        supabase.from("founding_beta_enrollments")
+          .select("*").eq("user_id", userId).maybeSingle(),
+        supabase.from("user_events")
+          .select("id, event_type, occurred_at, event_data")
+          .eq("user_id", userId)
+          .order("occurred_at", { ascending: false })
+          .limit(50),
+        supabase.from("email_log")
+          .select("id, template, status, sent_at, resend_id")
+          .eq("user_id", userId)
+          .order("sent_at", { ascending: false })
+          .limit(20),
+        supabase.from("b2c_acquisition")
+          .select("source, medium, campaign, landing_page, referrer, created_at")
+          .eq("user_id", userId)
+          .maybeSingle(),
+      ])
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          profile,
+          auth_email: authEmail,  // canonical email from auth.users when profile.email is null
+          founding_beta: foundingRes.data || null,
+          events: eventsRes.data || [],
+          emails_sent: emailsRes.data || [],
+          acquisition: acquisitionRes.data || null,
+        })
+      }
+    }
+
     // ── WRITES ───────────────────────────────────────────────────────────────
 
     if (action === "save_content") {
@@ -615,6 +738,64 @@ const handler: Handler = async (event) => {
         .from("user_master_profiles")
         .update({ is_test: value })
         .eq("user_id", userId)
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
+    if (action === "preview_mark_test") {
+      if (!payload?.profileId) return { statusCode: 400, body: JSON.stringify({ error: "profileId requerido" }) }
+      const profileId = String(payload.profileId)
+
+      const { data: profile, error } = await supabase
+        .from("user_master_profiles")
+        .select("id, user_id, full_name, email, is_test")
+        .eq("id", profileId)
+        .single()
+      if (error || !profile) return { statusCode: 404, body: JSON.stringify({ error: "Perfil no encontrado" }) }
+
+      const protected_ = PROTECTED_REAL_USERS.has(profile.id) || PROTECTED_REAL_USERS.has(profile.user_id)
+      const wouldSetTo = typeof payload.value === "boolean" ? payload.value : !profile.is_test
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          preview: {
+            profileId: profile.id,
+            name: profile.full_name || profile.email || "(sin nombre)",
+            currentIsTest: profile.is_test,
+            wouldSetTo,
+            protected: protected_,
+            protectedReason: protected_ ? "Este usuario es un cliente real confirmado. No puede marcarse como test." : null,
+          }
+        })
+      }
+    }
+
+    if (action === "execute_mark_test") {
+      if (!payload?.profileId || typeof payload.value !== "boolean") {
+        return { statusCode: 400, body: JSON.stringify({ error: "profileId y value (boolean) requeridos" }) }
+      }
+      const profileId = String(payload.profileId)
+
+      // Re-fetch to get user_id for the guard check
+      const { data: profile, error: fetchError } = await supabase
+        .from("user_master_profiles")
+        .select("id, user_id")
+        .eq("id", profileId)
+        .single()
+      if (fetchError || !profile) return { statusCode: 404, body: JSON.stringify({ error: "Perfil no encontrado" }) }
+
+      if (PROTECTED_REAL_USERS.has(profile.id) || PROTECTED_REAL_USERS.has(profile.user_id)) {
+        return {
+          statusCode: 403,
+          body: JSON.stringify({ error: "Este usuario es un cliente real confirmado y está protegido. No puede marcarse como test." })
+        }
+      }
+
+      const { error } = await supabase
+        .from("user_master_profiles")
+        .update({ is_test: payload.value })
+        .eq("id", profileId)
       if (error) throw error
       return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }

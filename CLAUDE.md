@@ -90,7 +90,7 @@ Navigation order — follow strictly:
 5. `graphify-out/wiki/index.md` or `GRAPH_REPORT.md` — ONLY if steps 1-3 cannot provide enough broad context
 
 NEVER: read `graphify-out/graph.json` directly (thousands of tokens, no value over CLI).
-After modifying code: `graphify update .` to keep graph current.
+After modifying code: `graphify update .` then `graphify label` to keep graph and community names current.
 
 ## Token Policy
 
@@ -121,3 +121,18 @@ docs/ai/SYSTEM_CONTRACTS.md  — pipeline invariants, matching flags, subsystem 
 docs/ai/KNOWN_FAILURE_MODES.md  — failure catalog with root causes and DO-NOTs
 docs/ai/OPERATIONS.md  — deploy model, build commands, env layers, graphify ops
 docs/ai/SESSION_HANDOFF.md  — current state snapshot (dated), pending work, start-up checklist
+
+## Founding Beta Operating System (2026-08-19)
+
+New tables: founding_beta_enrollments, user_events, email_log, b2c_acquisition
+New columns: user_master_profiles (lifecycle_state, ttfv_seconds, first_value_event), b2b_prospects (+7 funnel/founding columns)
+New functions: accept_founding_beta, mark_founding_beta_offered (both SET search_path='')
+New Netlify functions: log-user-event, founding-beta-action, send-founding-email, notify-founder-signup
+
+Real user protection: PROTECTED_REAL_USERS in netlify/functions/admin-data.ts
+Use execute_mark_test (not toggle_test) from admin UI — enforces guard.
+
+Lifecycle: lifecycle_state on user_master_profiles is a denormalized cache. Source of truth: user_events.
+Email dedup: query email_log before sending, never add UNIQUE constraint to email_log.
+Founding Beta: 50 users max, 6 months Pro, status enum: eligible/offered/accepted/active/completed/declined.
+"Ahora no" = dismiss only (no status change). "Prefiero no participar" = localStorage flag only (V1).

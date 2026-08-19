@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle, AlertCircle, X, Eye, EyeOff, Edit, Trash2, Save, Plus, RefreshCw } from 'lucide-react'
 import AdminGrowthCenter from '@/components/admin/AdminGrowthCenter'
 import AdminSeoControlCenter from '@/components/admin/AdminSeoControlCenter'
+import { AdminCeoHoy } from '@/components/admin/AdminCeoHoy'
+import { UserDetailDrawer } from '@/components/admin/UserDetailDrawer'
 
 interface ContentItem {
   id?: string
@@ -244,7 +246,7 @@ export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(ADMIN_VISUAL_PREVIEW)
   const [password, setPassword] = useState('')
   const adminPasswordRef = useRef('')
-  const [activeTab, setActiveTab] = useState<'brief' | 'feedback' | 'moderacion' | 'fuentes' | 'usuarios' | 'beta' | 'prospects' | 'contenido' | 'tokens' | 'skills' | 'analytics' | 'seo'>(ADMIN_PREVIEW_MODE === 'feedback' ? 'feedback' : 'brief')
+  const [activeTab, setActiveTab] = useState<'hoy' | 'brief' | 'feedback' | 'moderacion' | 'fuentes' | 'usuarios' | 'beta' | 'prospects' | 'contenido' | 'tokens' | 'skills' | 'analytics' | 'seo'>(ADMIN_PREVIEW_MODE === 'feedback' ? 'feedback' : 'hoy')
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -255,6 +257,8 @@ export default function Admin() {
   const [externalMetrics, setExternalMetrics] = useState<any>(ADMIN_PREVIEW_MODE?.startsWith('brief') ? BRIEF_PREVIEW_EXTERNAL : null)
   const [briefLoading, setBriefLoading] = useState(false)
   const [briefError, setBriefError] = useState<string | null>(null)
+  const [foundingStats, setFoundingStats] = useState<any>(null)
+  const [foundingStatsLoading, setFoundingStatsLoading] = useState(false)
   const [b2bProspects, setB2bProspects] = useState<any[]>([])
   const [productFeedback, setProductFeedback] = useState<ProductFeedback[]>([])
   const [selectedFeedback, setSelectedFeedback] = useState<ProductFeedback | null>(null)
@@ -349,7 +353,13 @@ export default function Admin() {
     }[]
   } | null>(ADMIN_PREVIEW_MODE?.startsWith('brief') ? BRIEF_PREVIEW_SCRAPERS : null)
 
+  // Drawer state — Customer 360
+  const [drawerProfileId, setDrawerProfileId] = useState<string | null>(null)
+  const [drawerData, setDrawerData] = useState<any>(null)
+  const [drawerLoading, setDrawerLoading] = useState(false)
+
   const NAV_ITEMS = [
+    { id: 'hoy', label: 'Hoy', dotColor: 'bg-[#c9a84c]', badge: null },
     { id: 'brief', label: 'Brief del día', dotColor: 'bg-emerald-400', badge: null },
     { id: 'feedback', label: 'Reportes', dotColor: 'bg-rose-300', badge: productFeedback.filter(item => !['resolved', 'closed'].includes(item.status)).length.toString() },
     { id: 'moderacion', label: 'Verificación', dotColor: 'bg-amber-300', badge: (reviewSummary.pending || 0).toString() },
@@ -372,6 +382,7 @@ export default function Admin() {
       loadSkillCandidates()
       loadMetrics()
       loadExternalMetrics()
+      loadFoundingStats()
       loadTokens()
       loadBeta()
       loadScraperReport()
@@ -457,6 +468,26 @@ export default function Admin() {
     } catch (error: any) {
       setExternalMetrics({ google: { configured: false, analytics: null, searchConsole: null, errors: [`Conexión: ${error.message}`] }, alerts: { configured: false, counts: {}, error: error.message } })
     }
+  }
+
+  const loadFoundingStats = async () => {
+    setFoundingStatsLoading(true)
+    try {
+      const data = await adminFetch('founding_beta_stats')
+      setFoundingStats(data)
+    } catch { /* non-critical */ }
+    finally { setFoundingStatsLoading(false) }
+  }
+
+  const openDrawer = async (profileId: string) => {
+    setDrawerProfileId(profileId)
+    setDrawerData(null)
+    setDrawerLoading(true)
+    try {
+      const data = await adminFetch('user_detail', { profileId })
+      setDrawerData(data)
+    } catch { /* non-critical */ }
+    finally { setDrawerLoading(false) }
   }
 
   const loadB2bProspects = async () => {
@@ -1023,6 +1054,16 @@ export default function Admin() {
                     <div className="p-6">{selectedFeedback ? <div><div className="flex items-start justify-between gap-5"><div><p className="text-[10px] uppercase tracking-[0.15em] text-[#c9a84c]" style={{ fontFamily: MONO }}>{selectedFeedback.reference_code}</p><h2 className="mt-2 text-xl text-[#e8e8e0]">{selectedFeedback.feature}</h2><p className="mt-1 text-xs text-white/30">{selectedFeedback.audience.toUpperCase()} · {selectedFeedback.page_path} · {new Date(selectedFeedback.created_at).toLocaleString('es-PY')}</p></div><span className="border border-white/10 px-2.5 py-1 text-[9px] uppercase text-white/40" style={{ fontFamily: MONO }}>{selectedFeedback.severity}</span></div><div className="mt-6 border-l-2 border-[#c9a84c]/35 pl-5"><p className="whitespace-pre-wrap text-sm leading-relaxed text-white/65">{selectedFeedback.message}</p>{selectedFeedback.expected_result && <div className="mt-5"><p className="text-[9px] uppercase tracking-[0.14em] text-white/25" style={{ fontFamily: MONO }}>RESULTADO ESPERADO</p><p className="mt-2 whitespace-pre-wrap text-sm text-white/45">{selectedFeedback.expected_result}</p></div>}</div><div className="mt-6 grid gap-px bg-white/[0.06] sm:grid-cols-3"><div className="bg-[#080808] p-3"><p className="text-[9px] text-white/25">CONTACTO</p><p className="mt-1 truncate text-xs text-white/50">{selectedFeedback.contact_email || 'No informado'}</p></div><div className="bg-[#080808] p-3"><p className="text-[9px] text-white/25">PANTALLA</p><p className="mt-1 text-xs text-white/50">{selectedFeedback.context?.viewport?.width || '—'} × {selectedFeedback.context?.viewport?.height || '—'}</p></div><div className="bg-[#080808] p-3"><p className="text-[9px] text-white/25">TIPO</p><p className="mt-1 text-xs uppercase text-white/50">{selectedFeedback.category}</p></div></div><div className="mt-6 grid gap-4 sm:grid-cols-2"><label><span className="text-[9px] uppercase tracking-[0.14em] text-white/25">Responsable</span><input value={feedbackAssignee} onChange={event => setFeedbackAssignee(event.target.value)} placeholder="Nombre o equipo" className={`${inputCls} mt-2`} /></label><label><span className="text-[9px] uppercase tracking-[0.14em] text-white/25">Estado</span><select value={selectedFeedback.status} onChange={event => updateProductFeedback(event.target.value as ProductFeedback['status'])} className={`${inputCls} mt-2 bg-[#0b0b0b]`}><option value="new">Nuevo</option><option value="triaged">Clasificado</option><option value="in_progress">En curso</option><option value="resolved">Resuelto</option><option value="closed">Cerrado</option></select></label></div><label className="mt-4 block"><span className="text-[9px] uppercase tracking-[0.14em] text-white/25">Nota interna</span><textarea rows={5} value={feedbackNote} onChange={event => setFeedbackNote(event.target.value)} placeholder="Diagnóstico, decisión o referencia a la corrección…" className={`${inputCls} mt-2 resize-none`} /></label><div className="mt-4 flex justify-end gap-2"><button onClick={() => updateProductFeedback('triaged')} className="border border-white/10 px-4 py-2 text-xs text-white/50">Guardar clasificación</button><button onClick={() => updateProductFeedback('resolved')} className="bg-[#c9a84c] px-4 py-2 text-xs font-medium text-black">Marcar resuelto</button></div></div> : <div className="grid h-full min-h-[560px] place-items-center text-center"><div><AlertCircle className="mx-auto h-7 w-7 text-white/15" /><p className="mt-4 text-sm text-white/30">Seleccioná un reporte para revisar su contexto y avance.</p></div></div>}</div>
                   </div>
                 </div>
+              )}
+
+              {/* ── HOY ────────────────────────────────────────────────── */}
+              {activeTab === 'hoy' && (
+                <AdminCeoHoy
+                  metrics={metrics}
+                  externalMetrics={externalMetrics}
+                  foundingStats={foundingStats}
+                  foundingStatsLoading={foundingStatsLoading}
+                />
               )}
 
               {/* ── BRIEF ──────────────────────────────────────────────── */}
@@ -1800,6 +1841,13 @@ export default function Admin() {
                                 sin login
                               </span>
                             )}
+                            <button
+                              onClick={() => openDrawer(sub.id)}
+                              className="ml-2 text-[10px] text-sky-400/60 hover:text-sky-400 transition-colors"
+                              style={{ fontFamily: MONO }}
+                            >
+                              ver
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -2156,6 +2204,32 @@ export default function Admin() {
               {/* ── B2B PROSPECTS ───────────────────────────────────────── */}
               {activeTab === 'prospects' && (
                 <div>
+                  {/* Founding Companies summary */}
+                  <div className="mb-6 rounded-xl border border-[#c9a84c]/15 bg-[#c9a84c]/5 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: '#c9a84c' }}>FOUNDING COMPANIES</span>
+                    </div>
+                    {(() => {
+                      const founding = b2bProspects.filter((p: any) => p.founding_company)
+                      return founding.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {founding.map((p: any) => (
+                            <div key={p.id} className="flex items-center justify-between text-sm">
+                              <span className="text-[#e8e8e0]">{p.company_name}</span>
+                              <span style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.5)' }}>
+                                {p.b2b_funnel_status || 'prospect'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-white/30">
+                          No hay Founding Companies registradas. Importar CSV con: IMUT, Quality Travel, Manantial, Vitalmed, Grupo Dicsa.
+                        </p>
+                      )
+                    })()}
+                  </div>
+
                   <div className="flex items-center justify-between mb-6">
                     <div>
                       <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>PIPELINE B2B</p>
@@ -2177,7 +2251,7 @@ export default function Admin() {
                       <table className="w-full border-collapse">
                         <thead>
                           <tr className="border-b border-white/[0.05]">
-                            {['EMPRESA', 'EMAIL', 'CONTACTO', 'STATUS', 'ACCIÓN'].map(h => (
+                            {['EMPRESA', 'CONTACTO', 'FUNNEL', 'FOUNDING', 'ACCIÓN'].map(h => (
                               <th key={h} className="text-left py-2.5 px-4 font-normal tracking-widest text-[rgba(232,232,224,0.3)]" style={{ fontFamily: MONO, fontSize: '10px' }}>{h}</th>
                             ))}
                           </tr>
@@ -2185,17 +2259,28 @@ export default function Admin() {
                         <tbody className="divide-y divide-white/[0.04]">
                           {b2bProspects.map((p: any) => (
                             <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
-                              <td className="py-3 px-4 text-sm text-[#e8e8e0]">{p.company_name || '—'}</td>
-                              <td className="py-3 px-4" style={{ fontFamily: MONO, fontSize: '11px', color: 'rgba(232,232,224,0.6)' }}>{p.email}</td>
+                              <td className="py-3 px-4">
+                                <p className="text-sm text-[#e8e8e0]">{p.company_name || '—'}</p>
+                                <p style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.4)' }}>{p.email}</p>
+                              </td>
                               <td className="py-3 px-4 text-sm text-[rgba(232,232,224,0.5)]">{p.contact_name || '—'}</td>
                               <td className="py-3 px-4">
                                 <span className={`text-[10px] px-2 py-0.5 border ${
-                                  p.status === 'activated' ? 'border-emerald-500/40 text-emerald-400'
-                                  : p.status === 'invited' ? 'border-[#c9a84c]/40 text-[#c9a84c]'
+                                  p.b2b_funnel_status === 'client' ? 'border-emerald-500/40 text-emerald-400'
+                                  : p.b2b_funnel_status === 'pilot' ? 'border-[#c9a84c]/40 text-[#c9a84c]'
+                                  : p.b2b_funnel_status === 'interested' || p.b2b_funnel_status === 'demo_scheduled' ? 'border-sky-500/40 text-sky-400'
+                                  : p.b2b_funnel_status === 'churned' || p.b2b_funnel_status === 'disqualified' ? 'border-white/10 text-white/30'
                                   : 'border-white/10 text-[rgba(232,232,224,0.4)]'
-                                }`} style={{ fontFamily: MONO, letterSpacing: '0.1em' }}>
-                                  {(p.status || 'pending').toUpperCase()}
+                                }`} style={{ fontFamily: MONO, letterSpacing: '0.05em' }}>
+                                  {(p.b2b_funnel_status || p.status || 'prospect').toUpperCase()}
                                 </span>
+                              </td>
+                              <td className="py-3 px-4">
+                                {p.founding_company && (
+                                  <span className="text-[10px] border border-[#c9a84c]/40 text-[#c9a84c] px-2 py-0.5" style={{ fontFamily: MONO }}>
+                                    FOUNDING
+                                  </span>
+                                )}
                               </td>
                               <td className="py-3 px-4">
                                 {p.status === 'pending' && (
@@ -2212,7 +2297,7 @@ export default function Admin() {
                                     className="text-[10px] text-sky-400/60 hover:text-sky-400 transition-colors"
                                     style={{ fontFamily: MONO }}
                                   >
-                                    Enviar invitación →
+                                    Invitar →
                                   </button>
                                 )}
                               </td>
@@ -2231,7 +2316,51 @@ export default function Admin() {
               )}
 
               {activeTab === 'seo' && (
-                <AdminSeoControlCenter adminPassword={adminPasswordRef.current} />
+                <div className="space-y-8">
+                  {/* GSC Coverage Snapshot — 2026-08-19 */}
+                  <div className="rounded-xl border border-white/8 bg-[#111] p-5">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <p style={{ fontFamily: 'monospace', fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>SEARCH CONSOLE — COBERTURA</p>
+                        <h3 className="text-base text-[#e8e8e0] mt-0.5">Reporte de Cobertura de Índice</h3>
+                      </div>
+                      <span className="text-[10px] border border-amber-500/30 text-amber-400/70 px-2.5 py-1 rounded" style={{ fontFamily: 'monospace' }}>
+                        Snapshot 2026-08-19
+                      </span>
+                    </div>
+                    <p className="text-xs text-white/30 mb-5">
+                      Datos de la notificación GSC del 2026-08-19. No son en tiempo real — el API de Coverage no está disponible con las credenciales actuales.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {[
+                        { label: 'Excluidas por robots.txt', count: 85, tone: 'amber' },
+                        { label: 'Canonicalizadas por el usuario', count: 37, tone: 'neutral' },
+                        { label: 'Alternativas con tag canonical', count: 23, tone: 'neutral' },
+                        { label: 'Rastreadas - no indexadas', count: 96, tone: 'amber' },
+                        { label: 'Descubiertas - no rastreadas', count: 7, tone: 'neutral' },
+                        { label: 'Errores 404 / no encontradas', count: 3, tone: 'red' },
+                        { label: 'Páginas indexadas', count: 2, tone: 'green' },
+                        { label: 'Páginas válidas con advertencia', count: 1, tone: 'amber' },
+                      ].map(item => (
+                        <div key={item.label} className="rounded-lg border border-white/[0.06] bg-[#0d0d0d] p-3">
+                          <p className={`text-xl font-bold tabular-nums ${
+                            item.tone === 'red' ? 'text-red-400' :
+                            item.tone === 'amber' ? 'text-amber-400' :
+                            item.tone === 'green' ? 'text-emerald-400' :
+                            'text-white/70'
+                          }`}>{item.count}</p>
+                          <p className="text-[10px] text-white/40 mt-1 leading-snug">{item.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-4 rounded-lg bg-amber-500/5 border border-amber-500/15 p-3">
+                      <p className="text-xs text-amber-400/80">
+                        <strong>Acciones prioritarias:</strong> Revisar las 85 páginas bloqueadas por robots.txt — posible configuración incorrecta en Netlify. Las 96 "rastreadas no indexadas" son normales para páginas auth-gated (/mi-carrera/*). Los 3 errores 404 requieren revisión.
+                      </p>
+                    </div>
+                  </div>
+                  <AdminSeoControlCenter adminPassword={adminPasswordRef.current} />
+                </div>
               )}
 
               {activeTab === 'skills' && (
@@ -2325,6 +2454,13 @@ export default function Admin() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <UserDetailDrawer
+        profileId={drawerProfileId}
+        data={drawerData}
+        loading={drawerLoading}
+        onClose={() => setDrawerProfileId(null)}
+      />
     </div>
   )
 }

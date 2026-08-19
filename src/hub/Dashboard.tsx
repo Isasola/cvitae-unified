@@ -13,6 +13,8 @@ import { ProductGuide } from '@/components/cv/ProductGuide'
 import { auth, supabase } from '@/lib/supabase'
 import { CVLoader } from '@/components/cv/CVLoader'
 import { playComplete } from '@/lib/sounds'
+import { useFoundingBeta } from '@/hooks/useFoundingBeta'
+import { FoundingBetaModal } from '@/components/cvitae/FoundingBetaModal'
 
 const MATCH_BATCH_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1/match-batch'
 const WA_NUMBER = '595992954169'
@@ -370,6 +372,8 @@ export default function Dashboard() {
   const [serverMissingSkills, setServerMissingSkills] = useState<string[]>([])
   const [dashboardError, setDashboardError] = useState('')
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null)
+
+  const foundingBeta = useFoundingBeta(user?.id || null)
 
   const loaderSteps = ['Leyendo tu perfil', 'Cargando vacantes activas', 'Calculando compatibilidad', 'Ordenando recomendaciones']
 
@@ -759,6 +763,15 @@ export default function Dashboard() {
           { title: 'Elegí tu próxima acción', description: 'Abrí la fuente original, adaptá tu CV o reforzá una habilidad. El score orienta, pero vos decidís dónde postular.' },
         ]}
       />
+      {foundingBeta.showModal && (
+        <FoundingBetaModal
+          slotsRemaining={foundingBeta.slotsRemaining}
+          programFull={foundingBeta.programFull}
+          onAccept={foundingBeta.accept}
+          onDismiss={foundingBeta.dismiss}
+          onDecline={foundingBeta.decline}
+        />
+      )}
     </DashboardLayout>
   )
 }
