@@ -24,8 +24,13 @@ export default defineConfig({
           if (id.includes('jspdf') || id.includes('pdfjs')) return 'vendor-pdf'
           // Supabase client
           if (id.includes('@supabase')) return 'vendor-supabase'
-          // Core React runtime — tiny, keep in main
-          if (id.includes('react/') || id.includes('react-dom/')) return 'vendor-react'
+          // React runtime + its internal deps in one chunk to avoid circular init (TDZ)
+          // scheduler and use-sync-external-store are react-dom internals that must
+          // stay in the same chunk — splitting them causes "Cannot access X before initialization"
+          if (
+            id.includes('/react/') || id.includes('/react-dom/') ||
+            id.includes('/scheduler/') || id.includes('/use-sync-external-store/')
+          ) return 'vendor-react'
           // Everything else — shared vendor chunk
           return 'vendor'
         },

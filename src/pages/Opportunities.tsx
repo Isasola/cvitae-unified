@@ -152,6 +152,25 @@ export default function Opportunities() {
               })}
             </section>
           )}
+          <nav className="mt-10 border-t border-white/8 pt-8" aria-label="Mercados por región">
+            <p className="mb-4 text-xs uppercase tracking-widest text-white/30">Explorar por mercado</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Link href="/oportunidades/paraguay" className="group flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.02] px-5 py-4 transition hover:border-[#c9a84c]/30 hover:bg-white/[0.04]">
+                <div>
+                  <p className="text-sm font-medium text-cream group-hover:text-white">Paraguay</p>
+                  <p className="mt-0.5 text-xs text-white/40">Empleos y fuentes locales verificadas</p>
+                </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-white/25 transition group-hover:text-[#c9a84c]" />
+              </Link>
+              <Link href="/oportunidades/latam" className="group flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.02] px-5 py-4 transition hover:border-[#c9a84c]/30 hover:bg-white/[0.04]">
+                <div>
+                  <p className="text-sm font-medium text-cream group-hover:text-white">América Latina</p>
+                  <p className="mt-0.5 text-xs text-white/40">Becas y programas internacionales LATAM</p>
+                </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-white/25 transition group-hover:text-[#c9a84c]" />
+              </Link>
+            </div>
+          </nav>
           <AdSlot placement="opportunities-feed" />
         </main>
       </SiteShell>

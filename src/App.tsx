@@ -16,6 +16,9 @@ import JobDetail from './pages/JobDetail'
 import NotFound from './pages/NotFound'
 import AuthCallback from './pages/AuthCallback'
 
+// Market opportunity pages — lazy (geo-segmented, load on demand)
+const MarketOpportunities = lazy(() => import('./pages/MarketOpportunities'))
+
 // Heavy/private routes — lazy (not crawled, load on demand)
 const Admin = lazy(() => import('./pages/Admin'))
 const Cookies = lazy(() => import('./pages/Cookies'))
@@ -47,6 +50,9 @@ export default function App() {
       <Route path="/" component={LandingPage} />
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/oportunidades" component={Opportunities} />
+      {/* Market pages — regex with named capture; only matches the 4 known markets.
+          All other /oportunidades/:slug paths fall through to OpportunityDetail below. */}
+      <Route path={/^\/oportunidades\/(?<market>paraguay|peru|remoto-latam|latam)\/?$/i} component={MarketOpportunities} />
       <Route path="/oportunidades/:slug" component={OpportunityDetail} />
       <Route path="/empleos" component={Jobs} />
       <Route path="/empleos/:slug" component={JobDetail} />
