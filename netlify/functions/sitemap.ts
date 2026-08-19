@@ -62,6 +62,9 @@ export const handler: Handler = async () => {
       { url: "/", priority: "1.0", freq: "daily" },
       { url: "/empleos", priority: "0.9", freq: "daily" },
       { url: "/oportunidades", priority: "0.9", freq: "daily" },
+      // Market pages — only index:true markets
+      { url: "/oportunidades/paraguay", priority: "0.8", freq: "daily" },
+      { url: "/oportunidades/latam", priority: "0.8", freq: "weekly" },
       { url: "/blog", priority: "0.8", freq: "weekly" },
       { url: "/sobre-cvitae", priority: "0.6", freq: "monthly" },
       { url: "/privacy", priority: "0.3", freq: "yearly" },

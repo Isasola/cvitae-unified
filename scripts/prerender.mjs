@@ -110,7 +110,13 @@ function markdownToSnapshotHtml(md, maxChars = 4000) {
 
 // ── Core helpers ───────────────────────────────────────────────────────────
 function injectPage(templateHtml, metaTagsBlock, contentHtml) {
-  return templateHtml
+  // Strip template-level canonical and robots BEFORE injecting metaTagsBlock so the injected
+  // page-specific tags are the sole authority. The home page (index.html) is not processed here
+  // and retains its own canonical/robots from the template.
+  const cleaned = templateHtml
+    .replace(/<link[^>]+rel="canonical"[^>]*>\s*/g, '')
+    .replace(/<meta[^>]+name="robots"[^>]*>\s*/g, '')
+  return cleaned
     .replace('<title>CVitae | Tu Agente de Carrera Inteligente para Paraguay</title>', metaTagsBlock)
     .replace('<div id="root"></div>', `<div id="root">${contentHtml}</div>`)
 }
@@ -267,6 +273,26 @@ ${snapshotNav()}
 </div>`
 }
 
+const MARKET_SNAPSHOT_META = {
+  paraguay: { eyebrow: 'Oportunidades Paraguay', h1: 'Oportunidades verificadas para Paraguay.', desc: 'Empleos, becas, programas y financiación verificados para personas en Paraguay.' },
+  latam: { eyebrow: 'Becas y Programas LATAM', h1: 'Becas y programas para LATAM.', desc: 'Becas internacionales, fellowships y programas verificados para América Latina.' },
+  peru: { eyebrow: 'Oportunidades Perú', h1: 'Oportunidades verificadas para Perú.', desc: 'Empleos, becas y programas verificados disponibles para personas en Perú y América Latina.' },
+  'remoto-latam': { eyebrow: 'Empleos Remotos LATAM', h1: 'Empleos remotos para LATAM.', desc: 'Empleos 100% remotos abiertos a candidatos de América Latina.' },
+}
+
+function marketSnapshotContent(market) {
+  const m = MARKET_SNAPSHOT_META[market] || MARKET_SNAPSHOT_META.paraguay
+  return `<div style="min-height:100vh;background:#111111">
+${snapshotNav('/oportunidades', '← Oportunidades')}
+<main style="max-width:900px;margin:0 auto;padding:3rem 1.5rem">
+  <p style="font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;color:#c9a84c;font-family:system-ui,sans-serif">${escapeHtml(m.eyebrow)}</p>
+  <h1 style="font-size:2rem;color:#fff;font-weight:700;margin:.75rem 0 1rem;font-family:system-ui,sans-serif">${escapeHtml(m.h1)}</h1>
+  <p style="font-size:1rem;color:rgba(232,232,224,.6);margin:0 0 2rem;font-family:system-ui,sans-serif">${escapeHtml(m.desc)}</p>
+  <p style="font-size:.875rem;color:rgba(232,232,224,.4);font-family:system-ui,sans-serif">Consultando oportunidades verificadas…</p>
+</main>
+</div>`
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────
 async function prerender() {
   if (!existsSync(join(distDir, 'index.html'))) {
@@ -352,18 +378,48 @@ async function prerender() {
       desc: 'Condiciones de uso de la plataforma CVitae.',
       snapshot: staticPageSnapshotContent('Términos de Servicio', 'Condiciones de uso de la plataforma CVitae.'),
     },
+    // Market opportunity pages — prerendered so Netlify serves correct SEO HTML before JS
+    {
+      path: 'oportunidades/paraguay',
+      title: 'Empleos y oportunidades en Paraguay | CVitae',
+      desc: 'Empleos, becas, programas y financiación verificados y disponibles para personas en Paraguay.',
+      index: true,
+      snapshot: marketSnapshotContent('paraguay'),
+    },
+    {
+      path: 'oportunidades/latam',
+      title: 'Becas y programas para América Latina | CVitae',
+      desc: 'Becas internacionales, fellowships, intercambios y programas verificados para candidatos de América Latina.',
+      index: true,
+      snapshot: marketSnapshotContent('latam'),
+    },
+    {
+      path: 'oportunidades/peru',
+      title: 'Empleos y oportunidades en Perú | CVitae',
+      desc: 'Empleos, becas y programas verificados disponibles para personas en Perú y América Latina.',
+      index: false,
+      snapshot: marketSnapshotContent('peru'),
+    },
+    {
+      path: 'oportunidades/remoto-latam',
+      title: 'Empleos remotos para América Latina | CVitae',
+      desc: 'Empleos 100% remotos en tecnología, diseño y marketing, abiertos a candidatos de América Latina.',
+      index: false,
+      snapshot: marketSnapshotContent('remoto-latam'),
+    },
   ]
 
   for (const route of staticShells) {
     const routeDir = join(distDir, route.path)
     mkdirSync(routeDir, { recursive: true })
     const ldTag = route.ld ? `\n<script type="application/ld+json">${JSON.stringify(route.ld).replace(/</g, '\\u003c')}</script>` : ''
+    const robotsTag = route.index === false ? '\n<meta name="robots" content="noindex,follow">' : ''
     const metaTags = `<title>${route.title}</title>
 <meta name="description" content="${escapeHtml(route.desc)}">
 <link rel="canonical" href="${SITE_URL}/${route.path}">
 <meta property="og:title" content="${route.title}">
 <meta property="og:description" content="${escapeHtml(route.desc)}">
-<meta property="og:url" content="${SITE_URL}/${route.path}">${ldTag}`
+<meta property="og:url" content="${SITE_URL}/${route.path}">${ldTag}${robotsTag}`
     writeFileSync(join(routeDir, 'index.html'), injectPage(templateHtml, metaTags, route.snapshot))
   }
 
