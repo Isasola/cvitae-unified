@@ -47,7 +47,6 @@ export const handler: Handler = async (event) => {
 
   // ── get_status ────────────────────────────────────────────────────────────
   if (action === "get_status") {
-    // Check if test account — test accounts are not eligible
     const { data: profileCheck } = await supabaseAdmin
       .from("user_master_profiles")
       .select("is_test")
@@ -56,6 +55,20 @@ export const handler: Handler = async (event) => {
 
     if (profileCheck?.is_test === true) {
       return { statusCode: 200, body: JSON.stringify({ enrollment: null, program_full: false, slots_remaining: 50, ineligible: true, reason: "test_account" }) }
+    }
+
+    // Rollout gate — fail closed: any DB error = ineligible until verified
+    const { data: gateCheck, error: gateError } = await supabaseAdmin
+      .from("user_master_profiles")
+      .select("founding_offer_enabled")
+      .eq("user_id", user.id)
+      .maybeSingle()
+    if (gateError) {
+      console.error("[founding-beta-action] gate_check error", gateError.message)
+      return { statusCode: 200, body: JSON.stringify({ enrollment: null, program_full: false, slots_remaining: 50, ineligible: true, reason: "gate_error" }) }
+    }
+    if (gateCheck?.founding_offer_enabled === false) {
+      return { statusCode: 200, body: JSON.stringify({ enrollment: null, program_full: false, slots_remaining: 50, ineligible: true, reason: "rollout_pending" }) }
     }
 
     const { data, error } = await supabaseAdmin
@@ -96,9 +109,22 @@ export const handler: Handler = async (event) => {
       .eq("user_id", user.id)
       .maybeSingle()
 
-    // Test accounts are not eligible for Founding Beta
     if (profile?.is_test === true) {
       return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: true, reason: "test_account" }) }
+    }
+
+    // Rollout gate — fail closed: any DB error = skip offer, do not send email
+    const { data: gateCheck, error: gateError } = await supabaseAdmin
+      .from("user_master_profiles")
+      .select("founding_offer_enabled")
+      .eq("user_id", user.id)
+      .maybeSingle()
+    if (gateError) {
+      console.error("[founding-beta-action] gate_check error (mark_offered)", gateError.message)
+      return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: true, reason: "gate_error" }) }
+    }
+    if (gateCheck?.founding_offer_enabled === false) {
+      return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: true, reason: "rollout_pending" }) }
     }
 
     const email = profile?.email || user.email || ""
@@ -189,9 +215,22 @@ export const handler: Handler = async (event) => {
       .eq("user_id", user.id)
       .single()
 
-    // Test accounts cannot accept Founding Beta
     if ((profile as any)?.is_test === true) {
       return { statusCode: 403, body: JSON.stringify({ error: "Cuentas de prueba no pueden participar en Founding Beta" }) }
+    }
+
+    // Rollout gate — fail closed: any DB error = block acceptance
+    const { data: gateCheck, error: gateError } = await supabaseAdmin
+      .from("user_master_profiles")
+      .select("founding_offer_enabled")
+      .eq("user_id", user.id)
+      .maybeSingle()
+    if (gateError) {
+      console.error("[founding-beta-action] gate_check error (accept)", gateError.message)
+      return { statusCode: 503, body: JSON.stringify({ error: "Error al verificar elegibilidad. Intentá nuevamente." }) }
+    }
+    if ((gateCheck as any)?.founding_offer_enabled === false) {
+      return { statusCode: 403, body: JSON.stringify({ error: "Tu acceso al Founding Beta estará disponible pronto." }) }
     }
 
     const email = profile?.email || user.email || ""

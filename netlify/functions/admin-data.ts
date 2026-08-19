@@ -514,6 +514,15 @@ const handler: Handler = async (event) => {
       }
     }
 
+    if (action === "enable_founding_offer") {
+      if (!payload?.userId) return { statusCode: 400, body: JSON.stringify({ error: "userId requerido" }) }
+      const { error } = await supabase.from("user_master_profiles")
+        .update({ founding_offer_enabled: true })
+        .eq("user_id", String(payload.userId))
+      if (error) return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
     // ── WRITES ───────────────────────────────────────────────────────────────
 
     if (action === "save_content") {

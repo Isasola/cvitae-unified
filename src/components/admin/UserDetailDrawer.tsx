@@ -2,6 +2,7 @@
 // Slide-out Customer 360 drawer. Opens when admin clicks a user row.
 // Data is fetched by the parent (Admin.tsx) via the user_detail action.
 
+import { useState } from 'react'
 import { X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -10,6 +11,8 @@ interface UserDetailDrawerProps {
   data: UserDetailData | null
   loading: boolean
   onClose: () => void
+  onEnableFoundingOffer?: (userId: string) => Promise<void>
+  onDetailRefresh?: (profileId: string) => void
 }
 
 interface UserDetailData {
@@ -30,8 +33,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-export function UserDetailDrawer({ profileId, data, loading, onClose }: UserDetailDrawerProps) {
+export function UserDetailDrawer({ profileId, data, loading, onClose, onEnableFoundingOffer, onDetailRefresh }: UserDetailDrawerProps) {
   const isOpen = !!profileId
+  const [confirmingEnable, setConfirmingEnable] = useState(false)
+  const [enablingOffer, setEnablingOffer] = useState(false)
 
   return (
     <AnimatePresence>
@@ -107,6 +112,54 @@ export function UserDetailDrawer({ profileId, data, loading, onClose }: UserDeta
                         {data.profile.is_subscribed ? '● PRO' : '○ FREE'}
                       </span>
                     </div>
+                    {!data.profile.is_test && (
+                      <div className="flex justify-between items-start">
+                        <span className="text-white/50">Founding</span>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            data.profile.founding_offer_enabled === false
+                              ? 'bg-zinc-700/50 text-zinc-400'
+                              : 'bg-[#c9a84c]/10 text-[#c9a84c]/70'
+                          }`}>
+                            {data.profile.founding_offer_enabled === false
+                              ? 'ELIGIBLE · DEFERRED'
+                              : 'ELIGIBLE / ENABLED'}
+                          </span>
+                          {data.profile.founding_offer_enabled === false && onEnableFoundingOffer && (
+                            confirmingEnable ? (
+                              <div className="flex gap-1.5 items-center">
+                                <span className="text-[10px] text-zinc-400">¿Confirmar para {data.profile.full_name || 'este usuario'}?</span>
+                                <button
+                                  disabled={enablingOffer}
+                                  onClick={async () => {
+                                    setEnablingOffer(true)
+                                    try {
+                                      await onEnableFoundingOffer(data.profile.user_id)
+                                      setConfirmingEnable(false)
+                                      if (profileId) onDetailRefresh?.(profileId)
+                                    } finally { setEnablingOffer(false) }
+                                  }}
+                                  className="text-[10px] px-2 py-0.5 rounded bg-[#c9a84c]/20 text-[#c9a84c] hover:bg-[#c9a84c]/30 disabled:opacity-40 transition"
+                                >
+                                  {enablingOffer ? '...' : 'Confirmar'}
+                                </button>
+                                <button
+                                  onClick={() => setConfirmingEnable(false)}
+                                  className="text-[10px] text-zinc-500 hover:text-white transition"
+                                >Cancelar</button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmingEnable(true)}
+                                className="text-[10px] px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:border-[#c9a84c]/50 hover:text-[#c9a84c]/80 transition"
+                              >
+                                Habilitar Founding →
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </Section>
 

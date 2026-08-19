@@ -629,6 +629,48 @@ async function prerender() {
     oppCount++
   }
 
+  // ── Jobs also served under /oportunidades/:slug ──────────────────────────
+  // The /oportunidades catalog links ALL opportunity types (including jobs) to
+  // /oportunidades/:slug. Netlify serves static files first, so these pages must
+  // exist at build time or the redirect rule returns a real 404.
+  for (const job of jobs) {
+    if (!job.slug || !isSafeRouteSegment(job.slug)) continue
+    if (writtenOppSlugs.has(job.slug)) continue
+    const title = (job.title || '').trim()
+    if (!title) continue
+    const description = (job.description || '').trim()
+    const descExcerpt = description.replace(/[#*`>]/g, '').substring(0, 160) || `${title} en ${job.location || 'Paraguay'}.`
+    const canonical = `${SITE_URL}/oportunidades/${job.slug}`
+    const realOrg = (job.organization || '').trim()
+    const canEmitJobPosting = description.length >= 100 && realOrg.length > 0
+    // jobLocation only when city is known — do not invent country for remote/intl jobs
+    const jobLocationField = job.city
+      ? { jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: job.city, addressCountry: 'PY' } } }
+      : {}
+    const ld = canEmitJobPosting ? {
+      '@context': 'https://schema.org', '@type': 'JobPosting', title,
+      description, datePosted: job.created_at,
+      hiringOrganization: { '@type': 'Organization', name: realOrg },
+      ...jobLocationField,
+      employmentType: toGoogleEmploymentType(job.type), directApply: false, url: canonical,
+    } : {
+      '@context': 'https://schema.org', '@type': 'WebPage',
+      name: title, url: canonical, description: descExcerpt,
+    }
+    const metaTags = `<title>${escapeHtml(title)} | CVitae</title>
+<meta name="description" content="${escapeHtml(descExcerpt)}">
+<meta property="og:title" content="${escapeHtml(title)} | CVitae">
+<meta property="og:description" content="${escapeHtml(descExcerpt)}">
+<meta property="og:url" content="${canonical}">
+<link rel="canonical" href="${canonical}">
+<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`
+    const oppDir = join(oppsDir, job.slug)
+    mkdirSync(oppDir, { recursive: true })
+    writeFileSync(join(oppDir, 'index.html'), injectPage(templateHtml, metaTags, jobSnapshotContent(job)))
+    writtenOppSlugs.add(job.slug)
+    oppCount++
+  }
+
   console.log(`Prerender completado — blog: ${blogCount}, empleos: ${jobCount}, oportunidades: ${oppCount}`)
 }
 

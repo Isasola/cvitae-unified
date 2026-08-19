@@ -2460,6 +2460,10 @@ export default function Admin() {
         data={drawerData}
         loading={drawerLoading}
         onClose={() => setDrawerProfileId(null)}
+        onEnableFoundingOffer={async (userId) => {
+          await adminFetch('enable_founding_offer', { userId })
+        }}
+        onDetailRefresh={(profileId) => openDrawer(profileId)}
       />
     </div>
   )
