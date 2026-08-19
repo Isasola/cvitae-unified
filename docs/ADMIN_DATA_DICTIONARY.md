@@ -1,7 +1,69 @@
 # CVitae Admin — Data Dictionary
 
-> New actions introduced in Founding Beta Operating System (2026-08-19).
-> All actions are called via `/.netlify/functions/admin-data` unless noted otherwise.
+> Last updated: 2026-08-19. Production commit: `45377355`.
+> All admin actions call `/.netlify/functions/admin-data` (POST, x-admin-password header) unless noted otherwise.
+
+---
+
+## Column / Field Semantics
+
+### `user_master_profiles.is_test`
+
+Boolean. `true` = internal/test account, excluded from all KPIs and Founding Beta eligibility.
+`false` (default for real signups) = real B2C user.
+
+**Do not flip manually.** Use `execute_mark_test` which enforces `PROTECTED_REAL_USERS` guard.
+
+### `user_master_profiles.founding_offer_enabled`
+
+Boolean DEFAULT `true`. Controls the Founding Beta offer gate for this specific user.
+
+| Value | Meaning |
+|---|---|
+| `true` | Normal flow — Founding modal eligible on next qualified login |
+| `false` | Deferred — offer suppressed at get_status, mark_offered, and accept |
+
+> **`false` does NOT mean:** test account, declined, inactive, or rejected.
+> **It means:** temporarily deferred by controlled rollout. The user is still Founding-eligible; the founder will enable them at the right time.
+
+Changing `false → true` via Admin "Habilitar Founding →" does NOT send email, offer, or grant Pro. It merely unblocks the next genuine login from triggering the offer flow.
+
+Fail-closed: if the gate query fails, the system treats the user as ineligible until confirmed.
+
+### `user_master_profiles.lifecycle_state`
+
+Denormalized cache. Source of truth is `user_events`. States: `signed_up` → `activated` → `engaged` → `churned`.
+Activation = first useful outcome (cv_generated, ats_completed, cv_rewritten, workspace_created). NOT login or profile creation.
+
+### `user_master_profiles.ttfv_seconds`
+
+Time To First Value in seconds from signup to first activation event. Null if not yet activated.
+
+### `founding_beta_enrollments.status`
+
+Enum: `eligible | offered | accepted | active | completed | declined`.
+
+Note: Status `offered` is a defined DB state but is NOT reached by the current V1 auto-flow (mark_offered is not called by the frontend). It can be set via admin-only `mark_founding_beta_offered` RPC.
+
+### `email_log.idempotency_key`
+
+Pattern: `<template>:<user_id>:v1`. Unique partial index prevents duplicate sends. Never add UNIQUE constraint to the full email_log table.
+
+---
+
+## Founder-Facing Definitions
+
+| Term | Meaning |
+|---|---|
+| **REAL USER** | `is_test = false` — genuine B2C signup |
+| **TEST USER** | `is_test = true` — internal/test account |
+| **FOUNDING ELIGIBLE** | Non-test user who qualifies for the Founding 50 program |
+| **FOUNDING ENABLED** | `founding_offer_enabled = true` — eligible and offer will be shown on next login |
+| **FOUNDING DEFERRED** | `founding_offer_enabled = false` — eligible but offer postponed by controlled rollout |
+| **FOUNDING OFFERED** | Enrollment exists with status `offered` (V1: not reached by auto-flow) |
+| **FOUNDING ACCEPTED** | User clicked accept; enrollment status `accepted` or `active`; Pro granted |
+| **PRO** | `is_subscribed = true` via Founding entitlement or paid subscription |
+| **FREE** | `is_subscribed = false` |
 
 ---
 
@@ -219,6 +281,33 @@ HTTP 403:
 ```
 
 **Important:** Always use `execute_mark_test` from the admin UI — never use the legacy `toggle_test` action, which does not enforce the guard.
+
+---
+
+## `enable_founding_offer`
+
+Enables the Founding Beta offer gate for a specific user (sets `founding_offer_enabled = true`).
+Used via Admin Customer 360 "Habilitar Founding →" button for deferred users.
+
+**Parameters:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `userId` | string (uuid) | yes | `user_master_profiles.user_id` (auth UUID, not profile id) |
+
+**Success response:**
+
+```json
+{ "ok": true }
+```
+
+**Does NOT:**
+- Send any email
+- Mark the offer as shown
+- Grant Pro
+- Create an enrollment
+
+The actual Founding offer fires on the user's next eligible login after this change.
 
 ---
 

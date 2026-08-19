@@ -1,10 +1,13 @@
 # CVitae — CLAUDE.md
 
-## Estado operativo post-deploy (2026-08-14)
+## Estado operativo (2026-08-19)
 
-Leer primero [`docs/POST-DEPLOY-HANDOFF-2026-08-14.md`](docs/POST-DEPLOY-HANDOFF-2026-08-14.md). El QA P13-P19 esta cerrado localmente y desplegado desde `feature/aws-migration`; Netlify publica automaticamente cada push. No crear otro sitio.
+Commit de producción: `45377355` — fix(beta): gate founding rollout and prerender opportunity deep links.
+Handoff de sesión: [`docs/HANDOFF_2026-08-19_FOUNDING_BETA.md`](docs/HANDOFF_2026-08-19_FOUNDING_BETA.md)
 
-Produccion tiene 133 oportunidades verificadas y 556 en `in_review` con `is_active=false`. No activar fuentes, matching, alertas, SEO, migraciones ni variables privadas sin autorizacion explicita. El siguiente trabajo operativo es moderacion gradual y sink compliance de scrapers legacy.
+Produccion tiene 133 oportunidades verificadas. No activar fuentes, matching, alertas, ni migraciones sin autorizacion explicita.
+
+**Deploy: git push a `feature/aws-migration` ÚNICAMENTE. NUNCA `netlify deploy`.**
 
 ## Comandos
 
@@ -122,17 +125,49 @@ docs/ai/KNOWN_FAILURE_MODES.md  — failure catalog with root causes and DO-NOTs
 docs/ai/OPERATIONS.md  — deploy model, build commands, env layers, graphify ops
 docs/ai/SESSION_HANDOFF.md  — current state snapshot (dated), pending work, start-up checklist
 
-## Founding Beta Operating System (2026-08-19)
+## Founding Beta Operating System
 
-New tables: founding_beta_enrollments, user_events, email_log, b2c_acquisition
-New columns: user_master_profiles (lifecycle_state, ttfv_seconds, first_value_event), b2b_prospects (+7 funnel/founding columns)
-New functions: accept_founding_beta, mark_founding_beta_offered (both SET search_path='')
-New Netlify functions: log-user-event, founding-beta-action, send-founding-email, notify-founder-signup
+Migrations applied through `202608190014` (migrations 010–014). Do not rerun.
 
-Real user protection: PROTECTED_REAL_USERS in netlify/functions/admin-data.ts
-Use execute_mark_test (not toggle_test) from admin UI — enforces guard.
+Tables: `founding_beta_enrollments`, `user_events`, `email_log`, `b2c_acquisition`
+New columns: `user_master_profiles` (lifecycle_state, ttfv_seconds, first_value_event, **founding_offer_enabled**), `b2b_prospects` (+7 funnel columns)
+RPC functions: `accept_founding_beta`, `mark_founding_beta_offered` (both SET search_path='')
+Netlify functions: `log-user-event`, `founding-beta-action`, `send-founding-email`, `notify-founder-signup`
 
-Lifecycle: lifecycle_state on user_master_profiles is a denormalized cache. Source of truth: user_events.
-Email dedup: query email_log before sending, never add UNIQUE constraint to email_log.
-Founding Beta: 50 users max, 6 months Pro, status enum: eligible/offered/accepted/active/completed/declined.
+### Sequential Rollout Gate
+
+`founding_offer_enabled boolean DEFAULT true` on `user_master_profiles`.
+- `true` (default) → normal auto Founding flow for all future genuine users.
+- `false` → offer deferred; `get_status` returns ineligible/rollout_pending; `mark_offered` skips; `accept` returns 403.
+- Gate is **fail-closed**: DB error on gate query = ineligible in all three handlers.
+- Changing `false → true` via Admin Customer 360 "Habilitar Founding →" (requires confirmation) does NOT send email/offer/grant Pro — merely unblocks the next genuine login.
+
+Current state (as of 2026-08-19):
+- Rosarito Godoy (d5892885): `founding_offer_enabled = true` — ELIGIBLE / ENABLED
+- Marcelo Vázquez (49ae16ef): `founding_offer_enabled = false` — ELIGIBLE · DEFERRED
+
+### Automation Truth — Founding Email / Offer
+
+CRITICAL: `mark_offered` is NOT called by the frontend. The `useFoundingBeta` hook calls only `get_status`, `accept`, and `increment_dismissed`.
+
+**As of 2026-08-19:**
+- `founding_offer_v1` email: **NOT automatically sent** (mark_offered never fires from UI).
+- Founder notification on offer: **NOT automatically triggered**.
+- `founding_welcome_v1` email: **NOT automatically sent on acceptance** (accept action sends no email).
+- These are documented gaps; do NOT assume automatic email delivery for current users.
+- `send-founding-email.ts` and `notify-founder-signup.ts` exist for manual/admin sends only.
+
+### Other Rules
+
+Real user protection: `PROTECTED_REAL_USERS` in `netlify/functions/admin-data.ts`. Use `execute_mark_test` (not toggle_test) — enforces guard.
+Lifecycle: `lifecycle_state` is a denormalized cache. Source of truth: `user_events`.
+Email dedup: idempotency_key `<template>:<user_id>:v1`; never add UNIQUE constraint to email_log.
+Founding status enum: `eligible/offered/accepted/active/completed/declined`.
 "Ahora no" = dismiss only (no status change). "Prefiero no participar" = localStorage flag only (V1).
+
+## Opportunity Routing
+
+Jobs prerendered under BOTH `/empleos/:slug` (canonical for jobs-only facet) AND `/oportunidades/:slug` (canonical for catalog route).
+Non-job opps and content_hub opps under `/oportunidades/:slug` only.
+`netlify.toml`: unknown /oportunidades/:slug → real 404. Unknown /empleos/:slug → real 404. No `/* → /index.html` catch-all for deep routes.
+jobLocation emitted in JSON-LD only when `job.city` is present — no fabricated country for remote/intl jobs.

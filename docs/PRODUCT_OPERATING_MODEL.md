@@ -1,6 +1,7 @@
 # CVitae — Product Operating Model
 
-> Reference: Founding Beta Operating System (2026-08-19)
+> Last updated: 2026-08-19. Production commit: `45377355`.
+> Reference: Founding Beta Operating System session.
 
 ---
 
@@ -10,37 +11,66 @@
 
 **Benefit:** 6 months Pro access — free, no credit card, no auto-renewal.
 
-### Offer flow
+### Sequential Rollout Gate
 
-1. Backend calls `mark_founding_beta_offered(user_id, email, offer_version)` — sets status to `offered`, records `offered_at`.
-2. Frontend shows `FoundingBetaModal` via `useFoundingBeta` hook.
-3. User chooses one of three paths:
+`user_master_profiles.founding_offer_enabled boolean DEFAULT true`.
+
+| Value | Meaning | Admin badge |
+|---|---|---|
+| `true` (default) | Normal Founding flow — modal eligible on next login | ELIGIBLE / ENABLED |
+| `false` | Deferred — offer suppressed at all three gate points | ELIGIBLE · DEFERRED |
+
+Gate is **fail-closed**: any DB error on the gate query = ineligible. Admin can enable via Customer 360 "Habilitar Founding →" button (requires confirmation). Enabling alone does NOT send any email or grant Pro — it merely allows the next genuine login to trigger the offer flow.
+
+Current experiment users (2026-08-19):
+- **Rosarito Godoy** — gate=true, experiment user #1
+- **Marcelo Vázquez** — gate=false, experiment user #2 (deferred ~24-48h)
+
+Future genuine new B2C users: `DEFAULT true` — unaffected, normal auto-flow preserved.
+
+### Offer flow (V1)
+
+1. User loads Dashboard → `useFoundingBeta` hook calls `get_status` (with JWT).
+2. If `ineligible` → modal suppressed, dismissed flag set in React state.
+3. If eligible and `enrollment === null` → `showModal = true` → `FoundingBetaModal` renders.
+4. User chooses:
 
 | Action | Label (UI) | Effect |
 |---|---|---|
-| Accept | "Quiero ser Founding Member" | Calls `founding-beta-action` → `accept` → status: `accepted` → `active` |
-| Dismiss | "Ahora no" | Increments `dismissed_count` only. Status unchanged. Modal re-shown next login. |
-| Decline | "Prefiero no participar" | Sets `localStorage` flag only (V1). No DB status change. |
+| Accept | "Quiero ser Founding User" | Calls `founding-beta-action` → `accept` → `accept_founding_beta` RPC → enrollment created, Pro granted |
+| Dismiss | "Ahora no" | `increment_dismissed` called (fire-and-forget). `dismissed_count` incremented. Modal re-shown next session. |
+| Decline | "Prefiero no participar" | `localStorage['founding_beta_declined'] = '1'`. No DB change. Permanent for that browser. |
 
-### Status lifecycle
+### Automation gaps (V1 — as of 2026-08-19)
+
+> ⚠️ **CRITICAL: The following are NOT automatically triggered:**
+> - `founding_offer_v1` email — `mark_offered` is never called by the frontend
+> - Founder notification on offer — also tied to `mark_offered`
+> - `founding_welcome_v1` email — not sent on acceptance
+>
+> All three require manual admin send via `send-founding-email.ts` / `notify-founder-signup.ts`.
+> Do NOT assume automatic email delivery for existing or new users until this is wired.
+
+`mark_offered` action exists on the backend but has no frontend caller. Status `offered` is never set by the auto-flow.
+
+### Founding status lifecycle
 
 ```
-eligible → offered → accepted → active → completed
-                              ↘ declined (localStorage only, V1)
+(none) → [modal shown] → accepted → active → completed
+                                   ↘ (localStorage decline only, V1)
 ```
 
-`eligible` = user qualifies but offer not yet shown.
-`offered` = modal has been displayed at least once.
-`accepted` = user clicked accept (may be transitional).
-`active` = benefit is live (benefit_start / benefit_end populated).
-`completed` = benefit period ended.
-`declined` = permanent opt-out (V1: localStorage flag, not a DB terminal state).
+Status `offered` is a defined DB state but not currently reached via the auto-flow.
+
+`active` = benefit live (benefit_start / benefit_end populated, is_subscribed=true via entitlement).
+`completed` = benefit period ended (downgrade behavior: TBD).
 
 ### Netlify function
 
 `/.netlify/functions/founding-beta-action`
 Actions: `get_status` / `accept` / `mark_offered` / `increment_dismissed`
 Auth: requires valid Supabase JWT.
+Gate: `founding_offer_enabled` checked separately (fail-closed) after `is_test` check.
 
 ---
 
@@ -55,13 +85,11 @@ signed_up → activated → engaged → churned
 | State | Trigger |
 |---|---|
 | `signed_up` | Account created (default) |
-| `activated` | First value event logged (see below) |
+| `activated` | First meaningful useful outcome (see below) |
 | `engaged` | Sustained activity (future logic) |
 | `churned` | Inactivity threshold (future logic) |
 
-### First value events
-
-Any of these events in `user_events` triggers the `activated` transition:
+**Activation is NOT login, pageview, or profile creation.** Activation = first useful outcome:
 - `cv_generated`
 - `ats_completed`
 - `cv_rewritten`
@@ -69,13 +97,13 @@ Any of these events in `user_events` triggers the `activated` transition:
 
 The `log-user-event` Netlify function writes to `user_events` and updates `lifecycle_state` when an activation event is detected.
 
-### Important: denormalization rule
+**North Star metric:** Weekly Activated Users.
+**Core activation metric:** TTFV (Time To First Value) = signup or first relevant session → first useful result.
+
+### Denormalization rule
 
 `lifecycle_state` on `user_master_profiles` is a **denormalized cache** — optimized for fast queries.
-
-**Source of truth: `user_events` table.**
-
-Never treat `lifecycle_state` as canonical for audit or billing decisions. Always verify against `user_events` when exactness matters.
+**Source of truth: `user_events` table.** Never use `lifecycle_state` for billing or audit decisions.
 
 ---
 
