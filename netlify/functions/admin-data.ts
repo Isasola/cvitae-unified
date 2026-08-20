@@ -4,6 +4,10 @@ import { getGoogleReportingMetrics } from "./lib/google-reporting"
 import { runSeoPipeline } from "./lib/seo-pipeline-runner"
 import { classifyOpportunity } from "../../src/lib/seo/classify"
 import { enqueueIndexingEvent } from "./lib/indexing-queue"
+import { validateBatchApprovalSnapshot } from "./lib/batch-review-snapshot"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
+import { reconcileSources } from "./lib/source-reconciliation"
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
 if (!ADMIN_PASSWORD) throw new Error("ADMIN_PASSWORD env var not configured")
@@ -209,7 +213,15 @@ const handler: Handler = async (event) => {
         if (row.deleted_at) stats.deleted++
         else if (row.verification_status in stats) stats[row.verification_status]++
       }
-      return { statusCode: 200, body: JSON.stringify({ controls: controlsRes.data || [], sources: sourcesRes.data || [], sourceStats }) }
+      let reconciliation: any[] = []
+      try {
+        const registry = JSON.parse(readFileSync(resolve(process.cwd(), "scrapers/source_registry.json"), "utf8"))
+        const workflow = readFileSync(resolve(process.cwd(), ".github/workflows/scrapers.yml"), "utf8")
+        reconciliation = reconcileSources(registry.sources || [], workflow, controlsRes.data || [], sourcesRes.data || [])
+      } catch (error: any) {
+        console.error("[source-reconciliation]", error?.message || error)
+      }
+      return { statusCode: 200, body: JSON.stringify({ controls: controlsRes.data || [], sources: sourcesRes.data || [], sourceStats, reconciliation }) }
     }
 
     if (action === "opportunity_review_summary") {
@@ -302,6 +314,17 @@ const handler: Handler = async (event) => {
       }
       const scraperRuns = [...historyByScraper.values()].map(history => {
         const latest = history[0]
+        const operationalStatus = ["failed", "timeout"].includes(latest.status)
+          ? "failed"
+          : String(latest.error_summary || "").startsWith("[SKIPPED]")
+            ? "skipped"
+            : String(latest.error_summary || "").startsWith("[BLOCKED]")
+              ? "blocked"
+              : latest.status === "warning"
+                ? "partial_success"
+                : latest.status === "healthy"
+                  ? "success"
+                  : latest.status
         const found = latest.found_count
         const inserted = latest.inserted_count
         const updated = latest.updated_count
@@ -314,12 +337,14 @@ const handler: Handler = async (event) => {
           && typeof rejected === "number" && rejected >= found
         const noResults = found === 0 && inserted === 0
         const noCounters = found == null && inserted == null
-        const healthStatus = ["failed", "timeout"].includes(latest.status)
+        const healthStatus = operationalStatus === "failed"
           ? "critical"
-          : rejectedAll
+          : operationalStatus === "blocked" || rejectedAll
             ? "blocked"
-            : latest.error_count > 0 || latest.status === "warning"
+            : operationalStatus === "partial_success" || latest.error_count > 0
               ? "warning"
+              : operationalStatus === "skipped"
+                ? "idle"
               : noResults || allDuplicates
                 ? "idle"
                 : noCounters
@@ -339,6 +364,7 @@ const handler: Handler = async (event) => {
                       : "Ejecución correcta, sin cambios en la base"
         return {
           ...latest,
+          operational_status: operationalStatus,
           health_status: healthStatus,
           productive,
           outcome_reason: outcomeReason,
@@ -491,7 +517,7 @@ const handler: Handler = async (event) => {
           .order("occurred_at", { ascending: false })
           .limit(50),
         supabase.from("email_log")
-          .select("id, template, status, sent_at, resend_id")
+          .select("id, template, status, sent_at, resend_id, metadata")
           .eq("user_id", userId)
           .order("sent_at", { ascending: false })
           .limit(20),
@@ -836,7 +862,7 @@ const handler: Handler = async (event) => {
 
       const { data: candidates, error: fetchError } = await supabase
         .from("opportunities")
-        .select("id,source_authority,original_source_verified,verification_status")
+        .select("id,source_authority,original_source_verified,verification_status,catalog_eligible,match_eligible,alerts_eligible,seo_eligible")
         .eq("source", source)
         .in("verification_status", fromStatuses)
         .is("deleted_at", null)
@@ -849,6 +875,8 @@ const handler: Handler = async (event) => {
       let toProcess = candidates
       let skipped = 0
       if (status === "verified") {
+        const validation = validateBatchApprovalSnapshot(candidates as any, payload)
+        if (!validation.ok) return { statusCode: validation.status, body: JSON.stringify({ error: validation.error, stale_ids: validation.staleIds }) }
         const eligible = candidates.filter(c => c.source_authority === "original" || c.original_source_verified)
         skipped = candidates.length - eligible.length
         toProcess = eligible
@@ -873,10 +901,10 @@ const handler: Handler = async (event) => {
           reviewed_at: reviewedAt,
           reviewed_by: "admin_batch",
           is_active: verified,
-          catalog_eligible: verified && features.catalog !== false,
-          match_eligible: verified && features.matching !== false,
-          alerts_eligible: verified && features.alerts !== false,
-          seo_eligible: verified && features.seo !== false,
+          catalog_eligible: verified && features.catalog === true,
+          match_eligible: verified && features.matching === true,
+          alerts_eligible: verified && features.alerts === true,
+          seo_eligible: verified && features.seo === true,
           policy_overrides: verified ? features : {},
         })
         .in("id", ids)
@@ -886,7 +914,16 @@ const handler: Handler = async (event) => {
         opportunity_id: id,
         previous_status: candidates.find(c => c.id === id)?.verification_status || "unknown",
         new_status: status,
-        criteria: ["batch_review"],
+        criteria: verified
+          ? [
+              "batch_review",
+              `snapshot:${String(payload.idempotency_key).slice(0, 120)}`,
+              `review:${String((payload.review_snapshot || []).find((item: any) => String(item.id) === String(id))?.recommendation || "unknown")}`,
+              `rules:${String((payload.review_snapshot || []).find((item: any) => String(item.id) === String(id))?.rules_version || "unknown").slice(0, 80)}`,
+              `flags_before:${JSON.stringify({ catalog: candidates.find(c => c.id === id)?.catalog_eligible, matching: candidates.find(c => c.id === id)?.match_eligible, alerts: candidates.find(c => c.id === id)?.alerts_eligible, seo: candidates.find(c => c.id === id)?.seo_eligible })}`,
+              `flags_after:${JSON.stringify(features)}`,
+            ]
+          : ["batch_review"],
         note: note || `Revisión en lote — fuente: ${source}`,
         actor: "admin_batch",
       }))

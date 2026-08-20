@@ -33,6 +33,9 @@
 [functions."admin-analytics"]
   timeout = 30
 
+[functions."admin-data"]
+  included_files = ["scrapers/source_registry.json", ".github/workflows/scrapers.yml"]
+
 [functions."cv-ats-workspace"]
   timeout = 30
 

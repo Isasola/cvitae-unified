@@ -281,6 +281,8 @@ export default function Admin() {
   const [reviewLifecycle, setReviewLifecycle] = useState('active')
   const [editingReview, setEditingReview] = useState(false)
   const [reviewEditData, setReviewEditData] = useState<Record<string, string>>({})
+  const [reviewBotResult, setReviewBotResult] = useState<any | null>(null)
+  const [reviewBotLoading, setReviewBotLoading] = useState(false)
   const [batchSource, setBatchSource] = useState('all')
   const [batchAction, setBatchAction] = useState<'verified' | 'rejected' | 'quarantined'>('rejected')
   const [batchLoading, setBatchLoading] = useState(false)
@@ -288,9 +290,16 @@ export default function Admin() {
   const [batchPreviewData, setBatchPreviewData] = useState<{ eligible: { id: string; title: string; organization: string | null; source_authority: string; original_source_url: string | null }[]; ineligible: { id: string; title: string; reason: string }[] } | null>(null)
   const [batchPreviewLoading, setBatchPreviewLoading] = useState(false)
   const [batchPreviewSelectedIds, setBatchPreviewSelectedIds] = useState<string[]>([])
+  const [batchFeatures, setBatchFeatures] = useState({ catalog: true, matching: false, alerts: false, seo: false })
+  const [batchReason, setBatchReason] = useState('')
+  const [batchSnapshotKey, setBatchSnapshotKey] = useState('')
+  const [batchBotResults, setBatchBotResults] = useState<Record<string, any>>({})
+  const [batchBotLoading, setBatchBotLoading] = useState(false)
+  const [batchBotFilter, setBatchBotFilter] = useState('all')
   const [scraperControls, setScraperControls] = useState<any[]>([])
   const [sourcePolicies, setSourcePolicies] = useState<any[]>([])
   const [sourceStats, setSourceStats] = useState<Record<string, any>>({})
+  const [sourceReconciliation, setSourceReconciliation] = useState<any[]>([])
   const [selectedControl, setSelectedControl] = useState<{ kind: 'scraper' | 'source'; data: any } | null>(null)
   const [controlSaved, setControlSaved] = useState(false)
   const [controlFormValues, setControlFormValues] = useState<Record<string, any>>({})
@@ -318,10 +327,6 @@ export default function Admin() {
   const [sendingSuggestion, setSendingSuggestion] = useState(false)
 
   // Scraper report state
-  const [analyticsData, setAnalyticsData] = useState<{ metrics: any; insights: string | null; blogIdeas: string[]; generatedAt: string } | null>(null)
-  const [analyticsLoading, setAnalyticsLoading] = useState(false)
-  const [analyticsError, setAnalyticsError] = useState<string | null>(null)
-
   const [scraperReport, setScraperReport] = useState<{
     totalOpportunities: number
     totalContentHub: number
@@ -340,6 +345,7 @@ export default function Admin() {
     scraperRuns: {
       id: string; scraper_id: string; scraper_name: string; script_path: string
       status: 'running' | 'healthy' | 'warning' | 'failed' | 'timeout'
+      operational_status: 'success' | 'partial_success' | 'skipped' | 'blocked' | 'failed' | 'running'
       health_status: 'healthy' | 'idle' | 'unknown' | 'warning' | 'blocked' | 'critical'
       productive: boolean; insertion_rate: number | null
       outcome_reason: string
@@ -402,10 +408,6 @@ export default function Admin() {
   useEffect(() => {
     if (isAuthenticated && activeTab === 'feedback') loadProductFeedback()
   }, [feedbackStatus, feedbackAudience])
-
-  useEffect(() => {
-    if (isAuthenticated && activeTab === 'analytics' && !analyticsData) loadAnalytics()
-  }, [isAuthenticated, activeTab])
 
   useEffect(() => {
     if (isAuthenticated && activeTab === 'moderacion') loadOpportunityReviews()
@@ -546,19 +548,40 @@ export default function Admin() {
     setReviewNote(opportunity.verification_note || '')
     setReviewScore(opportunity.verification_score ?? 70)
     setReviewFeatures({
-      catalog: opportunity.catalog_eligible ?? true,
-      matching: opportunity.match_eligible ?? true,
-      alerts: opportunity.alerts_eligible ?? true,
-      seo: opportunity.seo_eligible ?? true,
+      // Unknown eligibility is never promoted implicitly. The reviewer must opt in.
+      catalog: opportunity.catalog_eligible === true,
+      matching: opportunity.match_eligible === true,
+      alerts: opportunity.alerts_eligible === true,
+      seo: opportunity.seo_eligible === true,
     })
     setReviewEditData({
       title: opportunity.title || '', organization: opportunity.organization || '', location: opportunity.location || '',
-      country_code: '', department: '', city: '', type: '', opportunity_kind: opportunity.opportunity_kind || 'empleo', opportunity_type: opportunity.opportunity_type || 'job', rubro: opportunity.rubro || '',
+      country_code: (opportunity as any).country_code || '', department: (opportunity as any).department || '', city: (opportunity as any).city || '', type: (opportunity as any).type || '', opportunity_kind: opportunity.opportunity_kind || 'empleo', opportunity_type: opportunity.opportunity_type || 'job', rubro: opportunity.rubro || '',
       source_authority: opportunity.source_authority || 'aggregator', original_source_url: opportunity.original_source_url || '', original_source_verified: opportunity.original_source_verified || false,
       description: opportunity.description || '', application_url: opportunity.application_url || '',
     })
     setAggregatorConfirmPanel(false)
     setEditingReview(false)
+    setReviewBotResult(null)
+  }
+
+  const runReviewBot = async (allowAi: boolean) => {
+    if (!selectedReview) return
+    setReviewBotLoading(true)
+    try {
+      const response = await fetch('/.netlify/functions/admin-review-bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPasswordRef.current },
+        body: JSON.stringify({ opportunityIds: [selectedReview.id], allowAi }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'No se pudo ejecutar Review Bot')
+      setReviewBotResult(payload.results?.[0]?.result || null)
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message })
+    } finally {
+      setReviewBotLoading(false)
+    }
   }
 
   const submitOpportunityReview = async (status: OpportunityReview['verification_status']) => {
@@ -608,7 +631,9 @@ export default function Admin() {
       try {
         const json = await adminFetch('batch_review_preview', { source: batchSource })
         setBatchPreviewData(json)
-        setBatchPreviewSelectedIds((json.eligible || []).map((item: any) => item.id))
+        setBatchPreviewSelectedIds([])
+        setBatchBotResults({})
+        setBatchSnapshotKey(crypto.randomUUID())
       } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
       finally { setBatchPreviewLoading(false) }
       return
@@ -625,15 +650,77 @@ export default function Admin() {
 
   const submitBatchApproveSelected = async () => {
     if (!batchPreviewSelectedIds.length) return
+    if (!batchReason.trim()) { setNotification({ type: 'error', message: 'Escribí el motivo de la aprobación en lote' }); return }
+    if (batchPreviewSelectedIds.some(id => !batchBotResults[id])) { setNotification({ type: 'error', message: 'El snapshot debe pasar primero por Review Bot' }); return }
     setBatchLoading(true)
     try {
-      const json = await adminFetch('batch_review_by_source', { source: batchSource, status: 'verified', ids: batchPreviewSelectedIds, note: `Aprobación en lote desde preview — fuente: ${batchSource}` })
+      const json = await adminFetch('batch_review_by_source', {
+        source: batchSource,
+        status: 'verified',
+        ids: batchPreviewSelectedIds,
+        features: batchFeatures,
+        note: batchReason.trim(),
+        idempotency_key: batchSnapshotKey,
+        review_snapshot: batchPreviewSelectedIds.map(id => ({
+          id,
+          recommendation: batchBotResults[id].recommendation,
+          confidence: batchBotResults[id].confidence,
+          rules_version: batchBotResults[id].rulesVersion,
+          review_bot_version: batchBotResults[id].reviewBotVersion,
+          ai_provider: batchBotResults[id].ai?.used ? batchBotResults[id].ai.provider : null,
+        })),
+      })
       setNotification({ type: 'success', message: `Aprobadas: ${json.processed}${json.skipped ? ` · Omitidas: ${json.skipped}` : ''}` })
       setBatchPreviewData(null)
       setBatchPreviewSelectedIds([])
+      setBatchReason('')
+      setBatchSnapshotKey('')
+      setBatchBotResults({})
       await Promise.all([loadOpportunityReviews(), loadReviewSummary()])
     } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
     finally { setBatchLoading(false) }
+  }
+
+  const runBatchReviewBot = async () => {
+    if (!batchPreviewData?.eligible.length) return
+    setBatchBotLoading(true)
+    try {
+      const ids = batchPreviewData.eligible.map(item => item.id)
+      const collected: Record<string, any> = {}
+      for (let start = 0; start < ids.length; start += 25) {
+        const response = await fetch('/.netlify/functions/admin-review-bot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPasswordRef.current },
+          body: JSON.stringify({ opportunityIds: ids.slice(start, start + 25), allowAi: false }),
+        })
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload.error || 'No se pudo completar Review Bot')
+        for (const item of payload.results || []) collected[item.id] = item.result
+      }
+      setBatchBotResults(collected)
+      setBatchPreviewSelectedIds(ids.filter(id => collected[id]?.recommendation === 'approve'))
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message })
+    } finally {
+      setBatchBotLoading(false)
+    }
+  }
+
+  const batchItemVisible = (id: string) => {
+    if (batchBotFilter === 'all') return true
+    const result = batchBotResults[id]
+    if (!result) return false
+    const codes = new Set((result.issues || []).map((issue: any) => issue.code))
+    if (batchBotFilter === 'approve') return result.recommendation === 'approve'
+    if (batchBotFilter === 'high') return result.confidence === 'high'
+    if (batchBotFilter === 'review') return result.recommendation === 'review'
+    if (batchBotFilter === 'do_not_publish') return result.recommendation === 'do_not_publish'
+    if (batchBotFilter === 'geo') return codes.has('GEO_UNKNOWN')
+    if (batchBotFilter === 'redirects') return (result.deterministic?.redirects || 0) > 0
+    if (batchBotFilter === 'duplicates') return (result.deterministic?.duplicates || []).length > 0
+    if (batchBotFilter === 'deadline') return codes.has('MISSING_DEADLINE')
+    if (batchBotFilter === 'inconsistent') return [...codes].some(code => String(code).includes('CONTRADICTION'))
+    return true
   }
 
   const saveOpportunityEdit = async () => {
@@ -667,6 +754,7 @@ export default function Admin() {
       setScraperControls(json.controls || [])
       setSourcePolicies(json.sources || [])
       setSourceStats(json.sourceStats || {})
+      setSourceReconciliation(json.reconciliation || [])
     } catch (err: any) { setNotification({ type: 'error', message: `No se pudo cargar controles: ${err.message}` }) }
   }
 
@@ -691,24 +779,6 @@ export default function Admin() {
     setControlSaved(true)
     setTimeout(() => setControlSaved(false), 2500)
     await loadControlCenter()
-  }
-
-  const loadAnalytics = async () => {
-    setAnalyticsLoading(true)
-    setAnalyticsError(null)
-    try {
-      const res = await fetch('/.netlify/functions/admin-analytics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminPasswordRef.current}` },
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Error al cargar analytics')
-      setAnalyticsData(json)
-    } catch (err: any) {
-      setAnalyticsError(err.message)
-    } finally {
-      setAnalyticsLoading(false)
-    }
   }
 
   const reviewRecruiter = async (id: string, status: 'verified' | 'rejected' | 'in_review') => {
@@ -1264,6 +1334,10 @@ export default function Admin() {
                                 </thead>
                                 <tbody className="divide-y divide-white/[0.03]">
                                   {scraperReport.scraperRuns.map(run => {
+                                    const operationalLabel = {
+                                      success: 'SUCCESS', partial_success: 'PARCIAL', skipped: 'OMITIDO',
+                                      blocked: 'BLOQUEADO', failed: 'FALLÓ', running: 'EJECUTANDO',
+                                    }[run.operational_status]
                                     const state = {
                                       critical: { color: '#f87171', label: 'CRÍTICO' },
                                       blocked: { color: '#fb7185', label: 'TODO RECH.' },
@@ -1274,7 +1348,7 @@ export default function Admin() {
                                     }[run.health_status]
                                     return (
                                       <tr key={run.id} className="align-top hover:bg-white/[0.02]">
-                                        <td className="py-2.5 px-3"><span style={{ fontFamily: MONO, fontSize: 9, color: state.color }}>{state.label}</span></td>
+                                        <td className="py-2.5 px-3"><span style={{ fontFamily: MONO, fontSize: 9, color: state.color }}>{operationalLabel || state.label}</span></td>
                                         <td className="py-2.5 px-3" style={{ fontFamily: MONO, fontSize: 11, color: '#e8e8e0' }}>{run.scraper_name}</td>
                                         <td className="py-2.5 px-3 text-xs text-white/50">{run.found_count ?? '—'}</td>
                                         <td className="py-2.5 px-3 text-xs text-white/50">{run.valid_count ?? '—'}</td>
@@ -1427,6 +1501,18 @@ export default function Admin() {
                     </div>
                     <button onClick={loadControlCenter} className="border border-white/10 px-3 py-2 text-xs text-white/50 transition hover:text-white" style={{ fontFamily: MONO }}>↻ ACTUALIZAR</button>
                   </div>
+
+                  <details className="mb-5 border border-white/[0.07] bg-white/[0.015]">
+                    <summary className="cursor-pointer px-4 py-3 text-[10px] uppercase tracking-[0.14em] text-white/40" style={{ fontFamily: MONO }}>
+                      Reconciliación registry / workflow / runtime · {sourceReconciliation.filter(row => !(row.in_registry && row.in_workflow && row.in_runtime)).length} diferencias
+                    </summary>
+                    <div className="max-h-80 overflow-auto border-t border-white/[0.07]">
+                      <table className="w-full text-left text-xs">
+                        <thead className="sticky top-0 bg-[#080808] text-[9px] uppercase text-white/25"><tr><th className="px-3 py-2">Fuente</th><th>Registry</th><th>Workflow</th><th>Runtime</th><th>Collect</th><th>Review</th><th>Último estado</th><th>Bloqueo/error</th></tr></thead>
+                        <tbody className="divide-y divide-white/[0.04]">{sourceReconciliation.map(row => <tr key={row.key}><td className="px-3 py-2 font-mono text-white/60">{row.key}</td><td>{row.in_registry ? 'sí' : 'no'}</td><td>{row.in_workflow ? 'sí' : 'no'}</td><td>{row.in_runtime ? 'sí' : 'no'}</td><td>{row.collection_enabled ? 'on' : 'off'}</td><td>{row.require_review ? 'sí' : 'no'}</td><td>{row.last_run_status || '—'}</td><td className="max-w-[280px] truncate pr-3 text-white/35" title={row.blocked_reason || row.error || ''}>{row.blocked_reason || row.error || '—'}</td></tr>)}</tbody>
+                      </table>
+                    </div>
+                  </details>
 
                   <div className="grid min-h-[700px] border border-white/[0.07] xl:grid-cols-[440px_1fr]">
                     <div className="border-b border-white/[0.07] xl:border-b-0 xl:border-r">
@@ -1596,8 +1682,27 @@ export default function Admin() {
                     <div className="mb-5 border border-white/[0.07]">
                       <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3">
                         <p className="text-[10px] uppercase tracking-[0.14em] text-white/30" style={{ fontFamily: MONO }}>Preview de aprobación — {batchSource}</p>
-                        <button onClick={() => { setBatchPreviewData(null); setBatchPreviewSelectedIds([]) }} className="text-xs text-white/35 hover:text-white transition-colors">✕ Cerrar</button>
+                        <div className="flex items-center gap-2">
+                          <button onClick={runBatchReviewBot} disabled={batchBotLoading || batchPreviewData.eligible.length === 0} className="border border-sky-300/25 px-3 py-1.5 text-xs text-sky-200/75 disabled:opacity-40">{batchBotLoading ? 'REVISANDO…' : 'EJECUTAR REVIEW BOT · 0 IA'}</button>
+                          <button onClick={() => { setBatchPreviewData(null); setBatchPreviewSelectedIds([]); setBatchBotResults({}) }} className="text-xs text-white/35 hover:text-white transition-colors">✕ Cerrar</button>
+                        </div>
                       </div>
+                      {Object.keys(batchBotResults).length > 0 && (
+                        <>
+                          <div className="grid grid-cols-3 gap-px border-b border-white/[0.07] bg-white/[0.04]">
+                            {([
+                              ['APROBAR', Object.values(batchBotResults).filter((result: any) => result.recommendation === 'approve').length, '#34d399'],
+                              ['REVISIÓN HUMANA', Object.values(batchBotResults).filter((result: any) => result.recommendation === 'review').length, '#fde047'],
+                              ['NO PUBLICAR', Object.values(batchBotResults).filter((result: any) => result.recommendation === 'do_not_publish').length, '#f87171'],
+                            ] as const).map(([label, value, color]) => <div key={label} className="bg-[#080808] px-3 py-2"><p className="text-[9px] text-white/30" style={{ fontFamily: MONO }}>{label}</p><p style={{ color }}>{value}</p></div>)}
+                          </div>
+                          <div className="border-b border-white/[0.07] px-4 py-2">
+                            <select value={batchBotFilter} onChange={event => setBatchBotFilter(event.target.value)} className={inputCls}>
+                              <option value="all">Todas las revisadas</option><option value="approve">Sólo recomendadas</option><option value="high">Alta confianza</option><option value="review">Revisión humana</option><option value="do_not_publish">No publicar</option><option value="geo">Geo incierto</option><option value="redirects">Redirects</option><option value="duplicates">Duplicados</option><option value="deadline">Fecha ausente</option><option value="inconsistent">Inconsistencias</option>
+                            </select>
+                          </div>
+                        </>
+                      )}
                       {batchPreviewData.eligible.length === 0 ? (
                         <div className="px-5 py-5">
                           <p className="text-sm text-amber-200/70">Ninguna de estas oportunidades tiene fuente original verificada — verificalas una por una.</p>
@@ -1608,12 +1713,13 @@ export default function Admin() {
                           <div className="bg-[#080808] p-4">
                             <p className="mb-3 text-[10px] uppercase tracking-[0.14em] text-emerald-400/70" style={{ fontFamily: MONO }}>Aprobables ahora ({batchPreviewData.eligible.length}) — tienen fuente verificada</p>
                             <div className="max-h-64 overflow-y-auto space-y-0.5">
-                              {batchPreviewData.eligible.map(item => (
+                              {batchPreviewData.eligible.filter(item => batchItemVisible(item.id)).map(item => (
                                 <label key={item.id} className="flex cursor-pointer items-start gap-3 px-1 py-1.5 hover:bg-white/[0.02]">
-                                  <input type="checkbox" checked={batchPreviewSelectedIds.includes(item.id)} onChange={() => setBatchPreviewSelectedIds(ids => ids.includes(item.id) ? ids.filter(id => id !== item.id) : [...ids, item.id])} className="mt-0.5 h-3.5 w-3.5 shrink-0 appearance-none border border-white/25 checked:border-[#c9a84c] checked:bg-[#c9a84c]" />
+                                  <input type="checkbox" disabled={!batchBotResults[item.id]} checked={batchPreviewSelectedIds.includes(item.id)} onChange={() => setBatchPreviewSelectedIds(ids => ids.includes(item.id) ? ids.filter(id => id !== item.id) : [...ids, item.id])} className="mt-0.5 h-3.5 w-3.5 shrink-0 appearance-none border border-white/25 checked:border-[#c9a84c] checked:bg-[#c9a84c] disabled:opacity-20" />
                                   <span>
                                     <span className="block text-xs leading-snug text-[#e8e8e0]">{item.title}</span>
                                     <span className="mt-0.5 block text-[10px] text-white/35" style={{ fontFamily: MONO }}>{item.organization || 'Sin org.'} · {item.source_authority}</span>
+                                    {batchBotResults[item.id] && <span className={`mt-0.5 block text-[10px] ${batchBotResults[item.id].recommendation === 'approve' ? 'text-emerald-300/70' : batchBotResults[item.id].recommendation === 'review' ? 'text-amber-200/70' : 'text-red-300/70'}`} style={{ fontFamily: MONO }}>{batchBotResults[item.id].recommendation.replaceAll('_', ' ')} · {batchBotResults[item.id].confidence}</span>}
                                   </span>
                                 </label>
                               ))}
@@ -1635,11 +1741,33 @@ export default function Admin() {
                         </div>
                       )}
                       {batchPreviewData.eligible.length > 0 && (
-                        <div className="flex items-center justify-between gap-3 border-t border-white/[0.07] px-4 py-3">
-                          <button onClick={() => setBatchPreviewSelectedIds(batchPreviewData!.eligible.map(item => item.id))} className="text-xs text-white/40 transition hover:text-white" style={{ fontFamily: MONO }}>Seleccionar todas</button>
-                          <button onClick={submitBatchApproveSelected} disabled={batchLoading || batchPreviewSelectedIds.length === 0} className="bg-[#c9a84c] px-5 py-2 text-xs font-medium text-black disabled:opacity-40">
-                            {batchLoading ? 'PROCESANDO…' : `Aprobar las seleccionadas (${batchPreviewSelectedIds.length})`}
-                          </button>
+                        <div className="space-y-3 border-t border-white/[0.07] px-4 py-3">
+                          <div className="grid gap-2 sm:grid-cols-4">
+                            {([
+                              ['catalog', 'Catálogo'], ['matching', 'Matching'], ['alerts', 'Alertas'], ['seo', 'SEO'],
+                            ] as const).map(([key, label]) => (
+                              <label key={key} className="flex items-center justify-between gap-2 border border-white/[0.07] px-3 py-2 text-xs text-white/55">
+                                <span>{label}: {batchFeatures[key] ? batchPreviewSelectedIds.length : 0}</span>
+                                <input type="checkbox" checked={batchFeatures[key]} onChange={e => setBatchFeatures(current => ({ ...current, [key]: e.target.checked }))} />
+                              </label>
+                            ))}
+                          </div>
+                          <input
+                            value={batchReason}
+                            onChange={e => setBatchReason(e.target.value)}
+                            placeholder="Motivo obligatorio de la aprobación"
+                            className={inputCls + ' w-full'}
+                            maxLength={1000}
+                          />
+                          <p className="text-[10px] text-white/30" style={{ fontFamily: MONO }}>
+                            Snapshot {batchSnapshotKey.slice(0, 8)} · la confirmación usará exactamente estos {batchPreviewSelectedIds.length} IDs.
+                          </p>
+                          <div className="flex items-center justify-between gap-3">
+                            <button onClick={() => setBatchPreviewSelectedIds(batchPreviewData!.eligible.map(item => item.id).filter(id => Boolean(batchBotResults[id])))} disabled={Object.keys(batchBotResults).length === 0} className="text-xs text-white/40 transition hover:text-white disabled:opacity-30" style={{ fontFamily: MONO }}>Seleccionar revisadas</button>
+                            <button onClick={submitBatchApproveSelected} disabled={batchLoading || batchPreviewSelectedIds.length === 0 || !batchReason.trim()} className="bg-[#c9a84c] px-5 py-2 text-xs font-medium text-black disabled:opacity-40">
+                              {batchLoading ? 'PROCESANDO…' : `Aprobar snapshot (${batchPreviewSelectedIds.length})`}
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1687,6 +1815,41 @@ export default function Admin() {
                             <a href={safeExternalUrl(selectedReview.application_url)} target="_blank" rel="noreferrer" className="mt-4 inline-flex text-xs text-[#c9a84c] hover:underline">Abrir enlace recolectado ↗</a>
                             {selectedReview.original_source_url && <a href={safeExternalUrl(selectedReview.original_source_url)} target="_blank" rel="noreferrer" className="ml-4 mt-4 inline-flex text-xs text-emerald-300/70 hover:underline">Abrir fuente original ↗</a>}
                             <button onClick={() => setEditingReview(value => !value)} className="ml-4 text-xs text-white/45 transition hover:text-white">{editingReview ? 'Cancelar edición' : 'Editar datos'}</button>
+                          </div>
+
+                          <div className="mt-5 border border-sky-400/15 bg-sky-400/[0.03] p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-sky-300/60" style={{ fontFamily: MONO }}>REVIEW BOT · READ ONLY</p>
+                                <p className="mt-1 text-xs text-white/40">Comprueba evidencia; nunca cambia estado, flags ni publicación.</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button disabled={reviewBotLoading} onClick={() => runReviewBot(false)} className="border border-sky-300/25 px-3 py-2 text-xs text-sky-200/80 disabled:opacity-40">{reviewBotLoading ? 'REVISANDO…' : 'Revisar · 0 IA'}</button>
+                                {reviewBotResult?.deterministic?.needsAi && !reviewBotResult?.deterministic?.hardBlocks?.length && (
+                                  <button disabled={reviewBotLoading} onClick={() => runReviewBot(true)} className="border border-purple-300/25 px-3 py-2 text-xs text-purple-200/80 disabled:opacity-40">Aclarar con Gemini</button>
+                                )}
+                              </div>
+                            </div>
+                            {reviewBotResult && (
+                              <div className="mt-4 space-y-3">
+                                <div className="flex flex-wrap gap-2 text-[10px] uppercase" style={{ fontFamily: MONO }}>
+                                  <span className="border border-white/10 px-2 py-1 text-white/60">{reviewBotResult.recommendation.replaceAll('_', ' ')}</span>
+                                  <span className="border border-white/10 px-2 py-1 text-white/60">confianza {reviewBotResult.confidence}</span>
+                                  <span className="border border-white/10 px-2 py-1 text-white/60">IA {reviewBotResult.ai.used ? `${reviewBotResult.ai.provider}${reviewBotResult.ai.cached ? ' · cache' : ''}` : 'no usada'}</span>
+                                  <span className="border border-white/10 px-2 py-1 text-white/40">reglas {reviewBotResult.rulesVersion}</span>
+                                </div>
+                                <div className="grid gap-2 sm:grid-cols-4">
+                                  {(['catalog', 'matching', 'alerts', 'seo'] as const).map(key => (
+                                    <div key={key} className="border border-white/[0.06] p-2 text-xs">
+                                      <span className={reviewBotResult.flags[key].recommended ? 'text-emerald-300' : 'text-white/30'}>{key}: {reviewBotResult.flags[key].recommended ? 'sí' : 'no'}</span>
+                                      <p className="mt-1 text-[10px] leading-snug text-white/30">{reviewBotResult.flags[key].reason}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                                {reviewBotResult.issues.length > 0 && <div className="space-y-1">{reviewBotResult.issues.slice(0, 8).map((issue: any) => <p key={`${issue.code}-${issue.message}`} className={`text-xs ${issue.severity === 'hard_block' ? 'text-red-300/80' : issue.severity === 'review' ? 'text-amber-200/70' : 'text-white/35'}`}>{issue.code} · {issue.message}</p>)}</div>}
+                                <details><summary className="cursor-pointer text-xs text-white/35">Ver evidencia ({reviewBotResult.evidence.length})</summary><div className="mt-2 space-y-1">{reviewBotResult.evidence.map((item: any, index: number) => <p key={`${item.check}-${index}`} className="break-all text-[10px] text-white/35" style={{ fontFamily: MONO }}>{item.check}: {item.value}</p>)}</div></details>
+                              </div>
+                            )}
                           </div>
 
                           {editingReview && (

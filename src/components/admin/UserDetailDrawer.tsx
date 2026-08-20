@@ -20,7 +20,7 @@ interface UserDetailData {
   auth_email: string | null
   founding_beta: any | null
   events: Array<{ id: number; event_type: string; occurred_at: string; event_data: any }>
-  emails_sent: Array<{ id: number; template: string; status: string; sent_at: string; resend_id: string | null }>
+  emails_sent: Array<{ id: number; template: string; status: string; sent_at: string; resend_id: string | null; metadata?: Record<string, any> }>
   acquisition: any | null
 }
 
@@ -163,32 +163,26 @@ export function UserDetailDrawer({ profileId, data, loading, onClose, onEnableFo
                   </div>
                 </Section>
 
-                {/* Founding Beta */}
-                {data.founding_beta && (
-                  <Section title="Founding Beta">
+                {/* Founding Beta — observation only; lifecycle remains automatic */}
+                {!data.profile.is_test && (
+                  <Section title="Founding · lifecycle observado">
                     <div className="rounded-lg border border-[#c9a84c]/20 bg-[#c9a84c]/5 p-3 space-y-1.5 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-white/50">Estado</span>
-                        <span className="text-[#c9a84c]">{data.founding_beta.status}</span>
-                      </div>
-                      {data.founding_beta.accepted_at && (
-                        <div className="flex justify-between">
-                          <span className="text-white/50">Aceptó</span>
-                          <span className="text-white/70 text-xs">{new Date(data.founding_beta.accepted_at).toLocaleDateString('es-PY')}</span>
-                        </div>
-                      )}
-                      {data.founding_beta.benefit_end && (
-                        <div className="flex justify-between">
-                          <span className="text-white/50">Pro hasta</span>
-                          <span className="text-white/70 text-xs">{new Date(data.founding_beta.benefit_end).toLocaleDateString('es-PY')}</span>
-                        </div>
-                      )}
-                      {data.founding_beta.dismissed_count > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-white/50">"Ahora no"</span>
-                          <span className="text-white/50 text-xs">{data.founding_beta.dismissed_count}×</span>
-                        </div>
-                      )}
+                      {[
+                        ['Eligible', data.profile.founding_offer_enabled === false ? 'No · deferred' : 'Sí'],
+                        ['Offer gate', data.profile.founding_offer_enabled === false ? 'Cerrado' : 'Abierto'],
+                        ['Estado', data.founding_beta?.status || 'Sin enrollment'],
+                        ['Offered', data.founding_beta?.offered_at ? 'Sí' : 'No'],
+                        ['offered_at', data.founding_beta?.offered_at ? new Date(data.founding_beta.offered_at).toLocaleString('es-PY') : '—'],
+                        ['Accepted', data.founding_beta?.accepted_at ? 'Sí' : 'No'],
+                        ['accepted_at', data.founding_beta?.accepted_at ? new Date(data.founding_beta.accepted_at).toLocaleString('es-PY') : '—'],
+                        ['Active', data.founding_beta?.status === 'active' ? 'Sí' : 'No'],
+                        ['benefit_start', data.founding_beta?.benefit_start ? new Date(data.founding_beta.benefit_start).toLocaleDateString('es-PY') : '—'],
+                        ['benefit_end', data.founding_beta?.benefit_end ? new Date(data.founding_beta.benefit_end).toLocaleDateString('es-PY') : '—'],
+                        ['Pro entitlement', data.profile.is_subscribed ? 'Activo' : 'No activo'],
+                        ['First value', data.profile.first_value_event || 'No registrado'],
+                        ['TTFV', data.profile.ttfv_seconds ? `${Math.round(data.profile.ttfv_seconds / 60)} min` : '—'],
+                      ].map(([label, value]) => <div key={label} className="flex justify-between gap-4"><span className="text-white/50">{label}</span><span className="text-right text-xs text-white/70">{value}</span></div>)}
+                      {data.founding_beta?.dismissed_count > 0 && <div className="flex justify-between"><span className="text-white/50">"Ahora no"</span><span className="text-white/50 text-xs">{data.founding_beta.dismissed_count}×</span></div>}
                     </div>
                   </Section>
                 )}
@@ -238,9 +232,10 @@ export function UserDetailDrawer({ profileId, data, loading, onClose, onEnableFo
                   <Section title={`Emails enviados (${data.emails_sent.length})`}>
                     <div className="space-y-1.5">
                       {data.emails_sent.map(e => (
-                        <div key={e.id} className="flex items-center justify-between text-xs">
-                          <span className="text-white/60 font-mono">{e.template}</span>
-                          <span className={e.status === 'sent' ? 'text-emerald-400/70' : 'text-red-400/70'}>{e.status}</span>
+                        <div key={e.id} className="rounded border border-white/[0.06] p-2 text-xs">
+                          <div className="flex items-center justify-between"><span className="text-white/60 font-mono">{e.template}</span><span className={e.status === 'sent' ? 'text-emerald-400/70' : 'text-red-400/70'}>{e.status}</span></div>
+                          <div className="mt-1 flex justify-between gap-3 text-[10px] text-white/30"><span>{new Date(e.sent_at).toLocaleString('es-PY')}</span><span className="truncate font-mono">{e.resend_id || 'sin resend_id'}</span></div>
+                          {e.status !== 'sent' && <p className="mt-1 text-[10px] text-red-300/50">Error detallado no almacenado; revisar logs por request/resend_id.</p>}
                         </div>
                       ))}
                     </div>
