@@ -146,7 +146,7 @@ function Analizador() {
 
   return (
     <section id="analizador" className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
-      <Eyebrow>Analizador gratuito — sin límites</Eyebrow>
+      <Eyebrow>Diagnóstico inicial gratuito</Eyebrow>
       <h2 className="font-display mt-2 max-w-2xl text-3xl text-cream sm:text-4xl">
         Tu score ATS <em>real</em>. En segundos.
       </h2>

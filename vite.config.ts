@@ -39,6 +39,9 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    watch: {
+      ignored: ['**/artifacts/**'],
+    },
     proxy: {
       '/.netlify/functions': {
         target: 'http://localhost:9999',

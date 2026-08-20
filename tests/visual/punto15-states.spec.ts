@@ -171,6 +171,13 @@ function injectRecruiterSession(page: Page, opts: { balance?: number; company?: 
   }
   return page.addInitScript((s) => {
     sessionStorage.setItem('cvitae_recruiter_session', JSON.stringify(s))
+    localStorage.setItem('cvitae_consent_v1', JSON.stringify({
+      version: 1,
+      analytics: false,
+      advertising: false,
+      decidedAt: '2026-08-20T00:00:00.000Z',
+    }))
+    localStorage.setItem('cvitae_guide_b2b_panel_v1_completed', 'true')
   }, session)
 }
 
@@ -215,7 +222,7 @@ test.describe('/empresas — estados de carga y vacío', () => {
     await expect(tabVacancies).toBeVisible({ timeout: 10_000 })
     await tabVacancies.click()
 
-    await expect(page.locator('text=Todavía no creaste ninguna vacante')).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByRole('heading', { name: 'Creá tu primera vacante' })).toBeVisible({ timeout: 5_000 })
   })
 
   test('P15-R3 — banner de error al fallar creación de vacante', async ({ page }) => {
@@ -366,6 +373,38 @@ test.describe('/empresas — estados de carga y vacío', () => {
     // El error debe aparecer como banner, no como alert nativo
     await expect(page.locator('text=No se pudo comparar los candidatos')).toBeVisible({ timeout: 5_000 })
     expect(alertCalled).toBe(false)
+  })
+
+  test('P15-R9 — error de carga de vacantes no parece un estado vacío', async ({ page }) => {
+    await injectRecruiterSession(page)
+    page.route('/.netlify/functions/validate-recruiter-token', async route => {
+      const action = (await route.request().postDataJSON())?.action
+      if (action === 'get_vacancies') {
+        await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Servicio de vacantes temporalmente no disponible' }) })
+        return
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) })
+    })
+    await openRecruiterPanel(page)
+    await page.locator('button', { hasText: 'Mis Vacantes' }).click()
+    await expect(page.getByRole('alert')).toContainText('Servicio de vacantes temporalmente no disponible')
+    await expect(page.getByRole('button', { name: 'Reintentar' })).toBeVisible()
+  })
+
+  test('P15-R10 — error de historial ofrece reintento', async ({ page }) => {
+    await injectRecruiterSession(page)
+    page.route('/.netlify/functions/validate-recruiter-token', async route => {
+      const action = (await route.request().postDataJSON())?.action
+      if (action === 'get_history') {
+        await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'No pudimos recuperar el historial' }) })
+        return
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) })
+    })
+    await openRecruiterPanel(page)
+    await page.locator('button', { hasText: 'Historial' }).click()
+    await expect(page.getByRole('alert')).toContainText('No pudimos recuperar el historial')
+    await expect(page.getByRole('button', { name: 'Reintentar' })).toBeVisible()
   })
 })
 

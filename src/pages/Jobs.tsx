@@ -65,10 +65,10 @@ export default function Jobs() {
     <>
       <Helmet>
         <title>Empleos en Paraguay actualizados | CVitae</title>
-        <meta name="description" content="Buscá empleos actualizados en Paraguay por área, empresa y ubicación. Vacantes reunidas y verificadas diariamente por CVitae." />
+        <meta name="description" content="Buscá empleos revisados en Paraguay por área, empresa y ubicación. Vacantes reunidas y verificadas por CVitae." />
         <link rel="canonical" href="https://cvitae.lat/empleos" />
         <meta property="og:title" content="Empleos en Paraguay actualizados | CVitae" />
-        <meta property="og:description" content="Vacantes de Paraguay reunidas, ordenadas y verificadas diariamente." />
+        <meta property="og:description" content="Vacantes de Paraguay reunidas, ordenadas y verificadas antes de mostrarse en el catálogo." />
         <meta property="og:url" content="https://cvitae.lat/empleos" />
       </Helmet>
       <SiteShell>
@@ -105,7 +105,7 @@ export default function Jobs() {
 
           <div className="mt-6 flex items-center justify-between gap-4 text-xs text-white/50">
             <span>{loading ? 'Consultando fuentes…' : `${filtered.length} empleos visibles`}</span>
-            <span>Última revisión automática diaria</span>
+            <span>Catálogo sujeto a revisión continua</span>
           </div>
 
           {error ? (

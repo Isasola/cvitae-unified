@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useParams, useLocation } from 'wouter'
+import { Link, useParams } from 'wouter'
 import { Helmet } from 'react-helmet-async'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Calendar, Clock, Tag } from 'lucide-react'
@@ -25,7 +25,6 @@ export default function BlogPost() {
   const { slug } = useParams<{ slug: string }>()
   const [post, setPost] = useState<BlogPost | null>(null)
   const [loading, setLoading] = useState(true)
-  const [, setLocation] = useLocation()
 
   useEffect(() => {
     if (slug) {
@@ -151,17 +150,16 @@ export default function BlogPost() {
 
           {/* Footer CTA */}
           <div className="mt-16 pt-10 border-t border-white/8">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+            <div className="flex flex-col gap-5">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.18em] text-white/25 mb-1.5">¿Te resultó útil?</p>
-                <p className="text-sm text-white/50">Compartilo con alguien que lo necesite.</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-white/25 mb-1.5">Siguiente paso</p>
+                <p className="text-sm text-white/50">Aplicá lo aprendido a tu perfil o explorá oportunidades verificadas.</p>
               </div>
-              <Link
-                href="/blog"
-                className="inline-flex items-center gap-2 border border-white/10 px-5 py-2.5 text-sm text-white/60 transition hover:border-gold/40 hover:text-white"
-              >
-                <ArrowLeft size={14} /> Ver más artículos
-              </Link>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <Link href="/mi-carrera" className="inline-flex items-center justify-center bg-gold px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-gold-soft">Revisar mi perfil</Link>
+                <Link href="/oportunidades" className="inline-flex items-center justify-center border border-white/10 px-5 py-2.5 text-sm text-white/60 transition hover:border-gold/40 hover:text-white">Explorar oportunidades</Link>
+                <Link href="/blog" className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm text-white/45 transition hover:text-white"><ArrowLeft size={14} /> Más artículos</Link>
+              </div>
             </div>
           </div>
         </motion.article>

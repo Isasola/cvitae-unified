@@ -249,6 +249,7 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
 }) {
   const [history, setHistory] = useState<AnalysisRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [search, setSearch] = useState('')
@@ -257,13 +258,17 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
   useEffect(() => { loadHistory() }, [])
 
   const loadHistory = async () => {
+    setLoading(true)
+    setLoadError('')
     try {
       const res = await fetch('/.netlify/functions/validate-recruiter-token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, action: 'get_history' }),
       })
-      setHistory((await res.json()).history || [])
-    } catch { /* silencioso */ }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'No pudimos cargar el historial')
+      setHistory(data.history || [])
+    } catch (error: any) { setLoadError(error?.message || 'No pudimos cargar el historial') }
     finally { setLoading(false) }
   }
 
@@ -306,6 +311,14 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
   if (loading) return (
     <div className="flex justify-center py-20">
       <Loader2 className="animate-spin text-[#c9a84c]" />
+    </div>
+  )
+
+  if (loadError) return (
+    <div className="glass-card rounded-3xl py-16 text-center" role="alert">
+      <AlertCircle strokeWidth={1.25} className="mx-auto mb-4 h-9 w-9 text-amber-300" />
+      <p className="text-sm text-white/65">{loadError}</p>
+      <button type="button" onClick={loadHistory} className="mt-4 rounded-full border border-white/15 px-4 py-2 text-xs text-white/65 transition hover:border-white/30 hover:text-white">Reintentar</button>
     </div>
   )
 
@@ -600,28 +613,34 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, 
   const [hasMore, setHasMore] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [loadError, setLoadError] = useState('')
 
   const handleActionUpdate = async (applicationId: string, action: string, notes?: string) => {
     setUpdatingAction(applicationId)
+    setRankError('')
     try {
-      await fetch('/.netlify/functions/validate-recruiter-token', {
+      const response = await fetch('/.netlify/functions/validate-recruiter-token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, action: 'update_application_status', application_id: applicationId, recruiter_action: action, recruiter_notes: notes }),
       })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'No pudimos guardar el estado del candidato')
       setApplicants(prev => prev.map(a => a.id === applicationId ? { ...a, recruiter_action: action } : a))
-    } catch { /* silencioso */ }
+    } catch (error: any) { setRankError(error?.message || 'No pudimos guardar el estado del candidato') }
     finally { setUpdatingAction(null) }
   }
 
   const loadApplicants = async (requestedPage = 0, append = false) => {
     if (append) setLoadingMore(true)
     else setLoading(true)
+    setLoadError('')
     try {
       const response = await fetch('/.netlify/functions/validate-recruiter-token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, action: 'get_applicants', vacancy_id: vacancyId, page: requestedPage, page_size: 60 }),
       })
       const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'No pudimos cargar los candidatos')
       const nextApplicants = data.applicants || []
       setApplicants(previous => append
         ? [...previous, ...nextApplicants.filter((candidate: Applicant) => !previous.some(existing => existing.id === candidate.id))]
@@ -629,7 +648,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, 
       setReview(data.review || null)
       setPage(requestedPage)
       setHasMore(data.pagination?.has_more === true)
-    } catch { /* conserva el último estado visible */ }
+    } catch (error: any) { setLoadError(error?.message || 'No pudimos cargar los candidatos') }
     finally {
       setLoading(false)
       setLoadingMore(false)
@@ -722,7 +741,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, 
                 navigator.clipboard.writeText(`https://cvitae.lat/vacante/${vacancySlug}`).then(() => {
                   setLinkCopied(true)
                   setTimeout(() => setLinkCopied(false), 2000)
-                }).catch(() => {})
+                }).catch(() => setRankError('No pudimos copiar el link. Seleccionalo y copialo manualmente.'))
               }}
               className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.08] px-3 py-1.5 text-xs text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.18]"
             >
@@ -733,6 +752,13 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, 
           <p className="mt-2 text-[11px] font-light text-white/45">
             Compartí este link con candidatos — cada postulación queda registrada automáticamente
           </p>
+        </div>
+      )}
+
+      {loadError && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4 text-sm text-amber-100" role="alert">
+          <span>{loadError}</span>
+          <button type="button" onClick={() => loadApplicants(0, false)} className="rounded-full border border-amber-200/25 px-3 py-1.5 text-xs">Reintentar</button>
         </div>
       )}
 
@@ -1142,19 +1168,24 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
   const [createdUrl, setCreatedUrl] = useState('')
   const [vacancies, setVacancies] = useState<VacancyRecord[]>([])
   const [loadingList, setLoadingList] = useState(true)
+  const [listError, setListError] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
   const [selectedVacancy, setSelectedVacancy] = useState<VacancyRecord | null>(null)
 
   useEffect(() => { loadVacancies() }, [])
 
   const loadVacancies = async () => {
+    setLoadingList(true)
+    setListError('')
     try {
       const res = await fetch('/.netlify/functions/validate-recruiter-token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, action: 'get_vacancies' }),
       })
-      setVacancies((await res.json()).vacancies || [])
-    } catch { /* silencioso */ }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'No pudimos cargar las vacantes')
+      setVacancies(data.vacancies || [])
+    } catch (error: any) { setListError(error?.message || 'No pudimos cargar las vacantes') }
     finally { setLoadingList(false) }
   }
 
@@ -1200,6 +1231,12 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
 
   return (
     <div className="space-y-8">
+      {listError && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4 text-sm text-amber-100" role="alert">
+          <span>{listError}</span>
+          <button type="button" onClick={loadVacancies} className="rounded-full border border-amber-200/25 px-3 py-1.5 text-xs">Reintentar</button>
+        </div>
+      )}
       {/* First-vacancy banner — only when list is loaded and empty */}
       {!loadingList && vacancies.length === 0 && (
         <motion.div
@@ -1834,10 +1871,10 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
       <Ambient />
       <Helmet>
         <title>Para Empresas | CVitae — Análisis de CVs con IA</title>
-        <meta name="description" content="Acceso al panel de empresas. Analizá CVs con IA y encontrá al candidato ideal en segundos." />
+        <meta name="description" content="Acceso al panel de empresas. Priorizá CVs con evidencia explicable y mantené la decisión de contratación en manos de tu equipo." />
         <link rel="canonical" href="https://cvitae.lat/empresas" />
         <meta property="og:title" content="Para Empresas | CVitae — Análisis de CVs con IA" />
-        <meta property="og:description" content="Analizá lotes de CVs, obtené un ranking comparativo y encontrá al candidato ideal." />
+        <meta property="og:description" content="Revisá lotes de CVs con evidencia comparable y construí una shortlist con control humano." />
         <meta property="og:url" content="https://cvitae.lat/empresas" />
         <meta property="og:type" content="website" />
       </Helmet>
@@ -1860,10 +1897,10 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
               <span className="h-px w-8 bg-white/20" /> Para empresas
             </div>
             <h1 className="mt-6 font-display text-4xl leading-[1.05] tracking-[-0.01em] text-white md:text-6xl">
-              Encontrá al candidato ideal en <em className="italic font-normal">segundos</em>.
+              Priorizá candidatos con <em className="italic font-normal">evidencia clara</em>.
             </h1>
             <p className="mt-5 max-w-md text-sm font-light leading-relaxed text-white/55 md:text-base">
-              CVitae lee los CVs por vos, los compara con criterio ATS y te entrega un ranking listo para entrevistar. Cero horas filtrando PDFs.
+              CVitae organiza los CVs con criterios ATS, muestra fortalezas y brechas, y ayuda a tu equipo a decidir qué perfiles revisar primero.
             </p>
 
             <ol className="mt-7 grid max-w-xl grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Flujo de evaluación">

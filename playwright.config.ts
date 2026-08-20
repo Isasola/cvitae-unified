@@ -44,12 +44,14 @@ export default defineConfig({
       name: 'chromium-mobile',
       use: {
         ...devices['iPhone SE'],
+        browserName: 'chromium',
       },
     },
     {
       name: 'chromium-reduced',
       use: {
         ...devices['Desktop Chrome'],
+        browserName: 'chromium',
         viewport: { width: 600, height: 900 },
       },
     },
