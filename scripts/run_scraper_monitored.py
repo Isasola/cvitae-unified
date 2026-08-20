@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import quote
 
 import requests
@@ -22,6 +23,34 @@ WARNING_RE = re.compile(r"(warning|advertencia|deprecated)", re.IGNORECASE)
 FOUND_RE = re.compile(r"(?:encontrad[ao]s?|totales?)\D{0,12}(\d+)", re.IGNORECASE)
 INSERTED_RE = re.compile(r"(?:insertad[ao]s?|nuev[ao]s?|guardad[ao]s?)\D{0,12}(\d+)", re.IGNORECASE)
 SUMMARY_RE = re.compile(r"^CVITAE_INGESTION_SUMMARY=(\{.*\})$", re.MULTILINE)
+BLOCKED_RE = re.compile(r"(block|captcha|login|autentic|forbidden|403)", re.IGNORECASE)
+
+
+def write_local_status(scraper_id: str, status: str, **details: object) -> None:
+    """Persist workflow-local operational metadata for the final summary."""
+    root = Path(os.getenv("RUNNER_TEMP") or (Path.cwd() / ".cvitae-run-status"))
+    root.mkdir(parents=True, exist_ok=True)
+    safe_id = re.sub(r"[^a-z0-9_-]+", "_", scraper_id.casefold())
+    payload = {
+        "scraper_id": scraper_id,
+        "status": status,
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
+        **details,
+    }
+    (root / f"cvitae-{safe_id}.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def db_status(status: str) -> str:
+    """Map explicit states onto the existing scraper_runs DB constraint."""
+    return {
+        "success": "healthy",
+        "partial_success": "warning",
+        "skipped": "warning",
+        "blocked": "warning",
+        "failed": "failed",
+    }.get(status, "failed")
 
 
 def api_headers() -> dict[str, str]:
@@ -72,7 +101,7 @@ def load_control(scraper_id: str, scraper_name: str, script_path: str) -> dict:
 
 
 def maybe_auto_pause(control: dict, scraper_id: str, current_status: str) -> None:
-    if not control.get("auto_pause_on_failure") or current_status not in {"failed", "timeout"}:
+    if not control.get("auto_pause_on_failure") or current_status != "failed":
         return
     threshold = max(1, int(control.get("consecutive_failures_before_pause") or 3))
     base = os.environ["SUPABASE_URL"].rstrip("/") + "/rest/v1"
@@ -99,9 +128,9 @@ def update_control_quality(scraper_id: str, status: str, summary: dict | None, e
     found = summary.get("found") if summary else None
     inserted = summary.get("inserted") if summary else None
     quality = (
-        "broken" if status in {"failed", "timeout"}
+        "broken" if status in {"failed", "telemetry_failed"}
         else "healthy" if isinstance(inserted, int) and inserted > 0
-        else "degraded" if status == "warning"
+        else "degraded" if status == "partial_success"
         else "unproductive" if found == 0
         else "degraded"
     )
@@ -160,12 +189,14 @@ def main() -> int:
         control = load_control(args.scraper_id, args.scraper_name, args.script_path)
     except Exception as exc:
         print(f"[monitor] No se pudo leer la política del scraper: {type(exc).__name__}", file=sys.stderr)
+        write_local_status(args.scraper_id, "telemetry_failed", reason="control_unavailable")
         return 1
 
     effective_timeout = min(args.timeout, max(30, int(control.get("max_runtime_seconds") or args.timeout)))
     if not control.get("collection_enabled", False):
         finished = datetime.now(timezone.utc)
         reason = control.get("paused_reason") or "Pausado desde el centro de control"
+        explicit_status = "blocked" if BLOCKED_RE.search(reason) else "skipped"
         try:
             save({
                 "run_id": run_id,
@@ -173,10 +204,10 @@ def main() -> int:
                 "scraper_name": args.scraper_name,
                 "script_path": args.script_path,
                 "trigger_type": trigger_type,
-                "status": "warning",
+                "status": db_status(explicit_status),
                 "warning_count": 1,
                 "error_count": 0,
-                "error_summary": reason,
+                "error_summary": f"[{explicit_status.upper()}] {reason}",
                 "started_at": started.isoformat(),
                 "finished_at": finished.isoformat(),
                 "duration_seconds": 0,
@@ -184,10 +215,14 @@ def main() -> int:
             })
         except Exception as exc:
             print(f"[monitor] No se pudo registrar la pausa: {type(exc).__name__}", file=sys.stderr)
+            write_local_status(args.scraper_id, "telemetry_failed", reason="skipped_run_not_persisted")
+            return 1
+        write_local_status(args.scraper_id, explicit_status, reason=reason)
         print(f"[monitor] {args.scraper_id}: pausado · {reason}")
         return 0
 
     record_id = None
+    telemetry_ok = True
     try:
         record_id = save({
             "run_id": run_id,
@@ -202,6 +237,7 @@ def main() -> int:
     except Exception as exc:
         # Monitoring must never prevent opportunity ingestion.
         print(f"[monitor] No se pudo iniciar telemetría: {type(exc).__name__}", file=sys.stderr)
+        telemetry_ok = False
 
     summary = None
     try:
@@ -235,15 +271,15 @@ def main() -> int:
                 useful_lines = [line.strip() for line in output.splitlines() if line.strip()]
                 error_lines = [useful_lines[-1] if useful_lines else f"Proceso finalizó con código {result.returncode}"]
                 error_count = 1
-        elif error_count:
-            status = "warning"
+        elif error_count or warning_count:
+            status = "partial_success"
         else:
-            status = "healthy"
+            status = "success"
         exit_code = result.returncode
     except subprocess.TimeoutExpired as exc:
         output = ((exc.stdout or "") + "\n" + (exc.stderr or "")).strip()
         error_lines = [f"Tiempo máximo excedido ({effective_timeout}s)"]
-        warning_count, error_count, exit_code, status = 0, 1, None, "timeout"
+        warning_count, error_count, exit_code, status = 0, 1, None, "failed"
 
     finished = datetime.now(timezone.utc)
     duration = max(0, round((finished - started).total_seconds()))
@@ -251,7 +287,7 @@ def main() -> int:
     if record_id:
         try:
             save({
-                "status": status,
+                "status": db_status(status),
                 "exit_code": exit_code,
                 "found_count": summary.get("found") if summary else last_number(FOUND_RE, output),
                 "inserted_count": summary.get("inserted") if summary else last_number(INSERTED_RE, output),
@@ -270,6 +306,7 @@ def main() -> int:
             }, record_id)
         except Exception as exc:
             print(f"[monitor] No se pudo finalizar telemetría: {type(exc).__name__}", file=sys.stderr)
+            telemetry_ok = False
 
     try:
         maybe_auto_pause(control, args.scraper_id, status)
@@ -280,9 +317,20 @@ def main() -> int:
     except Exception as exc:
         print(f"[monitor] No se pudo actualizar calidad del scraper: {type(exc).__name__}", file=sys.stderr)
 
+    final_status = status if telemetry_ok else "telemetry_failed"
+    write_local_status(
+        args.scraper_id,
+        final_status,
+        scraper_status=status,
+        exit_code=exit_code,
+        error_count=error_count,
+        duration_seconds=duration,
+    )
     print(output)
-    print(f"\n[monitor] {args.scraper_id}: {status} · {duration}s · {error_count} error(es)")
-    return 0  # Other scrapers must continue; status is persisted independently.
+    print(f"\n[monitor] {args.scraper_id}: {final_status} · {duration}s · {error_count} error(es)")
+    # Individual workflow steps may continue, but the final summary must fail
+    # for a real scraper or telemetry failure.
+    return 1 if final_status in {"failed", "telemetry_failed"} else 0
 
 
 if __name__ == "__main__":

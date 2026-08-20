@@ -535,3 +535,9 @@ jobs:
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'bolsas_locales' || github.event_name == 'schedule' }}
         run: python scripts/run_scraper_monitored.py bolsas_locales_scraper bolsas_locales_scraper scrapers/bolsas_locales_scraper.py
         continue-on-error: true
+
+      # Scrapers stay isolated, but the final job conclusion reflects real
+      # scraper/telemetry failures after every selected source has finished.
+      - name: Resumir estado real de scrapers
+        if: ${{ always() }}
+        run: python scripts/summarize_scraper_run.py
