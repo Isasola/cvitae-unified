@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { observeAiCall } from './lib/ai-telemetry'
 import { makeSupabaseAdmin } from './_supabase'
 import {
   authenticatedUser,
@@ -143,7 +144,7 @@ Cada dimensión vale de 0 a 20. Devolvé las cinco exactamente una vez. Máximo 
 CV EXTRAÍDO:
 ${cvText}`
 
-  const response = await bedrock.send(new InvokeModelCommand({
+  const response = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'cv_ats_diagnostic', trigger: 'user_action', actor: 'user' }, () => bedrock.send(new InvokeModelCommand({
     modelId: MODEL_ID,
     contentType: 'application/json',
     accept: 'application/json',
@@ -153,7 +154,7 @@ ${cvText}`
       system: 'Sos un auditor de CV riguroso. Respondés solamente JSON válido y fundamentás cada conclusión en el texto recibido.',
       messages: [{ role: 'user', content: prompt }],
     }),
-  }))
+  })))
   const decoded = JSON.parse(new TextDecoder().decode(response.body))
   return normalizeAtsResult(extractJSON(decoded.content?.[0]?.text || '{}'))
 }

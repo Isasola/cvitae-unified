@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { observeAiCall } from './lib/ai-telemetry'
 import { makeSupabaseAdmin } from './_supabase'
 import {
   authenticatedUser,
@@ -288,7 +289,7 @@ Respondé ÚNICAMENTE JSON válido:
 Texto total de la oportunidad para copiar requisitos literalmente:
 ${opportunityText}`
 
-  const response = await bedrock.send(new InvokeModelCommand({
+  const response = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'application_workspace', trigger: 'user_action', actor: 'user' }, () => bedrock.send(new InvokeModelCommand({
     modelId: MODEL_ID,
     contentType: 'application/json',
     accept: 'application/json',
@@ -298,7 +299,7 @@ ${opportunityText}`
       system: 'Sos un asistente de postulación riguroso. Nunca completás hechos del candidato y respondés JSON válido.',
       messages: [{ role: 'user', content: prompt }],
     }),
-  }))
+  })))
   const decoded = JSON.parse(new TextDecoder().decode(response.body))
   return extractJSON(decoded.content?.[0]?.text || '{}')
 }

@@ -1,5 +1,6 @@
 import { Handler } from "@netlify/functions"
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
+import { observeAiCall } from './lib/ai-telemetry'
 import {
   clientIp,
   consumeRateLimit,
@@ -42,7 +43,7 @@ async function invokeModel(system: string, userPrompt: string): Promise<string> 
       messages: [{ role: "user", content: userPrompt }],
     }),
   })
-  const response = await bedrockClient.send(command)
+  const response = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'public_cv_analysis', trigger: 'user_action', actor: 'user' }, () => bedrockClient.send(command))
   const result = JSON.parse(new TextDecoder().decode(response.body))
   return result.content[0]?.text ?? ""
 }

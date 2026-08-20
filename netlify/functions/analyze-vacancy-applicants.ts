@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { observeAiCall } from './lib/ai-telemetry'
 import { makeSupabaseAdmin } from './_supabase'
 
 const MODEL_ID = 'global.anthropic.claude-sonnet-4-6'
@@ -21,7 +22,7 @@ function extractJSON(text: string): any {
 }
 
 async function callBedrock(system: string, user: string, maxTokens: number): Promise<string> {
-  const response = await bedrock.send(new InvokeModelCommand({
+  const response = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'vacancy_applicant_analysis', trigger: 'user_action', actor: 'user' }, () => bedrock.send(new InvokeModelCommand({
     modelId: MODEL_ID,
     contentType: 'application/json',
     accept: 'application/json',
@@ -31,7 +32,7 @@ async function callBedrock(system: string, user: string, maxTokens: number): Pro
       system,
       messages: [{ role: 'user', content: user }],
     }),
-  }))
+  })))
   const parsed = JSON.parse(new TextDecoder().decode(response.body))
   return parsed.content[0]?.text ?? ''
 }

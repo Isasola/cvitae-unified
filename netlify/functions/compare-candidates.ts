@@ -1,6 +1,7 @@
 // ⚠️ Netlify Free: límite 10s. Para migrar a Lambda: scripts/deploy-lambda.sh
 import { Handler } from "@netlify/functions"
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
+import { observeAiCall } from './lib/ai-telemetry'
 import { makeSupabaseAdmin } from "./_supabase"
 
 const MODEL_ID = "global.anthropic.claude-sonnet-4-6"
@@ -34,7 +35,7 @@ async function invokeModel(system: string | null, userPrompt: string, maxTokens:
     accept: "application/json",
     body: JSON.stringify(body),
   })
-  const response = await bedrockClient.send(command)
+  const response = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'candidate_comparison', trigger: 'user_action', actor: 'user' }, () => bedrockClient.send(command))
   const result = JSON.parse(new TextDecoder().decode(response.body))
   return result.content[0]?.text ?? ""
 }

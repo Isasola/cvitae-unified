@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { makeSupabaseAdmin } from './_supabase'
+import { observeAiCall } from './lib/ai-telemetry'
 import {
   authenticatedUser,
   consumeRateLimit,
@@ -196,14 +197,14 @@ No inventes un nombre de curso, URL, duración, precio, certificado, disponibili
 No agregues habilidades fuera de la lista. El servidor construirá el título y el enlace.
 El foco debe ser prudente y útil; no afirmes que completar un curso garantiza mejorar un score.`
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent`, {
+  const response = await observeAiCall({ provider: 'gemini', model: MODEL_ID, feature: 'learning_plan_recommendations', trigger: 'user_action', actor: 'user' }, () => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { maxOutputTokens: 1600, responseMimeType: 'application/json', responseSchema: COURSE_SCHEMA },
     }),
-  })
+  }))
   if (!response.ok) {
     console.error(`Gemini learning plan failed with status ${response.status}`)
     return []

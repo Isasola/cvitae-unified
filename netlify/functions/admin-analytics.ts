@@ -1,4 +1,5 @@
 import { makeSupabaseAdmin } from './_supabase'
+import { observeAiCall } from './lib/ai-telemetry'
 import { createSign } from 'crypto'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -346,7 +347,7 @@ const GEMINI_SCHEMA = {
 
 async function callGemini(apiKey: string, prompt: string): Promise<GeminiResult | GeminiFailure> {
   try {
-    const res = await fetch(`${GEMINI_API}?key=${apiKey}`, {
+    const res = await observeAiCall({ provider: 'gemini', model: GEMINI_MODEL, feature: 'admin_growth_analysis', trigger: 'user_action', actor: 'admin' }, () => fetch(`${GEMINI_API}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -356,7 +357,7 @@ async function callGemini(apiKey: string, prompt: string): Promise<GeminiResult 
           responseSchema: GEMINI_SCHEMA,
         },
       }),
-    })
+    }))
     if (!res.ok) {
       const errText = await res.text()
       console.error(`[Gemini] HTTP ${res.status} model=${GEMINI_MODEL}:`, errText.substring(0, 400))
@@ -435,6 +436,9 @@ export default async function handler(req: Request) {
   let body: any = {}
   try { body = await req.json() } catch { /* empty body */ }
   const question: string | null      = body.question ?? null
+  // Cost safety: metrics are deterministic. Gemini is opt-in and is also
+  // enabled for an explicit operator question.
+  const includeAi: boolean           = body.includeAi === true || Boolean(question?.trim())
   const mode: 'standard' | 'launch' = body.mode === 'launch' ? 'launch' : 'standard'
   const launchEvents: any[]          = body.launchEvents ?? []
 
@@ -726,7 +730,9 @@ export default async function handler(req: Request) {
     let geminiErrorCode: string | null = null
     let geminiErrorMessage: string | null = null
 
-    if (!geminiKey) {
+    if (!includeAi) {
+      // Page load / ordinary refresh: intentionally no model call.
+    } else if (!geminiKey) {
       geminiErrorCode = 'no_key'
       geminiErrorMessage = 'GEMINI_API_KEY no configurada en el servidor'
     } else {
@@ -813,6 +819,7 @@ ${answerRule}`
           gemini_available:     !!geminiResult,
           gemini_error_code:    geminiErrorCode,
           gemini_error_message: geminiErrorMessage,
+          ai_requested:          includeAi,
           mode,
           generated_at:         now.toISOString(),
         },

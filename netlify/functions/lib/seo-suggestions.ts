@@ -8,6 +8,7 @@
  */
 
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { observeAiCall } from './ai-telemetry'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 const MODEL_HAIKU = 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
@@ -59,7 +60,7 @@ async function askBedrock(system: string, user: string): Promise<string> {
       messages: [{ role: 'user', content: user }],
     }),
   })
-  const res = await client.send(cmd)
+  const res = await observeAiCall({ provider: 'bedrock', model: MODEL_HAIKU, feature: 'seo_field_suggestions', trigger: 'user_action', actor: 'admin' }, () => client.send(cmd))
   const parsed = JSON.parse(new TextDecoder().decode(res.body))
   return parsed.content[0]?.text ?? ''
 }

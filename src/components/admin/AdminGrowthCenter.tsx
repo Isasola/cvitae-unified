@@ -145,6 +145,7 @@ type GrowthResponse = {
     gemini_available: boolean
     gemini_error_code: string | null
     gemini_error_message: string | null
+    ai_requested: boolean
     mode: string
     generated_at: string
   }
@@ -231,10 +232,12 @@ function AdminGrowthCenter({ adminPassword }: Props) {
   const [newEventLabel, setNewEventLabel] = useState('')
   const [showRaw, setShowRaw] = useState(false)
   const [cachedAt, setCachedAt] = useState<string | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
 
   const fetchData = useCallback(
-    async (mode: 'standard' | 'launch', events: LaunchEvent[]) => {
-      setLoading(true)
+    async (mode: 'standard' | 'launch', events: LaunchEvent[], includeAi = false) => {
+      if (includeAi) setAiLoading(true)
+      else setLoading(true)
       setError(null)
       try {
         const res = await fetch('/.netlify/functions/admin-analytics', {
@@ -243,7 +246,7 @@ function AdminGrowthCenter({ adminPassword }: Props) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${adminPassword}`,
           },
-          body: JSON.stringify({ mode, launchEvents: events }),
+          body: JSON.stringify({ mode, launchEvents: events, includeAi }),
         })
         if (!res.ok) throw new Error(`Error ${res.status}: ${await res.text()}`)
         const json: GrowthResponse = await res.json()
@@ -264,6 +267,7 @@ function AdminGrowthCenter({ adminPassword }: Props) {
         setError(e instanceof Error ? e.message : 'Error desconocido')
       } finally {
         setLoading(false)
+        setAiLoading(false)
       }
     },
     [adminPassword]
@@ -296,11 +300,16 @@ function AdminGrowthCenter({ adminPassword }: Props) {
         localStorage.removeItem(CACHE_TS_KEY)
       }
     }
-    fetchData(launchMode ? 'launch' : 'standard', parsed)
+    // Metrics may load automatically; model analysis never does.
+    fetchData(launchMode ? 'launch' : 'standard', parsed, false)
   }, [])
 
   const handleRefresh = () => {
-    fetchData(launchMode ? 'launch' : 'standard', launchEvents)
+    fetchData(launchMode ? 'launch' : 'standard', launchEvents, false)
+  }
+
+  const handleGenerateAi = () => {
+    fetchData(launchMode ? 'launch' : 'standard', launchEvents, true)
   }
 
   const handleQuestion = async () => {
@@ -317,8 +326,9 @@ function AdminGrowthCenter({ adminPassword }: Props) {
         },
         body: JSON.stringify({
           mode: launchMode ? 'launch' : 'standard',
-          question,
-          launchEvents,
+            question,
+            launchEvents,
+            includeAi: true,
         }),
       })
       if (!res.ok) throw new Error(`Error ${res.status}`)
@@ -368,7 +378,7 @@ function AdminGrowthCenter({ adminPassword }: Props) {
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
         <RefreshCw className="animate-spin" size={32} style={{ color: '#c9a84c' }} />
         <div style={{ fontFamily: MONO, color: 'rgba(232,232,224,0.5)', fontSize: 14 }}>
-          Analizando con Gemini...
+          Cargando métricas sin IA...
         </div>
       </div>
     )
@@ -412,6 +422,15 @@ function AdminGrowthCenter({ adminPassword }: Props) {
             LAUNCH MODE {launchMode ? 'ON' : 'OFF'}
           </button>
           <button
+            onClick={handleGenerateAi}
+            disabled={aiLoading}
+            className="flex items-center gap-1 px-3 py-1.5 rounded border border-purple-400/20 hover:border-purple-400/40 text-xs transition-all disabled:opacity-50"
+            style={{ fontFamily: MONO, color: '#c4b5fd' }}
+          >
+            <Zap size={12} />
+            {aiLoading ? 'Generando…' : 'Generar análisis IA'}
+          </button>
+          <button
             onClick={handleRefresh}
             className="flex items-center gap-1 px-3 py-1.5 rounded border border-white/[0.07] hover:border-[#c9a84c]/40 text-xs transition-all"
             style={{ fontFamily: MONO, color: '#c9a84c' }}
@@ -446,7 +465,7 @@ function AdminGrowthCenter({ adminPassword }: Props) {
               [
                 { label: 'GA4', available: meta?.ga4_available },
                 { label: 'Search Console', available: meta?.gsc_available },
-                { label: 'Gemini', available: meta?.gemini_available },
+                { label: meta?.ai_requested ? 'Gemini' : 'Gemini (no solicitado)', available: meta?.ai_requested ? meta?.gemini_available : true },
               ] as const
             ).map(({ label, available }) => (
               <span

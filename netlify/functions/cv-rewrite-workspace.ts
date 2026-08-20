@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { observeAiCall } from './lib/ai-telemetry'
 import { makeSupabaseAdmin } from './_supabase'
 import {
   authenticatedUser,
@@ -201,7 +202,7 @@ Respondé ÚNICAMENTE JSON válido:
   ]
 }`
 
-  const response = await bedrock.send(new InvokeModelCommand({
+  const response = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'cv_rewrite_workspace', trigger: 'user_action', actor: 'user' }, () => bedrock.send(new InvokeModelCommand({
     modelId: MODEL_ID,
     contentType: 'application/json',
     accept: 'application/json',
@@ -211,7 +212,7 @@ Respondé ÚNICAMENTE JSON válido:
       system: 'Sos un editor de CV riguroso. Solo reescribís hechos autorizados y respondés JSON válido.',
       messages: [{ role: 'user', content: prompt }],
     }),
-  }))
+  })))
   const decoded = JSON.parse(new TextDecoder().decode(response.body))
   return extractJSON(decoded.content?.[0]?.text || '{}')
 }

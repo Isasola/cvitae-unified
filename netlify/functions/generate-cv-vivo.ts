@@ -1,4 +1,5 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
+import { observeAiCall } from './lib/ai-telemetry'
 import { createHash } from 'node:crypto'
 import { makeSupabaseAdmin } from "./_supabase"
 import {
@@ -31,7 +32,7 @@ async function invokeModel(userPrompt: string, maxTokens: number): Promise<strin
       messages: [{ role: "user", content: userPrompt }],
     }),
   })
-  const response = await bedrockClient.send(command)
+  const response = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'cv_vivo_generation', trigger: 'user_action', actor: 'user' }, () => bedrockClient.send(command))
   const result = JSON.parse(new TextDecoder().decode(response.body))
   return result.content[0]?.text ?? ""
 }

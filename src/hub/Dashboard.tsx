@@ -411,7 +411,7 @@ export default function Dashboard() {
 
   useEffect(() => { if (user) loadMatches() }, [user])
 
-  const loadMatches = async (force = false) => {
+  const loadMatches = async (force = false, includeAi = false) => {
     setDashboardError('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -455,7 +455,8 @@ export default function Dashboard() {
       const usage = prof?.profile_data?.daily_usage
       const usedToday = (usage?.date === today) ? (usage?.matches_shown || 0) : 0
       setDailyMatchesUsed(usedToday)
-      const nextCourses = nextMissing.length > 0
+      // Matching is deterministic. Course generation is an explicit user action.
+      const nextCourses = includeAi && nextMissing.length > 0
         ? await loadGeminiCourses(nextMissing, token, nextMatches)
         : []
       const storedAt = Date.now()
@@ -575,12 +576,12 @@ export default function Dashboard() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => loadMatches(true)}
+                  onClick={() => loadMatches(true, true)}
                   disabled={loadingMatches}
                   className="inline-flex h-8 items-center gap-2 rounded-full border border-white/10 px-3 text-xs text-muted-foreground transition hover:border-[#c9a84c]/35 hover:text-[#c9a84c] disabled:opacity-50"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${loadingMatches ? 'animate-spin' : ''}`} />
-                  Actualizar análisis
+                  Actualizar con IA
                 </button>
               </div>
               {dashboardError && (
