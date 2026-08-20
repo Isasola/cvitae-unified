@@ -148,14 +148,21 @@ Current state (as of 2026-08-19):
 
 ### Automation Truth — Founding Email / Offer
 
-CRITICAL: `mark_offered` is NOT called by the frontend. The `useFoundingBeta` hook calls only `get_status`, `accept`, and `increment_dismissed`.
+All founding lifecycle emails are now automatically triggered. Wired in commit after `80b73d30`.
 
-**As of 2026-08-19:**
-- `founding_offer_v1` email: **NOT automatically sent** (mark_offered never fires from UI).
-- Founder notification on offer: **NOT automatically triggered**.
-- `founding_welcome_v1` email: **NOT automatically sent on acceptance** (accept action sends no email).
-- These are documented gaps; do NOT assume automatic email delivery for current users.
-- `send-founding-email.ts` and `notify-founder-signup.ts` exist for manual/admin sends only.
+**Current auto-flow:**
+- `useFoundingBeta` hook calls `get_status` on mount.
+- If eligible and `showModal` would be true → fires `mark_offered` (fire-and-forget; modal shows immediately).
+- `mark_offered` backend: on first offer → sends `founding_offer_v1` to user + `founder_founding_offered` alert to founder (both via `email_log`, idempotent key `founding_offer_v1:<userId>:v1` / `founder_founding_offered:<userId>:v1`).
+- Repeated logins with status `offered` → `mark_offered` called again → idempotency dedup prevents duplicate emails.
+- On `accept` → `founding_welcome_v1` to user + `founder_founding_accepted` alert to founder (keys `founding_welcome_v1:<userId>:v1` / `founder_founding_accepted:<userId>:v1`).
+- On first `signed_up → activated` transition in `log-user-event` (non-test users only) → `founder_first_value` alert (key `founder_first_value:<userId>:v1`).
+
+**Idempotency architecture:** All 5 emails use `email_log.idempotency_key` for dedup. Failure is logged; product state (Pro, enrollment, lifecycle) is NEVER rolled back due to email failure.
+
+**Founder milestone alerts** (`contacto@cvitae.lat`): FOUNDING OFFERED, FOUNDING ACCEPTED, FIRST VALUE. No alerts for logins, pageviews, dismissals, or matching.
+
+`send-founding-email.ts` and `notify-founder-signup.ts` remain available for admin/manual sends.
 
 ### Other Rules
 

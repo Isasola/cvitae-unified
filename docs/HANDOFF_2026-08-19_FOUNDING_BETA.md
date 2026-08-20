@@ -61,21 +61,20 @@
 
 ---
 
-## Email Automation — Critical Gaps
+## Email Automation — Fully Wired
 
-> **DO NOT ASSUME AUTOMATIC EMAIL DELIVERY.**
+`mark_offered` is called by `useFoundingBeta` (fire-and-forget) when `showModal` would be true.
 
-`mark_offered` is never called by the frontend (`useFoundingBeta` hook only calls `get_status`, `accept`, `increment_dismissed`).
+| Email | Trigger | Status | Idempotency key |
+|---|---|---|---|
+| `founding_offer_v1` (user) | `mark_offered` first call | **AUTO** | `founding_offer_v1:<userId>:v1` |
+| `FOUNDING OFFERED` alert (founder) | `mark_offered` first call | **AUTO** | `founder_founding_offered:<userId>:v1` |
+| `founding_welcome_v1` (user) | `accept` success | **AUTO** | `founding_welcome_v1:<userId>:v1` |
+| `FOUNDING ACCEPTED` alert (founder) | `accept` success | **AUTO** | `founder_founding_accepted:<userId>:v1` |
+| `FIRST VALUE` alert (founder) | `log-user-event` first activation | **AUTO** | `founder_first_value:<userId>:v1` |
 
-| Email | Trigger | Status |
-|---|---|---|
-| `founding_offer_v1` | `mark_offered` → first modal show | **NOT AUTO** — mark_offered not wired |
-| Founder notification (offer) | `mark_offered` → first modal show | **NOT AUTO** |
-| `founding_welcome_v1` | On acceptance | **NOT WIRED** — accept action sends no email |
-
-Both `send-founding-email.ts` and `notify-founder-signup.ts` are admin-only endpoints for manual sends.
-
-Rosarito's next genuine login will trigger the modal (via `get_status` → enrollment=null → showModal=true), but NO email will be sent automatically unless `mark_offered` is wired in a future session.
+All 5 use `email_log` idempotency. Failure does NOT corrupt product state.
+Rosarito's next genuine login will trigger the modal AND send `founding_offer_v1` + founder alert automatically.
 
 ---
 
@@ -102,7 +101,7 @@ netlify.toml:
 
 > **DO NOT ADD MORE INFRASTRUCTURE BEFORE REAL USER SIGNALS.**
 
-- Do not wire `mark_offered` to the frontend yet — observe Rosarito first
+- Do not change the email/notification logic before observing real user signals
 - Do not add new Founding email templates
 - Do not change pricing UI (pending Moonshot Paraguay intel)
 - Do not activate B2B Wave #1 until founder decides
@@ -122,16 +121,9 @@ netlify.toml:
    - Admin → Customer 360 → Marcelo → "Habilitar Founding →" → Confirm
    - Does NOT send email; modal shows on his next login
 
-3. **Wire mark_offered** — after both real users have engaged:
-   - Connect `mark_offered` call to the `showModal` trigger in `useFoundingBeta`
-   - This will enable `founding_offer_v1` email and founder notification
+3. **B2B Wave #1** — founder chooses 1-2 companies from the 5 survey leads when ready
 
-4. **Wire founding_welcome_v1** — after first acceptance:
-   - Add `sendFoundingEmail({ template: 'founding_welcome_v1', ... })` to `accept` action
-
-5. **B2B Wave #1** — founder chooses 1-2 companies from the 5 survey leads when ready
-
-6. **Canonical SEO audit** — decide single canonical URL per job (`/oportunidades/` vs `/empleos/`)
+4. **Canonical SEO audit** — decide single canonical URL per job (`/oportunidades/` vs `/empleos/`)
 
 ---
 

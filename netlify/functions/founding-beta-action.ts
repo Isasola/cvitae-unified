@@ -8,7 +8,7 @@
 import { Handler } from "@netlify/functions"
 import { createClient } from "@supabase/supabase-js"
 import { Resend } from "resend"
-import { sendFoundingEmail, notifyFounder } from "./lib/founding-mailer"
+import { sendFoundingEmail, notifyFounderMilestone } from "./lib/founding-mailer"
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -152,20 +152,22 @@ export const handler: Handler = async (event) => {
     if (isFirstOffer) {
       const resend = new Resend(process.env.RESEND_API_KEY)
 
-      // Founder notification — awaited; failure logged but does not block user
+      // Founder offer alert — idempotent; failure logged but does not block modal
       try {
-        await notifyFounder({
+        await notifyFounderMilestone({
+          event: "founding_offered",
+          userId: user.id,
           userEmail: user.email || email,
           userName: profile?.full_name || undefined,
-          signupAt: user.created_at,
-          source: "founding_beta_offer",
+          timestamp: new Date().toISOString(),
+          supabaseAdmin,
           resend,
         })
       } catch (err: any) {
-        console.error("[founding-beta-action] notify error", err?.message)
+        console.error("[founding-beta-action] founder offer alert failed", err?.message)
       }
 
-      // Founding offer email — awaited; failure logged but does not block the modal
+      // founding_offer_v1 to user — idempotent; failure logged but does not block modal
       const emailResult = await sendFoundingEmail({
         template: "founding_offer_v1",
         userId: user.id,
@@ -211,7 +213,7 @@ export const handler: Handler = async (event) => {
   if (action === "accept") {
     const { data: profile } = await supabaseAdmin
       .from("user_master_profiles")
-      .select("email, is_test")
+      .select("email, is_test, full_name")
       .eq("user_id", user.id)
       .single()
 
@@ -249,7 +251,42 @@ export const handler: Handler = async (event) => {
       return { statusCode: 500, body: JSON.stringify({ error: "Error al procesar la aceptación" }) }
     }
 
-    return { statusCode: 200, body: JSON.stringify({ ok: true, enrollment: data?.[0] || null }) }
+    // Product state is authoritative. Email failures are logged but do NOT rollback Pro.
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    const enrollmentData = data?.[0] as any
+
+    // founding_welcome_v1 — idempotent
+    const welcomeResult = await sendFoundingEmail({
+      template: "founding_welcome_v1",
+      userId: user.id,
+      supabaseAdmin,
+      resend,
+    })
+    if (!welcomeResult.ok && !welcomeResult.already_sent) {
+      console.error("[founding-beta-action] welcome email failed", welcomeResult.error)
+    }
+
+    // Founder acceptance alert — idempotent
+    try {
+      await notifyFounderMilestone({
+        event: "founding_accepted",
+        userId: user.id,
+        userEmail: email,
+        userName: (profile as any)?.full_name || undefined,
+        timestamp: enrollmentData?.accepted_at || new Date().toISOString(),
+        details: {
+          benefit_start: enrollmentData?.benefit_start,
+          benefit_end: enrollmentData?.benefit_end,
+          accepted_at: enrollmentData?.accepted_at,
+        },
+        supabaseAdmin,
+        resend,
+      })
+    } catch (err: any) {
+      console.error("[founding-beta-action] founder accept alert failed", err?.message)
+    }
+
+    return { statusCode: 200, body: JSON.stringify({ ok: true, enrollment: enrollmentData || null }) }
   }
 
   return { statusCode: 400, body: JSON.stringify({ error: "Acción no procesada" }) }

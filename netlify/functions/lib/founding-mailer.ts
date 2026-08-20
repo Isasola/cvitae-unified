@@ -215,3 +215,153 @@ export async function notifyFounder({
     html,
   })
 }
+
+type FounderMilestoneEvent = "founding_offered" | "founding_accepted" | "first_value"
+
+function buildFounderMilestoneEmail(
+  event: FounderMilestoneEvent,
+  data: { userEmail: string; userName?: string; timestamp: string; details?: Record<string, any> }
+): { subject: string; html: string } {
+  const name = data.userName || data.userEmail
+  const ts = new Date(data.timestamp).toLocaleString("es-PY", { timeZone: "America/Asuncion" })
+  const adminLink = "https://cvitae.lat/admin"
+
+  if (event === "founding_offered") {
+    return {
+      subject: `[CVitae] ${name} recibió la oferta Founding`,
+      html: `
+<div style="font-family:monospace;background:#0a0a0a;color:#f5f0e8;padding:20px;border-radius:8px;max-width:520px">
+  <div style="color:#c9a84c;font-weight:bold;margin-bottom:12px">FOUNDING OFFERED — CVitae</div>
+  <div style="color:#a0a0a0;line-height:1.8">
+    <div><strong style="color:#f5f0e8">Nombre:</strong> ${name}</div>
+    <div><strong style="color:#f5f0e8">Email:</strong> ${data.userEmail}</div>
+    <div><strong style="color:#f5f0e8">Evento:</strong> FOUNDING OFFERED</div>
+    <div><strong style="color:#f5f0e8">Timestamp:</strong> ${ts}</div>
+    <div><strong style="color:#f5f0e8">Plan actual:</strong> FREE → oferta pendiente</div>
+  </div>
+  <div style="margin-top:16px">
+    <a href="${adminLink}" style="color:#c9a84c;text-decoration:none;font-size:12px">Admin / Customer 360 →</a>
+  </div>
+</div>`,
+    }
+  }
+
+  if (event === "founding_accepted") {
+    const d = data.details || {}
+    const acceptedTs = d.accepted_at
+      ? new Date(d.accepted_at).toLocaleString("es-PY", { timeZone: "America/Asuncion" })
+      : ts
+    return {
+      subject: `[CVitae] ${name} aceptó Founding — 6 meses Pro activos`,
+      html: `
+<div style="font-family:monospace;background:#0a0a0a;color:#f5f0e8;padding:20px;border-radius:8px;max-width:520px">
+  <div style="color:#c9a84c;font-weight:bold;margin-bottom:12px">FOUNDING ACCEPTED — CVitae</div>
+  <div style="color:#a0a0a0;line-height:1.8">
+    <div><strong style="color:#f5f0e8">Nombre:</strong> ${name}</div>
+    <div><strong style="color:#f5f0e8">Email:</strong> ${data.userEmail}</div>
+    <div><strong style="color:#f5f0e8">Evento:</strong> FOUNDING ACCEPTED</div>
+    <div><strong style="color:#f5f0e8">Aceptado:</strong> ${acceptedTs}</div>
+    <div><strong style="color:#f5f0e8">Beneficio inicio:</strong> ${d.benefit_start || "—"}</div>
+    <div><strong style="color:#f5f0e8">Beneficio fin:</strong> ${d.benefit_end || "—"}</div>
+    <div><strong style="color:#f5f0e8">Plan actual:</strong> PRO (6 meses)</div>
+  </div>
+  <div style="margin-top:16px">
+    <a href="${adminLink}" style="color:#c9a84c;text-decoration:none;font-size:12px">Admin / Customer 360 →</a>
+  </div>
+</div>`,
+    }
+  }
+
+  // first_value
+  const d = data.details || {}
+  const ttfvStr = d.ttfv_seconds != null ? `${d.ttfv_seconds}s` : "—"
+  return {
+    subject: `[CVitae] ${name} alcanzó su primer valor`,
+    html: `
+<div style="font-family:monospace;background:#0a0a0a;color:#f5f0e8;padding:20px;border-radius:8px;max-width:520px">
+  <div style="color:#c9a84c;font-weight:bold;margin-bottom:12px">FIRST VALUE — CVitae</div>
+  <div style="color:#a0a0a0;line-height:1.8">
+    <div><strong style="color:#f5f0e8">Nombre:</strong> ${name}</div>
+    <div><strong style="color:#f5f0e8">Email:</strong> ${data.userEmail}</div>
+    <div><strong style="color:#f5f0e8">Evento activador:</strong> ${d.event_type || "primera activación"}</div>
+    <div><strong style="color:#f5f0e8">TTFV:</strong> ${ttfvStr}</div>
+    <div><strong style="color:#f5f0e8">Timestamp:</strong> ${ts}</div>
+    ${d.founding_status ? `<div><strong style="color:#f5f0e8">Founding:</strong> ${d.founding_status}</div>` : ""}
+    ${d.plan ? `<div><strong style="color:#f5f0e8">Plan:</strong> ${d.plan}</div>` : ""}
+  </div>
+  <div style="margin-top:16px">
+    <a href="${adminLink}" style="color:#c9a84c;text-decoration:none;font-size:12px">Admin / Customer 360 →</a>
+  </div>
+</div>`,
+  }
+}
+
+// Sends an idempotent milestone alert to the founder.
+// Idempotency key: founder_<event>:<userId>:v1 — logged in email_log.
+// Failure is logged but does NOT affect product state.
+export async function notifyFounderMilestone({
+  event,
+  userId,
+  userEmail,
+  userName,
+  timestamp,
+  details,
+  supabaseAdmin,
+  resend,
+}: {
+  event: FounderMilestoneEvent
+  userId: string
+  userEmail: string
+  userName?: string
+  timestamp?: string
+  details?: Record<string, any>
+  supabaseAdmin: SupabaseClient
+  resend: Resend
+}): Promise<{ ok: boolean; already_sent?: boolean }> {
+  const idempotencyKey = `founder_${event}:${userId}:v1`
+  const now = timestamp || new Date().toISOString()
+
+  const { data: existing } = await supabaseAdmin
+    .from("email_log")
+    .select("id")
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle()
+  if (existing) return { ok: true, already_sent: true }
+
+  const { subject, html } = buildFounderMilestoneEmail(event, {
+    userEmail,
+    userName,
+    timestamp: now,
+    details,
+  })
+
+  let status: "sent" | "failed" = "sent"
+  let resendId: string | null = null
+
+  try {
+    const result = await resend.emails.send({
+      from: "CVitae Sistema <noreply@cvitae.lat>",
+      to: ["contacto@cvitae.lat"],
+      subject,
+      html,
+    })
+    resendId = (result.data as any)?.id || null
+  } catch (err: any) {
+    console.error("[founding-mailer] notifyFounderMilestone send error", err.message)
+    status = "failed"
+  }
+
+  const { error: logError } = await supabaseAdmin.from("email_log").insert({
+    user_id: userId,
+    template: `founder_milestone_${event}`,
+    recipient_email: "contacto@cvitae.lat",
+    subject,
+    status,
+    resend_id: resendId,
+    idempotency_key: idempotencyKey,
+    metadata: { event, milestone: true },
+  })
+  if (logError) console.error("[founding-mailer] notifyFounderMilestone log error", logError.message)
+
+  return { ok: status === "sent" }
+}

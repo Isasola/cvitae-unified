@@ -144,9 +144,8 @@ Canonical/indexation architecture review needed to choose a single canonical URL
 **P2:** Prerender JobPosting geography emits `addressCountry: PY` when `job.city` is present.
 Verify later that city-country mapping cannot misclassify international cities.
 
-**P2:** `mark_offered` action exists but is never called by the frontend.
-`founding_offer_v1` email and founder notification are not automatically sent.
-Wire in a future session after observing Rosarito's real experiment outcome.
+**P2 (RESOLVED):** `mark_offered` is now called by the frontend (`useFoundingBeta` hook, fire-and-forget).
+`founding_offer_v1`, `founding_welcome_v1`, and all 3 founder milestone alerts are automatically triggered with full idempotency.
 
 **P3:** Admin SEO endpoint had a pre-existing 502/timeout during validation session.
 Not investigated; does not affect production B2C or B2B flows.

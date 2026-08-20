@@ -43,7 +43,7 @@ Time To First Value in seconds from signup to first activation event. Null if no
 
 Enum: `eligible | offered | accepted | active | completed | declined`.
 
-Note: Status `offered` is a defined DB state but is NOT reached by the current V1 auto-flow (mark_offered is not called by the frontend). It can be set via admin-only `mark_founding_beta_offered` RPC.
+Status `offered` IS reached by the auto-flow: `mark_offered` is called by `useFoundingBeta` (fire-and-forget) when the modal would be shown. On first show, the enrollment is created with `status='offered'`. Repeated logins keep the status `offered` until the user accepts or declines. Email dedup prevents duplicate offers.
 
 ### `email_log.idempotency_key`
 
@@ -335,6 +335,11 @@ Sends a transactional email via Resend and logs the result to `email_log`.
 | `founding_welcome_v1` | Welcome email sent after Founding Beta activation |
 | `founding_offer_v1` | Offer email prompting user to accept Founding Beta |
 
+**Auto-triggered by:**
+- `founding_offer_v1` — auto-sent by `mark_offered` backend action on first offer
+- `founding_welcome_v1` — auto-sent by `accept` backend action on acceptance
+- Manual admin sends also remain available via this endpoint
+
 **Dedup behavior:** Before sending, the function queries `email_log` for an existing `(user_id, template)` pair. If found and `force` is not `true`, the send is skipped and a `{ "skipped": true }` response is returned.
 
 **Success response:**
@@ -348,3 +353,21 @@ Sends a transactional email via Resend and logs the result to `email_log`.
 ```json
 { "skipped": true, "reason": "already_sent" }
 ```
+
+---
+
+## Founder Milestone Alerts (automatic)
+
+Sent via `notifyFounderMilestone()` in `lib/founding-mailer.ts` directly from the relevant Netlify functions. Recipient: `contacto@cvitae.lat`.
+
+| Event | Trigger | Idempotency key | Function |
+|---|---|---|---|
+| `FOUNDING OFFERED` | `mark_offered` — first offer for this user | `founder_founding_offered:<userId>:v1` | `founding-beta-action.ts` |
+| `FOUNDING ACCEPTED` | `accept` — successful acceptance | `founder_founding_accepted:<userId>:v1` | `founding-beta-action.ts` |
+| `FIRST VALUE` | `log-user-event` — first `signed_up→activated` (non-test only) | `founder_first_value:<userId>:v1` | `log-user-event.ts` |
+
+These alerts are NOT sent for: test accounts, rollout-deferred users, gate errors, or repeated events.
+
+All three use the same `email_log` idempotency architecture as user-facing emails. Failure of founder alerts does NOT affect product state (Pro, enrollment, lifecycle).
+
+Founder alert content includes: user name, canonical auth email, timestamp, event-specific details (benefit dates, TTFV, etc.), and a link to `/admin`.

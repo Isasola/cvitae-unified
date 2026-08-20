@@ -4,6 +4,8 @@
 
 import { Handler } from "@netlify/functions"
 import { createClient } from "@supabase/supabase-js"
+import { Resend } from "resend"
+import { notifyFounderMilestone } from "./lib/founding-mailer"
 
 // Allowlist of event types the frontend is permitted to log.
 // Only add new types here when there's a corresponding frontend trigger.
@@ -94,7 +96,7 @@ export const handler: Handler = async (event) => {
   if (ACTIVATION_EVENTS.has(event_type)) {
     const { data: profile } = await supabaseAdmin
       .from("user_master_profiles")
-      .select("lifecycle_state, ttfv_seconds, first_value_event, created_at")
+      .select("lifecycle_state, ttfv_seconds, first_value_event, created_at, is_test, full_name")
       .eq("user_id", user.id)
       .single()
 
@@ -112,6 +114,29 @@ export const handler: Handler = async (event) => {
           updated_at: now,
         })
         .eq("user_id", user.id)
+
+      // Founder first-value alert — only for real (non-test) users, only on first activation
+      if (!profile.is_test) {
+        try {
+          const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(user.id)
+          const userEmail = authUser?.user?.email || ""
+          if (userEmail) {
+            const resend = new Resend(process.env.RESEND_API_KEY)
+            await notifyFounderMilestone({
+              event: "first_value",
+              userId: user.id,
+              userEmail,
+              userName: profile.full_name || undefined,
+              timestamp: now,
+              details: { event_type, ttfv_seconds: ttfvSeconds },
+              supabaseAdmin,
+              resend,
+            })
+          }
+        } catch (err: any) {
+          console.error("[log-user-event] first_value founder alert failed", err?.message)
+        }
+      }
     }
   }
 

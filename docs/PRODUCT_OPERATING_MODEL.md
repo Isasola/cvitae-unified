@@ -41,26 +41,29 @@ Future genuine new B2C users: `DEFAULT true` — unaffected, normal auto-flow pr
 | Dismiss | "Ahora no" | `increment_dismissed` called (fire-and-forget). `dismissed_count` incremented. Modal re-shown next session. |
 | Decline | "Prefiero no participar" | `localStorage['founding_beta_declined'] = '1'`. No DB change. Permanent for that browser. |
 
-### Automation gaps (V1 — as of 2026-08-19)
+### Automatic event flow (wired)
 
-> ⚠️ **CRITICAL: The following are NOT automatically triggered:**
-> - `founding_offer_v1` email — `mark_offered` is never called by the frontend
-> - Founder notification on offer — also tied to `mark_offered`
-> - `founding_welcome_v1` email — not sent on acceptance
->
-> All three require manual admin send via `send-founding-email.ts` / `notify-founder-signup.ts`.
-> Do NOT assume automatic email delivery for existing or new users until this is wired.
+All founding lifecycle emails trigger automatically. No manual admin action required.
 
-`mark_offered` action exists on the backend but has no frontend caller. Status `offered` is never set by the auto-flow.
+| Trigger | Action | Idempotency key |
+|---|---|---|
+| `get_status` eligible + `showModal=true` | `mark_offered` fired (fire-and-forget) | — |
+| `mark_offered` first call | `founding_offer_v1` → user | `founding_offer_v1:<userId>:v1` |
+| `mark_offered` first call | `FOUNDING OFFERED` alert → founder | `founder_founding_offered:<userId>:v1` |
+| `accept` success | `founding_welcome_v1` → user | `founding_welcome_v1:<userId>:v1` |
+| `accept` success | `FOUNDING ACCEPTED` alert → founder | `founder_founding_accepted:<userId>:v1` |
+| `log-user-event` `signed_up→activated` (non-test) | `FIRST VALUE` alert → founder | `founder_first_value:<userId>:v1` |
+
+Repeated logins, duplicate retries, and concurrent calls are all safely handled by the idempotency key architecture. Failure of any email does NOT affect Pro, enrollment, or lifecycle state.
 
 ### Founding status lifecycle
 
 ```
-(none) → [modal shown] → accepted → active → completed
+(none) → [modal shown] → offered → accepted → active → completed
                                    ↘ (localStorage decline only, V1)
 ```
 
-Status `offered` is a defined DB state but not currently reached via the auto-flow.
+Status `offered` IS set by the auto-flow: `mark_offered` creates the enrollment with `status='offered'` on first modal show. Modal re-shows on subsequent logins while status remains `offered` (existing "Ahora no" dismiss behavior is preserved).
 
 `active` = benefit live (benefit_start / benefit_end populated, is_subscribed=true via entitlement).
 `completed` = benefit period ended (downgrade behavior: TBD).
@@ -71,6 +74,7 @@ Status `offered` is a defined DB state but not currently reached via the auto-fl
 Actions: `get_status` / `accept` / `mark_offered` / `increment_dismissed`
 Auth: requires valid Supabase JWT.
 Gate: `founding_offer_enabled` checked separately (fail-closed) after `is_test` check.
+Frontend wiring: `useFoundingBeta` calls `get_status` on mount; if modal would show, fires `mark_offered` (fire-and-forget).
 
 ---
 

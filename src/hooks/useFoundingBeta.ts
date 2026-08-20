@@ -65,13 +65,29 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
 
         const data = await callFoundingAction(token, 'get_status')
         if (data.ineligible) {
-          // Test/internal account — founding beta not offered, suppress modal
+          // Test/internal account, rollout deferred, or gate error — suppress modal
           setDismissed(true)
           return
         }
-        setEnrollment(data.enrollment || null)
-        setProgramFull(data.program_full || false)
-        setSlotsRemaining(data.slots_remaining ?? 50)
+
+        const currentEnrollment: FoundingBetaEnrollment | null = data.enrollment || null
+        const isFull = data.program_full || false
+        const slots = data.slots_remaining ?? 50
+
+        setEnrollment(currentEnrollment)
+        setProgramFull(isFull)
+        setSlotsRemaining(slots)
+
+        // Wire mark_offered: call when modal would be shown.
+        // Fire-and-forget — modal displays immediately; email/notification happen server-side.
+        // Backend is idempotent: repeated logins do not produce repeated emails.
+        const wouldShowModal = currentEnrollment === null
+          ? !isFull
+          : (currentEnrollment.status === 'eligible' || currentEnrollment.status === 'offered')
+
+        if (wouldShowModal) {
+          callFoundingAction(token, 'mark_offered').catch(() => {})
+        }
       } catch {
         // Non-critical — modal won't show but dashboard continues
       } finally {
