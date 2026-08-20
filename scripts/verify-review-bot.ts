@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { reviewOpportunityDeterministic, type OpportunityReviewInput } from '../src/lib/review/opportunity-review'
 import { fetchOpportunityPage } from '../netlify/functions/lib/safe-opportunity-fetch'
 import { clarifyReviewWithGemini } from '../netlify/functions/lib/review-gemini'
-import { validateBatchApprovalSnapshot } from '../netlify/functions/lib/batch-review-snapshot'
+import { selectBatchMutationCandidates, validateBatchApprovalSnapshot } from '../netlify/functions/lib/batch-review-snapshot'
 import { reconcileSources } from '../netlify/functions/lib/source-reconciliation'
 
 const now = new Date('2026-08-20T12:00:00Z')
@@ -27,6 +27,14 @@ assert.equal(resolved.recommendation, 'approve', 'deterministic complete record 
 assert.equal(resolved.ai.used, false, 'deterministic path must use zero AI')
 assert.equal(resolved.deterministic.needsAi, false, 'complete evidence must not request Gemini')
 assert.equal(resolved.flags.matching.recommended, true)
+
+const mixedSourceRecords = [
+  reviewOpportunityDeterministic({ ...base, id: 'clasipar-good', source: 'clasipar', source_authority: 'aggregator', original_source_verified: true }, page, [], now),
+  reviewOpportunityDeterministic({ ...base, id: 'clasipar-doubtful', source: 'clasipar', source_authority: 'aggregator', original_source_verified: true, deadline: null }, page, [], now),
+  reviewOpportunityDeterministic({ ...base, id: 'clasipar-expired', source: 'clasipar', source_authority: 'aggregator', original_source_verified: true, deadline: '2026-01-01' }, page, [], now),
+]
+assert.deepEqual(mixedSourceRecords.map(result => result.recommendation), ['approve', 'review', 'do_not_publish'],
+  'one mixed source must yield independent record-level decisions')
 
 const expired = reviewOpportunityDeterministic({ ...base, deadline: '2026-01-01' }, page, [], now)
 assert.equal(expired.recommendation, 'do_not_publish')
@@ -107,6 +115,31 @@ const doubleSubmit = validateBatchApprovalSnapshot([], batchPayload)
 assert.equal(doubleSubmit.ok, false, 'a second submit after rows leave review state is stale/idempotent')
 if (!doubleSubmit.ok) assert.equal(doubleSubmit.status, 409)
 
+// Preview freezes 10 rows, the admin selects 3 and row 11 arrives before confirmation.
+// Only the exact IDs returned by validation may reach the mutation.
+const previewTen = Array.from({ length: 10 }, (_, index) => ({
+  id: String(index + 1), verification_status: 'in_review', source_authority: 'original', original_source_verified: true,
+}))
+const selectedThree = ['2', '5', '7']
+const subsetPayload = {
+  ...batchPayload,
+  ids: selectedThree,
+  idempotency_key: 'clasipar-preview-10-select-3',
+  review_snapshot: selectedThree.map(id => ({ id, recommendation: 'approve', rules_version: 'fixture' })),
+}
+const rowEleven = { id: '11', verification_status: 'in_review', source_authority: 'original', original_source_verified: true }
+const candidatesAtConfirmation = [...previewTen, rowEleven]
+const subsetValidation = validateBatchApprovalSnapshot(candidatesAtConfirmation, subsetPayload)
+assert.equal(subsetValidation.ok, true)
+if (subsetValidation.ok) {
+  const mutationRows = selectBatchMutationCandidates(candidatesAtConfirmation, subsetValidation.ids)
+  assert.deepEqual(mutationRows.map(row => row.id), selectedThree)
+  const simulatedState = new Map(candidatesAtConfirmation.map(row => [row.id, row.verification_status]))
+  mutationRows.forEach(row => simulatedState.set(row.id, 'verified'))
+  assert.deepEqual([...simulatedState.entries()].filter(([, status]) => status === 'verified').map(([id]) => id), selectedThree)
+  assert.equal(simulatedState.get('11'), 'in_review', 'post-preview row must never enter the mutation')
+}
+
 const reconciled = reconcileSources(
   [{ source_id: 'official', script: 'scrapers/official_scraper.py', source_tier: 'A' }],
   'run: python scripts/run_scraper_monitored.py official_scraper official scrapers/official_scraper.py',
@@ -116,4 +149,4 @@ const reconciled = reconcileSources(
 assert.equal(reconciled.length, 1)
 assert.equal(reconciled[0].in_registry && reconciled[0].in_workflow && reconciled[0].in_runtime, true)
 
-console.log('PASS verify-review-bot: deterministic, redirects, 404/410, expiry, aggregator, geo, duplicates, Gemini cache/failure, snapshot/mixed flags/double submit, legacy auto-write retired, source reconciliation, no Bedrock, no Resend')
+console.log('PASS verify-review-bot: deterministic, mixed-source record decisions, redirects, 404/410, expiry, aggregator, geo, duplicates, Gemini cache/failure, exact subset snapshot/post-preview insert, mixed flags/double submit, legacy auto-write retired, source reconciliation, no Bedrock, no Resend')

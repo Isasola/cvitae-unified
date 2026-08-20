@@ -209,6 +209,14 @@ export function reviewOpportunityDeterministic(
 
   const classification = classifyOpportunity(input)
   for (const reason of classification.reasons.filter(reason => reason.severity !== 'info')) {
+    if (reason.code === 'WEAK_SOURCE' && input.original_source_verified) {
+      evidence.push({
+        check: 'source_reputation',
+        value: `${input.source || 'unknown'}: reputación débil, pero origen del registro verificado`,
+        source: 'policy',
+      })
+      continue
+    }
     if (!issues.some(issue => issue.code === reason.code)) {
       addIssue(`SEO_${reason.code}`, reason.message, reason.severity === 'block' ? 'hard_block' : 'review')
     }

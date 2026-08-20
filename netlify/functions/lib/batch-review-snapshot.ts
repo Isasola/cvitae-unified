@@ -20,6 +20,11 @@ export type SnapshotValidation =
   | { ok: true; ids: string[]; features: ExplicitFeatures; reviewById: Map<string, any> }
   | { ok: false; status: number; error: string; staleIds?: string[] }
 
+export function selectBatchMutationCandidates<T extends { id: unknown }>(candidates: T[], validatedIds: string[]): T[] {
+  const exactIds = new Set(validatedIds.map(String))
+  return candidates.filter(candidate => exactIds.has(String(candidate.id)))
+}
+
 export function validateBatchApprovalSnapshot(candidates: BatchCandidate[], payload: any): SnapshotValidation {
   const ids = Array.isArray(payload?.ids) ? [...new Set(payload.ids.map(String))] : []
   if (!ids.length) return { ok: false, status: 400, error: 'La aprobación requiere un snapshot explícito de IDs' }

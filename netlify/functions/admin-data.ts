@@ -4,7 +4,7 @@ import { getGoogleReportingMetrics } from "./lib/google-reporting"
 import { runSeoPipeline } from "./lib/seo-pipeline-runner"
 import { classifyOpportunity } from "../../src/lib/seo/classify"
 import { enqueueIndexingEvent } from "./lib/indexing-queue"
-import { validateBatchApprovalSnapshot } from "./lib/batch-review-snapshot"
+import { selectBatchMutationCandidates, validateBatchApprovalSnapshot } from "./lib/batch-review-snapshot"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { reconcileSources } from "./lib/source-reconciliation"
@@ -857,15 +857,19 @@ const handler: Handler = async (event) => {
       const note = String(payload.note || "").trim().slice(0, 1000) || null
       const features = payload.features && typeof payload.features === "object" ? payload.features : {}
       const fromStatuses: string[] = Array.isArray(payload.from_statuses) ? payload.from_statuses.map(String) : ["in_review", "pending"]
-      const maxBatch = Math.min(Number(payload.limit) || 200, 500)
+      const requestedIds = Array.isArray(payload.ids) ? [...new Set(payload.ids.map(String))] : []
+      if (requestedIds.length > 500) return { statusCode: 400, body: JSON.stringify({ error: "El lote no puede superar 500 IDs" }) }
+      const maxBatch = requestedIds.length || Math.min(Number(payload.limit) || 200, 500)
       const reviewedAt = new Date().toISOString()
 
-      const { data: candidates, error: fetchError } = await supabase
+      let candidateQuery = supabase
         .from("opportunities")
         .select("id,source_authority,original_source_verified,verification_status,catalog_eligible,match_eligible,alerts_eligible,seo_eligible")
         .eq("source", source)
         .in("verification_status", fromStatuses)
         .is("deleted_at", null)
+      if (requestedIds.length) candidateQuery = candidateQuery.in("id", requestedIds)
+      const { data: candidates, error: fetchError } = await candidateQuery
         .limit(maxBatch)
       if (fetchError) throw fetchError
       if (!candidates || candidates.length === 0) {
@@ -874,9 +878,11 @@ const handler: Handler = async (event) => {
 
       let toProcess = candidates
       let skipped = 0
+      let validatedIds: string[] | null = null
       if (status === "verified") {
         const validation = validateBatchApprovalSnapshot(candidates as any, payload)
         if (!validation.ok) return { statusCode: validation.status, body: JSON.stringify({ error: validation.error, stale_ids: validation.staleIds }) }
+        validatedIds = validation.ids
         const eligible = candidates.filter(c => c.source_authority === "original" || c.original_source_verified)
         skipped = candidates.length - eligible.length
         toProcess = eligible
@@ -885,10 +891,12 @@ const handler: Handler = async (event) => {
         }
       }
 
-      // Optional: restrict batch to a specific subset of IDs (used by the preview flow)
-      if (Array.isArray(payload.ids) && payload.ids.length > 0) {
-        const allowedIds = new Set(payload.ids.map(String))
-        toProcess = toProcess.filter(c => allowedIds.has(String(c.id)))
+      // Mutation consumes the IDs returned by snapshot validation, never a live source filter.
+      if (validatedIds) {
+        toProcess = selectBatchMutationCandidates(candidates, validatedIds)
+        skipped = 0
+      } else if (requestedIds.length) {
+        toProcess = selectBatchMutationCandidates(candidates, requestedIds)
       }
 
       const ids = toProcess.map(c => c.id)
