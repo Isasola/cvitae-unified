@@ -10,6 +10,8 @@
     "staging:status": "npx supabase status",
     "staging:stop": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/stop-local-staging.ps1",
     "test:critical": "tsx scripts/verify-critical-flows.ts",
+    "test:review-bot": "tsx scripts/verify-review-bot.ts",
+    "test:ai-cost": "tsx scripts/verify-ai-cost-safety.ts",
     "test:b2b-progressive-review": "tsx scripts/verify-progressive-vacancy-review.ts",
     "qa:b2b-fixtures": "tsx scripts/generate-b2b-pdf-fixtures.ts",
     "test:visual": "playwright test tests/visual/",
