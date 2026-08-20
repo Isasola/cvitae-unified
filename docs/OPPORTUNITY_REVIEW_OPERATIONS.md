@@ -22,6 +22,8 @@ The existing source preview is preserved, but approval now requires:
 
 The backend re-fetches rows in `pending`/`in_review` and returns HTTP 409 if the snapshot is stale or contains an unverified origin. Audit events include snapshot ID, recommendation, rules version, flags before and flags after.
 
+The legacy `auto_approve_classified` action remains available for deterministic preview only. Confirmation exits with HTTP 409 and directs callers to the safe snapshot action.
+
 ## Held findings
 
 - Canonical architecture is unchanged.

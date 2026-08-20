@@ -1009,6 +1009,14 @@ const handler: Handler = async (event) => {
       }
 
       // confirm — only processes IDs from the preview; re-fetches and re-classifies each
+      // The legacy classifier remains useful as a read-only preview. Confirmation must
+      // use bulk_verify_opportunities, which enforces an immutable snapshot, Review Bot
+      // evidence, explicit feature flags and an idempotency key.
+      return { statusCode: 409, body: JSON.stringify({
+        error: "La confirmación automática fue retirada. Usá el preview seguro de aprobación masiva.",
+        requiredAction: "bulk_verify_opportunities",
+      }) }
+
       const rawIds = Array.isArray(payload.candidateIds) ? payload.candidateIds : []
       const candidateIds = rawIds
         .filter((id: any) => typeof id === "string" && id.trim())

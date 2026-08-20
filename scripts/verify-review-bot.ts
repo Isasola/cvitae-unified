@@ -85,6 +85,11 @@ await assert.rejects(() => clarifyReviewWithGemini(failedInput, failedReview, {
 
 const reviewSource = readFileSync(new URL('../netlify/functions/admin-review-bot.ts', import.meta.url), 'utf8')
 assert(!/BedrockRuntimeClient|InvokeModelCommand/.test(reviewSource), 'Review Bot V1 must not call Bedrock')
+const adminDataSource = readFileSync(new URL('../netlify/functions/admin-data.ts', import.meta.url), 'utf8')
+const retiredLegacyConfirm = adminDataSource.indexOf('requiredAction: "bulk_verify_opportunities"')
+const legacyWriteLoop = adminDataSource.indexOf('const rawIds = Array.isArray(payload.candidateIds)')
+assert(retiredLegacyConfirm >= 0 && retiredLegacyConfirm < legacyWriteLoop,
+  'legacy auto-approve confirm must exit before any write path')
 const mailerSource = readFileSync(new URL('../netlify/functions/lib/founding-mailer.ts', import.meta.url), 'utf8')
 assert(/idempotency/i.test(mailerSource) && /Resend/.test(mailerSource), 'Founding email safety contract remains present; tests never invoke Resend')
 
@@ -111,4 +116,4 @@ const reconciled = reconcileSources(
 assert.equal(reconciled.length, 1)
 assert.equal(reconciled[0].in_registry && reconciled[0].in_workflow && reconciled[0].in_runtime, true)
 
-console.log('PASS verify-review-bot: deterministic, redirects, 404/410, expiry, aggregator, geo, duplicates, Gemini cache/failure, snapshot/mixed flags/double submit, source reconciliation, no Bedrock, no Resend')
+console.log('PASS verify-review-bot: deterministic, redirects, 404/410, expiry, aggregator, geo, duplicates, Gemini cache/failure, snapshot/mixed flags/double submit, legacy auto-write retired, source reconciliation, no Bedrock, no Resend')
