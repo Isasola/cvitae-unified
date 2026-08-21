@@ -66,13 +66,14 @@ export function saveConsent(values: Pick<ConsentPreferences, 'analytics' | 'adve
 }
 
 function injectScript(id: string, src: string, attributes: Record<string, string> = {}) {
-  if (document.getElementById(id)) return
+  if (document.getElementById(id)) return false
   const script = document.createElement('script')
   script.id = id
   script.async = true
   script.src = src
   Object.entries(attributes).forEach(([key, value]) => script.setAttribute(key, value))
   document.head.appendChild(script)
+  return true
 }
 
 export async function loadAllowedGoogleServices(preferences = readConsent()) {
@@ -80,9 +81,11 @@ export async function loadAllowedGoogleServices(preferences = readConsent()) {
   if (preferences.analytics) {
     const measurementId = String(import.meta.env.VITE_GA_MEASUREMENT_ID || 'G-BZ16ZLP8ZZ').trim()
     if (measurementId && /^G-[A-Z0-9]+$/i.test(measurementId)) {
-      injectScript('cvitae-ga4', `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`)
-      googleCommand('js', new Date())
-      window.gtag?.('config', measurementId, { anonymize_ip: true })
+      const inserted = injectScript('cvitae-ga4', `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`)
+      if (inserted) {
+        googleCommand('js', new Date())
+        window.gtag?.('config', measurementId, { anonymize_ip: true })
+      }
     }
   }
 

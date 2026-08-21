@@ -142,6 +142,7 @@ type GrowthResponse = {
   meta: {
     ga4_available: boolean
     gsc_available: boolean
+    gemini_configured: boolean
     gemini_available: boolean
     gemini_error_code: string | null
     gemini_error_message: string | null
@@ -465,7 +466,7 @@ function AdminGrowthCenter({ adminPassword }: Props) {
               [
                 { label: 'GA4', available: meta?.ga4_available },
                 { label: 'Search Console', available: meta?.gsc_available },
-                { label: meta?.ai_requested ? 'Gemini' : 'Gemini (no solicitado)', available: meta?.ai_requested ? meta?.gemini_available : true },
+                { label: meta?.gemini_configured ? 'Gemini configurado' : 'Gemini sin configurar', available: meta?.gemini_configured === true },
               ] as const
             ).map(({ label, available }) => (
               <span

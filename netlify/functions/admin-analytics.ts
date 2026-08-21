@@ -1,5 +1,11 @@
 import { makeSupabaseAdmin } from './_supabase'
 import { observeAiCall } from './lib/ai-telemetry'
+import {
+  analyticsAiRequested,
+  analyticsGeminiConfigured,
+  CLOSED_ANALYTICS_RANGES,
+  GEMINI_ANALYTICS_TIMEOUT_MS,
+} from './lib/admin-analytics-policy'
 import { createSign } from 'crypto'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -9,7 +15,7 @@ const GEMINI_API   = `https://generativelanguage.googleapis.com/v1beta/models/${
 const GA4_API      = 'https://analyticsdata.googleapis.com/v1beta/properties'
 const GSC_API      = 'https://www.googleapis.com/webmasters/v3/sites'
 const TOKEN_URL    = 'https://oauth2.googleapis.com/token'
-const GA4_PROPERTY = '529848293'
+const GA4_PROPERTY = process.env.GA4_PROPERTY_ID || '529848293'
 const GSC_SITE     = 'https://cvitae.lat/'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -172,7 +178,7 @@ async function gscQuery(token: string, body: object): Promise<any> {
 // ── Anomaly detection ─────────────────────────────────────────────────────────
 
 function detectAnomalies(params: {
-  todaySessions: number
+  referenceSessions: number
   sessions7d: number
   countries7d: Array<{ country: string; sessions: number }>
   countriesPrev7d: Array<{ country: string; sessions: number }>
@@ -184,22 +190,23 @@ function detectAnomalies(params: {
   const anomalies: Anomaly[] = []
   const dailyAvg7d = params.sessions7d / 7
 
-  // 1. Spike / drop: today vs daily avg of 7d
+  // 1. Spike / drop: yesterday vs the closed 7-day daily average.
+  // Never classify an incomplete current day as a traffic drop.
   if (dailyAvg7d > 0) {
-    const ratio = params.todaySessions / dailyAvg7d
+    const ratio = params.referenceSessions / dailyAvg7d
     if (ratio > 1.5) {
       anomalies.push({
         type: 'spike',
-        message: `Spike de tráfico hoy: ${params.todaySessions} sesiones (${(ratio * 100).toFixed(0)}% del promedio 7d de ${dailyAvg7d.toFixed(0)})`,
+        message: `Spike de tráfico ayer: ${params.referenceSessions} sesiones (${(ratio * 100).toFixed(0)}% del promedio 7d de ${dailyAvg7d.toFixed(0)})`,
         severity: 'high',
-        data: { today: params.todaySessions, daily_avg_7d: Number(dailyAvg7d.toFixed(1)), ratio: Number(ratio.toFixed(2)) },
+        data: { yesterday: params.referenceSessions, daily_avg_7d: Number(dailyAvg7d.toFixed(1)), ratio: Number(ratio.toFixed(2)) },
       })
     } else if (ratio < 0.4) {
       anomalies.push({
         type: 'drop',
-        message: `Caída de tráfico hoy: ${params.todaySessions} sesiones (${(ratio * 100).toFixed(0)}% del promedio 7d de ${dailyAvg7d.toFixed(0)})`,
+        message: `Caída de tráfico ayer: ${params.referenceSessions} sesiones (${(ratio * 100).toFixed(0)}% del promedio 7d de ${dailyAvg7d.toFixed(0)})`,
         severity: 'high',
-        data: { today: params.todaySessions, daily_avg_7d: Number(dailyAvg7d.toFixed(1)), ratio: Number(ratio.toFixed(2)) },
+        data: { yesterday: params.referenceSessions, daily_avg_7d: Number(dailyAvg7d.toFixed(1)), ratio: Number(ratio.toFixed(2)) },
       })
     }
   }
@@ -345,11 +352,16 @@ const GEMINI_SCHEMA = {
   required: ['executive_summary', 'signals', 'recommendations', 'seo_quick_wins', 'blog_insights', 'linkedin_picks', 'answer'],
 }
 
-async function callGemini(apiKey: string, prompt: string): Promise<GeminiResult | GeminiFailure> {
+export async function callGemini(
+  apiKey: string,
+  prompt: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<GeminiResult | GeminiFailure> {
   try {
-    const res = await observeAiCall({ provider: 'gemini', model: GEMINI_MODEL, feature: 'admin_growth_analysis', trigger: 'user_action', actor: 'admin' }, () => fetch(`${GEMINI_API}?key=${apiKey}`, {
+    const res = await observeAiCall({ provider: 'gemini', model: GEMINI_MODEL, feature: 'admin_growth_analysis', trigger: 'user_action', actor: 'admin' }, () => fetchImpl(`${GEMINI_API}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(GEMINI_ANALYTICS_TIMEOUT_MS),
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
@@ -435,10 +447,10 @@ export default async function handler(req: Request) {
 
   let body: any = {}
   try { body = await req.json() } catch { /* empty body */ }
-  const question: string | null      = body.question ?? null
+  const question: string | null      = typeof body.question === 'string' ? body.question : null
   // Cost safety: metrics are deterministic. Gemini is opt-in and is also
   // enabled for an explicit operator question.
-  const includeAi: boolean           = body.includeAi === true || Boolean(question?.trim())
+  const includeAi: boolean           = analyticsAiRequested(body)
   const mode: 'standard' | 'launch' = body.mode === 'launch' ? 'launch' : 'standard'
   const launchEvents: any[]          = body.launchEvents ?? []
 
@@ -497,8 +509,8 @@ export default async function handler(req: Request) {
           dateRanges: [
             { startDate: 'today',     endDate: 'today' },
             { startDate: 'yesterday', endDate: 'yesterday' },
-            { startDate: '7daysAgo',  endDate: 'today' },
-            { startDate: '14daysAgo', endDate: '8daysAgo' },
+            CLOSED_ANALYTICS_RANGES.current7d,
+            CLOSED_ANALYTICS_RANGES.previous7d,
           ],
           metrics: [
             { name: 'sessions' }, { name: 'activeUsers' }, { name: 'screenPageViews' },
@@ -506,28 +518,28 @@ export default async function handler(req: Request) {
           ],
         }),
         ga4Report(accessToken, {
-          dateRanges: [{ startDate: '30daysAgo', endDate: 'today' }],
+          dateRanges: [{ startDate: '30daysAgo', endDate: 'yesterday' }],
           dimensions: [{ name: 'date' }],
           metrics: [{ name: 'sessions' }, { name: 'activeUsers' }],
           orderBys: [{ dimension: { dimensionName: 'date' }, desc: false }],
           limit: 31,
         }),
         ga4Report(accessToken, {
-          dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
+          dateRanges: [CLOSED_ANALYTICS_RANGES.current7d],
           dimensions: [{ name: 'country' }],
           metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'newUsers' }],
           orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
           limit: 15,
         }),
         ga4Report(accessToken, {
-          dateRanges: [{ startDate: '14daysAgo', endDate: '8daysAgo' }],
+          dateRanges: [CLOSED_ANALYTICS_RANGES.previous7d],
           dimensions: [{ name: 'country' }],
           metrics: [{ name: 'sessions' }],
           orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
           limit: 15,
         }),
         ga4Report(accessToken, {
-          dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
+          dateRanges: [CLOSED_ANALYTICS_RANGES.current7d],
           dimensions: [{ name: 'pagePath' }],
           metrics: [
             { name: 'sessions' }, { name: 'activeUsers' },
@@ -537,13 +549,13 @@ export default async function handler(req: Request) {
           limit: 20,
         }),
         ga4Report(accessToken, {
-          dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
+          dateRanges: [CLOSED_ANALYTICS_RANGES.current7d],
           dimensions: [{ name: 'sessionDefaultChannelGrouping' }],
           metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'newUsers' }],
           orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
         }),
         ga4Report(accessToken, {
-          dateRanges: [{ startDate: '14daysAgo', endDate: '8daysAgo' }],
+          dateRanges: [CLOSED_ANALYTICS_RANGES.previous7d],
           dimensions: [{ name: 'sessionDefaultChannelGrouping' }],
           metrics: [{ name: 'sessions' }],
           orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
@@ -621,7 +633,7 @@ export default async function handler(req: Request) {
     // ── Anomaly detection ─────────────────────────────────────────────────────
     const anomalies: Anomaly[] = ga4Available
       ? detectAnomalies({
-          todaySessions:   parseOverviewRow(ga4Raw.overviewReport, 0).sessions,
+          referenceSessions: parseOverviewRow(ga4Raw.overviewReport, 1).sessions,
           sessions7d:      parseOverviewRow(ga4Raw.overviewReport, 2).sessions,
           countries7d:     ga4Raw.countries7d,
           countriesPrev7d: ga4Raw.countriesPrev7d,
@@ -816,6 +828,7 @@ ${answerRule}`
         meta: {
           ga4_available:        ga4Available,
           gsc_available:        gscAvailable,
+          gemini_configured:    analyticsGeminiConfigured(geminiKey),
           gemini_available:     !!geminiResult,
           gemini_error_code:    geminiErrorCode,
           gemini_error_message: geminiErrorMessage,
