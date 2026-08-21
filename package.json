@@ -14,6 +14,8 @@
     "test:ai-cost": "tsx scripts/verify-ai-cost-safety.ts",
     "test:server-env": "tsx scripts/verify-netlify-server-env.ts",
     "test:analytics": "tsx scripts/verify-admin-analytics.ts && tsx scripts/verify-consent-ads.ts && playwright test tests/visual/analytics-consent.spec.ts --project=chromium-desktop",
+    "test:csp": "tsx scripts/verify-csp.ts && playwright test tests/visual/analytics-csp.spec.ts --project=chromium-desktop",
+    "test:csp:generated": "tsx scripts/verify-csp.ts --generated",
     "test:b2b-progressive-review": "tsx scripts/verify-progressive-vacancy-review.ts",
     "qa:b2b-fixtures": "tsx scripts/generate-b2b-pdf-fixtures.ts",
     "test:visual": "playwright test tests/visual/",
