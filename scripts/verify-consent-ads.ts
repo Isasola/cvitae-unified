@@ -25,6 +25,9 @@ assert(!index.includes('pagead2.googlesyndication.com'), 'AdSense no debe cargar
 assert(main.indexOf('initializeConsentMode()') < main.indexOf('ReactDOM.createRoot'), 'El consentimiento predeterminado debe establecerse antes de montar la aplicación')
 assert(consent.includes("ad_storage: 'denied'") && consent.includes("analytics_storage: 'denied'"), 'Google Consent Mode debe comenzar denegado')
 assert(consent.includes('Advanced Consent Mode') && consent.includes('VITE_GA_MEASUREMENT_ID'), 'GA4 debe inicializarse en modo avanzado bajo el estado de consentimiento')
+assert(consent.includes('dataLayer?.push(arguments)'), 'gtag debe conservar el objeto Arguments que consume el script oficial')
+assert(!consent.includes('dataLayer?.push(args)'), 'gtag no debe convertir sus comandos a Array')
+assert(consent.includes('function googleCommand(...command: unknown[])'), 'googleCommand debe preservar la aridad de cada comando, especialmente js')
 assert(consent.includes('analyticsLocationSafe()'), 'GA4 no debe cargar en URLs que puedan contener credenciales o PII')
 assert(analytics.includes("readConsent()?.analytics === true"), 'Los eventos personalizados deben exigir consentimiento explícito')
 assert(!main.includes("'page_view'") && !app.includes("'page_view'") && !consent.includes("'page_view'"), 'Enhanced Measurement debe seguir siendo el único responsable de page_view SPA')
@@ -49,4 +52,4 @@ for (const privatePage of [
 assert(envExample.includes('VITE_GOOGLE_ADSENSE_READY=false'), 'La configuración de ejemplo debe mantener AdSense apagado')
 assert(envExample.includes('VITE_ADSENSE_PREVIEW=false'), 'La vista previa no debe quedar activa en producción')
 
-console.log('Consentimiento y publicidad: 30 verificaciones focalizadas superadas.')
+console.log('Consentimiento y publicidad: 33 verificaciones focalizadas superadas.')

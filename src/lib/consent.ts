@@ -43,10 +43,10 @@ export function readConsent(): ConsentPreferences | null {
   }
 }
 
-function googleCommand(command: string, action: string | Date, values: Record<string, string | boolean> = {}) {
+function googleCommand(...command: unknown[]) {
   window.dataLayer = window.dataLayer || []
-  window.gtag = window.gtag || function gtag(...args: unknown[]) { window.dataLayer?.push(args) }
-  window.gtag(command, action, values)
+  window.gtag = window.gtag || function gtag() { window.dataLayer?.push(arguments) }
+  window.gtag(...command)
 }
 
 export function initializeConsentMode() {

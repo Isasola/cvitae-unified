@@ -31,6 +31,14 @@ test('primera visita inicia Advanced Consent Mode sin cookies', async ({ page })
   const consentIndex = commands.findIndex((entry: any) => entry?.[0] === 'consent' && entry?.[1] === 'default')
   expect(defaultConsent?.[2]?.analytics_storage).toBe('denied')
   expect(defaultConsent?.[2]?.ad_storage).toBe('denied')
+  expect(await page.evaluate(() => (window.dataLayer ?? []).slice(0, 3).map(entry => ({
+    isArray: Array.isArray(entry),
+    tag: Object.prototype.toString.call(entry),
+  })))).toEqual([
+    { isArray: false, tag: '[object Arguments]' },
+    { isArray: false, tag: '[object Arguments]' },
+    { isArray: false, tag: '[object Arguments]' },
+  ])
   expect(consentIndex).toBeGreaterThanOrEqual(0)
   expect(configIndex).toBeGreaterThan(consentIndex)
   expect(await page.evaluate(() => document.cookie.includes('_ga'))).toBe(false)
