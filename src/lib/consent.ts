@@ -24,6 +24,14 @@ const denied = {
   analytics_storage: 'denied',
 } as const
 
+const SAFE_ANALYTICS_QUERY_PARAM = /^(utm_(source|medium|campaign|term|content)|gclid|fbclid)$/i
+
+export function analyticsLocationSafe(location = window.location): boolean {
+  if (location.pathname === '/auth/callback' || location.hash) return false
+  const params = new URLSearchParams(location.search)
+  return [...params.keys()].every(key => SAFE_ANALYTICS_QUERY_PARAM.test(key))
+}
+
 export function readConsent(): ConsentPreferences | null {
   try {
     const parsed = JSON.parse(localStorage.getItem(CONSENT_STORAGE_KEY) || 'null')
@@ -77,8 +85,10 @@ function injectScript(id: string, src: string, attributes: Record<string, string
 }
 
 export async function loadAllowedGoogleServices(preferences = readConsent()) {
-  if (!preferences) return
-  if (preferences.analytics) {
+  // Advanced Consent Mode: initialize GA under the consent state already set by
+  // initializeConsentMode(). With analytics_storage=denied Google receives only
+  // cookieless measurement; optional custom events remain consent-gated.
+  if (analyticsLocationSafe()) {
     const measurementId = String(import.meta.env.VITE_GA_MEASUREMENT_ID || 'G-BZ16ZLP8ZZ').trim()
     if (measurementId && /^G-[A-Z0-9]+$/i.test(measurementId)) {
       const inserted = injectScript('cvitae-ga4', `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`)
@@ -91,7 +101,7 @@ export async function loadAllowedGoogleServices(preferences = readConsent()) {
 
   const adsReady = import.meta.env.VITE_GOOGLE_ADSENSE_READY === 'true'
   const client = String(import.meta.env.VITE_GOOGLE_ADSENSE_CLIENT || '').trim()
-  if (preferences.advertising && adsReady && /^ca-pub-\d+$/.test(client)) {
+  if (preferences?.advertising && adsReady && /^ca-pub-\d+$/.test(client)) {
     injectScript(
       'cvitae-adsense',
       `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(client)}`,

@@ -44,7 +44,7 @@ export function CookiePreferences() {
           <div className="grid items-center gap-4 lg:grid-cols-[1fr_auto]">
             <div className="flex items-start gap-3">
               <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[#c9a84c]/25 bg-[#c9a84c]/8"><Cookie className="h-4 w-4 text-[#c9a84c]" /></span>
-              <div><h2 className="text-sm font-medium text-cream">Vos decidís qué medimos</h2><p className="mt-1 max-w-2xl text-xs leading-relaxed text-white/45">Las cookies necesarias mantienen tu sesión. Analytics y publicidad quedan apagados hasta que los aceptes. Podés cambiar tu decisión cuando quieras.</p><a href="/cookies" className="mt-1.5 inline-flex text-[11px] text-[#c9a84c] hover:underline">Ver política de cookies</a></div>
+              <div><h2 className="text-sm font-medium text-cream">Vos decidís qué medimos</h2><p className="mt-1 max-w-2xl text-xs leading-relaxed text-white/45">Las cookies necesarias mantienen tu sesión. Analytics usa medición sin cookies hasta que lo aceptes; publicidad permanece apagada. Podés cambiar tu decisión cuando quieras.</p><a href="/cookies" className="mt-1.5 inline-flex text-[11px] text-[#c9a84c] hover:underline">Ver política de cookies</a></div>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex">
               <button type="button" onClick={() => choose({ analytics: false, advertising: false })} className="min-h-10 rounded-full border border-white/12 px-4 text-xs text-white/60 transition hover:border-white/25 hover:text-white">Solo necesarias</button>
@@ -62,7 +62,7 @@ export function CookiePreferences() {
 
             <div className="mt-7 space-y-3">
               <PreferenceRow icon={ShieldCheck} title="Necesarias" detail="Sesión, seguridad y funciones solicitadas por vos." checked locked onChange={() => {}} />
-              <PreferenceRow icon={BarChart3} title="Analytics" detail="Nos ayuda a entender qué páginas funcionan. Google Analytics solo carga si lo aceptás." checked={analytics} onChange={setAnalytics} />
+              <PreferenceRow icon={BarChart3} title="Analytics" detail="Nos ayuda a entender qué páginas funcionan. Sin permiso no usa cookies; si aceptás, habilita la medición completa." checked={analytics} onChange={setAnalytics} />
               <PreferenceRow icon={Megaphone} title="Publicidad" detail="Permite mostrar anuncios en espacios públicos claramente identificados. Nunca dentro de tu CV, perfil o postulaciones." checked={advertising} onChange={setAdvertising} />
             </div>
 

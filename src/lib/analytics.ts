@@ -1,3 +1,5 @@
+import { readConsent } from './consent'
+
 declare global {
   interface Window {
     gtag?: (...args: any[]) => void
@@ -5,7 +7,10 @@ declare global {
 }
 
 function track(eventName: string, params?: Record<string, any>) {
-  if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
+  // Advanced Consent Mode may initialize gtag before a choice is made. Product
+  // events stay opt-in so no opportunity, company, CV or user metadata is sent
+  // before explicit analytics consent.
+  if (typeof window !== 'undefined' && readConsent()?.analytics === true && typeof window.gtag === 'function') {
     window.gtag('event', eventName, params)
   }
 }
