@@ -8,7 +8,7 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { runSeoPipeline } from './lib/seo-pipeline-runner'
-import { serverSeoFlags } from '../../src/lib/seo/flags'
+import { serverSeoFlags } from './lib/seo-flags'
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {

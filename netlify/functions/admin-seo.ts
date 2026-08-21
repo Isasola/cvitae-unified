@@ -8,7 +8,7 @@ import type { Handler } from '@netlify/functions'
 import { makeSupabaseAdmin } from './_supabase'
 import { runSeoPipeline } from './lib/seo-pipeline-runner'
 import { generateAndPersistSuggestions } from './lib/seo-suggestions'
-import { serverSeoFlags } from '../../src/lib/seo/flags'
+import { serverSeoFlags } from './lib/seo-flags'
 import { classifyOpportunity } from '../../src/lib/seo/classify'
 
 // Mapping: suggestion.field (conceptual) → real opportunities column name.
