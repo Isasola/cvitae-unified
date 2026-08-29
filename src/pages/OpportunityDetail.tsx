@@ -14,6 +14,9 @@ interface Opportunity {
   title: string
   organization: string | null
   location: string | null
+  city: string | null
+  department: string | null
+  country_code: string | null
   type: string | null
   description: string | null
   opportunity_type: string | null
@@ -47,7 +50,7 @@ export default function OpportunityDetail() {
     if (!slug) return
     supabase
       .from('opportunities')
-      .select('id,slug,title,organization,location,type,description,opportunity_type,application_url,source,deadline,funding_type,funding_amount,currency,fully_funded,eligible_countries,eligible_regions,education_level,updated_at')
+      .select('id,slug,title,organization,location,city,department,country_code,type,description,opportunity_type,application_url,source,deadline,funding_type,funding_amount,currency,fully_funded,eligible_countries,eligible_regions,education_level,updated_at')
       .eq('slug', slug)
       .eq('is_active', true)
       .eq('verification_status', 'verified')
@@ -87,7 +90,12 @@ export default function OpportunityDetail() {
 
   let structuredData: Record<string, unknown>
   if (canEmitJobPosting) {
-    const googleEmploymentType = toGoogleEmploymentType(item.type)
+    const googleEmploymentType = toGoogleEmploymentType(item.type) ?? (item.opportunity_type === 'internship' ? 'INTERN' : undefined)
+    const oppAddrLocality = clean(item.city || item.location) || undefined
+    const oppAddrRegion = clean(item.department) || undefined
+    const oppAddrCountry = item.country_code?.trim().toUpperCase().match(/^[A-Z]{2}$/) ? item.country_code.trim().toUpperCase() : 'PY'
+    const oppHasLocation = oppAddrLocality || oppAddrRegion
+    const oppJobAddr = { '@type': 'PostalAddress', addressCountry: oppAddrCountry, ...(oppAddrLocality ? { addressLocality: oppAddrLocality } : {}), ...(oppAddrRegion ? { addressRegion: oppAddrRegion } : {}) }
     structuredData = {
       '@context': 'https://schema.org',
       '@type': 'JobPosting',
@@ -95,9 +103,9 @@ export default function OpportunityDetail() {
       description: realDescription,
       url: canonicalUrl,
       datePosted: item.updated_at,
-      validThrough: item.deadline || undefined,
+      ...(item.deadline ? { validThrough: item.deadline } : {}),
       hiringOrganization: { '@type': 'Organization', name: realOrg },
-      jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: clean(item.location) || eligibility || 'Paraguay', addressCountry: 'PY' } },
+      ...(oppHasLocation ? { jobLocation: { '@type': 'Place', address: oppJobAddr } } : {}),
       directApply: false,
       ...(googleEmploymentType ? { employmentType: googleEmploymentType } : {}),
     }

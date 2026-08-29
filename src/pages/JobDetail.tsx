@@ -14,7 +14,12 @@ interface Job {
   title: string
   organization: string | null
   location: string | null
+  city: string | null
+  department: string | null
+  country_code: string | null
   type: string | null
+  opportunity_type: string | null
+  deadline: string | null
   rubro: string | null
   description: string | null
   application_url: string
@@ -34,7 +39,7 @@ export default function JobDetail() {
     if (!slug) return
     supabase
       .from('opportunities')
-      .select('id,slug,title,organization,location,type,rubro,description,application_url,source,created_at,updated_at')
+      .select('id,slug,title,organization,location,city,department,country_code,type,opportunity_type,deadline,rubro,description,application_url,source,created_at,updated_at')
       .eq('slug', slug)
       .eq('is_active', true)
       .eq('verification_status', 'verified')
@@ -63,15 +68,22 @@ export default function JobDetail() {
   const realOrg = clean(job.organization)
   const canEmitJobPosting = realDescription.length >= 100 && realOrg.length > 0
 
+  const resolvedEmpType = toGoogleEmploymentType(job.type) ?? (job.opportunity_type === 'internship' ? 'INTERN' : undefined)
+  const addrLocality = clean(job.city || job.location) || undefined
+  const addrRegion = clean(job.department) || undefined
+  const addrCountry = job.country_code?.trim().toUpperCase().match(/^[A-Z]{2}$/) ? job.country_code.trim().toUpperCase() : 'PY'
+  const hasLocation = addrLocality || addrRegion
+  const jobAddr = { '@type': 'PostalAddress' as const, addressCountry: addrCountry, ...(addrLocality ? { addressLocality: addrLocality } : {}), ...(addrRegion ? { addressRegion: addrRegion } : {}) }
   const structuredData = canEmitJobPosting ? {
     '@context': 'https://schema.org',
     '@type': 'JobPosting',
     title: clean(job.title),
     description: realDescription,
     datePosted: job.created_at,
-    employmentType: toGoogleEmploymentType(job.type) ?? undefined,
+    ...(job.deadline ? { validThrough: job.deadline } : {}),
+    ...(resolvedEmpType ? { employmentType: resolvedEmpType } : {}),
     hiringOrganization: { '@type': 'Organization', name: realOrg },
-    jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: clean(job.location) || 'Paraguay', addressCountry: 'PY' } },
+    ...(hasLocation ? { jobLocation: { '@type': 'Place', address: jobAddr } } : {}),
     directApply: false,
     url: canonical,
   } : {

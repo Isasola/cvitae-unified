@@ -439,16 +439,16 @@ async function prerender() {
         .select('slug,titulo,cuerpo,created_at,imagen_url,categoria')
         .eq('tipo', 'blog').eq('is_active', true),
       supabase.from('opportunities')
-        .select('slug,title,organization,location,city,description,created_at,updated_at,type,opportunity_type')
+        .select('slug,title,organization,location,city,description,created_at,updated_at,type,opportunity_type,deadline,department,country_code')
         .eq('is_active', true).eq('verification_status', 'verified').eq('catalog_eligible', true)
         .in('opportunity_type', ['job', 'internship', 'consultancy'])
-        .is('deleted_at', null).not('slug', 'is', null)
+        .is('deleted_at', null).is('archived_at', null).not('slug', 'is', null)
         .order('updated_at', { ascending: false }).limit(1000),
       supabase.from('opportunities')
         .select('slug,title,organization,location,city,description,opportunity_type,deadline,updated_at')
         .eq('is_active', true).eq('verification_status', 'verified').eq('catalog_eligible', true)
         .not('opportunity_type', 'in', '(job,internship,consultancy)')
-        .is('deleted_at', null).not('slug', 'is', null)
+        .is('deleted_at', null).is('archived_at', null).not('slug', 'is', null)
         .limit(200),
       supabase.from('content_hub')
         .select('slug,titulo,cuerpo,categoria,ubicacion,fecha_vencimiento')
@@ -539,12 +539,20 @@ async function prerender() {
     const canonical = `${SITE_URL}/empleos/${job.slug}`
     const realOrg = (job.organization || '').trim()
     const canEmitJobPosting = description.length >= 100 && realOrg.length > 0
+    const resolvedEmpType = toGoogleEmploymentType(job.type) ?? (job.opportunity_type === 'internship' ? 'INTERN' : undefined)
+    const addrLocality = job.city || job.location || undefined
+    const addrRegion = job.department || undefined
+    const addrCountry = job.country_code || 'PY'
+    const hasLocation = addrLocality || addrRegion
+    const jobAddr = { '@type': 'PostalAddress', addressCountry: addrCountry, ...(addrLocality ? { addressLocality: addrLocality } : {}), ...(addrRegion ? { addressRegion: addrRegion } : {}) }
     const ld = canEmitJobPosting ? {
       '@context': 'https://schema.org', '@type': 'JobPosting', title,
       description, datePosted: job.created_at,
+      ...(job.deadline ? { validThrough: job.deadline } : {}),
       hiringOrganization: { '@type': 'Organization', name: realOrg },
-      jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: job.city || job.location || 'Paraguay', addressCountry: 'PY' } },
-      employmentType: toGoogleEmploymentType(job.type), directApply: false, url: canonical,
+      ...(hasLocation ? { jobLocation: { '@type': 'Place', address: jobAddr } } : {}),
+      ...(resolvedEmpType ? { employmentType: resolvedEmpType } : {}),
+      directApply: false, url: canonical,
     } : {
       '@context': 'https://schema.org', '@type': 'WebPage',
       name: title, url: canonical, description: descExcerpt,
@@ -643,16 +651,20 @@ async function prerender() {
     const canonical = `${SITE_URL}/oportunidades/${job.slug}`
     const realOrg = (job.organization || '').trim()
     const canEmitJobPosting = description.length >= 100 && realOrg.length > 0
-    // jobLocation only when city is known — do not invent country for remote/intl jobs
-    const jobLocationField = job.city
-      ? { jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: job.city, addressCountry: 'PY' } } }
-      : {}
+    const resolvedEmpTypeO = toGoogleEmploymentType(job.type) ?? (job.opportunity_type === 'internship' ? 'INTERN' : undefined)
+    const oAddrLocality = job.city || job.location || undefined
+    const oAddrRegion = job.department || undefined
+    const oAddrCountry = job.country_code || 'PY'
+    const oHasLocation = oAddrLocality || oAddrRegion
+    const oJobAddr = { '@type': 'PostalAddress', addressCountry: oAddrCountry, ...(oAddrLocality ? { addressLocality: oAddrLocality } : {}), ...(oAddrRegion ? { addressRegion: oAddrRegion } : {}) }
     const ld = canEmitJobPosting ? {
       '@context': 'https://schema.org', '@type': 'JobPosting', title,
       description, datePosted: job.created_at,
+      ...(job.deadline ? { validThrough: job.deadline } : {}),
       hiringOrganization: { '@type': 'Organization', name: realOrg },
-      ...jobLocationField,
-      employmentType: toGoogleEmploymentType(job.type), directApply: false, url: canonical,
+      ...(oHasLocation ? { jobLocation: { '@type': 'Place', address: oJobAddr } } : {}),
+      ...(resolvedEmpTypeO ? { employmentType: resolvedEmpTypeO } : {}),
+      directApply: false, url: canonical,
     } : {
       '@context': 'https://schema.org', '@type': 'WebPage',
       name: title, url: canonical, description: descExcerpt,
