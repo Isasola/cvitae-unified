@@ -16,6 +16,7 @@ export interface RawOpportunity {
   location: string | null
   country_code: string | null
   city: string | null
+  department: string | null
   type: string | null
   opportunity_type: string | null
   application_url: string | null
@@ -39,6 +40,7 @@ export interface NormalizedOpportunity {
   description: string | null     // stripped HTML, max 5000 chars
   organization: string | null
   addressLocality: string | null // city or location field
+  addressRegion: string | null   // department/state field
   addressCountry: string         // ISO 3166-1 alpha-2 ('PY' default)
   employmentType: string | null  // valid Google Jobs value or null
   opportunityType: string | null // normalized opportunity_type
@@ -110,9 +112,10 @@ export function normalizeOpportunity(raw: RawOpportunity): NormalizedOpportunity
 
   // location: prefer city field, then location field
   const addressLocality = stripHtml(raw.city || raw.location, 100)
+  const addressRegion = stripHtml(raw.department, 100)
 
   const applicationUrl = normalizeUrl(raw.application_url)
-  const employmentType = toGoogleEmploymentType(raw.type)
+  const employmentType = toGoogleEmploymentType(raw.type) ?? (raw.opportunity_type === 'internship' ? 'INTERN' : null)
   const deadline = normalizeDeadline(raw.deadline)
   const addressCountry = normalizeCountry(raw.country_code)
   const isJobPosting = !SCHOLARSHIP_TYPES.has(raw.opportunity_type || '')
@@ -124,6 +127,7 @@ export function normalizeOpportunity(raw: RawOpportunity): NormalizedOpportunity
     description: description || null,
     organization: organization || null,
     addressLocality,
+    addressRegion,
     addressCountry,
     employmentType,
     opportunityType: raw.opportunity_type || null,

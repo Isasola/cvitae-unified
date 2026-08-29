@@ -287,7 +287,7 @@ export default function Admin() {
   const [batchAction, setBatchAction] = useState<'verified' | 'rejected' | 'quarantined'>('rejected')
   const [batchLoading, setBatchLoading] = useState(false)
   const [aggregatorConfirmPanel, setAggregatorConfirmPanel] = useState(false)
-  const [batchPreviewData, setBatchPreviewData] = useState<{ eligible: { id: string; title: string; organization: string | null; source_authority: string; original_source_url: string | null }[]; ineligible: { id: string; title: string; reason: string }[] } | null>(null)
+  const [batchPreviewData, setBatchPreviewData] = useState<{ eligible: { id: string; title: string; organization: string | null; source_authority: string; original_source_url: string | null }[]; ineligible: { id: string; title: string; reason: string }[]; source_trusted?: boolean } | null>(null)
   const [batchPreviewLoading, setBatchPreviewLoading] = useState(false)
   const [batchPreviewSelectedIds, setBatchPreviewSelectedIds] = useState<string[]>([])
   const [batchFeatures, setBatchFeatures] = useState({ catalog: true, matching: false, alerts: false, seo: false })
@@ -300,6 +300,12 @@ export default function Admin() {
   const [sourcePolicies, setSourcePolicies] = useState<any[]>([])
   const [sourceStats, setSourceStats] = useState<Record<string, any>>({})
   const [sourceReconciliation, setSourceReconciliation] = useState<any[]>([])
+  // Direct message modal state
+  const [msgUserId, setMsgUserId] = useState<string | null>(null)
+  const [msgUserEmail, setMsgUserEmail] = useState('')
+  const [msgSubject, setMsgSubject] = useState('')
+  const [msgBody, setMsgBody] = useState('')
+  const [msgSending, setMsgSending] = useState(false)
   const [selectedControl, setSelectedControl] = useState<{ kind: 'scraper' | 'source'; data: any } | null>(null)
   const [controlSaved, setControlSaved] = useState(false)
   const [controlFormValues, setControlFormValues] = useState<Record<string, any>>({})
@@ -642,7 +648,7 @@ export default function Admin() {
     setBatchLoading(true)
     try {
       const json = await adminFetch('batch_review_by_source', { source: batchSource, status: batchAction, note: `Acción en lote desde admin: ${batchAction}` })
-      setNotification({ type: 'success', message: `Procesados: ${json.processed}${json.skipped ? ` · Omitidos (fuente no original): ${json.skipped}` : ''}` })
+      setNotification({ type: 'success', message: `Procesados: ${json.processed}${json.skipped ? ` · Omitidos: ${json.skipped}` : ''}` })
       await Promise.all([loadOpportunityReviews(), loadReviewSummary()])
     } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
     finally { setBatchLoading(false) }
@@ -703,6 +709,20 @@ export default function Admin() {
       setNotification({ type: 'error', message: err.message })
     } finally {
       setBatchBotLoading(false)
+    }
+  }
+
+  const sendAdminMessage = async () => {
+    if (!msgUserId || !msgSubject.trim() || !msgBody.trim()) return
+    setMsgSending(true)
+    try {
+      await adminFetch('send_admin_message', { userId: msgUserId, subject: msgSubject.trim(), message: msgBody.trim() })
+      setNotification({ type: 'success', message: `Mensaje enviado a ${msgUserEmail}` })
+      setMsgUserId(null)
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message })
+    } finally {
+      setMsgSending(false)
     }
   }
 
@@ -1705,13 +1725,21 @@ export default function Admin() {
                       )}
                       {batchPreviewData.eligible.length === 0 ? (
                         <div className="px-5 py-5">
-                          <p className="text-sm text-amber-200/70">Ninguna de estas oportunidades tiene fuente original verificada — verificalas una por una.</p>
-                          <p className="mt-1 text-xs text-white/30">Podés editar el campo "Confirmé manualmente la convocatoria en la fuente original" en cada registro y luego usar el preview de nuevo.</p>
+                          {batchPreviewData.source_trusted ? (
+                            <p className="text-sm text-amber-200/70">La fuente está habilitada pero no hay registros pendientes en este estado. Revisá los filtros de estado o esperá nuevos ingresos del scraper.</p>
+                          ) : (
+                            <>
+                              <p className="text-sm text-amber-200/70">Ninguna de estas oportunidades tiene fuente original verificada — verificalas una por una.</p>
+                              <p className="mt-1 text-xs text-white/30">Podés editar el campo "Confirmé manualmente la convocatoria en la fuente original" en cada registro y luego usar el preview de nuevo. O habilitá esta fuente en Fuentes y reglas para desbloquear la aprobación masiva.</p>
+                            </>
+                          )}
                         </div>
                       ) : (
                         <div className="grid gap-px bg-white/[0.04] xl:grid-cols-2">
                           <div className="bg-[#080808] p-4">
-                            <p className="mb-3 text-[10px] uppercase tracking-[0.14em] text-emerald-400/70" style={{ fontFamily: MONO }}>Aprobables ahora ({batchPreviewData.eligible.length}) — tienen fuente verificada</p>
+                            <p className="mb-3 text-[10px] uppercase tracking-[0.14em] text-emerald-400/70" style={{ fontFamily: MONO }}>
+                              Aprobables ahora ({batchPreviewData.eligible.length}) — {batchPreviewData.source_trusted ? 'fuente habilitada en catálogo' : 'tienen fuente verificada'}
+                            </p>
                             <div className="max-h-64 overflow-y-auto space-y-0.5">
                               {batchPreviewData.eligible.filter(item => batchItemVisible(item.id)).map(item => (
                                 <label key={item.id} className="flex cursor-pointer items-start gap-3 px-1 py-1.5 hover:bg-white/[0.02]">
@@ -2011,6 +2039,15 @@ export default function Admin() {
                             >
                               ver
                             </button>
+                            {sub.user_id && (
+                              <button
+                                onClick={() => { setMsgUserId(sub.user_id); setMsgUserEmail(sub.email || ''); setMsgSubject(''); setMsgBody('') }}
+                                className="ml-2 text-[10px] text-amber-400/60 hover:text-amber-400 transition-colors"
+                                style={{ fontFamily: MONO }}
+                              >
+                                msg
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -2628,6 +2665,40 @@ export default function Admin() {
         }}
         onDetailRefresh={(profileId) => openDrawer(profileId)}
       />
+
+      {msgUserId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-md border border-white/[0.08] bg-[#0a0a0a] p-6">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-white/30" style={{ fontFamily: MONO }}>MENSAJE DIRECTO</p>
+            <p className="mt-1 text-sm text-white/50">{msgUserEmail}</p>
+            <input
+              className="mt-4 w-full border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-cream placeholder:text-white/20 focus:outline-none focus:border-white/20"
+              placeholder="Asunto"
+              value={msgSubject}
+              onChange={e => setMsgSubject(e.target.value)}
+              maxLength={200}
+            />
+            <textarea
+              className="mt-2 w-full resize-none border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-cream placeholder:text-white/20 focus:outline-none focus:border-white/20"
+              rows={5}
+              placeholder="Mensaje para el usuario…"
+              value={msgBody}
+              onChange={e => setMsgBody(e.target.value)}
+              maxLength={2000}
+            />
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <button onClick={() => setMsgUserId(null)} className="border border-white/[0.08] px-4 py-2 text-xs text-white/40 transition hover:text-white/70">Cancelar</button>
+              <button
+                onClick={sendAdminMessage}
+                disabled={msgSending || !msgSubject.trim() || !msgBody.trim()}
+                className="bg-[#c9a84c] px-5 py-2 text-xs font-medium text-black disabled:opacity-40"
+              >
+                {msgSending ? 'Enviando…' : 'Enviar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
