@@ -35,3 +35,4 @@ tmp/
 artifacts/visual/
 playwright-report/
 test-results/
+.aider*

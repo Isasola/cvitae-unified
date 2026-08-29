@@ -419,7 +419,9 @@ async function prerender() {
 <link rel="canonical" href="${SITE_URL}/${route.path}">
 <meta property="og:title" content="${route.title}">
 <meta property="og:description" content="${escapeHtml(route.desc)}">
-<meta property="og:url" content="${SITE_URL}/${route.path}">${ldTag}${robotsTag}`
+<meta property="og:url" content="${SITE_URL}/${route.path}">
+<meta property="og:type" content="website">
+<meta property="og:image" content="${SITE_URL}/og-image.jpg">${ldTag}${robotsTag}`
     writeFileSync(join(routeDir, 'index.html'), injectPage(templateHtml, metaTags, route.snapshot))
   }
 
@@ -475,6 +477,8 @@ async function prerender() {
 <meta property="og:title" content="Blog de Carrera | CVitae">
 <meta property="og:description" content="Ideas, guías y datos sobre carrera, IA y mercado laboral en Paraguay.">
 <meta property="og:url" content="${SITE_URL}/blog">
+<meta property="og:type" content="website">
+<meta property="og:image" content="${SITE_URL}/og-image.jpg">
 <script type="application/ld+json">${JSON.stringify(blogLd).replace(/</g, '\\u003c')}</script>`
     mkdirSync(join(distDir, 'blog'), { recursive: true })
     writeFileSync(join(distDir, 'blog', 'index.html'), injectPage(templateHtml, meta, blogIndexSnapshotContent(posts)))
@@ -522,6 +526,8 @@ async function prerender() {
 <meta property="og:title" content="Empleos en Paraguay | CVitae">
 <meta property="og:description" content="Vacantes laborales de Paraguay reunidas, deduplicadas y revisadas diariamente.">
 <meta property="og:url" content="${SITE_URL}/empleos">
+<meta property="og:type" content="website">
+<meta property="og:image" content="${SITE_URL}/og-image.jpg">
 <script type="application/ld+json">${JSON.stringify(empLd).replace(/</g, '\\u003c')}</script>`
     mkdirSync(join(distDir, 'empleos'), { recursive: true })
     writeFileSync(join(distDir, 'empleos', 'index.html'), injectPage(templateHtml, meta, empleosIndexSnapshotContent(jobs)))
@@ -562,6 +568,8 @@ async function prerender() {
 <meta property="og:title" content="${escapeHtml(title)} | CVitae">
 <meta property="og:description" content="${escapeHtml(descExcerpt)}">
 <meta property="og:url" content="${canonical}">
+<meta property="og:type" content="article">
+<meta property="og:image" content="${SITE_URL}/og-image.jpg">
 <link rel="canonical" href="${canonical}">
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`
     const jobDir = join(jobsDir, job.slug)
@@ -579,6 +587,8 @@ async function prerender() {
 <meta property="og:title" content="Oportunidades en Paraguay | CVitae">
 <meta property="og:description" content="Empleos, becas y oportunidades de crecimiento en Paraguay y Latinoamérica.">
 <meta property="og:url" content="${SITE_URL}/oportunidades">
+<meta property="og:type" content="website">
+<meta property="og:image" content="${SITE_URL}/og-image.jpg">
 <script type="application/ld+json">${JSON.stringify(oppLd).replace(/</g, '\\u003c')}</script>`
     mkdirSync(join(distDir, 'oportunidades'), { recursive: true })
     writeFileSync(join(distDir, 'oportunidades', 'index.html'), injectPage(templateHtml, meta, oportunidadesIndexSnapshotContent(nonJobOpps)))
@@ -608,6 +618,8 @@ async function prerender() {
 <meta property="og:title" content="${escapeHtml(title)} | CVitae">
 <meta property="og:description" content="${escapeHtml(desc)}">
 <meta property="og:url" content="${canonical}">
+<meta property="og:type" content="article">
+<meta property="og:image" content="${SITE_URL}/og-image.jpg">
 <link rel="canonical" href="${canonical}">
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`
     const oppDir = join(oppsDir, opp.slug)
@@ -641,6 +653,8 @@ async function prerender() {
   // The /oportunidades catalog links ALL opportunity types (including jobs) to
   // /oportunidades/:slug. Netlify serves static files first, so these pages must
   // exist at build time or the redirect rule returns a real 404.
+  // Canonical points to /empleos/:slug (matches OpportunityDetail.tsx runtime behavior)
+  // so static and JS-rendered versions agree and Google consolidates under /empleos/.
   for (const job of jobs) {
     if (!job.slug || !isSafeRouteSegment(job.slug)) continue
     if (writtenOppSlugs.has(job.slug)) continue
@@ -648,7 +662,8 @@ async function prerender() {
     if (!title) continue
     const description = (job.description || '').trim()
     const descExcerpt = description.replace(/[#*`>]/g, '').substring(0, 160) || `${title} en ${job.location || 'Paraguay'}.`
-    const canonical = `${SITE_URL}/oportunidades/${job.slug}`
+    const selfUrl = `${SITE_URL}/oportunidades/${job.slug}`
+    const canonicalUrl = `${SITE_URL}/empleos/${job.slug}`
     const realOrg = (job.organization || '').trim()
     const canEmitJobPosting = description.length >= 100 && realOrg.length > 0
     const resolvedEmpTypeO = toGoogleEmploymentType(job.type) ?? (job.opportunity_type === 'internship' ? 'INTERN' : undefined)
@@ -664,17 +679,19 @@ async function prerender() {
       hiringOrganization: { '@type': 'Organization', name: realOrg },
       ...(oHasLocation ? { jobLocation: { '@type': 'Place', address: oJobAddr } } : {}),
       ...(resolvedEmpTypeO ? { employmentType: resolvedEmpTypeO } : {}),
-      directApply: false, url: canonical,
+      directApply: false, url: canonicalUrl,
     } : {
       '@context': 'https://schema.org', '@type': 'WebPage',
-      name: title, url: canonical, description: descExcerpt,
+      name: title, url: canonicalUrl, description: descExcerpt,
     }
     const metaTags = `<title>${escapeHtml(title)} | CVitae</title>
 <meta name="description" content="${escapeHtml(descExcerpt)}">
 <meta property="og:title" content="${escapeHtml(title)} | CVitae">
 <meta property="og:description" content="${escapeHtml(descExcerpt)}">
-<meta property="og:url" content="${canonical}">
-<link rel="canonical" href="${canonical}">
+<meta property="og:url" content="${selfUrl}">
+<meta property="og:type" content="article">
+<meta property="og:image" content="${SITE_URL}/og-image.jpg">
+<link rel="canonical" href="${canonicalUrl}">
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`
     const oppDir = join(oppsDir, job.slug)
     mkdirSync(oppDir, { recursive: true })
