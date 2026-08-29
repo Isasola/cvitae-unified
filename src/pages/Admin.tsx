@@ -287,7 +287,7 @@ export default function Admin() {
   const [batchAction, setBatchAction] = useState<'verified' | 'rejected' | 'quarantined'>('rejected')
   const [batchLoading, setBatchLoading] = useState(false)
   const [aggregatorConfirmPanel, setAggregatorConfirmPanel] = useState(false)
-  const [batchPreviewData, setBatchPreviewData] = useState<{ eligible: { id: string; title: string; organization: string | null; source_authority: string; original_source_url: string | null }[]; ineligible: { id: string; title: string; reason: string }[] } | null>(null)
+  const [batchPreviewData, setBatchPreviewData] = useState<{ eligible: { id: string; title: string; organization: string | null; source_authority: string; original_source_url: string | null }[]; ineligible: { id: string; title: string; reason: string }[]; source_trusted?: boolean } | null>(null)
   const [batchPreviewLoading, setBatchPreviewLoading] = useState(false)
   const [batchPreviewSelectedIds, setBatchPreviewSelectedIds] = useState<string[]>([])
   const [batchFeatures, setBatchFeatures] = useState({ catalog: true, matching: false, alerts: false, seo: false })
@@ -648,7 +648,7 @@ export default function Admin() {
     setBatchLoading(true)
     try {
       const json = await adminFetch('batch_review_by_source', { source: batchSource, status: batchAction, note: `Acción en lote desde admin: ${batchAction}` })
-      setNotification({ type: 'success', message: `Procesados: ${json.processed}${json.skipped ? ` · Omitidos (fuente no original): ${json.skipped}` : ''}` })
+      setNotification({ type: 'success', message: `Procesados: ${json.processed}${json.skipped ? ` · Omitidos: ${json.skipped}` : ''}` })
       await Promise.all([loadOpportunityReviews(), loadReviewSummary()])
     } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
     finally { setBatchLoading(false) }
@@ -1725,13 +1725,21 @@ export default function Admin() {
                       )}
                       {batchPreviewData.eligible.length === 0 ? (
                         <div className="px-5 py-5">
-                          <p className="text-sm text-amber-200/70">Ninguna de estas oportunidades tiene fuente original verificada — verificalas una por una.</p>
-                          <p className="mt-1 text-xs text-white/30">Podés editar el campo "Confirmé manualmente la convocatoria en la fuente original" en cada registro y luego usar el preview de nuevo.</p>
+                          {batchPreviewData.source_trusted ? (
+                            <p className="text-sm text-amber-200/70">La fuente está habilitada pero no hay registros pendientes en este estado. Revisá los filtros de estado o esperá nuevos ingresos del scraper.</p>
+                          ) : (
+                            <>
+                              <p className="text-sm text-amber-200/70">Ninguna de estas oportunidades tiene fuente original verificada — verificalas una por una.</p>
+                              <p className="mt-1 text-xs text-white/30">Podés editar el campo "Confirmé manualmente la convocatoria en la fuente original" en cada registro y luego usar el preview de nuevo. O habilitá esta fuente en Fuentes y reglas para desbloquear la aprobación masiva.</p>
+                            </>
+                          )}
                         </div>
                       ) : (
                         <div className="grid gap-px bg-white/[0.04] xl:grid-cols-2">
                           <div className="bg-[#080808] p-4">
-                            <p className="mb-3 text-[10px] uppercase tracking-[0.14em] text-emerald-400/70" style={{ fontFamily: MONO }}>Aprobables ahora ({batchPreviewData.eligible.length}) — tienen fuente verificada</p>
+                            <p className="mb-3 text-[10px] uppercase tracking-[0.14em] text-emerald-400/70" style={{ fontFamily: MONO }}>
+                              Aprobables ahora ({batchPreviewData.eligible.length}) — {batchPreviewData.source_trusted ? 'fuente habilitada en catálogo' : 'tienen fuente verificada'}
+                            </p>
                             <div className="max-h-64 overflow-y-auto space-y-0.5">
                               {batchPreviewData.eligible.filter(item => batchItemVisible(item.id)).map(item => (
                                 <label key={item.id} className="flex cursor-pointer items-start gap-3 px-1 py-1.5 hover:bg-white/[0.02]">
