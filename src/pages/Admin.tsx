@@ -300,6 +300,12 @@ export default function Admin() {
   const [sourcePolicies, setSourcePolicies] = useState<any[]>([])
   const [sourceStats, setSourceStats] = useState<Record<string, any>>({})
   const [sourceReconciliation, setSourceReconciliation] = useState<any[]>([])
+  // Direct message modal state
+  const [msgUserId, setMsgUserId] = useState<string | null>(null)
+  const [msgUserEmail, setMsgUserEmail] = useState('')
+  const [msgSubject, setMsgSubject] = useState('')
+  const [msgBody, setMsgBody] = useState('')
+  const [msgSending, setMsgSending] = useState(false)
   const [selectedControl, setSelectedControl] = useState<{ kind: 'scraper' | 'source'; data: any } | null>(null)
   const [controlSaved, setControlSaved] = useState(false)
   const [controlFormValues, setControlFormValues] = useState<Record<string, any>>({})
@@ -703,6 +709,20 @@ export default function Admin() {
       setNotification({ type: 'error', message: err.message })
     } finally {
       setBatchBotLoading(false)
+    }
+  }
+
+  const sendAdminMessage = async () => {
+    if (!msgUserId || !msgSubject.trim() || !msgBody.trim()) return
+    setMsgSending(true)
+    try {
+      await adminFetch('send_admin_message', { userId: msgUserId, subject: msgSubject.trim(), message: msgBody.trim() })
+      setNotification({ type: 'success', message: `Mensaje enviado a ${msgUserEmail}` })
+      setMsgUserId(null)
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message })
+    } finally {
+      setMsgSending(false)
     }
   }
 
@@ -2011,6 +2031,15 @@ export default function Admin() {
                             >
                               ver
                             </button>
+                            {sub.user_id && (
+                              <button
+                                onClick={() => { setMsgUserId(sub.user_id); setMsgUserEmail(sub.email || ''); setMsgSubject(''); setMsgBody('') }}
+                                className="ml-2 text-[10px] text-amber-400/60 hover:text-amber-400 transition-colors"
+                                style={{ fontFamily: MONO }}
+                              >
+                                msg
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -2628,6 +2657,40 @@ export default function Admin() {
         }}
         onDetailRefresh={(profileId) => openDrawer(profileId)}
       />
+
+      {msgUserId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-md border border-white/[0.08] bg-[#0a0a0a] p-6">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-white/30" style={{ fontFamily: MONO }}>MENSAJE DIRECTO</p>
+            <p className="mt-1 text-sm text-white/50">{msgUserEmail}</p>
+            <input
+              className="mt-4 w-full border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-cream placeholder:text-white/20 focus:outline-none focus:border-white/20"
+              placeholder="Asunto"
+              value={msgSubject}
+              onChange={e => setMsgSubject(e.target.value)}
+              maxLength={200}
+            />
+            <textarea
+              className="mt-2 w-full resize-none border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-cream placeholder:text-white/20 focus:outline-none focus:border-white/20"
+              rows={5}
+              placeholder="Mensaje para el usuario…"
+              value={msgBody}
+              onChange={e => setMsgBody(e.target.value)}
+              maxLength={2000}
+            />
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <button onClick={() => setMsgUserId(null)} className="border border-white/[0.08] px-4 py-2 text-xs text-white/40 transition hover:text-white/70">Cancelar</button>
+              <button
+                onClick={sendAdminMessage}
+                disabled={msgSending || !msgSubject.trim() || !msgBody.trim()}
+                className="bg-[#c9a84c] px-5 py-2 text-xs font-medium text-black disabled:opacity-40"
+              >
+                {msgSending ? 'Enviando…' : 'Enviar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

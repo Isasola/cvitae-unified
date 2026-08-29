@@ -846,6 +846,38 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
+    if (action === "send_admin_message") {
+      const { userId, subject, message } = payload || {}
+      if (!userId || !String(subject || "").trim() || !String(message || "").trim()) {
+        return { statusCode: 400, body: JSON.stringify({ error: "userId, subject y message son requeridos" }) }
+      }
+      const { data: profile, error: profileError } = await supabase
+        .from("user_master_profiles")
+        .select("email, full_name")
+        .eq("id", String(userId))
+        .maybeSingle()
+      if (profileError) throw profileError
+      if (!profile?.email) {
+        return { statusCode: 404, body: JSON.stringify({ error: "Usuario no encontrado o sin email" }) }
+      }
+      const resendKey = process.env.RESEND_API_KEY
+      if (!resendKey) {
+        return { statusCode: 500, body: JSON.stringify({ error: "Servicio de email no configurado" }) }
+      }
+      const htmlBody = String(message).replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>")
+      const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111"><p>${htmlBody}</p><hr style="border:none;border-top:1px solid #eee;margin:24px 0"/><p style="font-size:12px;color:#888">Mensaje enviado por el equipo de CVitae · <a href="https://cvitae.lat">cvitae.lat</a></p></div>`
+      const sendRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: "CVitae <contacto@cvitae.lat>", to: [profile.email], subject: String(subject).trim(), html }),
+      })
+      if (!sendRes.ok) {
+        const errBody = await sendRes.text()
+        return { statusCode: 502, body: JSON.stringify({ error: `Error al enviar email: ${errBody}` }) }
+      }
+      return { statusCode: 200, body: JSON.stringify({ ok: true, to: profile.email }) }
+    }
+
     if (action === "batch_review_by_source") {
       const allowed = ["rejected", "quarantined"]
       const batchVerify = payload?.status === "verified"
@@ -876,18 +908,26 @@ const handler: Handler = async (event) => {
         return { statusCode: 200, body: JSON.stringify({ ok: true, processed: 0, skipped: 0, message: "No hay registros elegibles para ese filtro" }) }
       }
 
+      // Source-level trust: if catalog_enabled=true the admin already blessed this aggregator source
+      const { data: sourceConfig } = await supabase
+        .from("opportunity_sources")
+        .select("catalog_enabled")
+        .eq("source", source)
+        .maybeSingle()
+      const sourceTrusted = sourceConfig?.catalog_enabled === true
+
       let toProcess = candidates
       let skipped = 0
       let validatedIds: string[] | null = null
       if (status === "verified") {
-        const validation = validateBatchApprovalSnapshot(candidates as any, payload)
+        const validation = validateBatchApprovalSnapshot(candidates as any, payload, sourceTrusted)
         if (!validation.ok) return { statusCode: validation.status, body: JSON.stringify({ error: validation.error, stale_ids: validation.staleIds }) }
         validatedIds = validation.ids
-        const eligible = candidates.filter(c => c.source_authority === "original" || c.original_source_verified)
+        const eligible = candidates.filter(c => c.source_authority === "original" || c.original_source_verified || sourceTrusted)
         skipped = candidates.length - eligible.length
         toProcess = eligible
         if (eligible.length === 0) {
-          return { statusCode: 409, body: JSON.stringify({ error: "Ningún registro de esta fuente tiene fuente original verificada. Verificá manualmente antes de aprobar en lote.", skipped: candidates.length }) }
+          return { statusCode: 409, body: JSON.stringify({ error: "No hay registros en el estado correcto para esta fuente. Revisá los filtros o verificá si la fuente está habilitada en el control de fuentes.", skipped: candidates.length }) }
         }
       }
 
@@ -954,16 +994,25 @@ const handler: Handler = async (event) => {
         .is("deleted_at", null)
         .limit(500)
       if (previewError) throw previewError
+
+      // Source-level trust: trusted aggregators are eligible for batch approval
+      const { data: previewSourceConfig } = await supabase
+        .from("opportunity_sources")
+        .select("catalog_enabled")
+        .eq("source", previewSource)
+        .maybeSingle()
+      const previewSourceTrusted = previewSourceConfig?.catalog_enabled === true
+
       const eligible: any[] = []
       const ineligible: any[] = []
       for (const c of (previewCandidates || [])) {
-        if (c.source_authority === "original" || c.original_source_verified) {
+        if (c.source_authority === "original" || c.original_source_verified || previewSourceTrusted) {
           eligible.push({ id: c.id, title: c.title, organization: c.organization, source_authority: c.source_authority, original_source_url: c.original_source_url })
         } else {
           ineligible.push({ id: c.id, title: c.title, reason: "aggregator_no_url" })
         }
       }
-      return { statusCode: 200, body: JSON.stringify({ eligible, ineligible }) }
+      return { statusCode: 200, body: JSON.stringify({ eligible, ineligible, source_trusted: previewSourceTrusted }) }
     }
 
     if (action === "auto_approve_classified") {

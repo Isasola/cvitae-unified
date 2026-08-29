@@ -25,7 +25,7 @@ export function selectBatchMutationCandidates<T extends { id: unknown }>(candida
   return candidates.filter(candidate => exactIds.has(String(candidate.id)))
 }
 
-export function validateBatchApprovalSnapshot(candidates: BatchCandidate[], payload: any): SnapshotValidation {
+export function validateBatchApprovalSnapshot(candidates: BatchCandidate[], payload: any, sourceTrusted?: boolean): SnapshotValidation {
   const ids = Array.isArray(payload?.ids) ? [...new Set(payload.ids.map(String))] : []
   if (!ids.length) return { ok: false, status: 400, error: 'La aprobación requiere un snapshot explícito de IDs' }
   const features = payload?.features
@@ -44,10 +44,13 @@ export function validateBatchApprovalSnapshot(candidates: BatchCandidate[], payl
   const candidateIds = new Set(candidates.map(candidate => String(candidate.id)))
   const staleIds = ids.filter(id => !candidateIds.has(id))
   if (staleIds.length) return { ok: false, status: 409, error: 'El lote cambió desde el preview; generá un preview nuevo', staleIds }
-  const ineligible = ids.filter(id => {
-    const candidate = candidates.find(item => String(item.id) === id)
-    return !candidate || (candidate.source_authority !== 'original' && !candidate.original_source_verified)
-  })
-  if (ineligible.length) return { ok: false, status: 409, error: 'El snapshot contiene registros sin fuente original verificada', staleIds: ineligible }
+  // Per-record authority check — skipped when the source itself is trusted (catalog_enabled=true)
+  if (!sourceTrusted) {
+    const ineligible = ids.filter(id => {
+      const candidate = candidates.find(item => String(item.id) === id)
+      return !candidate || (candidate.source_authority !== 'original' && !candidate.original_source_verified)
+    })
+    if (ineligible.length) return { ok: false, status: 409, error: 'El snapshot contiene registros sin fuente original verificada', staleIds: ineligible }
+  }
   return { ok: true, ids, features: features as ExplicitFeatures, reviewById }
 }
