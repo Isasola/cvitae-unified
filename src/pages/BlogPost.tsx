@@ -21,10 +21,24 @@ interface BlogPost {
   imagen_url?: string
 }
 
+const BlogCTA = () => (
+  <div className="my-10 border border-gold/30 bg-white/[0.02] p-6 not-prose">
+    <p className="text-sm font-semibold text-white">¿Buscás trabajo o una beca en Paraguay?</p>
+    <p className="mt-1 text-sm text-white/55">Analizá tu CV gratis con IA y descubrí las oportunidades que coinciden con tu perfil.</p>
+    <a
+      href="https://cvitae.lat/mi-carrera"
+      className="mt-4 inline-block border border-gold bg-gold px-5 py-2 text-xs font-semibold text-black transition hover:bg-gold/90"
+    >
+      Empezar gratis →
+    </a>
+  </div>
+)
+
 export default function BlogPost() {
   const { slug } = useParams<{ slug: string }>()
   const [post, setPost] = useState<BlogPost | null>(null)
   const [loading, setLoading] = useState(true)
+  const [related, setRelated] = useState<BlogPost[]>([])
 
   useEffect(() => {
     if (slug) {
@@ -35,7 +49,21 @@ export default function BlogPost() {
         .eq('tipo', 'blog')
         .eq('is_active', true)
         .single()
-        .then(({ data }) => { setPost(data); setLoading(false) })
+        .then(({ data }) => {
+          setPost(data)
+          setLoading(false)
+          if (data) {
+            supabase
+              .from('content_hub')
+              .select('id, titulo, slug, categoria, created_at, imagen_url')
+              .eq('tipo', 'blog')
+              .eq('is_active', true)
+              .eq('categoria', data.categoria)
+              .neq('id', data.id)
+              .limit(3)
+              .then(({ data: rel }) => setRelated(rel || []))
+          }
+        })
     }
   }, [slug])
 
@@ -128,25 +156,43 @@ export default function BlogPost() {
           )}
 
           {/* Body */}
-          <div className="
-            prose max-w-none
-            prose-headings:font-display prose-headings:text-white prose-headings:font-bold prose-headings:tracking-tight
-            prose-h2:text-[1.5rem] prose-h2:mt-14 prose-h2:mb-5 prose-h2:pb-3 prose-h2:border-b prose-h2:border-gold/15
-            prose-h3:text-[1.2rem] prose-h3:mt-10 prose-h3:mb-4 prose-h3:text-white/90
-            prose-p:text-white/75 prose-p:leading-[1.9] prose-p:text-base prose-p:mb-6
-            prose-li:text-white/75 prose-li:text-base prose-li:leading-[1.8] prose-li:mb-1
-            prose-ul:my-6 prose-ul:pl-6 prose-ol:my-6 prose-ol:pl-6
-            prose-strong:text-white prose-strong:font-semibold
-            prose-em:text-white/80
-            prose-blockquote:border-l-[3px] prose-blockquote:border-l-gold/60 prose-blockquote:pl-6 prose-blockquote:py-2 prose-blockquote:my-8 prose-blockquote:text-white/60 prose-blockquote:bg-white/[0.02]
-            prose-code:text-gold/80 prose-code:bg-white/5 prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.875em] prose-code:font-mono
-            prose-pre:bg-white/[0.04] prose-pre:border prose-pre:border-white/10 prose-pre:p-5 prose-pre:overflow-x-auto
-            prose-a:text-gold prose-a:no-underline hover:prose-a:underline
-            prose-hr:border-white/8 prose-hr:my-12
-            prose-img:my-8 prose-img:w-full prose-img:border prose-img:border-white/8
-          ">
-            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{post.cuerpo}</ReactMarkdown>
-          </div>
+          {(() => {
+            let h2Count = 0
+            return (
+              <div className="
+                prose max-w-none
+                prose-headings:font-display prose-headings:text-white prose-headings:font-bold prose-headings:tracking-tight
+                prose-h2:text-[1.5rem] prose-h2:mt-14 prose-h2:mb-5 prose-h2:pb-3 prose-h2:border-b prose-h2:border-gold/15
+                prose-h3:text-[1.2rem] prose-h3:mt-10 prose-h3:mb-4 prose-h3:text-white/90
+                prose-p:text-white/75 prose-p:leading-[1.9] prose-p:text-base prose-p:mb-6
+                prose-li:text-white/75 prose-li:text-base prose-li:leading-[1.8] prose-li:mb-1
+                prose-ul:my-6 prose-ul:pl-6 prose-ol:my-6 prose-ol:pl-6
+                prose-strong:text-white prose-strong:font-semibold
+                prose-em:text-white/80
+                prose-blockquote:border-l-[3px] prose-blockquote:border-l-gold/60 prose-blockquote:pl-6 prose-blockquote:py-2 prose-blockquote:my-8 prose-blockquote:text-white/60 prose-blockquote:bg-white/[0.02]
+                prose-code:text-gold/80 prose-code:bg-white/5 prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.875em] prose-code:font-mono
+                prose-pre:bg-white/[0.04] prose-pre:border prose-pre:border-white/10 prose-pre:p-5 prose-pre:overflow-x-auto
+                prose-a:text-gold prose-a:no-underline hover:prose-a:underline
+                prose-hr:border-white/8 prose-hr:my-12
+                prose-img:my-8 prose-img:w-full prose-img:border prose-img:border-white/8
+              ">
+                <ReactMarkdown
+                  rehypePlugins={[rehypeSanitize]}
+                  components={{
+                    h2: ({ children, ...props }) => {
+                      h2Count++
+                      return (
+                        <>
+                          <h2 {...props}>{children}</h2>
+                          {h2Count === 2 && <BlogCTA />}
+                        </>
+                      )
+                    }
+                  }}
+                >{post.cuerpo}</ReactMarkdown>
+              </div>
+            )
+          })()}
 
           {/* Footer CTA */}
           <div className="mt-16 pt-10 border-t border-white/8">
@@ -164,6 +210,25 @@ export default function BlogPost() {
           </div>
         </motion.article>
         <div className="mx-auto max-w-[820px] mt-14"><AdSlot placement="blog-end" /></div>
+
+        {related.length > 0 && (
+          <section className="max-w-[820px] mx-auto mt-16 border-t border-white/[0.07] pt-12 px-4 sm:px-0">
+            <p className="mb-6 text-[11px] uppercase tracking-[0.18em] text-white/30" style={{ fontFamily: 'monospace' }}>
+              Artículos relacionados
+            </p>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {related.map(r => (
+                <Link key={r.id} href={`/blog/${r.slug}`} className="group border border-white/[0.07] p-4 hover:border-gold/30 transition-colors block">
+                  {r.imagen_url && (
+                    <img src={r.imagen_url} alt={r.titulo} className="mb-3 h-28 w-full object-cover" />
+                  )}
+                  <p className="text-sm text-white/80 group-hover:text-white transition-colors leading-snug">{r.titulo}</p>
+                  <p className="mt-2 text-[11px] text-white/30" style={{ fontFamily: 'monospace' }}>{r.categoria}</p>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
 
       <Footer />

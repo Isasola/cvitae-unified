@@ -2,6 +2,7 @@
   command = "pnpm build && node scripts/prerender.mjs && node scripts/generate-sitemap.mjs && node scripts/generate-robots.mjs"
   publish = "dist"
   functions = "netlify/functions"
+  ignore = "bash netlify-should-build.sh"
 
 [build.environment]
   NODE_VERSION = "20"

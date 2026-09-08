@@ -13,6 +13,7 @@ export function Footer() {
         { label: 'Oportunidades', href: '/oportunidades' },
         { label: 'Analizador CV', href: '/#cv-analyzer' },
         { label: 'Blog', href: '/blog' },
+        { label: 'Contacto', href: '/contacto' },
       ],
     },
     {

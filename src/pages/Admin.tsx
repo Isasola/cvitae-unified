@@ -1,12 +1,14 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { safeExternalUrl } from '@/lib/safe-url'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle, AlertCircle, X, Eye, EyeOff, Edit, Trash2, Save, Plus, RefreshCw } from 'lucide-react'
+import { CheckCircle, AlertCircle, X, Eye, EyeOff, Edit, Trash2, Save, Plus, RefreshCw, Menu } from 'lucide-react'
 import AdminGrowthCenter from '@/components/admin/AdminGrowthCenter'
 import AdminSeoControlCenter from '@/components/admin/AdminSeoControlCenter'
 import { AdminCeoHoy } from '@/components/admin/AdminCeoHoy'
 import { UserDetailDrawer } from '@/components/admin/UserDetailDrawer'
+import ReactMarkdown from 'react-markdown'
+import rehypeSanitize from 'rehype-sanitize'
 
 interface ContentItem {
   id?: string
@@ -19,6 +21,7 @@ interface ContentItem {
   tipo: 'blog' | 'oportunidad' | 'beca' | 'foro'
   ubicacion: string
   is_active: boolean
+  metadata?: Record<string, any>
 }
 
 interface Subscriber {
@@ -246,6 +249,7 @@ export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(ADMIN_VISUAL_PREVIEW)
   const [password, setPassword] = useState('')
   const adminPasswordRef = useRef('')
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'hoy' | 'brief' | 'feedback' | 'moderacion' | 'fuentes' | 'usuarios' | 'beta' | 'prospects' | 'contenido' | 'tokens' | 'skills' | 'analytics' | 'seo'>(ADMIN_PREVIEW_MODE === 'feedback' ? 'feedback' : 'hoy')
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -269,9 +273,10 @@ export default function Admin() {
   const [opportunityReviews, setOpportunityReviews] = useState<OpportunityReview[]>([])
   const [reviewSummary, setReviewSummary] = useState<Record<string, number>>({})
   const [opportunityInventory, setOpportunityInventory] = useState<{ total: number; published: number; archived: number; deleted: number; deletion_pending: number; by_type: Record<string, number> }>({ total: 0, published: 0, archived: 0, deleted: 0, deletion_pending: 0, by_type: {} })
-  const [reviewStatus, setReviewStatus] = useState('pending')
+  const [reviewStatus, setReviewStatus] = useState('in_review')
   const [reviewSource, setReviewSource] = useState('all')
   const [reviewSearch, setReviewSearch] = useState('')
+  const [reviewCountryFilter, setReviewCountryFilter] = useState('all')
   const [reviewSources, setReviewSources] = useState<any[]>([])
   const [selectedReview, setSelectedReview] = useState<OpportunityReview | null>(null)
   const [selectedCriteria, setSelectedCriteria] = useState<string[]>([])
@@ -316,6 +321,7 @@ export default function Admin() {
     tipo: 'blog', ubicacion: 'Asunción, Paraguay', is_active: true
   })
   const [isEditing, setIsEditing] = useState(false)
+  const [contentPreview, setContentPreview] = useState(false)
 
   // Tokens state
   const [tokens, setTokens] = useState<any[]>([])
@@ -374,7 +380,7 @@ export default function Admin() {
     { id: 'hoy', label: 'Hoy', dotColor: 'bg-[#c9a84c]', badge: null },
     { id: 'brief', label: 'Brief del día', dotColor: 'bg-emerald-400', badge: null },
     { id: 'feedback', label: 'Reportes', dotColor: 'bg-rose-300', badge: productFeedback.filter(item => !['resolved', 'closed'].includes(item.status)).length.toString() },
-    { id: 'moderacion', label: 'Verificación', dotColor: 'bg-amber-300', badge: (reviewSummary.pending || 0).toString() },
+    { id: 'moderacion', label: 'Verificación', dotColor: 'bg-amber-300', badge: ((reviewSummary.in_review || 0) + (reviewSummary.pending || 0)).toString() },
     { id: 'fuentes', label: 'Fuentes y reglas', dotColor: 'bg-sky-300', badge: scraperControls.filter(item => item.collection_enabled).length.toString() },
     { id: 'usuarios', label: 'Usuarios', dotColor: 'bg-[#c9a84c]', badge: metrics.usuarios.toString() },
     { id: 'beta', label: 'Beta / Leads', dotColor: 'bg-sky-400', badge: null },
@@ -417,7 +423,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (isAuthenticated && activeTab === 'moderacion') loadOpportunityReviews()
-  }, [reviewStatus, reviewSource, reviewLifecycle])
+  }, [reviewStatus, reviewSource, reviewLifecycle, reviewCountryFilter])
 
   useEffect(() => {
     if (ADMIN_PREVIEW_MODE !== 'brief-scrapers') return
@@ -539,7 +545,7 @@ export default function Admin() {
 
   const loadOpportunityReviews = async () => {
     try {
-      const json = await adminFetch('list_opportunity_reviews', { status: reviewStatus, source: reviewSource, search: reviewSearch, lifecycle: reviewLifecycle })
+      const json = await adminFetch('list_opportunity_reviews', { status: reviewStatus, source: reviewSource, search: reviewSearch, lifecycle: reviewLifecycle, country_filter: reviewCountryFilter })
       setOpportunityReviews(json.data || [])
       setReviewSources(json.sources || [])
       if (selectedReview && !(json.data || []).some((item: OpportunityReview) => item.id === selectedReview.id)) setSelectedReview(null)
@@ -1060,19 +1066,47 @@ export default function Admin() {
 
   // ── MAIN CONSOLE ──────────────────────────────────────────────────────────
 
+  const navTo = useCallback((tab: typeof activeTab) => {
+    setActiveTab(tab)
+    setIsSidebarOpen(false)
+  }, [])
+
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: '#080808' }}>
 
+      {/* MOBILE OVERLAY */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 md:hidden"
+          style={{ zIndex: 25 }}
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* SIDEBAR */}
-      <aside className="w-52 fixed h-full border-r border-white/[0.07] bg-[#080808] flex flex-col py-6 px-4" style={{ zIndex: 20 }}>
+      <aside
+        className={`fixed h-full border-r border-white/[0.07] bg-[#080808] flex flex-col py-6 px-4 transition-transform duration-200
+          w-64 md:w-52
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+        style={{ zIndex: 30 }}
+      >
         {/* Logo */}
-        <div className="mb-8 px-2">
-          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#c9a84c', fontWeight: 900 }}>
-            CV<em style={{ fontStyle: 'italic', fontWeight: 400 }}>itae</em>
-          </span>
-          <p style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.3)', marginTop: '2px', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-            OPS CONSOLE
-          </p>
+        <div className="mb-8 px-2 flex items-start justify-between">
+          <div>
+            <span style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', color: '#c9a84c', fontWeight: 900 }}>
+              CV<em style={{ fontStyle: 'italic', fontWeight: 400 }}>itae</em>
+            </span>
+            <p style={{ fontFamily: MONO, fontSize: '10px', color: 'rgba(232,232,224,0.3)', marginTop: '2px', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+              OPS CONSOLE
+            </p>
+          </div>
+          <button
+            className="md:hidden text-white/30 hover:text-white/70 mt-1"
+            onClick={() => setIsSidebarOpen(false)}
+            aria-label="Cerrar menú"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         {/* Live indicator */}
@@ -1082,11 +1116,11 @@ export default function Admin() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 space-y-0.5">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto">
           {NAV_ITEMS.map(item => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id as typeof activeTab)}
+              onClick={() => navTo(item.id as typeof activeTab)}
               className={`w-full text-left px-2 py-2.5 text-sm transition-colors flex items-center gap-2.5 ${
                 activeTab === item.id
                   ? 'text-[#e8e8e0] bg-white/[0.05]'
@@ -1118,17 +1152,33 @@ export default function Admin() {
       </aside>
 
       {/* MAIN CONTENT */}
-      <div className="flex-grow ml-52 relative overflow-hidden" style={{ minHeight: '100vh' }}>
+      <div className="flex-grow md:ml-52 relative overflow-hidden" style={{ minHeight: '100vh' }}>
         <SignalLines />
 
-        <div className="relative z-10 p-8">
+        {/* MOBILE TOP BAR */}
+        <div className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-[#080808] border-b border-white/[0.07]">
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="text-white/50 hover:text-white/80 transition-colors"
+            aria-label="Abrir menú"
+          >
+            <Menu size={20} />
+          </button>
+          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.1rem', color: '#c9a84c', fontWeight: 900 }}>
+            CV<em style={{ fontStyle: 'italic', fontWeight: 400 }}>itae</em>
+            <span style={{ fontFamily: MONO, fontSize: '9px', color: 'rgba(232,232,224,0.3)', marginLeft: '6px', verticalAlign: 'middle', textTransform: 'uppercase', letterSpacing: '0.12em' }}>OPS</span>
+          </span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        </div>
+
+        <div className="relative z-10 p-4 md:p-8">
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
 
               {/* ── PRODUCT FEEDBACK ─────────────────────────────────── */}
               {activeTab === 'feedback' && (
                 <div>
-                  <div className="mb-6 flex items-end justify-between gap-6">
+                  <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
                     <div><p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>BUZÓN OPERATIVO</p><h1 className="mt-1 text-2xl font-semibold text-[#e8e8e0]">Errores y mejoras reportadas</h1><p className="mt-2 text-sm text-white/40">Cada reporte conserva contexto técnico mínimo, referencia y trazabilidad de estado. No incluye automáticamente CVs ni contenido de postulaciones.</p></div>
                     <button onClick={loadProductFeedback} className="border border-white/10 px-3 py-2 text-xs text-white/45 hover:text-white" style={{ fontFamily: MONO }}>↻ ACTUALIZAR</button>
                   </div>
@@ -1148,12 +1198,23 @@ export default function Admin() {
 
               {/* ── HOY ────────────────────────────────────────────────── */}
               {activeTab === 'hoy' && (
-                <AdminCeoHoy
-                  metrics={metrics}
-                  externalMetrics={externalMetrics}
-                  foundingStats={foundingStats}
-                  foundingStatsLoading={foundingStatsLoading}
-                />
+                <div>
+                  {(reviewSummary.in_review || 0) > 0 && (
+                    <div className="mb-4 flex items-center justify-between border border-white/[0.07] px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xl font-semibold tabular-nums ${(reviewSummary.in_review || 0) > 100 ? 'text-red-400' : 'text-amber-300'}`} style={{ fontFamily: MONO }}>{reviewSummary.in_review || 0}</span>
+                        <span className="text-sm text-white/45">oportunidades en revisión sin aprobar</span>
+                      </div>
+                      <button onClick={() => setActiveTab('moderacion')} className="border border-[#c9a84c]/30 px-3 py-1.5 text-[10px] text-[#c9a84c] hover:bg-[#c9a84c]/10 transition" style={{ fontFamily: MONO }}>MODERAR →</button>
+                    </div>
+                  )}
+                  <AdminCeoHoy
+                    metrics={metrics}
+                    externalMetrics={externalMetrics}
+                    foundingStats={foundingStats}
+                    foundingStatsLoading={foundingStatsLoading}
+                  />
+                </div>
               )}
 
               {/* ── BRIEF ──────────────────────────────────────────────── */}
@@ -1554,11 +1615,30 @@ export default function Admin() {
                       <div className="max-h-[340px] overflow-y-auto">
                         {sourcePolicies.map(source => {
                           const stats = sourceStats[source.source] || {}
-                          return <button key={source.source} onClick={() => { setSelectedControl({ kind: 'source', data: source }); setControlFormValues({ max_items_per_day: source.max_items_per_day ?? 500, retention_days: source.retention_days ?? 30, allowed_country_codes_str: (source.allowed_country_codes || []).join(', ') }) }} className={`flex w-full items-center gap-3 border-b border-white/[0.05] px-4 py-3 text-left transition ${selectedControl?.kind === 'source' && selectedControl.data.source === source.source ? 'bg-white/[0.06]' : 'hover:bg-white/[0.025]'}`}>
-                            <span className={`h-2 w-2 shrink-0 rounded-full ${source.trust_level === 'trusted' ? 'bg-emerald-400' : source.trust_level === 'blocked' ? 'bg-red-400' : 'bg-amber-300'}`} />
-                            <span className="min-w-0 flex-1"><span className="block truncate text-sm text-[#e8e8e0]">{source.display_name}</span><span className="block text-[10px] text-white/25" style={{ fontFamily: MONO }}>{stats.verified || 0} verificadas · {stats.pending || 0} pendientes</span></span>
-                            <span className="text-[9px] uppercase text-white/25" style={{ fontFamily: MONO }}>{source.trust_level}</span>
-                          </button>
+                          const tier = source.source_tier || 'A'
+                          const tierColor = tier === 'SS' ? 'text-[#c9a84c] border-[#c9a84c]/40' : tier === 'S' ? 'text-emerald-400 border-emerald-400/30' : tier === 'B' ? 'text-red-400 border-red-400/30' : 'text-white/30 border-white/15'
+                          return <div key={source.source} className={`flex w-full items-center gap-3 border-b border-white/[0.05] px-4 py-3 transition ${selectedControl?.kind === 'source' && selectedControl.data.source === source.source ? 'bg-white/[0.06]' : 'hover:bg-white/[0.025]'}`}>
+                            <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => { setSelectedControl({ kind: 'source', data: source }); setControlFormValues({ max_items_per_day: source.max_items_per_day ?? 500, retention_days: source.retention_days ?? 30, allowed_country_codes_str: (source.allowed_country_codes || []).join(', ') }) }}>
+                              <span className={`h-2 w-2 shrink-0 rounded-full ${source.trust_level === 'trusted' ? 'bg-emerald-400' : source.trust_level === 'blocked' ? 'bg-red-400' : 'bg-amber-300'}`} />
+                              <span className="min-w-0 flex-1"><span className="block truncate text-sm text-[#e8e8e0]">{source.display_name}</span><span className="block text-[10px] text-white/25" style={{ fontFamily: MONO }}>{stats.verified || 0} verificadas · {stats.pending || 0} pendientes</span></span>
+                            </button>
+                            <select
+                              value={tier}
+                              onClick={e => e.stopPropagation()}
+                              onChange={async e => {
+                                e.stopPropagation()
+                                await adminFetch('update_source_tier', { source: source.source, tier: e.target.value })
+                                await loadControlCenter()
+                              }}
+                              className={`border px-2 py-1 text-[10px] bg-transparent cursor-pointer ${tierColor}`}
+                              style={{ fontFamily: MONO }}
+                            >
+                              <option value="SS">SS</option>
+                              <option value="S">S</option>
+                              <option value="A">A</option>
+                              <option value="B">B</option>
+                            </select>
+                          </div>
                         })}
                       </div>
                     </div>
@@ -1634,11 +1714,14 @@ export default function Admin() {
               {/* ── VERIFICACIÓN DE OPORTUNIDADES ───────────────────── */}
               {activeTab === 'moderacion' && (
                 <div>
-                  <div className="mb-6 flex items-end justify-between gap-6">
+                  <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
                     <div>
                       <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase' }}>CONTROL DE CONFIANZA</p>
                       <h2 className="mt-1 text-2xl text-[#e8e8e0]">Bandeja de verificación</h2>
                       <p className="mt-2 max-w-2xl text-sm text-white/45">Nada se elimina automáticamente. Sólo las oportunidades verificadas aparecen en el catálogo y participan del matching.</p>
+                      {reviewSummary.verified_today !== undefined && (
+                        <p className="mt-1 text-[11px]" style={{ fontFamily: MONO, color: 'rgba(201,168,76,0.6)' }}>{reviewSummary.verified_today} verificadas hoy</p>
+                      )}
                     </div>
                     <button onClick={() => { loadOpportunityReviews(); loadReviewSummary() }} className="border border-white/10 px-3 py-2 text-xs text-white/50 transition hover:text-white" style={{ fontFamily: MONO }}>↻ ACTUALIZAR</button>
                   </div>
@@ -1664,11 +1747,20 @@ export default function Admin() {
                     </div>
                   </div>
 
-                  <div className="mb-5 grid gap-2 sm:grid-cols-[1fr_210px_170px_auto]">
+                  <div className="mb-5 grid gap-2 sm:grid-cols-[1fr_180px_140px_140px_auto]">
                     <input value={reviewSearch} onChange={event => setReviewSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') loadOpportunityReviews() }} placeholder="Buscar cargo o empresa" className={inputCls} />
                     <select value={reviewSource} onChange={event => setReviewSource(event.target.value)} className={inputCls}>
                       <option value="all">Todas las fuentes</option>
                       {reviewSources.map(source => <option key={source.source} value={source.source}>{source.display_name}</option>)}
+                    </select>
+                    <select value={reviewCountryFilter} onChange={e => setReviewCountryFilter(e.target.value)} className={inputCls} style={{ fontFamily: MONO, fontSize: '12px' }}>
+                      <option value="all">Todos los países</option>
+                      <option value="PY">Paraguay</option>
+                      <option value="PE">Perú</option>
+                      <option value="AR">Argentina</option>
+                      <option value="CL">Chile</option>
+                      <option value="BO">Bolivia</option>
+                      <option value="WORLDWIDE">Global / Remoto</option>
                     </select>
                     <select value={reviewLifecycle} onChange={event => setReviewLifecycle(event.target.value)} className={inputCls}>
                       <option value="active">Activas</option>
@@ -1806,14 +1898,23 @@ export default function Admin() {
                       <div className="border-b border-white/[0.07] px-4 py-3 text-[10px] uppercase tracking-[0.14em] text-white/30" style={{ fontFamily: MONO }}>{opportunityReviews.length} resultados cargados</div>
                       <div className="max-h-[680px] overflow-y-auto">
                         {opportunityReviews.length === 0 ? <p className="p-8 text-center text-sm text-white/35">No hay registros con este filtro.</p> : opportunityReviews.map(opportunity => (
-                          <button key={opportunity.id} onClick={() => openReview(opportunity)} className={`w-full border-b border-white/[0.05] px-4 py-4 text-left transition ${selectedReview?.id === opportunity.id ? 'bg-white/[0.06]' : 'hover:bg-white/[0.025]'}`}>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-[9px] uppercase tracking-[0.13em] text-[#c9a84c]" style={{ fontFamily: MONO }}>{opportunity.source}</span>
-                              <span className="text-[9px] uppercase text-white/25" style={{ fontFamily: MONO }}>{opportunity.verification_status.replace('_', ' ')}</span>
-                            </div>
-                            <p className="mt-2 line-clamp-2 text-sm leading-snug text-[#e8e8e0]">{opportunity.title}</p>
-                            <p className="mt-1 truncate text-xs text-white/40">{opportunity.organization || 'Organización no informada'} · {opportunity.location || 'Sin ubicación'}</p>
-                          </button>
+                          <div key={opportunity.id} className={`relative border-b border-white/[0.05] transition ${selectedReview?.id === opportunity.id ? 'bg-white/[0.06]' : 'hover:bg-white/[0.025]'}`}>
+                            <button onClick={() => openReview(opportunity)} className="w-full px-4 py-4 text-left">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-[9px] uppercase tracking-[0.13em] text-[#c9a84c]" style={{ fontFamily: MONO }}>{opportunity.source}</span>
+                                <span className="text-[9px] uppercase text-white/25" style={{ fontFamily: MONO }}>{opportunity.verification_status.replace('_', ' ')}</span>
+                              </div>
+                              <p className="mt-2 line-clamp-2 text-sm leading-snug text-[#e8e8e0]">{opportunity.title}</p>
+                              <p className="mt-1 truncate text-xs text-white/40">{opportunity.organization || 'Organización no informada'} · {opportunity.location || 'Sin ubicación'}</p>
+                            </button>
+                            {reviewStatus === 'in_review' && (
+                              <div className="flex items-center gap-1.5 px-4 pb-3">
+                                <button disabled={loading} onClick={e => { e.stopPropagation(); setSelectedReview(opportunity); setTimeout(() => submitOpportunityReview('verified'), 50) }} className="border border-emerald-500/30 px-3 py-1.5 text-[10px] text-emerald-400/80 hover:bg-emerald-500/10 active:bg-emerald-500/20 transition disabled:opacity-30" style={{ fontFamily: MONO }} title="Verificar">APROBAR</button>
+                                <button disabled={loading} onClick={e => { e.stopPropagation(); setSelectedReview(opportunity); setTimeout(() => submitOpportunityReview('quarantined'), 50) }} className="border border-amber-500/20 px-3 py-1.5 text-[10px] text-amber-400/70 hover:bg-amber-500/10 active:bg-amber-500/20 transition disabled:opacity-30" style={{ fontFamily: MONO }} title="Cuarentena">HOLD</button>
+                                <button disabled={loading} onClick={e => { e.stopPropagation(); setSelectedReview(opportunity); setTimeout(() => submitOpportunityReview('rejected'), 50) }} className="border border-red-500/20 px-3 py-1.5 text-[10px] text-red-400/70 hover:bg-red-500/10 active:bg-red-500/20 transition disabled:opacity-30" style={{ fontFamily: MONO }} title="Rechazar">✕</button>
+                              </div>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -2180,6 +2281,30 @@ export default function Admin() {
                     </button>
                   </div>
 
+                  {/* Borradores auto-generados */}
+                  {items.filter(i => i.metadata?.auto_generated && !i.is_active).length > 0 && (
+                    <div className="mb-6 border border-[#c9a84c]/20 p-4">
+                      <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(201,168,76,0.5)', textTransform: 'uppercase', marginBottom: '12px' }}>
+                        BORRADORES AUTO-GENERADOS — {items.filter(i => i.metadata?.auto_generated && !i.is_active).length} pendientes
+                      </p>
+                      <div className="divide-y divide-white/[0.05]">
+                        {items.filter(i => i.metadata?.auto_generated && !i.is_active).map(draft => (
+                          <div key={draft.id} className="flex items-start justify-between gap-4 py-3">
+                            <div className="min-w-0">
+                              <p className="text-sm text-[#e8e8e0] truncate">{draft.titulo}</p>
+                              <p className="mt-0.5 text-[11px] text-white/30" style={{ fontFamily: MONO }}>{draft.metadata?.trigger_source} · {draft.metadata?.tier || 'SS'}</p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <button onClick={() => toggleStatus(draft)} className="border border-[#c9a84c]/40 px-3 py-1.5 text-[10px] text-[#c9a84c] hover:bg-[#c9a84c]/10 transition" style={{ fontFamily: MONO }}>PUBLICAR</button>
+                              <button onClick={() => handleEdit(draft)} className="border border-white/10 px-3 py-1.5 text-[10px] text-white/50 hover:text-white transition" style={{ fontFamily: MONO }}>EDITAR</button>
+                              <button onClick={() => deleteItem(draft.id!)} className="border border-red-500/20 px-3 py-1.5 text-[10px] text-red-400/60 hover:text-red-400 transition" style={{ fontFamily: MONO }}>✕</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Form */}
                   <div className="border border-white/[0.07] p-5 mb-6">
                     <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase', marginBottom: '16px' }}>
@@ -2236,15 +2361,27 @@ export default function Admin() {
                         className={inputCls}
                         style={{ fontFamily: MONO, fontSize: '12px' }}
                       />
-                      <textarea
-                        value={formData.cuerpo}
-                        onChange={e => setFormData(prev => ({ ...prev, cuerpo: e.target.value }))}
-                        placeholder="Contenido (Markdown)"
-                        rows={8}
-                        required
-                        className={`${inputCls} resize-none`}
-                        style={{ fontFamily: MONO, fontSize: '12px' }}
-                      />
+                      <div>
+                        <div className="mb-2 flex items-center gap-1.5">
+                          <button type="button" onClick={() => setContentPreview(false)} className={`px-3 py-1.5 text-[10px] border transition ${!contentPreview ? 'border-[#c9a84c]/40 text-[#c9a84c]' : 'border-white/10 text-white/35 hover:text-white'}`} style={{ fontFamily: MONO }}>EDITAR</button>
+                          <button type="button" onClick={() => setContentPreview(true)} className={`px-3 py-1.5 text-[10px] border transition ${contentPreview ? 'border-[#c9a84c]/40 text-[#c9a84c]' : 'border-white/10 text-white/35 hover:text-white'}`} style={{ fontFamily: MONO }}>PREVIEW</button>
+                        </div>
+                        {contentPreview ? (
+                          <div className="min-h-[200px] border border-white/[0.07] bg-white/[0.01] p-5 prose max-w-none prose-headings:text-white prose-headings:font-semibold prose-p:text-white/65 prose-p:leading-relaxed prose-li:text-white/65 prose-strong:text-white prose-a:text-[#c9a84c] prose-blockquote:border-l-[#c9a84c]/40 prose-blockquote:text-white/50 prose-code:text-[#c9a84c]/70 prose-hr:border-white/10">
+                            {formData.cuerpo ? <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{formData.cuerpo}</ReactMarkdown> : <p style={{ fontFamily: MONO, fontSize: '12px', color: 'rgba(232,232,224,0.2)' }}>Sin contenido todavía.</p>}
+                          </div>
+                        ) : (
+                          <textarea
+                            value={formData.cuerpo}
+                            onChange={e => setFormData(prev => ({ ...prev, cuerpo: e.target.value }))}
+                            placeholder="Contenido (Markdown)"
+                            rows={8}
+                            required
+                            className={`${inputCls} resize-none`}
+                            style={{ fontFamily: MONO, fontSize: '12px' }}
+                          />
+                        )}
+                      </div>
                       <div className="flex justify-end gap-3">
                         {isEditing && (
                           <button

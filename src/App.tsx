@@ -13,6 +13,7 @@ import Opportunities from './pages/Opportunities'
 import OpportunityDetail from './pages/OpportunityDetail'
 import Jobs from './pages/Jobs'
 import JobDetail from './pages/JobDetail'
+import Contacto from './pages/Contacto'
 import NotFound from './pages/NotFound'
 import AuthCallback from './pages/AuthCallback'
 
@@ -58,6 +59,7 @@ export default function App() {
       <Route path="/empleos/:slug" component={JobDetail} />
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:slug" component={BlogPost} />
+      <Route path="/contacto" component={Contacto} />
       <Route path="/sobre-cvitae" component={About} />
       <Route path="/about"><Redirect to="/sobre-cvitae" /></Route>
       <Route path="/privacy" component={Privacy} />

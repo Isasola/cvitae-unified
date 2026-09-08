@@ -89,6 +89,51 @@ export const handler: Handler = async (event) => {
       .in("status", ["accepted", "active"])
       .eq("program", "founding_50")
 
+    // Fire-and-forget: notify founder on first visit of each real user (idempotent via email_log).
+    // This guarantees Isaias gets an alert even if the user never triggers mark_offered.
+    if (!data) {
+      const signupAlertKey = `founder_signup:${user.id}:v1`
+      const { data: existingAlert } = await supabaseAdmin
+        .from("email_log")
+        .select("id")
+        .eq("idempotency_key", signupAlertKey)
+        .maybeSingle()
+
+      if (!existingAlert) {
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(user.id)
+        const userEmail = authUser?.user?.email || ""
+        const { data: profileMeta } = await supabaseAdmin
+          .from("user_master_profiles")
+          .select("full_name, created_at")
+          .eq("user_id", user.id)
+          .maybeSingle()
+
+        if (userEmail) {
+          const resend = new Resend(process.env.RESEND_API_KEY)
+          notifyFounder({
+            userEmail,
+            userName: profileMeta?.full_name || undefined,
+            signupAt: profileMeta?.created_at || undefined,
+            source: "dashboard_first_visit",
+            resend,
+          }).catch((e: any) => console.error("[founding-beta-action] signup notify failed", e?.message))
+
+          supabaseAdmin.from("email_log").insert({
+            user_id: user.id,
+            template: "founder_signup_notification",
+            recipient_email: "contacto@cvitae.lat",
+            subject: `[CVitae] Nuevo usuario: ${userEmail}`,
+            status: "sent",
+            resend_id: null,
+            idempotency_key: signupAlertKey,
+            metadata: { source: "get_status_first_visit" },
+          }).then(({ error: logErr }: any) => {
+            if (logErr) console.error("[founding-beta-action] signup notify log error", logErr.message)
+          })
+        }
+      }
+    }
+
     return {
       statusCode: 200,
       body: JSON.stringify({

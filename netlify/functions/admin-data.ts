@@ -191,6 +191,14 @@ const handler: Handler = async (event) => {
       else if (payload?.lifecycle === "deleted") query = query.not("deleted_at", "is", null)
       else query = query.is("archived_at", null).is("deleted_at", null)
       if (search) query = query.or(`title.ilike.%${search.replace(/[%_,()]/g, "")}%,organization.ilike.%${search.replace(/[%_,()]/g, "")}%`)
+      if (payload?.country_filter && payload.country_filter !== 'all') {
+        if (payload.country_filter === 'WORLDWIDE') {
+          query = query.or('remote_scope.eq.WORLDWIDE,remote_scope.eq.LATAM')
+        } else {
+          const cf = String(payload.country_filter).replace(/[^A-Z]/g, '')
+          query = query.or(`country_code.eq.${cf},onsite_country.eq.${cf}`)
+        }
+      }
       const { data, error, count } = await query
       if (error) throw error
       const { data: sources } = await supabase.from("opportunity_sources").select("*").order("display_name")
@@ -1141,6 +1149,19 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({
         confirmed: confirmed.length, skipped: skipped.length + notFound.length,
       }) }
+    }
+
+    if (action === "update_source_tier") {
+      const source = String(payload?.source || "")
+      const tier = String(payload?.tier || "A")
+      if (!source) throw new Error("source required")
+      if (!["SS", "S", "A", "B"].includes(tier)) throw new Error("tier inválido")
+      const { error } = await supabase
+        .from("opportunity_sources")
+        .update({ source_tier: tier })
+        .eq("source", source)
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
     return { statusCode: 400, body: JSON.stringify({ error: "Acción desconocida" }) }

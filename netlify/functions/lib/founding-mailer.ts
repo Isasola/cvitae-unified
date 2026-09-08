@@ -8,84 +8,92 @@ import { Resend } from "resend"
 
 export const FOUNDING_TEMPLATES: Record<string, { subject: string; fromName: string; fromAddress: string }> = {
   "founding_welcome_v1": {
-    subject: "¡Sos parte del Founding 50 de CVitae! 🎉",
+    subject: "Ya sos parte del Founding 50 — y quiero escucharte",
     fromName: "Isaias de CVitae",
     fromAddress: "contacto@cvitae.lat",
   },
   "founding_offer_v1": {
-    subject: "Te reservamos un lugar en el Founding 50",
-    fromName: "CVitae",
-    fromAddress: "noreply@cvitae.lat",
+    subject: "Te escribo yo, el fundador de CVitae",
+    fromName: "Isaias de CVitae",
+    fromAddress: "contacto@cvitae.lat",
   },
 }
 
 export function buildFoundingEmailHtml(template: string, data: Record<string, any>): string {
   const name = data.name || "usuario"
 
-  if (template === "founding_welcome_v1") {
-    return `
-<!DOCTYPE html>
+  const base = (content: string) => `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="background:#0a0a0a;color:#f5f0e8;font-family:system-ui,sans-serif;margin:0;padding:0">
-  <div style="max-width:600px;margin:0 auto;padding:40px 24px">
-    <div style="margin-bottom:32px">
-      <span style="background:#c9a84c15;border:1px solid #c9a84c50;color:#c9a84c;font-size:12px;font-weight:600;padding:6px 14px;border-radius:100px">FOUNDING 50</span>
+<body style="background:#0f0f0f;color:#e8e4dc;font-family:Georgia,serif;margin:0;padding:0">
+  <div style="max-width:560px;margin:0 auto;padding:48px 28px">
+    ${content}
+    <div style="margin-top:40px;padding-top:24px;border-top:1px solid #1e1e1e">
+      <p style="color:#444;font-size:11px;line-height:1.7;margin:0">
+        Isaias Sola · Fundador de CVitae<br>
+        <a href="https://cvitae.lat" style="color:#444;text-decoration:none">cvitae.lat</a> · Paraguay
+      </p>
     </div>
-    <h1 style="font-size:28px;font-weight:700;color:#f5f0e8;margin:0 0 16px">¡Hola ${name}, sos parte del Founding 50!</h1>
-    <p style="color:#a0a0a0;line-height:1.7;margin:0 0 20px">
-      Gracias por unirte como uno de los primeros 50 usuarios de CVitae.
-      Tu cuenta ya tiene <strong style="color:#c9a84c">6 meses de Pro activados</strong>, sin tarjeta, sin auto-renovación.
-    </p>
-    <p style="color:#a0a0a0;line-height:1.7;margin:0 0 20px">
-      Como Founding User, tu feedback construye CVitae. Si algo no funciona como esperás,
-      o si tenés ideas, respondé este correo directamente.
-    </p>
-    <div style="margin:32px 0">
-      <a href="https://cvitae.lat/mi-carrera" style="background:#c9a84c;color:#0a0a0a;font-weight:600;font-size:14px;padding:14px 28px;border-radius:12px;text-decoration:none;display:inline-block">
-        Ir a mi carrera →
-      </a>
-    </div>
-    <p style="color:#555;font-size:12px;line-height:1.6">
-      CVitae · cvitae.lat · Paraguay<br>
-      Recibís este correo porque sos parte del programa Founding 50.
-    </p>
   </div>
 </body>
 </html>`
-  }
 
   if (template === "founding_offer_v1") {
-    return `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="background:#0a0a0a;color:#f5f0e8;font-family:system-ui,sans-serif;margin:0;padding:0">
-  <div style="max-width:600px;margin:0 auto;padding:40px 24px">
-    <div style="margin-bottom:32px">
-      <span style="background:#c9a84c15;border:1px solid #c9a84c50;color:#c9a84c;font-size:12px;font-weight:600;padding:6px 14px;border-radius:100px">FOUNDING 50</span>
-    </div>
-    <h1 style="font-size:28px;font-weight:700;color:#f5f0e8;margin:0 0 16px">Te reservamos un lugar, ${name}</h1>
-    <p style="color:#a0a0a0;line-height:1.7;margin:0 0 20px">
-      CVitae está construyendo su base de usuarios y queremos que seas de los primeros 50.
-      Solo tenés que entrar a tu dashboard y aceptar la invitación.
+    return base(`
+    <p style="color:#c9a84c;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;margin:0 0 28px">Founding 50 · CVitae</p>
+    <p style="font-size:18px;color:#e8e4dc;margin:0 0 24px;line-height:1.5">Hola ${name},</p>
+    <p style="color:#a0a0a0;line-height:1.85;margin:0 0 18px;font-size:15px">
+      Te escribo yo directamente. Soy Isaias, el fundador de CVitae.
     </p>
-    <p style="color:#a0a0a0;line-height:1.7;margin:0 0 20px">
-      El beneficio es <strong style="color:#c9a84c">6 meses de Pro gratis</strong>,
-      sin tarjeta requerida y sin renovación automática.
+    <p style="color:#a0a0a0;line-height:1.85;margin:0 0 18px;font-size:15px">
+      Vi que te registraste y creaste tu perfil. Quería agradecerte personalmente por ser de los primeros
+      en probar esto, todavía estamos construyendo y cada usuario que llega en esta etapa importa mucho.
     </p>
-    <div style="margin:32px 0">
-      <a href="https://cvitae.lat/mi-carrera" style="background:#c9a84c;color:#0a0a0a;font-weight:600;font-size:14px;padding:14px 28px;border-radius:12px;text-decoration:none;display:inline-block">
-        Ver mi oferta →
-      </a>
-    </div>
-    <p style="color:#555;font-size:12px;line-height:1.6">
-      CVitae · cvitae.lat · Paraguay<br>
-      Recibís este correo porque creaste una cuenta en CVitae.
+    <p style="color:#a0a0a0;line-height:1.85;margin:0 0 18px;font-size:15px">
+      Por eso quiero darte acceso al <strong style="color:#c9a84c">Founding 50</strong>: los primeros 50 usuarios
+      que van a tener 6 meses de Pro sin costo, sin tarjeta y sin auto-renovación. No es un descuento automático,
+      es una invitación directa mía.
     </p>
-  </div>
-</body>
-</html>`
+    <p style="color:#a0a0a0;line-height:1.85;margin:0 0 32px;font-size:15px">
+      Usá la plataforma, contame qué funciona y qué no. Si tenés alguna sugerencia o algo que no anduvo bien,
+      respondé directamente a este correo — lo leo yo.
+    </p>
+    <a href="https://cvitae.lat/mi-carrera"
+       style="background:#c9a84c;color:#0a0a0a;font-weight:700;font-size:14px;padding:14px 28px;text-decoration:none;display:inline-block;letter-spacing:0.03em">
+      Ver mi oferta →
+    </a>
+    <p style="color:#a0a0a0;line-height:1.85;margin:32px 0 0;font-size:15px">
+      Gracias de nuevo,<br>
+      <strong style="color:#e8e4dc">Isaias</strong>
+    </p>`)
+  }
+
+  if (template === "founding_welcome_v1") {
+    return base(`
+    <p style="color:#c9a84c;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;margin:0 0 28px">Founding 50 · CVitae</p>
+    <p style="font-size:18px;color:#e8e4dc;margin:0 0 24px;line-height:1.5">Hola ${name},</p>
+    <p style="color:#a0a0a0;line-height:1.85;margin:0 0 18px;font-size:15px">
+      ¡Ya sos parte del Founding 50 de CVitae!
+    </p>
+    <p style="color:#a0a0a0;line-height:1.85;margin:0 0 18px;font-size:15px">
+      Tus <strong style="color:#c9a84c">6 meses de Pro están activados desde hoy</strong>.
+      Sin tarjeta, sin renovación automática, sin letra chica.
+    </p>
+    <p style="color:#a0a0a0;line-height:1.85;margin:0 0 18px;font-size:15px">
+      Siendo uno de los primeros 50, tu experiencia con la plataforma es la que más me importa ahora mismo.
+      Si algo no funciona, si hay algo que esperabas y no encontraste, o si simplemente se te ocurre algo que
+      haría esto mejor — respondé este correo. Lo leo yo personalmente.
+    </p>
+    <p style="color:#a0a0a0;line-height:1.85;margin:0 0 32px;font-size:15px">
+      Gracias por estar en esto desde el principio.
+    </p>
+    <a href="https://cvitae.lat/mi-carrera"
+       style="background:#c9a84c;color:#0a0a0a;font-weight:700;font-size:14px;padding:14px 28px;text-decoration:none;display:inline-block;letter-spacing:0.03em">
+      Ir a mi carrera →
+    </a>
+    <p style="color:#a0a0a0;line-height:1.85;margin:32px 0 0;font-size:15px">
+      <strong style="color:#e8e4dc">Isaias</strong>
+    </p>`)
   }
 
   return `<p>Hola ${name},</p><p>Este es un correo de CVitae.</p>`

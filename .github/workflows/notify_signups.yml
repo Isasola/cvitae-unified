@@ -1,0 +1,31 @@
+name: CVitae — Notificaciones de usuarios
+
+on:
+  schedule:
+    # Todos los días a las 09:00 PY (UTC-3 = 12:00 UTC)
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Enviar resumen de usuarios incompletos y nuevos
+        run: python scripts/notify_incomplete_signups.py
