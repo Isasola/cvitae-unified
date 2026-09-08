@@ -1029,6 +1029,11 @@ export default function Admin() {
   ].filter(item => item.count > 0)
   const growthMaximum = Math.max(1, ...metrics.growth.flatMap(day => [day.userSignups, day.opportunitiesAdded, day.opportunitiesVerified]))
 
+  const navTo = useCallback((tab: typeof activeTab) => {
+    setActiveTab(tab)
+    setIsSidebarOpen(false)
+  }, [])
+
   if (!isAuthenticated) {
     return (
       <main className="min-h-screen bg-[#080808] flex items-center justify-center p-4">
@@ -1039,6 +1044,7 @@ export default function Admin() {
           <form onSubmit={handleLogin} className="space-y-4">
             <input
               type="password"
+              autoComplete="current-password"
               aria-label="Contraseña de administración"
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -1065,11 +1071,6 @@ export default function Admin() {
   }
 
   // ── MAIN CONSOLE ──────────────────────────────────────────────────────────
-
-  const navTo = useCallback((tab: typeof activeTab) => {
-    setActiveTab(tab)
-    setIsSidebarOpen(false)
-  }, [])
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: '#080808' }}>
