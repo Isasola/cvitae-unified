@@ -10,7 +10,7 @@ import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { CompatibilityTrace, Eyebrow } from '@/components/cv/visuals'
 import { auth, supabase } from '@/lib/supabase'
-import { CVLoader } from '@/components/cv/CVLoader'
+import { CVLoader, DiagnosticLoader } from '@/components/cv/CVLoader'
 import { playComplete } from '@/lib/sounds'
 
 type CategoryScore = { key: string; score: number; max: number; reason: string; evidence?: string | null }
@@ -289,6 +289,19 @@ export default function ATSDiagnostic() {
 
   return (
     <DashboardLayout>
+      <AnimatePresence>
+        {analyzing && (
+          <motion.div
+            key="ats-analyzing"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#080808]/85 backdrop-blur-sm"
+          >
+            <DiagnosticLoader />
+          </motion.div>
+        )}
+      </AnimatePresence>
       <Helmet>
         <title>Diagnóstico ATS | Mi Carrera · CVitae</title>
         <meta name="description" content="Diagnóstico ATS privado con rúbrica explicable y preguntas para mejorar tu CV sin inventar información." />

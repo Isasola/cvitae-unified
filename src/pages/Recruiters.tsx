@@ -1922,10 +1922,10 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
 
             <div className="mt-8 rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] px-5 py-4">
               <p className="text-sm font-medium text-[#c9a84c]">
-                Servicio gratuito para las primeras 100 empresas
+                Acceso gratuito para las primeras 10 empresas
               </p>
               <p className="mt-1 text-xs font-light text-white/55">
-                Valor real USD 79/mes — sin costo mientras seas parte del grupo fundador.
+                Valor real USD 79/mes — sin costo para el grupo fundador mientras estamos en beta.
               </p>
             </div>
           </div>

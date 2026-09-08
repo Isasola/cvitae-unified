@@ -8,7 +8,7 @@
 import { Handler } from "@netlify/functions"
 import { createClient } from "@supabase/supabase-js"
 import { Resend } from "resend"
-import { sendFoundingEmail, notifyFounderMilestone } from "./lib/founding-mailer"
+import { sendFoundingEmail, notifyFounderMilestone, notifyFounder } from "./lib/founding-mailer"
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {

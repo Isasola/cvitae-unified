@@ -46,7 +46,7 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
   const [enrollment, setEnrollment] = useState<FoundingBetaEnrollment | null>(null)
   const [programFull, setProgramFull] = useState(false)
   const [slotsRemaining, setSlotsRemaining] = useState(50)
-  const [dismissed, setDismissed] = useState(false)  // session-only dismiss flag
+  const [dismissed, setDismissed] = useState(() => sessionStorage.getItem('founding_beta_modal_seen') === '1')
 
   useEffect(() => {
     if (!userId) { setLoading(false); return }
@@ -125,8 +125,7 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
   }, [])
 
   const dismiss = useCallback(() => {
-    // "Ahora no" — session-only, no API call
-    // Also call increment_dismissed in background (fire-and-forget)
+    sessionStorage.setItem('founding_beta_modal_seen', '1')
     setDismissed(true)
     getToken().then(token => {
       if (token) callFoundingAction(token, 'increment_dismissed').catch(() => {})
