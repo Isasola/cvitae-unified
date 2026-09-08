@@ -102,7 +102,13 @@ function Ambient() {
 
 // ─── Panel header (when authenticated) ───────────────────────────────────────
 
-function PanelHeader({ session, balance, onLogout }: { session: RecruiterSession; balance: number; onLogout: () => void }) {
+function PanelHeader({ session, balance, onLogout, onRequestCredits, creditRequestSent }: {
+  session: RecruiterSession
+  balance: number
+  onLogout: () => void
+  onRequestCredits?: () => void
+  creditRequestSent?: boolean
+}) {
   return (
     <header className="border-b border-white/5 px-6 py-5">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-6">
@@ -118,11 +124,25 @@ function PanelHeader({ session, balance, onLogout }: { session: RecruiterSession
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 rounded-full border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] px-3.5 py-1.5">
-            <Coins strokeWidth={1.5} className="h-4 w-4 text-[#c9a84c]" />
-            <span className="text-xs font-medium tracking-wide text-white/80">
-              <span className="text-[#c9a84c]">{balance}</span> créditos
-            </span>
+              <Coins strokeWidth={1.5} className="h-4 w-4 text-[#c9a84c]" />
+              <span className="text-xs font-medium tracking-wide text-white/80">
+                <span className={balance <= 3 ? 'text-amber-400' : 'text-[#c9a84c]'}>{balance}</span> créditos
+              </span>
             </div>
+            {onRequestCredits && (
+              creditRequestSent ? (
+                <span className="text-[11px] text-emerald-400/80 flex items-center gap-1">
+                  <CheckCircle2 strokeWidth={1.5} className="h-3.5 w-3.5" /> Solicitud enviada
+                </span>
+              ) : (
+                <button
+                  onClick={onRequestCredits}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/20 px-3 py-1.5 text-[11px] text-[#c9a84c]/70 transition hover:border-[#c9a84c]/50 hover:text-[#c9a84c]"
+                >
+                  + Solicitar créditos
+                </button>
+              )
+            )}
             <B2BInfoPopover
               label="Cómo funcionan los créditos"
               title="Créditos y control humano"
@@ -1152,6 +1172,7 @@ interface VacancyRecord {
   slug: string
   location: string
   modality: string
+  is_active: boolean
   created_at: string
   vacancy_applications: { count: number }[]
 }
@@ -1171,6 +1192,8 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
   const [listError, setListError] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
   const [selectedVacancy, setSelectedVacancy] = useState<VacancyRecord | null>(null)
+  const [closingVacancy, setClosingVacancy] = useState<string | null>(null)
+  const [closingInProgress, setClosingInProgress] = useState(false)
 
   useEffect(() => { loadVacancies() }, [])
 
@@ -1191,6 +1214,20 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
 
   const copyToClipboard = async (text: string, id: string) => {
     try { await navigator.clipboard.writeText(text); setCopied(id); setTimeout(() => setCopied(null), 2000) } catch { /* silencioso */ }
+  }
+
+  const closeVacancy = async (id: string) => {
+    setClosingInProgress(true)
+    try {
+      await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action: 'close_vacancy', vacancy_id: id }),
+      })
+      setVacancies(vs => vs.map(v => v.id === id ? { ...v, is_active: false } : v))
+    } finally {
+      setClosingInProgress(false)
+      setClosingVacancy(null)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1403,30 +1440,59 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
                 {vacancies.map((v) => {
                   const url = `https://cvitae.lat/vacante/${v.slug}`
                   const count = v.vacancy_applications?.[0]?.count ?? 0
+                  const closed = v.is_active === false
                   return (
-                    <tr key={v.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors">
+                    <tr key={v.id} className={`border-b border-white/5 last:border-0 transition-colors ${closed ? 'opacity-50' : 'hover:bg-white/[0.02]'}`}>
                       <td className="px-4 py-3">
-                        <p className="text-sm text-white font-medium truncate max-w-[180px]">{v.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className={`text-sm font-medium truncate max-w-[160px] ${closed ? 'text-white/40 line-through' : 'text-white'}`}>{v.title}</p>
+                          {closed && <span className="shrink-0 rounded-full border border-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.14em] text-white/30">Cerrada</span>}
+                        </div>
                         <p className="text-[10px] text-white/30 mt-0.5">{new Date(v.created_at).toLocaleDateString('es-PY')}</p>
                       </td>
                       <td className="px-4 py-3 text-xs text-white/50 hidden sm:table-cell">{v.location}</td>
                       <td className="px-4 py-3 text-xs text-white/50 hidden md:table-cell">{v.modality}</td>
                       <td className="px-4 py-3 text-right">
-                        <span className={`font-display text-lg ${count > 0 ? 'text-[#c9a84c]' : 'text-white/20'}`}>{count}</span>
+                        <span className={`font-display text-lg ${count > 0 && !closed ? 'text-[#c9a84c]' : 'text-white/20'}`}>{count}</span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => setSelectedVacancy(v)}
-                            className="inline-flex items-center gap-1 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-2.5 py-1 text-[11px] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
-                          >
-                            <UserCheck strokeWidth={1.5} className="h-3 w-3" /> Ver →
-                          </button>
-                          <button onClick={() => copyToClipboard(url, v.id)}
-                            className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/40 transition hover:border-[#c9a84c]/40 hover:text-[#c9a84c]">
-                            {copied === v.id ? <CheckIcon strokeWidth={2} className="h-3 w-3" /> : <Copy strokeWidth={1.5} className="h-3 w-3" />}
-                          </button>
-                        </div>
+                        {closingVacancy === v.id ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="text-[11px] text-white/50">¿Confirmar?</span>
+                            <button
+                              onClick={() => closeVacancy(v.id)}
+                              disabled={closingInProgress}
+                              className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/[0.08] px-2.5 py-1 text-[11px] text-red-400 transition hover:bg-red-500/[0.18] disabled:opacity-50"
+                            >
+                              {closingInProgress ? <Loader2 strokeWidth={1.5} className="h-3 w-3 animate-spin" /> : 'Sí'}
+                            </button>
+                            <button onClick={() => setClosingVacancy(null)} className="text-[11px] text-white/30 hover:text-white/60">No</button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setSelectedVacancy(v)}
+                              className="inline-flex items-center gap-1 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-2.5 py-1 text-[11px] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                            >
+                              <UserCheck strokeWidth={1.5} className="h-3 w-3" /> Ver →
+                            </button>
+                            {!closed && (
+                              <button onClick={() => copyToClipboard(url, v.id)}
+                                className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/40 transition hover:border-[#c9a84c]/40 hover:text-[#c9a84c]">
+                                {copied === v.id ? <CheckIcon strokeWidth={2} className="h-3 w-3" /> : <Copy strokeWidth={1.5} className="h-3 w-3" />}
+                              </button>
+                            )}
+                            {!closed && (
+                              <button
+                                onClick={() => setClosingVacancy(v.id)}
+                                className="inline-flex items-center rounded-full border border-white/8 px-2.5 py-1 text-[11px] text-white/25 transition hover:border-red-500/30 hover:text-red-400"
+                                title="Cerrar vacante"
+                              >
+                                <X strokeWidth={1.5} className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   )
@@ -1466,6 +1532,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   const [injectCvText, setInjectCvText] = useState<string | null>(null)
   const [injectCandidateName, setInjectCandidateName] = useState<string>('')
   const [compareError, setCompareError] = useState('')
+  const [creditRequestSent, setCreditRequestSent] = useState(false)
 
   useEffect(() => {
     fetch('/.netlify/functions/validate-recruiter-token', {
@@ -1473,6 +1540,17 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
       body: JSON.stringify({ token: session.token, action: 'get_dashboard_stats' }),
     }).then(r => r.json()).then(d => { if (d.stats) setStats(d.stats) }).catch(() => {})
   }, [])
+
+  const requestCredits = async () => {
+    try {
+      await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: session.token, action: 'request_credits', amount: 50 }),
+      })
+    } finally {
+      setCreditRequestSent(true)
+    }
+  }
 
   const handleFile = (f: File) => {
     const ok = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']
@@ -1564,7 +1642,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
         <meta name="robots" content="noindex" />
       </Helmet>
 
-      <PanelHeader session={session} balance={balance} onLogout={onLogout} />
+      <PanelHeader session={session} balance={balance} onLogout={onLogout} onRequestCredits={requestCredits} creditRequestSent={creditRequestSent} />
 
       <section className="relative mx-auto max-w-7xl px-6 pt-16 pb-24 md:px-10 md:pt-20">
         {/* Page heading */}

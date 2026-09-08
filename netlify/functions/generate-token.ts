@@ -29,7 +29,8 @@ const handler: Handler = async (event) => {
       token_balance: token_balance || 10,
       access_token: token,
       plan_type: plan_type || "starter",
-      is_active: true
+      is_active: true,
+      verification_status: "verified",
     }])
 
     if (error) {

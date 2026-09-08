@@ -1,6 +1,20 @@
 import { Handler } from "@netlify/functions"
 import { makeSupabaseAdmin } from "./_supabase"
 
+const RESEND_KEY = process.env.RESEND_API_KEY
+const SITE_URL = process.env.SITE_URL || "https://cvitae.lat"
+
+async function sendEmail(to: string, subject: string, html: string) {
+  if (!RESEND_KEY) return
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: "CVitae <contacto@cvitae.lat>", to: [to], subject, html }),
+    })
+  } catch { /* non-fatal */ }
+}
+
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
@@ -168,20 +182,56 @@ const handler: Handler = async (event) => {
       }
     }
 
-    // ─── Acción: Listar vacantes del reclutador ───
+    // ─── Acción: Listar vacantes del reclutador (activas + cerradas) ───
     if (action === "get_vacancies") {
       const { data: vacancies } = await supabase
         .from("recruiter_vacancies")
         .select("id, title, slug, location, modality, is_active, created_at, vacancy_applications(count)")
         .eq("recruiter_token_id", data.id)
-        .eq("is_active", true)
         .order("created_at", { ascending: false })
-        .limit(50)
+        .limit(100)
 
       return {
         statusCode: 200,
         body: JSON.stringify({ vacancies: vacancies || [] }),
       }
+    }
+
+    // ─── Acción: Cerrar vacante ───
+    if (action === "close_vacancy" && body.vacancy_id) {
+      const { data: vac } = await supabase
+        .from("recruiter_vacancies")
+        .select("id")
+        .eq("id", body.vacancy_id)
+        .eq("recruiter_token_id", data.id)
+        .single()
+
+      if (!vac) {
+        return { statusCode: 403, body: JSON.stringify({ error: "Vacante no pertenece a este token" }) }
+      }
+
+      await Promise.all([
+        supabase.from("recruiter_vacancies").update({ is_active: false }).eq("id", body.vacancy_id),
+        supabase.from("opportunities").update({ is_active: false }).eq("recruiter_vacancy_id", body.vacancy_id),
+      ])
+
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
+    // ─── Acción: Solicitar recarga de créditos ───
+    if (action === "request_credits") {
+      const requested = Math.min(500, Math.max(10, Math.floor(Number(body.amount) || 50)))
+      await sendEmail(
+        "contacto@cvitae.lat",
+        `💳 Solicitud de créditos: ${data.company_name || data.email}`,
+        `<h2>Solicitud de recarga de créditos</h2>
+         <p><strong>Empresa:</strong> ${data.company_name || "Sin nombre"}</p>
+         <p><strong>Email:</strong> ${data.email}</p>
+         <p><strong>Créditos solicitados:</strong> ${requested}</p>
+         <p><strong>Balance actual:</strong> ${data.token_balance}</p>
+         <p><a href="${SITE_URL}/admin">Ir al admin →</a></p>`,
+      )
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
     // ─── Acción: Actualizar estado de postulante ───
@@ -230,23 +280,29 @@ const handler: Handler = async (event) => {
 
     // ─── Acción: Dashboard stats ───
     if (action === "get_dashboard_stats") {
-      const [vacRes, appRes, anaRes, callRes] = await Promise.all([
-        supabase.from("recruiter_vacancies").select("id", { count: "exact", head: true }).eq("recruiter_token_id", data.id).eq("is_active", true),
-        supabase.from("vacancy_applications").select("id", { count: "exact", head: true }).in(
-          "vacancy_id",
-          (await supabase.from("recruiter_vacancies").select("id").eq("recruiter_token_id", data.id)).data?.map((v: any) => v.id) || []
-        ),
+      // Fetch active vacancy IDs once, reuse in all sub-queries (avoids N+1)
+      const { data: activeVacRows } = await supabase
+        .from("recruiter_vacancies")
+        .select("id")
+        .eq("recruiter_token_id", data.id)
+        .eq("is_active", true)
+      const activeIds = activeVacRows?.map((v: any) => v.id) || []
+
+      const [appRes, anaRes, callRes] = await Promise.all([
+        activeIds.length
+          ? supabase.from("vacancy_applications").select("id", { count: "exact", head: true }).in("vacancy_id", activeIds)
+          : Promise.resolve({ count: 0 }),
         supabase.from("recruiter_analyses").select("id", { count: "exact", head: true }).eq("token_id", data.id),
-        supabase.from("vacancy_applications").select("id", { count: "exact", head: true }).eq("recommendation", "Llamar").in(
-          "vacancy_id",
-          (await supabase.from("recruiter_vacancies").select("id").eq("recruiter_token_id", data.id)).data?.map((v: any) => v.id) || []
-        ),
+        activeIds.length
+          ? supabase.from("vacancy_applications").select("id", { count: "exact", head: true }).eq("recommendation", "Llamar").in("vacancy_id", activeIds)
+          : Promise.resolve({ count: 0 }),
       ])
+
       return {
         statusCode: 200,
         body: JSON.stringify({
           stats: {
-            vacantesActivas: vacRes.count || 0,
+            vacantesActivas: activeIds.length,
             totalPostulantes: appRes.count || 0,
             cvsAnalizados: anaRes.count || 0,
             paraLlamar: callRes.count || 0,
