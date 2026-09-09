@@ -312,6 +312,8 @@ test.describe('Punto 13 — Dashboard con mock completo', () => {
     })
 
     await page.addInitScript(({ t, email }) => {
+      localStorage.setItem('cvitae_guide_b2c_dashboard_v1_completed', 'true')
+      sessionStorage.setItem('founding_beta_modal_seen', '1')
       localStorage.setItem('sb-127-auth-token', JSON.stringify({
         access_token: t, token_type: 'bearer', expires_in: 3600,
         expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -534,6 +536,8 @@ test.describe('Punto 13 — Dashboard con mock completo', () => {
     })
 
     await page.addInitScript(({ t, email }) => {
+      localStorage.setItem('cvitae_guide_b2c_dashboard_v1_completed', 'true')
+      sessionStorage.setItem('founding_beta_modal_seen', '1')
       localStorage.setItem('sb-127-auth-token', JSON.stringify({
         access_token: t, token_type: 'bearer', expires_in: 3600,
         expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -549,7 +553,7 @@ test.describe('Punto 13 — Dashboard con mock completo', () => {
     await page.waitForSelector('text=Oportunidades', { timeout: 20_000 })
 
     const beforeCount = fetchCount
-    const refreshBtn = page.locator('button', { hasText: /actualizar análisis/i })
+    const refreshBtn = page.locator('button', { hasText: /actualizar (?:análisis|con ia)/i })
     await expect(refreshBtn).toBeVisible()
     await refreshBtn.click()
 

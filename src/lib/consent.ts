@@ -100,8 +100,9 @@ export async function loadAllowedGoogleServices(preferences = readConsent()) {
   }
 
   const adsReady = import.meta.env.VITE_GOOGLE_ADSENSE_READY === 'true'
+  const certifiedCmpReady = import.meta.env.VITE_GOOGLE_CERTIFIED_CMP_READY === 'true'
   const client = String(import.meta.env.VITE_GOOGLE_ADSENSE_CLIENT || '').trim()
-  if (preferences?.advertising && adsReady && /^ca-pub-\d+$/.test(client)) {
+  if (preferences?.advertising && adsReady && certifiedCmpReady && /^ca-pub-\d+$/.test(client)) {
     injectScript(
       'cvitae-adsense',
       `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(client)}`,
@@ -116,5 +117,6 @@ export function adPreviewEnabled() {
 
 export function adsenseReady() {
   return import.meta.env.VITE_GOOGLE_ADSENSE_READY === 'true'
+    && import.meta.env.VITE_GOOGLE_CERTIFIED_CMP_READY === 'true'
     && /^ca-pub-\d+$/.test(String(import.meta.env.VITE_GOOGLE_ADSENSE_CLIENT || '').trim())
 }

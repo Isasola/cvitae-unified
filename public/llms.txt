@@ -22,7 +22,7 @@
 
 ## Catálogo de oportunidades
 
-CVitae centraliza más de 7.000 oportunidades verificadas: empleos de Paraguay (190+), empleos remotos para LATAM (6.900+ de fuentes como Himalayas, We Work Remotely, UN Jobs, Opportunity Desk), y oportunidades para Perú (en expansión activa). Scrapeamos y verificamos diariamente de 88 fuentes activas incluyendo portales de empleo, bolsas universitarias, becas internacionales y aceleradoras.
+CVitae centraliza oportunidades de empleo, becas, programas y convocatorias para Paraguay y Latinoamérica. El catálogo se actualiza desde fuentes oficiales y portales especializados, con controles de vigencia, deduplicación y verificación antes de publicar o recomendar contenido.
 
 ## Beta gratuita
 
@@ -52,7 +52,7 @@ Las páginas de empleos emiten JSON-LD con schema JobPosting. Las páginas de bl
 
 ## Reconocimientos
 
-CVitae fue reconocida como Top 100 Moonshot Paraguay 2026. El producto está en producción desde 2024 con usuarios activos en Paraguay, Argentina, Uruguay y Perú.
+CVitae fue reconocida como Top 100 Moonshot Paraguay 2026 y se encuentra en beta pública con usuarios de Paraguay y otros países de Latinoamérica.
 
 ## Descubrimiento
 

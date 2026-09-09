@@ -1,4 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { buildProfileEmbeddingText } from '../_shared/embedding.ts';
+import { isServiceRoleRequest } from '../_shared/service-auth.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -9,10 +11,12 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { status: 200 });
 
   // Require service role — this function is called server-side only
-  const authHeader = req.headers.get('Authorization') ?? '';
-  const token = authHeader.replace(/^Bearer\s+/i, '');
-  if (token !== Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) {
+  if (!isServiceRoleRequest(req, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  }
+
+  if (Deno.env.get('DISABLE_EMBEDDINGS') === 'true') {
+    return new Response(JSON.stringify({ done: false, processed: 0, disabled: true }), { status: 200 });
   }
 
   const body = await req.json().catch(() => ({}));
@@ -21,8 +25,9 @@ Deno.serve(async (req) => {
   // Build query: specific user or all users missing embedding
   let query = supabase
     .from('user_master_profiles')
-    .select('user_id, professional_title, profile_data')
+    .select('user_id, professional_title, summary, profile_data, cv_text')
     .is('embedding', null)
+    .not('user_id', 'is', null)
     .limit(50);
 
   if (userId) query = query.eq('user_id', userId);
@@ -39,23 +44,17 @@ Deno.serve(async (req) => {
 
   let processed = 0;
   for (const profile of profiles) {
-    const title = String(profile.professional_title ?? '');
-    const data = profile.profile_data ?? {};
-    const skills = Array.isArray(data.habilidades) ? data.habilidades.join(', ') : '';
-    const seniority = String(data.seniority ?? '');
-    const location = String(data.location ?? '');
-    const route = String(data.career_route ?? '');
-
-    const text = [title, seniority, skills, route, location].filter(Boolean).join(' | ');
+    const text = buildProfileEmbeddingText(profile);
     if (!text.trim()) continue;
 
     try {
-      const result = await session.run(text.slice(0, 512), { mean_pool: true, normalize: true });
+      const result = await session.run(text, { mean_pool: true, normalize: true });
       const embedding = Array.from(result);
-      await supabase
+      const { error: updateError } = await supabase
         .from('user_master_profiles')
         .update({ embedding })
         .eq('user_id', profile.user_id);
+      if (updateError) throw updateError;
       processed++;
     } catch (e) {
       console.error('embed-profile error for', profile.user_id, e);

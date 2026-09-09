@@ -33,6 +33,7 @@ assert(analytics.includes("readConsent()?.analytics === true"), 'Los eventos per
 assert(!main.includes("'page_view'") && !app.includes("'page_view'") && !consent.includes("'page_view'"), 'Enhanced Measurement debe seguir siendo el único responsable de page_view SPA')
 assert(consent.includes('preferences?.advertising && adsReady'), 'AdSense debe exigir consentimiento y habilitación operativa')
 assert(consent.includes("VITE_GOOGLE_ADSENSE_READY === 'true'"), 'Debe existir un interruptor de seguridad independiente')
+assert(consent.includes("VITE_GOOGLE_CERTIFIED_CMP_READY === 'true'"), 'AdSense debe exigir confirmación explícita de una CMP certificada')
 assert(banner.includes('Solo necesarias') && banner.includes('Aceptar todas') && banner.includes('Guardar selección'), 'El aviso debe ofrecer opciones equivalentes y granulares')
 assert(banner.includes('Ninguna elección limita las herramientas profesionales'), 'Rechazar cookies no debe bloquear las funciones del producto')
 assert(adSlot.includes('aria-label="Publicidad"') && adSlot.includes('data-ad-placement'), 'Cada anuncio debe distinguirse del contenido')
@@ -50,6 +51,7 @@ for (const privatePage of [
 }
 
 assert(envExample.includes('VITE_GOOGLE_ADSENSE_READY=false'), 'La configuración de ejemplo debe mantener AdSense apagado')
+assert(envExample.includes('VITE_GOOGLE_CERTIFIED_CMP_READY=false'), 'La CMP certificada debe quedar marcada como no configurada por defecto')
 assert(envExample.includes('VITE_ADSENSE_PREVIEW=false'), 'La vista previa no debe quedar activa en producción')
 
 console.log('Consentimiento y publicidad: 33 verificaciones focalizadas superadas.')

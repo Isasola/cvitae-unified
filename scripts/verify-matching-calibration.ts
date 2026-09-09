@@ -25,6 +25,8 @@ import {
   type MatchOpportunity,
   type ProfileInput,
 } from '../supabase/functions/_shared/matching.ts'
+import { parsePgVector } from '../supabase/functions/_shared/vector.ts'
+import { buildOpportunityEmbeddingText, buildProfileEmbeddingText } from '../supabase/functions/_shared/embedding.ts'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dir = dirname(__filename)
@@ -368,6 +370,23 @@ console.log(`  ✓ 8/8 condiciones verificadas (${eligibleBase.length} elegibles
 // ── 2. Normalización y regresiones de false positives ────────────────────────
 
 console.log('\n[2/7] Verificando normalización y regresiones de falsos positivos...')
+assert(JSON.stringify(parsePgVector('[0.1,-0.2,0.3]')) === JSON.stringify([0.1, -0.2, 0.3]), 'pgvector serializado debe convertirse a number[]')
+assert(JSON.stringify(parsePgVector([0.1, 0.2])) === JSON.stringify([0.1, 0.2]), 'pgvector ya materializado debe conservarse')
+assert(parsePgVector('[0.1,nope]') === null, 'pgvector inválido debe degradar a fallback')
+const profileEmbeddingText = buildProfileEmbeddingText({
+  professional_title: 'Analista de datos',
+  summary: 'Experiencia en inteligencia de negocio',
+  cv_text: 'Python SQL Power BI y modelos predictivos',
+  profile_data: { habilidades: ['Python', 'SQL'], location: 'Asunción' },
+})
+assert(profileEmbeddingText.includes('Experiencia CV: Python SQL Power BI'), 'embedding de perfil debe incluir evidencia del CV')
+const opportunityEmbeddingText = buildOpportunityEmbeddingText({
+  title: 'Data Analyst',
+  description: '<p>Python &amp; SQL</p>',
+  tags: ['Power BI'],
+})
+assert(!opportunityEmbeddingText.includes('<p>'), 'embedding de oportunidad debe eliminar HTML')
+assert(opportunityEmbeddingText.includes('Python & SQL'), 'embedding de oportunidad debe conservar texto normalizado')
 
 // Variantes legítimas
 assert(sameSkill('Node',    'Node.js',  dictionary), 'Node ↔ Node.js')

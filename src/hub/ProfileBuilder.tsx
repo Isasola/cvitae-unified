@@ -4,7 +4,7 @@ import { useLocation } from 'wouter'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Save, Plus, X, CheckCircle, ChevronRight, ChevronLeft,
-  Upload, Loader2, Brain,
+  Upload, Loader2, Brain, Download, FileText,
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { GrowthLine } from '@/components/cv/visuals'
@@ -44,6 +44,15 @@ const SUMMARY_EXAMPLES = [
   'Contador con experiencia en pymes paraguayas, manejo de impuestos SET y facturación electrónica. Busco rol en empresa en crecimiento.',
 ]
 
+async function fileToBase64(file: File): Promise<string> {
+  const reader = new FileReader()
+  return new Promise((resolve, reject) => {
+    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '')
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
 function StepDot({ active, done }: { active: boolean; done: boolean }) {
   return (
     <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-medium transition-all ${
@@ -63,7 +72,11 @@ export default function ProfileBuilder() {
   const [saved, setSaved] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [authLoading, setAuthLoading] = useState(true)
-  const [existingProfileId, setExistingProfileId] = useState<string | null>(null)
+  const [currentCV, setCurrentCV] = useState<{
+    file_name: string
+    uploaded_at?: string
+    status: 'stored' | 'reupload_required'
+  } | null>(null)
   const [formData, setFormData] = useState({
     full_name: '',
     professional_title: '',
@@ -94,11 +107,16 @@ export default function ProfileBuilder() {
 
   useEffect(() => {
     if (!user) return
-    supabase
-      .from('user_master_profiles').select('*').eq('user_id', user.id).maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setExistingProfileId(data.id)
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.access_token) return
+      const response = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'status' }),
+      })
+      if (!response.ok) return
+      const { profile: data } = await response.json()
+      if (data) {
           setFormData({
             full_name: data.full_name || '',
             professional_title: data.professional_title || '',
@@ -110,19 +128,36 @@ export default function ProfileBuilder() {
             cursos: data.profile_data?.cursos || [],
             career_route: data.profile_data?.career_route || '',
           })
-        }
-      })
+          setCurrentCV(data.has_cv || data.cv_reupload_required ? {
+            file_name: data.cv_file_name || 'CV anterior',
+            uploaded_at: data.cv_uploaded_at,
+            status: data.has_cv ? 'stored' : 'reupload_required',
+          } : null)
+      }
+    })
   }, [user])
 
   const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    const lowerName = file.name.toLowerCase()
+    if (!lowerName.endsWith('.pdf') && !lowerName.endsWith('.docx')) {
+      setAnalyzeError('Formato no compatible. Subí un archivo PDF o DOCX.')
+      e.target.value = ''
+      return
+    }
+    if (!file.size) {
+      setAnalyzeError('El archivo está vacío. Elegí otro CV.')
+      e.target.value = ''
+      return
+    }
     if (file.size > 4 * 1024 * 1024) {
       setAnalyzeError('El archivo no puede superar 4 MB.')
       e.target.value = ''
       return
     }
     setAnalyzing(true); setAnalyzeError(null)
+    let cvStored = false
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) throw new Error('Tu sesión expiró. Volvé a ingresar.')
@@ -130,17 +165,12 @@ export default function ProfileBuilder() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
       }
+      const fileBase64 = await fileToBase64(file)
       let text = ''
       if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-        const reader = new FileReader()
-        const base64 = await new Promise<string>((resolve, reject) => {
-          reader.onload = () => resolve((reader.result as string).split(',')[1])
-          reader.onerror = reject
-          reader.readAsDataURL(file)
-        })
         const res = await fetch('/.netlify/functions/extract-pdf-text', {
           method: 'POST', headers: authenticatedHeaders,
-          body: JSON.stringify({ pdfBase64: base64 }),
+          body: JSON.stringify({ pdfBase64: fileBase64 }),
         })
         if (!res.ok) throw new Error('Error extrayendo texto del PDF')
         const data = await res.json()
@@ -155,6 +185,28 @@ export default function ProfileBuilder() {
       if (!text || text.trim().length < 50) {
         throw new Error('No pudimos leer el contenido del archivo. Intentá con otro PDF o completá manualmente.')
       }
+
+      // Guardamos el original antes de pedir el autocompletado. El CV debe
+      // seguir disponible aunque el proveedor de IA o la importación de
+      // evidencias fallen después.
+      const persistRes = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: authenticatedHeaders,
+        body: JSON.stringify({
+          action: 'upload_cv',
+          file_name: file.name,
+          file_base64: fileBase64,
+          cv_text: text,
+        }),
+      })
+      const persisted = await persistRes.json()
+      if (!persistRes.ok) throw new Error(persisted.error || 'No pudimos guardar el CV en tu perfil')
+      setCurrentCV({
+        file_name: persisted.profile?.cv_file_name || file.name,
+        uploaded_at: persisted.profile?.cv_uploaded_at,
+        status: 'stored',
+      })
+      cvStored = true
 
       const analyzeRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
         method: 'POST', headers: authenticatedHeaders,
@@ -188,7 +240,9 @@ export default function ProfileBuilder() {
         cursos: extracted.education?.map((e: any) => `${e.degree} — ${e.institution}`).filter(Boolean) || prev.cursos,
       }))
     } catch (err: any) {
-      setAnalyzeError(err.message || 'No pudimos autocompletar. Completá manualmente.')
+      setAnalyzeError(cvStored
+        ? 'Tu CV quedó guardado, pero no pudimos autocompletar el perfil. Podés completarlo manualmente.'
+        : (err.message || 'No pudimos autocompletar. Completá manualmente.'))
     } finally {
       setAnalyzing(false)
     }
@@ -220,29 +274,37 @@ export default function ProfileBuilder() {
     if (!user) return
     setSaving(true)
     try {
-      const profileContent = {
-        full_name: formData.full_name,
-        professional_title: formData.professional_title,
-        summary: formData.summary,
-        profile_data: {
-          habilidades: formData.skills,
-          cursos: formData.cursos,
-          seniority: formData.seniority,
-          location: formData.location,
-          modality: formData.modality,
-          career_route: formData.career_route,
-        },
-      }
-      const { error } = existingProfileId
-        ? await supabase.from('user_master_profiles').update(profileContent).eq('id', existingProfileId).eq('user_id', user.id)
-        : await supabase.from('user_master_profiles').insert({ ...profileContent, user_id: user.id })
-      if (error) throw error
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Sesión expirada')
+      const response = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'save', profile: { ...formData } }),
+      })
+      if (!response.ok) throw new Error('No pudimos guardar el perfil')
       setSaved(true)
       setTimeout(() => setLocation('/mi-carrera'), 1500)
     } catch {
       alert('Error al guardar el perfil. Intentá de nuevo.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const downloadCurrentCV = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Tu sesión expiró. Volvé a ingresar.')
+      const response = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'download_cv' }),
+      })
+      const result = await response.json()
+      if (!response.ok || !result.url) throw new Error(result.error || 'No pudimos preparar la descarga')
+      window.open(result.url, '_blank', 'noopener,noreferrer')
+    } catch (error: any) {
+      setAnalyzeError(error?.message || 'No pudimos descargar el CV guardado.')
     }
   }
 
@@ -342,6 +404,34 @@ export default function ProfileBuilder() {
                     className="mt-3 text-center text-sm text-red-400">{analyzeError}</motion.p>
                 )}
               </AnimatePresence>
+              {currentCV && !analyzing && (
+                <div className={cn(
+                  'mt-4 flex items-center justify-between gap-4 rounded-2xl border px-4 py-3',
+                  currentCV.status === 'stored'
+                    ? 'border-emerald-300/20 bg-emerald-300/[0.04]'
+                    : 'border-amber-300/25 bg-amber-300/[0.05]',
+                )}>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <FileText className={cn(
+                      'h-5 w-5 shrink-0',
+                      currentCV.status === 'stored' ? 'text-emerald-300' : 'text-amber-300',
+                    )} />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-white">{currentCV.file_name}</p>
+                      <p className="text-xs text-white/45">
+                        {currentCV.status === 'stored'
+                          ? 'Guardado en tu perfil'
+                          : 'El archivo anterior no se conservó. Volvé a subirlo para descargarlo y mejorar tus matches.'}
+                      </p>
+                    </div>
+                  </div>
+                  {currentCV.status === 'stored' && (
+                    <button type="button" onClick={downloadCurrentCV} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs text-white/65 transition hover:border-[#c9a84c]/40 hover:text-white">
+                      <Download size={14} /> Descargar
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="my-6 flex items-center gap-4">
                 <div className="h-px flex-1 bg-white/8" />
                 <span className="text-[10px] uppercase tracking-widest text-muted-foreground">o completá manualmente</span>

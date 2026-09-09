@@ -23,7 +23,7 @@ async function generate() {
   const today = new Date().toISOString().split('T')[0]
 
   const { data: blogPosts } = await supabase
-    .from('content_hub').select('slug, created_at')
+    .from('content_hub').select('slug, created_at, updated_at')
     .eq('tipo', 'blog').eq('is_active', true)
 
   const { data: opportunities } = await supabase
@@ -66,6 +66,7 @@ async function generate() {
     { url: '/sobre-cvitae', priority: '0.6', freq: 'monthly' },
     { url: '/privacy', priority: '0.3', freq: 'monthly' },
     { url: '/terminos', priority: '0.3', freq: 'yearly' },
+    { url: '/cookies', priority: '0.3', freq: 'yearly' },
   ]
 
   staticPages.forEach(p => {
@@ -73,7 +74,7 @@ async function generate() {
   })
 
   blogPosts?.forEach(post => {
-    const lastmod = post.created_at?.split('T')[0] || today
+    const lastmod = (post.updated_at || post.created_at)?.split('T')[0] || today
     sitemap += `  <url>\n    <loc>${SITE_URL}/blog/${post.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`
   })
 

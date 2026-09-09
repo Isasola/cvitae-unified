@@ -323,22 +323,37 @@ const handler: Handler = async (event) => {
     let magicLinkSent = false
     if (talent_pool_consent === true) {
     // Create a reusable CVitae profile only with explicit, optional consent.
+    const { data: existingProfile } = await supabase
+      .from("user_master_profiles")
+      .select("id, user_id, profile_data")
+      .eq("email", normalizedEmail)
+      .maybeSingle()
     const profilePayload: Record<string, any> = {
       email: normalizedEmail,
       full_name: name || null,
+      cv_file_name: cv_file_name || null,
+      cv_storage_path: cvStoragePath,
+      cv_text: cvText || null,
+      cv_uploaded_at: new Date().toISOString(),
+      embedding: null,
       updated_at: new Date().toISOString(),
     }
-    const profileData: Record<string, any> = { vacancy_slug: vacancySlug }
+    const profileData: Record<string, any> = { ...(existingProfile?.profile_data || {}), vacancy_slug: vacancySlug }
     if (cover_letter) profileData.cover_letter = cover_letter
     if (cv_file_name) profileData.cv_file_name = cv_file_name
     profilePayload.profile_data = profileData
 
-    const { error: upsertError } = await supabase
-      .from("user_master_profiles")
-      .upsert(profilePayload, { onConflict: "email", ignoreDuplicates: false })
+    // A public application must never overwrite a profile already linked to an
+    // authenticated account merely because the applicant supplied its email.
+    if (!existingProfile?.user_id) {
+      const profileWrite = existingProfile
+        ? supabase.from("user_master_profiles").update(profilePayload).eq("id", existingProfile.id).is("user_id", null)
+        : supabase.from("user_master_profiles").insert(profilePayload)
+      const { error: upsertError } = await profileWrite
 
-    if (upsertError) {
-      console.error("upsert user_master_profiles:", upsertError.message)
+      if (upsertError) {
+        console.error("upsert user_master_profiles:", upsertError.message)
+      }
     }
 
     // 2. Generate magic link via admin API (no email sent by Supabase)

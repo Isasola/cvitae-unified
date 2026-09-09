@@ -44,6 +44,15 @@ export const handler = async (event: any) => {
 
     const supabase = makeSupabaseAdmin()
     const normalizedEmail = String(user.email || '').trim().toLowerCase()
+    const { data: profile } = await supabase
+      .from('user_master_profiles')
+      .select('cv_storage_path')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (profile?.cv_storage_path?.startsWith(`profiles/${user.id}/`)) {
+      const { error: storageError } = await supabase.storage.from('candidate-cvs').remove([profile.cv_storage_path])
+      if (storageError) throw storageError
+    }
     const { error: dataError } = await supabase.rpc('delete_b2c_user_data', {
       p_user_id: user.id,
       p_email: normalizedEmail || null,

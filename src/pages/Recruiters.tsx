@@ -538,6 +538,7 @@ interface Applicant {
   email: string
   cv_file_name: string | null
   cv_download_url: string | null
+  cv_reupload_required: boolean
   cv_parse_status: 'parsed' | 'manual_review' | 'missing'
   cv_text: string | null
   cover_letter: string | null
@@ -1133,6 +1134,11 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, 
                             >
                               <Download strokeWidth={1.5} className="h-3.5 w-3.5" /> Ver CV original
                             </a>
+                          )}
+                          {a.cv_reupload_required && (
+                            <p className="text-xs text-amber-200/70">
+                              El CV histórico no conserva el archivo original. Pedile al candidato que vuelva a subirlo.
+                            </p>
                           )}
                           {!a.cv_text && (
                             <p className="text-xs text-amber-200/60 italic">Revisión manual: no se pudo extraer texto</p>

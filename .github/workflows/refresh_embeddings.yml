@@ -1,0 +1,29 @@
+name: CVitae — Actualizar embeddings
+
+on:
+  schedule:
+    # Después de la recolección diaria. Procesa hasta 500 oportunidades nuevas.
+    - cron: '30 15 * * *'
+  workflow_dispatch:
+
+jobs:
+  refresh-opportunities:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Generar embeddings pendientes
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          for batch in {1..100}; do
+            response=$(curl --silent --show-error --fail-with-body \
+              --request POST "$SUPABASE_URL/functions/v1/embed-opportunities" \
+              --header "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              --header "Content-Type: application/json" \
+              --data '{"limit":5}')
+            echo "Batch $batch: $response"
+            if [[ "$response" == *'"done":true'* ]]; then
+              break
+            fi
+          done

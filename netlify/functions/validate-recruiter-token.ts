@@ -155,6 +155,7 @@ const handler: Handler = async (event) => {
         return {
           ...safeApplicant,
           cv_download_url: cvDownloadUrl,
+          cv_reupload_required: Boolean(a.cv_file_name && !cvDownloadUrl),
           badges: badgesByEmail[a.email] || [],
         }
       }))

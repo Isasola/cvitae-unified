@@ -13,6 +13,8 @@ import { handler as cvWorkspace } from '../netlify/functions/cv-workspace'
 import { handler as cvAtsWorkspace, normalizeAtsResult } from '../netlify/functions/cv-ats-workspace'
 import { handler as cvRewriteWorkspace, normalizeRewriteResult } from '../netlify/functions/cv-rewrite-workspace'
 import { handler as applicationWorkspace, normalizeApplicationResult } from '../netlify/functions/application-workspace'
+import { handler as b2cProfile, publicProfile } from '../netlify/functions/b2c-profile'
+import { isServiceRoleRequest } from '../supabase/functions/_shared/service-auth'
 
 process.env.CVITAE_TEST_RATE_LIMIT_MODE = 'bypass-unit-tests'
 
@@ -103,6 +105,18 @@ assert(generationWithoutSession?.statusCode === 401, 'La generación de CV debe 
 
 const deletionWithoutSession = await invoke(deleteB2cAccount, { confirmation: 'ELIMINAR' })
 assert(deletionWithoutSession?.statusCode === 401, 'La eliminación de cuenta debe exigir una sesión válida')
+
+const profileWithoutSession = await invoke(b2cProfile, { action: 'status' })
+assert(profileWithoutSession?.statusCode === 401, 'El perfil y el CV persistente deben exigir una sesión válida')
+const legacyCvProfile = publicProfile({ profile_data: { cv_file_name: 'cv-anterior.pdf' }, cv_storage_path: null })
+assert(legacyCvProfile.cv_reupload_required === true, 'Un CV legado sin archivo debe pedir una nueva carga')
+assert(legacyCvProfile.has_cv === false, 'Un nombre legado no debe simular un archivo descargable')
+const storedCvProfile = publicProfile({ cv_file_name: 'cv.pdf', cv_storage_path: 'profiles/user/cv.pdf', profile_data: {} })
+assert(storedCvProfile.has_cv === true && storedCvProfile.cv_reupload_required === false, 'Un archivo privado persistido debe habilitar descarga')
+assert(!('cv_storage_path' in storedCvProfile), 'La ruta privada del CV no debe exponerse al navegador')
+const submitLeadSource = readFileSync(new URL('../netlify/functions/submit-lead.ts', import.meta.url), 'utf8')
+assert(submitLeadSource.includes('if (!existingProfile?.user_id)'), 'Una postulación pública no debe sobrescribir perfiles vinculados')
+assert(submitLeadSource.includes('.is("user_id", null)'), 'La actualización del perfil huérfano debe conservar la condición de propiedad')
 
 const workspaceWithoutSession = await invoke(cvWorkspace, { action: 'overview' })
 assert(workspaceWithoutSession?.statusCode === 401, 'El historial y las evidencias del CV deben exigir una sesión válida')
@@ -294,5 +308,22 @@ for (const relativePath of protectedCorsFiles) {
 
 const recruiterValidation = readFileSync(new URL('../netlify/functions/validate-recruiter-token.ts', import.meta.url), 'utf8')
 assert(recruiterValidation.includes('statusCode: 410'), 'La ruta legacy de guardado debe permanecer deshabilitada')
+assert(recruiterValidation.includes('cv_reupload_required'), 'El panel B2B debe distinguir CVs históricos sin archivo original')
+const recruiterUi = readFileSync(new URL('../src/pages/Recruiters.tsx', import.meta.url), 'utf8')
+assert(recruiterUi.includes('Pedile al candidato que vuelva a subirlo'), 'El panel B2B debe explicar cómo recuperar un CV histórico')
+
+const encodeJwtPart = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url')
+const serviceJwt = `${encodeJwtPart({ alg: 'HS256' })}.${encodeJwtPart({ role: 'service_role' })}.signature`
+const anonJwt = `${encodeJwtPart({ alg: 'HS256' })}.${encodeJwtPart({ role: 'anon' })}.signature`
+assert(isServiceRoleRequest(new Request('http://local.test', { headers: { Authorization: `Bearer ${serviceJwt}` } }), 'rotated-runtime-key'), 'El mantenimiento debe aceptar un JWT service_role ya validado por el gateway')
+assert(!isServiceRoleRequest(new Request('http://local.test', { headers: { Authorization: `Bearer ${anonJwt}` } }), 'rotated-runtime-key'), 'El mantenimiento debe rechazar el rol anon')
+assert(!isServiceRoleRequest(new Request('http://local.test'), 'rotated-runtime-key'), 'El mantenimiento debe rechazar solicitudes sin token')
+const supabaseConfig = readFileSync(new URL('../supabase/config.toml', import.meta.url), 'utf8')
+assert(supabaseConfig.includes('[functions.embed-profile]\nverify_jwt = true'), 'embed-profile debe exigir verificación JWT en el gateway')
+assert(supabaseConfig.includes('[functions.embed-opportunities]\nverify_jwt = true'), 'embed-opportunities debe exigir verificación JWT en el gateway')
+const contentPolicyMigration = readFileSync(new URL('../supabase/migrations/202609090004_reset_content_hub_read_policies.sql', import.meta.url), 'utf8')
+assert(contentPolicyMigration.includes('using (is_active = true)'), 'El contenido publicado debe conservar lectura pública')
+const contentMetadataMigration = readFileSync(new URL('../supabase/migrations/202609090005_content_hub_metadata.sql', import.meta.url), 'utf8')
+assert(contentMetadataMigration.includes('add column if not exists updated_at'), 'El blog debe alinear updated_at antes del prerender')
 
 console.log('Critical flow checks passed: multi-PDF, persistent limits, B2C/B2B auth, ATS diagnostics/questions, evidence-grounded rewrites and application prep, profile ownership, protected CORS, ledger/batch invariants, alert idempotency and Gemini auth.')

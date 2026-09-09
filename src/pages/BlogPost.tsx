@@ -17,8 +17,20 @@ interface BlogPost {
   cuerpo: string
   categoria: string
   created_at: string
+  updated_at?: string
   fecha_vencimiento?: string
   imagen_url?: string
+  metadata?: { author_name?: string; reviewed_by?: string }
+}
+
+function articleExcerpt(markdown: string): string {
+  return markdown
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[#*`_>~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160)
 }
 
 const BlogCTA = () => (
@@ -44,7 +56,7 @@ export default function BlogPost() {
     if (slug) {
       supabase
         .from('content_hub')
-        .select('id, titulo, slug, cuerpo, categoria, created_at, fecha_vencimiento, imagen_url')
+        .select('id, titulo, slug, cuerpo, categoria, created_at, updated_at, fecha_vencimiento, imagen_url, metadata')
         .eq('slug', slug)
         .eq('tipo', 'blog')
         .eq('is_active', true)
@@ -83,16 +95,30 @@ export default function BlogPost() {
   const canonical = `https://cvitae.lat/blog/${post.slug}`
   const ogImage = post.imagen_url || 'https://cvitae.lat/og-image.jpg'
   const datePublished = post.created_at?.split('T')[0] || ''
-  const excerpt = (post.cuerpo || '').replace(/[#*`_>~[\]]/g, '').substring(0, 160)
+  const dateModified = post.updated_at || post.created_at
+  const excerpt = articleExcerpt(post.cuerpo || '')
+  const authorName = post.metadata?.author_name || 'Equipo editorial de CVitae'
   const articleLd = JSON.stringify({
-    '@context': 'https://schema.org', '@type': 'Article',
-    headline: post.titulo,
-    description: excerpt,
-    url: canonical,
-    datePublished,
-    image: ogImage,
-    author: { '@type': 'Organization', name: 'CVitae', url: 'https://cvitae.lat' },
-    publisher: { '@type': 'Organization', name: 'CVitae', url: 'https://cvitae.lat', logo: { '@type': 'ImageObject', url: 'https://cvitae.lat/favicon.svg' } },
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'BlogPosting', '@id': `${canonical}#article`,
+        headline: post.titulo, description: excerpt, url: canonical,
+        mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+        datePublished, dateModified, image: ogImage,
+        inLanguage: 'es-PY', articleSection: post.categoria,
+        author: { '@type': 'Organization', name: authorName, url: 'https://cvitae.lat/sobre-cvitae' },
+        publisher: { '@type': 'Organization', name: 'CVitae', url: 'https://cvitae.lat', logo: { '@type': 'ImageObject', url: 'https://cvitae.lat/favicon.svg' } },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Inicio', item: 'https://cvitae.lat/' },
+          { '@type': 'ListItem', position: 2, name: 'Blog', item: 'https://cvitae.lat/blog' },
+          { '@type': 'ListItem', position: 3, name: post.titulo, item: canonical },
+        ],
+      },
+    ],
   })
 
   return (
@@ -106,6 +132,9 @@ export default function BlogPost() {
         <meta property="og:url" content={canonical} />
         <meta property="og:type" content="article" />
         <meta property="og:image" content={ogImage} />
+        <meta property="article:published_time" content={post.created_at} />
+        <meta property="article:modified_time" content={dateModified} />
+        <meta name="twitter:card" content="summary_large_image" />
         <script type="application/ld+json">{articleLd}</script>
       </Helmet>
       <Navbar />
@@ -138,6 +167,7 @@ export default function BlogPost() {
                 <Clock size={12} />
                 {Math.max(1, Math.ceil((post.cuerpo || '').trim().split(/\s+/).length / 200))} min de lectura
               </span>
+              <span>Por {authorName}</span>
             </div>
 
             <h1 className="font-display text-4xl sm:text-[3rem] leading-[1.1] tracking-tight text-white mb-7">

@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { buildDictionary, careerBonus, normalize, rankOpportunities, toStrings } from '../_shared/matching.ts';
+import { parsePgVector } from '../_shared/vector.ts';
 const DEFAULT_SITE_URL = 'https://cvitae.lat';
 const LOCAL_ORIGINS = new Set([
   'http://127.0.0.1:5173',
@@ -62,24 +63,6 @@ async function getSkillDictionary() {
     ]);
   }
   return buildDictionary(extra);
-}
-async function generateProfileEmbedding(profileText) {
-  if (!profileText.trim()) return null;
-  // DISABLE_EMBEDDINGS=true permite correr la función local sin el modelo gte-small
-  // (evita WORKER_LIMIT en el edge runtime de Docker con CPU restringida)
-  if (Deno.env.get('DISABLE_EMBEDDINGS') === 'true') return null;
-  try {
-    // @ts-ignore Supabase Edge Runtime API
-    const session = new Supabase.ai.Session('gte-small');
-    const result = await session.run(profileText.slice(0, 512), {
-      mean_pool: true,
-      normalize: true
-    });
-    return Array.from(result);
-  } catch (error) {
-    console.error('profile embedding unavailable:', error);
-    return null;
-  }
 }
 Deno.serve(async (req)=>{
   const cors = requestCors(req);
@@ -164,13 +147,15 @@ Deno.serve(async (req)=>{
     const careerRoute = String(profile.profile_data?.career_route ?? '');
     const profileTitle = String(profile.professional_title ?? '');
     const dictionary = await getSkillDictionary();
-    let opportunitiesQuery = supabase.from('opportunities').select('id, slug, title, organization, location, rubro, tags, description, application_url, type, opportunity_type, opportunity_kind, eligible_countries, eligible_regions, source, deadline, created_at, is_active, verification_status, match_eligible, archived_at, deleted_at').eq('is_active', true).eq('verification_status', 'verified').eq('match_eligible', true).is('deleted_at', null).is('archived_at', null).or(`deadline.is.null,deadline.gte.${new Date().toISOString()}`).order('created_at', {
+    const opportunityFields = 'id, slug, title, organization, location, rubro, tags, description, application_url, type, opportunity_type, opportunity_kind, eligible_countries, eligible_regions, source, deadline, created_at, is_active, verification_status, match_eligible, alerts_eligible, archived_at, deleted_at';
+    const activeDeadlineFilter = `deadline.is.null,deadline.gte.${new Date().toISOString()}`;
+    let opportunitiesQuery = supabase.from('opportunities').select(opportunityFields).eq('is_active', true).eq('verification_status', 'verified').eq('match_eligible', true).is('deleted_at', null).is('archived_at', null).or(activeDeadlineFilter).order('created_at', {
       ascending: false
     }).limit(300);
     if (requestMode === 'alerts') {
       opportunitiesQuery = opportunitiesQuery.eq('alerts_eligible', true);
     }
-    const { data: opportunities, error: opportunitiesError } = await opportunitiesQuery;
+    const { data: recentOpportunities, error: opportunitiesError } = await opportunitiesQuery;
     if (opportunitiesError) throw opportunitiesError;
     const profileInput = {
       professional_title: profileTitle,
@@ -190,7 +175,7 @@ Deno.serve(async (req)=>{
     ].filter(Boolean).join(' | ');
     // Use cached embedding from DB — never call gte-small at match time (CPU limit)
     // embed-profile Edge Function generates and caches it; match-batch triggers it in background for new users
-    const embedding: number[] | null = Array.isArray(profile.embedding) ? profile.embedding : null;
+    const embedding = parsePgVector(profile.embedding);
     if (!embedding) {
       // Fire embed-profile in background — user gets keyword results now, semantic on next call
       // @ts-ignore EdgeRuntime is Supabase Edge Runtime global
@@ -206,6 +191,7 @@ Deno.serve(async (req)=>{
       );
     }
     const similarities = new Map();
+    let opportunities = recentOpportunities ?? [];
     if (embedding) {
       const { data: vectorMatches, error: vectorError } = await supabase.rpc('match_opportunities', {
         query_embedding: embedding,
@@ -217,6 +203,20 @@ Deno.serve(async (req)=>{
       } else {
         for (const item of vectorMatches ?? []){
           similarities.set(String(item.id), Number(item.similarity ?? 0));
+        }
+        // The primary query caps the newest catalog rows at 300. Hydrate vector
+        // hits outside that window so older relevant opportunities can rank.
+        const loadedIds = new Set(opportunities.map((item)=>String(item.id)));
+        const missingSemanticIds = (vectorMatches ?? []).map((item)=>String(item.id)).filter((id)=>id && !loadedIds.has(id));
+        if (missingSemanticIds.length) {
+          let semanticQuery = supabase.from('opportunities').select(opportunityFields).in('id', missingSemanticIds).eq('is_active', true).eq('verification_status', 'verified').eq('match_eligible', true).is('deleted_at', null).is('archived_at', null).or(activeDeadlineFilter);
+          if (requestMode === 'alerts') semanticQuery = semanticQuery.eq('alerts_eligible', true);
+          const { data: semanticOpportunities, error: semanticError } = await semanticQuery;
+          if (semanticError) {
+            console.error('semantic opportunity hydration unavailable:', semanticError.message);
+          } else if (semanticOpportunities?.length) {
+            opportunities = opportunities.concat(semanticOpportunities);
+          }
         }
       }
     }

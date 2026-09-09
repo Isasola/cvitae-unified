@@ -393,6 +393,14 @@ deno_version = 2
 [edge_runtime.secrets]
 DISABLE_EMBEDDINGS = "env(DISABLE_EMBEDDINGS)"
 
+# These maintenance endpoints accept only JWTs whose signature is verified by
+# the Supabase gateway and whose role claim is service_role.
+[functions.embed-profile]
+verify_jwt = true
+
+[functions.embed-opportunities]
+verify_jwt = true
+
 [analytics]
 enabled = false
 port = 54327

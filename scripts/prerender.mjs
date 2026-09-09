@@ -149,7 +149,8 @@ ${snapshotNav('/blog', '← Blog')}
   <h1 style="font-size:2.25rem;line-height:1.15;color:#fff;font-weight:700;margin:1rem 0 .5rem;font-family:system-ui,sans-serif">${escapeHtml(post.titulo)}</h1>
   ${dateStr ? `<time style="font-size:.875rem;color:rgba(232,232,224,.4);font-family:system-ui,sans-serif">${dateStr}</time>` : ''}
   <div style="height:1px;background:rgba(201,168,76,.2);margin:1.5rem 0"></div>
-  <article>${markdownToSnapshotHtml(post.cuerpo, 5000)}</article>
+  <p style="font-size:.8125rem;color:rgba(232,232,224,.45);font-family:system-ui,sans-serif">Por ${escapeHtml(post.metadata?.author_name || 'Equipo editorial de CVitae')}</p>
+  <article>${markdownToSnapshotHtml(post.cuerpo, 20000)}</article>
   <div style="margin-top:3rem;padding-top:1.5rem;border-top:1px solid rgba(255,255,255,.08)">
     <a href="/blog" style="color:#c9a84c;text-decoration:none;font-size:.875rem;font-family:system-ui,sans-serif">← Ver más artículos</a>
   </div>
@@ -370,13 +371,26 @@ async function prerender() {
       path: 'privacy',
       title: 'Política de Privacidad | CVitae',
       desc: 'Política de privacidad de CVitae.',
-      snapshot: staticPageSnapshotContent('Política de Privacidad', 'Política de privacidad de CVitae.'),
+      snapshot: staticPageSnapshotContent('Política de Privacidad', 'Cómo CVitae trata y protege los datos de cuentas, perfiles, CV y postulaciones.', `
+        <h2 style="${H2_STYLE}">Datos y finalidad</h2><p style="${P_STYLE}">Tratamos los datos que proporcionás al crear una cuenta, completar tu perfil, analizar un CV, configurar alertas o postularte para prestar esas funciones. No vendemos datos personales.</p>
+        <h2 style="${H2_STYLE}">CV, inteligencia artificial y proveedores</h2><p style="${P_STYLE}">Los documentos y datos profesionales pueden procesarse mediante infraestructura de Supabase, AWS y servicios de IA indicados en la política completa. Las postulaciones se comparten con la empresa responsable del proceso.</p>
+        <h2 style="${H2_STYLE}">Cookies y medición</h2><p style="${P_STYLE}">Las preferencias permiten aceptar, rechazar o cambiar la medición y la publicidad. Los servicios no esenciales permanecen sujetos a la elección del visitante.</p>
+        <h2 style="${H2_STYLE}">Tus derechos y contacto</h2><p style="${P_STYLE}">Podés rectificar o eliminar el perfil desde Configuración y contactar a cvitaeparaguay@gmail.com para consultas o solicitudes relacionadas con tus datos.</p>`),
     },
     {
       path: 'terminos',
       title: 'Términos de Servicio | CVitae',
       desc: 'Condiciones de uso de la plataforma CVitae.',
-      snapshot: staticPageSnapshotContent('Términos de Servicio', 'Condiciones de uso de la plataforma CVitae.'),
+      snapshot: staticPageSnapshotContent('Términos de Servicio', 'Condiciones de uso de la plataforma CVitae.', `<p style="${P_STYLE}">Al utilizar CVitae aceptás las condiciones aplicables al procesamiento de perfiles y CV, las recomendaciones asistidas por IA, las postulaciones y las etapas gratuitas o pagas informadas en el producto.</p><p style="${P_STYLE}">Tu CV sigue siendo de tu propiedad. Las recomendaciones requieren revisión humana y no garantizan empleo, admisión ni selección.</p>`),
+    },
+    {
+      path: 'cookies',
+      title: 'Política de Cookies | CVitae',
+      desc: 'Cómo CVitae utiliza cookies necesarias, Analytics y publicidad, y cómo administrar tus preferencias.',
+      snapshot: staticPageSnapshotContent('Política de Cookies', 'Cómo administrar las cookies y tecnologías de medición de CVitae.', `
+        <h2 style="${H2_STYLE}">Cookies necesarias</h2><p style="${P_STYLE}">Sostienen la sesión, la seguridad y las funciones que solicitás.</p>
+        <h2 style="${H2_STYLE}">Analytics y publicidad</h2><p style="${P_STYLE}">Google Analytics ayuda a entender el uso del sitio. La publicidad permanece desactivada hasta contar con configuración operativa y consentimiento aplicable.</p>
+        <h2 style="${H2_STYLE}">Cambiar tu decisión</h2><p style="${P_STYLE}">Podés reabrir Preferencias de cookies desde el pie de página para aceptar, rechazar o modificar tus opciones.</p>`),
     },
     // Market opportunity pages — prerendered so Netlify serves correct SEO HTML before JS
     {
@@ -438,7 +452,7 @@ async function prerender() {
   try {
     ;[{ data: posts }, { data: jobs }, { data: nonJobOpps }, { data: contentHubOpps }] = await Promise.all([
       supabase.from('content_hub')
-        .select('slug,titulo,cuerpo,created_at,imagen_url,categoria')
+        .select('slug,titulo,cuerpo,created_at,updated_at,imagen_url,categoria,metadata')
         .eq('tipo', 'blog').eq('is_active', true),
       supabase.from('opportunities')
         .select('slug,title,organization,location,city,description,created_at,updated_at,type,opportunity_type,deadline,department,country_code')
@@ -492,15 +506,31 @@ async function prerender() {
     if (!post.slug || !isSafeRouteSegment(post.slug)) { console.warn('Skip blog slug:', post.slug); continue }
     const title = post.titulo || 'Blog'
     const excerpt = (post.cuerpo || '').replace(/[#*`>_~\[\]!]/g, '').replace(/\(https?:[^)]+\)/g, '').substring(0, 160)
-    const datePublished = (post.created_at || '').split('T')[0] || ''
+    const datePublished = post.created_at || ''
+    const dateModified = post.updated_at || post.created_at || ''
     const imageUrl = post.imagen_url || `${SITE_URL}/og-image.jpg`
     const canonical = `${SITE_URL}/blog/${post.slug}`
     const ld = {
-      '@context': 'https://schema.org', '@type': 'Article',
-      headline: title, description: excerpt, url: canonical,
-      datePublished, image: imageUrl,
-      author: { '@type': 'Organization', name: 'CVitae', url: SITE_URL },
-      publisher: { '@type': 'Organization', name: 'CVitae', url: SITE_URL, logo: { '@type': 'ImageObject', url: `${SITE_URL}/favicon.svg` } },
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'BlogPosting', '@id': `${canonical}#article`,
+          headline: title, description: excerpt, url: canonical,
+          mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+          datePublished, dateModified, image: imageUrl,
+          inLanguage: 'es-PY', articleSection: post.categoria || undefined,
+          author: { '@type': 'Organization', name: post.metadata?.author_name || 'Equipo editorial de CVitae', url: `${SITE_URL}/sobre-cvitae` },
+          publisher: { '@type': 'Organization', name: 'CVitae', url: SITE_URL, logo: { '@type': 'ImageObject', url: `${SITE_URL}/favicon.svg` } },
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Inicio', item: `${SITE_URL}/` },
+            { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE_URL}/blog` },
+            { '@type': 'ListItem', position: 3, name: title, item: canonical },
+          ],
+        },
+      ],
     }
     const metaTags = `<title>${escapeHtml(title)} | CVitae</title>
 <meta name="description" content="${escapeHtml(excerpt)}">
@@ -509,6 +539,9 @@ async function prerender() {
 <meta property="og:url" content="${canonical}">
 <meta property="og:type" content="article">
 <meta property="og:image" content="${imageUrl}">
+<meta property="article:published_time" content="${escapeHtml(datePublished)}">
+<meta property="article:modified_time" content="${escapeHtml(dateModified)}">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="canonical" href="${canonical}">
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`
     const postDir = join(blogDir, post.slug)

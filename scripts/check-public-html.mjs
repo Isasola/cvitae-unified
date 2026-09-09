@@ -29,6 +29,7 @@ const ROUTES = [
   ['/sobre-cvitae', 'Sobre CVitae', true],
   ['/privacy', 'Privacidad', false],
   ['/terminos', 'Términos', false],
+  ['/cookies', 'Cookies', false],
 ]
 
 function parseHtml(html) {
