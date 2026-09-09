@@ -5,6 +5,15 @@ import { isServiceRoleRequest } from '../_shared/service-auth.ts'
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const supabase = createClient(supabaseUrl, serviceRoleKey)
+let embeddingSession: any
+
+function getEmbeddingSession() {
+  // Reuse the model inside a warm worker. Recreating it on every scheduled
+  // request accumulates native resources and eventually produces HTTP 546.
+  // @ts-ignore Supabase Edge Runtime API
+  embeddingSession ??= new Supabase.ai.Session('gte-small')
+  return embeddingSession
+}
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -40,8 +49,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ done: true, selected: 0, processed: 0, failed: 0 }), { status: 200 })
   }
 
-  // @ts-ignore Supabase Edge Runtime API
-  const session = new Supabase.ai.Session('gte-small')
+  const session = getEmbeddingSession()
   let processed = 0
   const failures: Array<{ id: string; error: string }> = []
 

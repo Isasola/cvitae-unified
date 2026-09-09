@@ -16,14 +16,25 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          for batch in {1..100}; do
-            response=$(curl --silent --show-error --fail-with-body \
+          for batch in {1..50}; do
+            raw=$(curl --silent --show-error \
               --request POST "$SUPABASE_URL/functions/v1/embed-opportunities" \
               --header "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
               --header "Content-Type: application/json" \
+              --write-out $'\n%{http_code}' \
               --data '{"limit":5}')
-            echo "Batch $batch: $response"
-            if [[ "$response" == *'"done":true'* ]]; then
+            status="${raw##*$'\n'}"
+            response="${raw%$'\n'*}"
+            echo "Batch $batch (HTTP $status): $response"
+            if [[ "$status" == "200" && "$response" == *'"done":true'* ]]; then
               break
+            fi
+            if [[ "$status" == "546" ]]; then
+              echo "::warning::Supabase alcanzó el límite del worker; el próximo ciclo continuará desde este punto."
+              break
+            fi
+            if [[ "$status" != "200" ]]; then
+              echo "::error::La actualización de embeddings respondió HTTP $status."
+              exit 1
             fi
           done
