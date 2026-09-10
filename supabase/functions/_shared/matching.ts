@@ -277,16 +277,17 @@ export function isTender(opp) {
   const ta = a.replace(/[^a-z0-9]/g, '');
   const tb = b.replace(/[^a-z0-9]/g, '');
   if (ta.length >= 3 && tb.length >= 3 && ta === tb) return true;
-  // 3. Alias del diccionario: ambas pertenecen al mismo canonical
-  for (const [, aliases] of dictionary){
-    const normAliases = aliases.map(normalize);
-    if (normAliases.includes(a) && normAliases.includes(b)) return true;
-    // Compacto solo cuando ambos tienen >= 3 chars (evita que "c" de "c#" colisione con "c" de "c++")
-    if (ta.length >= 3 && tb.length >= 3) {
-      const compactAliases = aliases.map((al)=>normalize(al).replace(/[^a-z0-9]/g, ''));
-      if (compactAliases.includes(ta) && compactAliases.includes(tb)) return true;
-    }
-  }
+  // 3. Alias del diccionario: ambas pertenecen al mismo canonical. El Ã­ndice
+  // se construye una sola vez por diccionario para no recorrerlo por cada
+  // habilidad de cada oportunidad.
+  const index = dictionaryIndex(dictionary);
+  const sharesCanonical = (leftSet, rightSet)=>{
+    if (!leftSet || !rightSet) return false;
+    for (const canonical of leftSet)if (rightSet.has(canonical)) return true;
+    return false;
+  };
+  if (sharesCanonical(index.byAlias.get(a), index.byAlias.get(b))) return true;
+  if (ta.length >= 3 && tb.length >= 3 && sharesCanonical(index.byCompactAlias.get(ta), index.byCompactAlias.get(tb))) return true;
   return false;
 }
 export function buildDefaultDictionary() {
@@ -313,6 +314,38 @@ export function buildDictionary(extra = []) {
     ...base.entries()
   ];
 }
+const dictionaryIndexCache = new WeakMap();
+function dictionaryIndex(dictionary) {
+  const cached = dictionaryIndexCache.get(dictionary);
+  if (cached) return cached;
+  const groups = dictionary.map(([canonical, aliases])=>[
+      canonical,
+      [...new Set(aliases.map(normalize).filter(Boolean))]
+    ]);
+  const byAlias = new Map();
+  const byCompactAlias = new Map();
+  const add = (index, key, canonical)=>{
+    if (!key) return;
+    const canonicals = index.get(key) ?? new Set();
+    canonicals.add(canonical);
+    index.set(key, canonicals);
+  };
+  for (const [canonical, aliases] of groups){
+    for (const alias of aliases){
+      add(byAlias, alias, canonical);
+      const compact = alias.replace(/[^a-z0-9]/g, '');
+      if (compact.length >= 3) add(byCompactAlias, compact, canonical);
+    }
+  }
+  const value = {
+    groups,
+    byAlias,
+    byCompactAlias,
+    byCanonical: new Map(groups)
+  };
+  dictionaryIndexCache.set(dictionary, value);
+  return value;
+}
 export function extractSkills(opp, dictionary) {
   const explicit = toStrings(opp.tags).filter((tag)=>normalize(tag).length >= 2).filter((tag)=>!STOP_WORDS.has(normalize(tag)));
   const searchable = normalize([
@@ -322,14 +355,12 @@ export function extractSkills(opp, dictionary) {
     stripHtml(opp.description),
     explicit.join(' ')
   ].filter(Boolean).join(' | '));
-  const detected = dictionary.filter(([, aliases])=>aliases.some((alias)=>{
-      const term = normalize(alias);
-      if (!term) return false;
-      return new RegExp(`(^|\\s)${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`, 'i').test(searchable);
-    })).map(([canonical])=>canonical);
+  const index = dictionaryIndex(dictionary);
+  const paddedSearchable = ` ${searchable} `;
+  const detected = index.groups.filter(([, aliases])=>aliases.some((term)=>paddedSearchable.includes(` ${term} `))).map(([canonical])=>canonical);
   const detectedNorms = new Set(detected.flatMap((canonical)=>{
-    const entry = dictionary.find(([c])=>c === canonical);
-    return entry ? entry[1].map(normalize) : [
+    const aliases = index.byCanonical.get(canonical);
+    return aliases ?? [
       normalize(canonical)
     ];
   }));

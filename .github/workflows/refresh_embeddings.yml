@@ -2,21 +2,38 @@ name: CVitae — Actualizar embeddings
 
 on:
   schedule:
-    # Después de la recolección diaria. Procesa hasta 500 oportunidades nuevas.
+    # Red de seguridad diaria; la ejecución principal ocurre al terminar scrapers.
     - cron: '30 15 * * *'
+  workflow_run:
+    workflows: ['CVitae Scrapers']
+    types: [completed]
   workflow_dispatch:
+    inputs:
+      max_batches:
+        description: 'Cantidad maxima de lotes de 5 (50 normal; hasta 250 para backfill controlado)'
+        required: false
+        default: '50'
 
 jobs:
   refresh-opportunities:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
+    concurrency:
+      group: cvitae-opportunity-embeddings
+      cancel-in-progress: false
     steps:
       - name: Generar embeddings pendientes
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MAX_BATCHES: ${{ github.event.inputs.max_batches || '50' }}
         run: |
-          for batch in {1..50}; do
+          if ! [[ "$MAX_BATCHES" =~ ^[0-9]+$ ]] || (( MAX_BATCHES < 1 || MAX_BATCHES > 250 )); then
+            echo "::error::max_batches debe estar entre 1 y 250."
+            exit 1
+          fi
+          total_processed=0
+          for ((batch=1; batch<=MAX_BATCHES; batch++)); do
             raw=$(curl --silent --show-error \
               --request POST "$SUPABASE_URL/functions/v1/embed-opportunities" \
               --header "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
@@ -26,7 +43,11 @@ jobs:
             status="${raw##*$'\n'}"
             response="${raw%$'\n'*}"
             echo "Batch $batch (HTTP $status): $response"
+            if [[ "$status" == "200" && "$response" =~ \"processed\":([0-9]+) ]]; then
+              total_processed=$((total_processed + BASH_REMATCH[1]))
+            fi
             if [[ "$status" == "200" && "$response" == *'"done":true'* ]]; then
+              echo "Cola completada. Embeddings generados: $total_processed"
               break
             fi
             if [[ "$status" == "546" ]]; then
@@ -38,3 +59,4 @@ jobs:
               exit 1
             fi
           done
+          echo "Embeddings generados en esta ejecucion: $total_processed"

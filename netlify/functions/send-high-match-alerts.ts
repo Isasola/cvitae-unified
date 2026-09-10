@@ -1,5 +1,6 @@
 import type { Handler } from "@netlify/functions"
 import { makeSupabaseAdmin } from "./_supabase"
+import { buildDictionary, rankOpportunities } from "../../supabase/functions/_shared/matching"
 
 const RESEND_KEY = process.env.RESEND_API_KEY
 const SITE_URL = process.env.SITE_URL || "https://cvitae.lat"
@@ -74,19 +75,25 @@ const handler: Handler = async () => {
   if (!RESEND_KEY) return { statusCode: 503, body: JSON.stringify({ error: "RESEND_API_KEY no configurada" }) }
   const supabase = makeSupabaseAdmin()
   const since = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString()
-  const [{ data: profiles, error: profilesError }, { data: opportunities, error: opportunitiesError }] = await Promise.all([
-    supabase.from("user_master_profiles").select("id,user_id,email,full_name,professional_title,profile_data,match_alerts_enabled,match_alert_threshold").eq("match_alerts_enabled", true).not("email", "is", null).limit(250),
-    supabase.from("opportunities").select("id,slug,title,organization,location,rubro,type,description,tags,opportunity_kind,created_at").eq("is_active", true).eq("verification_status", "verified").eq("alerts_eligible", true).is("deleted_at", null).is("archived_at", null).gte("created_at", since).order("created_at", { ascending: false }).limit(150),
+  const [{ data: profiles, error: profilesError }, { data: opportunities, error: opportunitiesError }, { data: skillRows, error: skillsError }] = await Promise.all([
+    supabase.from("user_master_profiles").select("id,user_id,email,full_name,professional_title,profile_data,match_alerts_enabled,match_alert_threshold,is_test").eq("match_alerts_enabled", true).not("email", "is", null).not("user_id", "is", null).or("is_test.is.null,is_test.eq.false").limit(250),
+    supabase.from("opportunities").select("id,slug,title,organization,location,rubro,type,description,tags,opportunity_kind,opportunity_type,eligible_countries,eligible_regions,deadline,created_at,is_active,verification_status,match_eligible,alerts_eligible,archived_at,deleted_at").eq("is_active", true).eq("verification_status", "verified").eq("match_eligible", true).eq("alerts_eligible", true).is("deleted_at", null).is("archived_at", null).gte("created_at", since).order("created_at", { ascending: false }).limit(150),
+    supabase.from("skill_dictionary").select("canonical_name,variants"),
   ])
-  if (profilesError || opportunitiesError) return { statusCode: 500, body: JSON.stringify({ error: profilesError?.message || opportunitiesError?.message }) }
+  if (profilesError || opportunitiesError || skillsError) return { statusCode: 500, body: JSON.stringify({ error: profilesError?.message || opportunitiesError?.message || skillsError?.message }) }
+  const dictionary = buildDictionary((skillRows || []).map((row: any) => [
+    String(row.canonical_name || '').trim(),
+    Array.isArray(row.variants) ? row.variants.map(String) : [],
+  ]).filter(([canonical]: [string, string[]]) => canonical))
 
   let sent = 0; let failed = 0; let claimed = 0; let eligible = 0
   for (const profile of profiles || []) {
     if (sent + failed >= MAX_EMAILS_PER_RUN) break
     const threshold = Number(profile.match_alert_threshold || 85)
-    for (const opp of opportunities || []) {
+    const { ranked } = rankOpportunities(profile, opportunities || [], dictionary)
+    for (const opp of ranked) {
       if (sent + failed >= MAX_EMAILS_PER_RUN) break
-      const match = score(profile, opp)
+      const match = { value: opp.finalScore, matched: opp.matchedSkills }
       if (match.value < threshold) continue
       eligible++
       const { data: rows, error: claimError } = await supabase.rpc("claim_match_alert_delivery", {

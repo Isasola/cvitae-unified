@@ -325,5 +325,20 @@ const contentPolicyMigration = readFileSync(new URL('../supabase/migrations/2026
 assert(contentPolicyMigration.includes('using (is_active = true)'), 'El contenido publicado debe conservar lectura pública')
 const contentMetadataMigration = readFileSync(new URL('../supabase/migrations/202609090005_content_hub_metadata.sql', import.meta.url), 'utf8')
 assert(contentMetadataMigration.includes('add column if not exists updated_at'), 'El blog debe alinear updated_at antes del prerender')
+const embeddingFreshnessMigration = readFileSync(new URL('../supabase/migrations/202609090006_opportunity_embedding_freshness.sql', import.meta.url), 'utf8')
+assert(embeddingFreshnessMigration.includes('new.embedding := null'), 'Cambios relevantes de una oportunidad deben invalidar su embedding')
+const embeddingWorkflow = readFileSync(new URL('../.github/workflows/refresh_embeddings.yml', import.meta.url), 'utf8')
+assert(embeddingWorkflow.includes('workflow_run:'), 'El refresco de embeddings debe ejecutarse despues de los scrapers')
+assert(embeddingWorkflow.includes("workflows: ['CVitae Scrapers']"), 'El refresco debe estar conectado al workflow real de scrapers')
+const highMatchAlerts = readFileSync(new URL('../netlify/functions/send-high-match-alerts.ts', import.meta.url), 'utf8')
+assert(highMatchAlerts.includes('rankOpportunities(profile, opportunities || [], dictionary)'), 'Las alertas deben usar el mismo ranking explicable que el dashboard')
+assert(highMatchAlerts.includes('is_test.is.null,is_test.eq.false'), 'Las alertas no deben enviar correos a cuentas de prueba')
+for (const relativePath of ['../netlify/functions/founding-beta-action.ts', '../netlify/functions/log-user-event.ts']) {
+  const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
+  assert(source.includes('authenticatedUser(event)'), `${relativePath} debe autenticar con el cliente Node 20-safe`)
+  assert(!source.includes('createClient('), `${relativePath} no debe recrear clientes Supabase sin transporte WebSocket`)
+}
+const b2cProfileFunction = readFileSync(new URL('../netlify/functions/b2c-profile.ts', import.meta.url), 'utf8')
+assert(b2cProfileFunction.includes('await refreshProfileEmbedding(user.id)'), 'Guardar el perfil debe generar su embedding antes del matching')
 
 console.log('Critical flow checks passed: multi-PDF, persistent limits, B2C/B2B auth, ATS diagnostics/questions, evidence-grounded rewrites and application prep, profile ownership, protected CORS, ledger/batch invariants, alert idempotency and Gemini auth.')

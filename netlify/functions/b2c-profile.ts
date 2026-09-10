@@ -97,6 +97,28 @@ async function mutationLimit(event: any, userId: string) {
   return jsonResponse(event, 429, { error: 'Alcanzaste el límite temporal de cambios.' }, rateLimitHeaders(limit))
 }
 
+async function refreshProfileEmbedding(userId: string) {
+  const supabaseUrl = process.env.SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !serviceRoleKey) return
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/embed-profile`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ user_id: userId }),
+      signal: AbortSignal.timeout(8_000),
+    })
+    if (!response.ok) console.error('[b2c-profile] embed-profile HTTP', response.status)
+  } catch (error: any) {
+    // Profile persistence remains authoritative. match-batch also retries missing
+    // profile embeddings, so a temporary inference failure cannot lose user data.
+    console.error('[b2c-profile] embed-profile unavailable', error?.message)
+  }
+}
+
 export const handler = async (event: any) => {
   const originError = rejectInvalidOrigin(event)
   if (originError) return originError
@@ -178,6 +200,7 @@ export const handler = async (event: any) => {
         .select(PROFILE_FIELDS)
         .single()
       if (error) throw error
+      await refreshProfileEmbedding(user.id)
       return jsonResponse(event, 200, { profile: publicProfile(saved) })
     }
 

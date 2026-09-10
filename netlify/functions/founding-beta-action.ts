@@ -6,9 +6,10 @@
 // This function handles explicit accept, status polling, and offer tracking.
 
 import { Handler } from "@netlify/functions"
-import { createClient } from "@supabase/supabase-js"
 import { Resend } from "resend"
 import { sendFoundingEmail, notifyFounderMilestone, notifyFounder } from "./lib/founding-mailer"
+import { authenticatedUser } from "./lib/b2c-security"
+import { makeSupabaseAdmin } from "./_supabase"
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -33,17 +34,12 @@ export const handler: Handler = async (event) => {
   }
 
   // Authenticate
-  const supabaseUrl = process.env.SUPABASE_URL!
-  const supabaseAnonKey = process.env.SUPABASE_KEY!
-  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  })
-  const { data: { user }, error: authError } = await userClient.auth.getUser()
+  const { user, error: authError } = await authenticatedUser(event)
   if (authError || !user) {
     return { statusCode: 401, body: JSON.stringify({ error: "Token inválido o expirado" }) }
   }
 
-  const supabaseAdmin = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const supabaseAdmin = makeSupabaseAdmin()
 
   // ── get_status ────────────────────────────────────────────────────────────
   if (action === "get_status") {

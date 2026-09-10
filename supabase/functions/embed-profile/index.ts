@@ -6,6 +6,15 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
+let embeddingSession: any;
+
+function getEmbeddingSession() {
+  // Reuse the native model while the worker remains warm. Recreating sessions
+  // across rapid profile updates can exhaust Edge worker resources.
+  // @ts-ignore Supabase Edge Runtime API
+  embeddingSession ??= new Supabase.ai.Session('gte-small');
+  return embeddingSession;
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { status: 200 });
@@ -39,8 +48,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ done: true, processed: 0 }), { status: 200 });
   }
 
-  // @ts-ignore Supabase Edge Runtime API
-  const session = new Supabase.ai.Session('gte-small');
+  const session = getEmbeddingSession();
 
   let processed = 0;
   for (const profile of profiles) {

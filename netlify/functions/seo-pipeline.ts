@@ -6,9 +6,9 @@
  */
 
 import type { Handler } from '@netlify/functions'
-import { createClient } from '@supabase/supabase-js'
 import { runSeoPipeline } from './lib/seo-pipeline-runner'
 import { serverSeoFlags } from './lib/seo-flags'
+import { makeSupabaseAdmin } from './_supabase'
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -35,10 +35,7 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) }
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  )
+  const supabase = makeSupabaseAdmin()
 
   const result = await runSeoPipeline(supabase, opportunityId, flags.SEO_DRY_RUN)
   return { statusCode: 200, body: JSON.stringify(result) }

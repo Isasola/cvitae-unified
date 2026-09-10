@@ -38,7 +38,11 @@ async function callFoundingAction(token: string, action: string, extra?: Record<
     },
     body: JSON.stringify({ action, ...extra }),
   })
-  return res.json()
+  const data = await res.json().catch(() => ({ error: 'Respuesta inválida del servidor' }))
+  if (!res.ok) {
+    throw new Error(data?.error || `Founding Beta no disponible (${res.status})`)
+  }
+  return data
 }
 
 export function useFoundingBeta(userId: string | null): FoundingBetaState {
