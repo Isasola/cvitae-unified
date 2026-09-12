@@ -17,6 +17,7 @@ const ROUTE_LABELS: Record<string, string> = {
   'beca-posgrado': 'acceder a una beca o posgrado',
   organismos: 'trabajar en organismos internacionales',
   emprendimiento: 'lanzar o hacer crecer un emprendimiento',
+  freelance: 'conseguir proyectos freelance sostenibles',
   'cambio-area': 'hacer una reconversión profesional',
 }
 const LEVELS = new Set(['Inicial', 'Intermedio', 'Avanzado'])
@@ -52,7 +53,7 @@ type ProviderKey = keyof typeof PROVIDERS
 type CorroboratedGap = {
   skill: string
   normalizedSkill: string
-  sources: Array<{ id: string; slug: string; title: string; organization: string | null; updated_at: string }>
+  sources: Array<{ id: string; slug: string; title: string; organization: string | null; updated_at: string; preferred?: boolean }>
 }
 
 const COURSE_SCHEMA = {
@@ -98,15 +99,19 @@ function recommendedProvider(skill: string): ProviderKey {
 }
 
 function allowedProvider(value: unknown, skill: string): ProviderKey {
+  const officialProvider = recommendedProvider(skill)
+  if (officialProvider === 'aws_skill_builder' || officialProvider === 'microsoft_learn' || officialProvider === 'google_skills') {
+    return officialProvider
+  }
   const proposed = String(value || '') as ProviderKey
-  return proposed in PROVIDERS ? proposed : recommendedProvider(skill)
+  return proposed in PROVIDERS ? proposed : officialProvider
 }
 
 function parseGemini(value: string): unknown {
   try { return JSON.parse(value) } catch { return [] }
 }
 
-export function normalizeLearningRecommendations(raw: unknown, gaps: CorroboratedGap[]) {
+export function normalizeLearningRecommendations(raw: unknown, gaps: CorroboratedGap[], context?: { goal?: string }) {
   const rawItems = Array.isArray(raw) ? raw : []
   const bySkill = new Map(rawItems.map((item: any) => [normalize(item?.skill), item]))
   return gaps.slice(0, 6).map((gap, index) => {
@@ -114,7 +119,9 @@ export function normalizeLearningRecommendations(raw: unknown, gaps: Corroborate
     const providerKey = allowedProvider(model?.providerKey, gap.skill)
     const provider = PROVIDERS[providerKey]
     const occurrence = gap.sources.length
-    const deterministicWhy = `Esta brecha aparece en ${occurrence} ${occurrence === 1 ? 'oportunidad verificada' : 'oportunidades verificadas'} entre tus mejores coincidencias.`
+    const preferred = gap.sources.some((source) => source.preferred)
+    const goal = cleanText(context?.goal, 180)
+    const deterministicWhy = `Esta brecha aparece en ${occurrence} ${occurrence === 1 ? 'oportunidad verificada' : 'oportunidades verificadas'} entre tus mejores coincidencias.${preferred ? ' También aparece en una oportunidad que marcaste como interesante.' : ''}${goal ? ` La priorizamos como puente hacia tu meta: ${goal}.` : ''}`
     return {
       skill: gap.skill,
       normalized_skill: gap.normalizedSkill,
@@ -157,10 +164,12 @@ function publicFields(row: any) {
 }
 
 async function overview(supabase: any, userId: string) {
-  const { data, error } = await supabase.from('learning_recommendations')
-    .select('*').eq('user_id', userId).neq('status', 'stale')
-    .order('created_at', { ascending: false }).order('priority', { ascending: true }).limit(30)
-  if (error) throw error
+  const [{ data, error }, { data: profile, error: profileError }] = await Promise.all([
+    supabase.from('learning_recommendations').select('*').eq('user_id', userId).neq('status', 'stale')
+      .order('created_at', { ascending: false }).order('priority', { ascending: true }).limit(30),
+    supabase.from('user_master_profiles').select('profile_data').eq('user_id', userId).maybeSingle(),
+  ])
+  if (error || profileError) throw error || profileError
   const rows = data || []
   const latestSignature = rows[0]?.profile_signature || null
   const current = latestSignature ? rows.filter((row: any) => row.profile_signature === latestSignature) : []
@@ -174,6 +183,12 @@ async function overview(supabase: any, userId: string) {
       inProgress: current.filter((row: any) => row.status === 'in_progress').length,
       completed: current.filter((row: any) => row.status === 'completed').length,
     },
+    intent: {
+      career_route: cleanText(profile?.profile_data?.career_route, 80),
+      desired_role_1y: cleanText(profile?.profile_data?.desired_role_1y, 300),
+      career_interests: cleanList(profile?.profile_data?.career_interests, 12, 120),
+      liked_opportunity_ids: cleanList(profile?.profile_data?.liked_opportunity_ids, 50, 120),
+    },
   }
 }
 
@@ -181,13 +196,19 @@ async function invokeGemini(profile: any, gaps: CorroboratedGap[]) {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return []
   const careerGoal = ROUTE_LABELS[cleanText(profile.profile_data?.career_route, 50)] || 'mejorar su empleabilidad'
+  const desiredRole = cleanText(profile.profile_data?.desired_role_1y, 300) || 'No especificada'
+  const interests = cleanList(profile.profile_data?.career_interests, 12, 120)
+  const preferredSources = gaps.flatMap((gap) => gap.sources.filter((source) => source.preferred).map((source) => source.title)).slice(0, 8)
   const prompt = `Actuá como curador de aprendizaje para una persona de Paraguay y Latinoamérica.
 
 Perfil guardado:
 - Título: ${cleanText(profile.professional_title, 120) || 'Profesional'}
 - Seniority: ${cleanText(profile.profile_data?.seniority, 50) || 'No especificado'}
 - Objetivo: ${careerGoal}
+- Meta declarada a un año: ${desiredRole}
+- Actividades o temas que disfruta: ${interests.join(', ') || 'No especificados'}
 - Habilidades confirmadas en el perfil: ${cleanList(profile.profile_data?.habilidades, 30).join(', ') || 'No especificadas'}
+- Oportunidades que marcó como interesantes: ${preferredSources.join(' | ') || 'Ninguna todavía'}
 
 Brechas corroboradas en oportunidades verificadas:
 ${JSON.stringify(gaps.map((gap) => ({ skill: gap.skill, occurrences: gap.sources.length })), null, 2)}
@@ -195,7 +216,8 @@ ${JSON.stringify(gaps.map((gap) => ({ skill: gap.skill, occurrences: gap.sources
 Para cada brecha elegí un proveedor del catálogo permitido y proponé un foco de aprendizaje concreto.
 No inventes un nombre de curso, URL, duración, precio, certificado, disponibilidad ni promesa de empleo.
 No agregues habilidades fuera de la lista. El servidor construirá el título y el enlace.
-El foco debe ser prudente y útil; no afirmes que completar un curso garantiza mejorar un score.`
+El foco debe ser prudente y útil; no afirmes que completar un curso garantiza mejorar un score.
+Cuando la brecha sea de AWS, Azure/Microsoft o Google Cloud, priorizá el catálogo oficial del fabricante.`
 
   const response = await observeAiCall({ provider: 'gemini', model: MODEL_ID, feature: 'learning_plan_recommendations', trigger: 'user_action', actor: 'user' }, () => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent`, {
     method: 'POST',
@@ -213,7 +235,7 @@ El foco debe ser prudente y útil; no afirmes que completar un curso garantiza m
   return parseGemini(data.candidates?.[0]?.content?.parts?.[0]?.text || '[]')
 }
 
-async function corroborateGaps(supabase: any, profile: any, requestedSkills: string[], opportunityIds: string[]) {
+async function corroborateGaps(supabase: any, profile: any, requestedSkills: string[], opportunityIds: string[], preferredIds = new Set<string>()) {
   if (!requestedSkills.length || !opportunityIds.length) return []
   const { data, error } = await supabase.from('opportunities')
     .select('id,slug,title,organization,description,tags,updated_at')
@@ -232,6 +254,7 @@ async function corroborateGaps(supabase: any, profile: any, requestedSkills: str
     }).map((item: any) => ({
       id: item.id, slug: item.slug || item.id, title: item.title,
       organization: item.organization, updated_at: item.updated_at,
+      preferred: preferredIds.has(String(item.id)),
     }))
     if (sources.length) gaps.push({ skill, normalizedSkill, sources })
   }
@@ -274,20 +297,29 @@ export const handler = async (event: any) => {
     }
 
     if (action !== 'recommend') return jsonResponse(event, 400, { error: 'Acción desconocida' })
-    const requestedSkills = cleanList(body.missingSkills, 6)
-    const opportunityIds = cleanList(body.opportunityIds, 10, 220)
-    if (!requestedSkills.length || !opportunityIds.length) return jsonResponse(event, 200, await overview(supabase, user.id))
+    const requestedOpportunityIds = cleanList(body.opportunityIds, 20, 220)
 
     const { data: profile, error: profileError } = await supabase.from('user_master_profiles')
       .select('id,user_id,professional_title,profile_data,updated_at').eq('user_id', user.id).maybeSingle()
     if (profileError) throw profileError
     if (!profile) return jsonResponse(event, 404, { error: 'Completá tu perfil para crear un plan de aprendizaje', recommendations: [], courses: [] })
 
-    const gaps = await corroborateGaps(supabase, profile, requestedSkills, opportunityIds)
+    const likedOpportunityIds = cleanList(profile.profile_data?.liked_opportunity_ids, 50, 120)
+    const likedGapMap = profile.profile_data?.liked_opportunity_gaps && typeof profile.profile_data.liked_opportunity_gaps === 'object'
+      ? profile.profile_data.liked_opportunity_gaps
+      : {}
+    const likedSkills = likedOpportunityIds.flatMap((id) => cleanList(likedGapMap[id], 12, 100))
+    const requestedSkills = cleanList([...likedSkills, ...cleanList(body.missingSkills, 6)], 6)
+    const opportunityIds = [...new Set([...likedOpportunityIds, ...requestedOpportunityIds])].slice(0, 20)
+    if (!requestedSkills.length || !opportunityIds.length) return jsonResponse(event, 200, await overview(supabase, user.id))
+    const gaps = await corroborateGaps(supabase, profile, requestedSkills, opportunityIds, new Set(likedOpportunityIds))
     if (!gaps.length) return jsonResponse(event, 200, { ...(await overview(supabase, user.id)), notice: 'No encontramos brechas nuevas respaldadas por oportunidades activas.' })
     const profileSignature = sha({
       profileUpdatedAt: profile.updated_at,
       careerRoute: profile.profile_data?.career_route || '',
+      desiredRole1y: profile.profile_data?.desired_role_1y || '',
+      careerInterests: profile.profile_data?.career_interests || [],
+      likedOpportunityIds,
       gaps: gaps.map((gap) => ({ skill: gap.normalizedSkill, sources: gap.sources.map((source) => `${source.id}:${source.updated_at}`) })),
     })
 
@@ -299,7 +331,7 @@ export const handler = async (event: any) => {
     const limit = await consumeRateLimit({ scope: 'b2c-course-recommendations', subject: user.id, limit: 8, windowSeconds: 24 * 60 * 60 })
     if (!limit.allowed) return jsonResponse(event, 429, { error: 'Alcanzaste el límite temporal de planes.', recommendations: [], courses: [] }, rateLimitHeaders(limit))
     const raw = await invokeGemini(profile, gaps)
-    const normalizedRecommendations = normalizeLearningRecommendations(raw, gaps)
+    const normalizedRecommendations = normalizeLearningRecommendations(raw, gaps, { goal: profile.profile_data?.desired_role_1y })
 
     const { error: insertError } = await supabase.from('learning_recommendations').insert(normalizedRecommendations.map((item) => ({
       ...item,

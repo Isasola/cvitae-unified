@@ -1,4 +1,5 @@
 import { classifyOpportunity, type ClassifyInput } from '../seo/classify'
+import { evaluateOpportunity } from '../opportunities/quality-gates'
 
 export const REVIEW_BOT_VERSION = 'review-bot-v1'
 export const REVIEW_RULES_VERSION = '2026-08-20.1'
@@ -31,6 +32,14 @@ export interface PageObservation {
   canonical: string | null
   title: string | null
   organization: string | null
+  description: string | null
+  salary: string | null
+  salaryCurrency: string | null
+  datePosted: string | null
+  validThrough: string | null
+  employmentType: string | null
+  jobLocation: string | null
+  applicantLocationRequirements: string | null
   hasStructuredData: boolean
   closedSignal: string | null
   pageKind: 'opportunity' | 'aggregator' | 'login' | 'error' | 'unknown'
@@ -156,9 +165,6 @@ export function reviewOpportunityDeterministic(
     if (Number.isNaN(deadline.getTime())) addIssue('INVALID_DEADLINE', 'Fecha de cierre no interpretable', 'review')
     else if (deadline.getTime() < now.getTime()) addIssue('EXPIRED', 'Oportunidad vencida explícitamente', 'hard_block')
     else evidence.push({ check: 'deadline', value: input.deadline, source: 'record' })
-  } else {
-    missingFields.push('deadline')
-    addIssue('MISSING_DEADLINE', 'No hay fecha explícita para confirmar vigencia', 'review')
   }
 
   const recordText = `${input.title || ''} ${input.description || ''}`
@@ -203,11 +209,17 @@ export function reviewOpportunityDeterministic(
       addIssue('TITLE_CONTRADICTION', 'El título guardado no coincide claramente con la página', 'review')
     }
     evidence.push({ check: 'structured_data', value: page.hasStructuredData ? 'present' : 'absent', source: 'html' })
+    if (!input.description?.trim() && page.description) evidence.push({ check: 'page_description', value: `${page.description.length} characters`, source: 'html' })
+    if (page.salary) evidence.push({ check: 'page_salary', value: page.salary, source: 'html' })
+    if (page.validThrough) evidence.push({ check: 'page_valid_through', value: page.validThrough, source: 'html' })
   } else if (normalizedUrl) {
     addIssue('URL_NOT_CHECKED', 'La URL todavía no fue comprobada por HTTP', 'review')
   }
 
-  const classification = classifyOpportunity(input)
+  const effectiveInput = !input.description?.trim() && page?.description ? { ...input, description: page.description } : input
+  const quality = evaluateOpportunity(effectiveInput, now)
+  if (quality.state === 'blocked' && !hardBlocks.length) addIssue('QUALITY_GATE_BLOCK', quality.reasons.join(', '), 'hard_block')
+  const classification = classifyOpportunity(effectiveInput)
   for (const reason of classification.reasons.filter(reason => reason.severity !== 'info')) {
     if (reason.code === 'WEAK_SOURCE' && input.original_source_verified) {
       evidence.push({

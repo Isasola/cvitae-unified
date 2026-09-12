@@ -25,6 +25,7 @@ const CAREER_ROUTES = [
   { id: 'beca-posgrado', label: 'Beca o posgrado',              icon: '🎓', desc: 'Especializarte o estudiar en el exterior' },
   { id: 'organismos',    label: 'Organismos internacionales',   icon: '🌐', desc: 'ONU, BID, OEA, PNUD y similares' },
   { id: 'emprendimiento',label: 'Emprendimiento',               icon: '🚀', desc: 'Capital semilla, aceleradoras, grants' },
+  { id: 'freelance',      label: 'Trabajo freelance',            icon: '🧩', desc: 'Proyectos por contrato para clientes locales o globales' },
   { id: 'cambio-area',   label: 'Cambio de área',               icon: '🔄', desc: 'Reconversión o pivot profesional' },
 ]
 
@@ -34,6 +35,7 @@ const ROUTE_GAPS: Record<string, { skill: string; sugerencia: string }[]> = {
   'organismos':     [{ skill: 'Inglés', sugerencia: 'Todos los organismos internacionales trabajan en inglés.' }, { skill: 'Redacción de proyectos', sugerencia: 'La postulación requiere cartas de motivación y propuestas formales.' }],
   'beca-posgrado':  [{ skill: 'Inglés', sugerencia: 'La mayoría de las becas exigen prueba de idioma (IELTS/TOEFL).' }],
   'emprendimiento': [{ skill: 'Gestión de Proyectos', sugerencia: 'Los jurados de aceleradoras evalúan ejecución y planificación.' }],
+  'freelance':      [],
   'empleo-local':   [],
   'cambio-area':    [],
 }
@@ -87,6 +89,8 @@ export default function ProfileBuilder() {
     skills: [] as string[],
     cursos: [] as string[],
     career_route: '' as string,
+    desired_role_1y: '',
+    career_interests: [] as string[],
   })
   const [newCurso, setNewCurso] = useState('')
   const [newSkill, setNewSkill] = useState('')
@@ -127,6 +131,8 @@ export default function ProfileBuilder() {
             skills: data.profile_data?.habilidades || [],
             cursos: data.profile_data?.cursos || [],
             career_route: data.profile_data?.career_route || '',
+            desired_role_1y: data.profile_data?.desired_role_1y || '',
+            career_interests: data.profile_data?.career_interests || [],
           })
           setCurrentCV(data.has_cv || data.cv_reupload_required ? {
             file_name: data.cv_file_name || 'CV anterior',
@@ -555,6 +561,31 @@ export default function ProfileBuilder() {
                       </div>
                     </div>
 
+                    <div className="grid gap-4 rounded-2xl border border-white/8 bg-white/[0.015] p-5">
+                      <div>
+                        <label className="mb-1 block text-sm text-white">¿Qué te gusta hacer?</label>
+                        <p className="mb-3 text-xs text-muted-foreground">Contanos actividades o temas que disfrutás, separados por coma. Son preferencias, no habilidades confirmadas.</p>
+                        <input
+                          value={formData.career_interests.join(', ')}
+                          onChange={e => setFormData(prev => ({ ...prev, career_interests: e.target.value.split(',').map(item => item.trimStart()) }))}
+                          placeholder="Ej: analizar datos, ayudar a clientes, escribir, crear productos"
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm text-white">En un año quiero ser o estar...</label>
+                        <p className="mb-3 text-xs text-muted-foreground">Definí una meta concreta. La IA va a proponer el puente desde tu CV actual, sin asumir que ya llegaste.</p>
+                        <textarea
+                          value={formData.desired_role_1y}
+                          onChange={e => setFormData(prev => ({ ...prev, desired_role_1y: e.target.value }))}
+                          maxLength={300}
+                          rows={3}
+                          placeholder="Ej: trabajando como analista de datos junior en una empresa remota"
+                          className={inputCls}
+                        />
+                      </div>
+                    </div>
+
                     {/* Brechas detectadas según ruta */}
                     {formData.career_route && (() => {
                       const gaps = (ROUTE_GAPS[formData.career_route] || []).filter(
@@ -632,6 +663,8 @@ export default function ProfileBuilder() {
                           Ruta: {CAREER_ROUTES.find(r => r.id === formData.career_route)?.label}
                         </div>
                       )}
+                      {formData.desired_role_1y && <p className="mb-3 text-sm text-white/55"><span className="text-white/30">Meta a un año:</span> {formData.desired_role_1y}</p>}
+                      {formData.career_interests.filter(Boolean).length > 0 && <p className="mb-5 text-sm text-white/55"><span className="text-white/30">Me interesa:</span> {formData.career_interests.filter(Boolean).join(', ')}</p>}
                       <div className="flex flex-wrap gap-2">
                         {formData.skills.map(s => (
                           <span key={s} className="rounded-full border border-white/10 bg-white/[0.02] px-2 py-0.5 text-[10px] text-white/60">{s}</span>

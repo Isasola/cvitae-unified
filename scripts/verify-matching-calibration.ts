@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
   buildDefaultDictionary,
+  careerBonus,
   extractSkills,
   isEligibleForProfile,
   isTender,
@@ -377,9 +378,12 @@ const profileEmbeddingText = buildProfileEmbeddingText({
   professional_title: 'Analista de datos',
   summary: 'Experiencia en inteligencia de negocio',
   cv_text: 'Python SQL Power BI y modelos predictivos',
-  profile_data: { habilidades: ['Python', 'SQL'], location: 'Asunción' },
+  profile_data: { habilidades: ['Python', 'SQL'], location: 'Asunción', desired_role_1y: 'Trabajar como analista cloud', career_interests: ['automatizar', 'datos'] },
 })
 assert(profileEmbeddingText.includes('Experiencia CV: Python SQL Power BI'), 'embedding de perfil debe incluir evidencia del CV')
+assert(profileEmbeddingText.includes('Meta a un año: Trabajar como analista cloud'), 'embedding de perfil debe incluir la meta declarada')
+assert(profileEmbeddingText.includes('Intereses: automatizar, datos'), 'embedding de perfil debe incluir intereses sin convertirlos en evidencia')
+assert(careerBonus('freelance', makeOpp({ id: 'freelance-route', title: 'Proyecto freelance de desarrollo' })) > 0, 'la ruta freelance debe priorizar proyectos por contrato')
 const opportunityEmbeddingText = buildOpportunityEmbeddingText({
   title: 'Data Analyst',
   description: '<p>Python &amp; SQL</p>',

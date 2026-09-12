@@ -10,7 +10,7 @@ const handler: Handler = async (event) => {
   if (!ADMIN_PASSWORD) return { statusCode: 500, body: JSON.stringify({ error: "Server misconfigured" }) }
 
   try {
-    const { password, email, token_balance, plan_type } = JSON.parse(event.body || "{}")
+    const { password, email, company_name, token_balance, plan_type } = JSON.parse(event.body || "{}")
 
     if (password !== ADMIN_PASSWORD) {
       return { statusCode: 401, body: JSON.stringify({ error: "No autorizado" }) }
@@ -19,6 +19,10 @@ const handler: Handler = async (event) => {
     if (!email) {
       return { statusCode: 400, body: JSON.stringify({ error: "Email is required" }) }
     }
+    const companyName = String(company_name || '').trim()
+    if (companyName.length < 2 || companyName.length > 240) {
+      return { statusCode: 400, body: JSON.stringify({ error: "Nombre de empresa requerido (2–240 caracteres)" }) }
+    }
 
     const token = `REC-${Math.random().toString(36).substring(2, 8).toUpperCase()}-${new Date().getFullYear()}`
 
@@ -26,6 +30,7 @@ const handler: Handler = async (event) => {
 
     const { error } = await supabase.from("recruiter_tokens").insert([{
       email,
+      company_name: companyName,
       token_balance: token_balance || 10,
       access_token: token,
       plan_type: plan_type || "starter",

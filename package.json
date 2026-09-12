@@ -11,6 +11,8 @@
     "staging:stop": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/stop-local-staging.ps1",
     "test:critical": "tsx scripts/verify-critical-flows.ts",
     "test:review-bot": "tsx scripts/verify-review-bot.ts",
+    "test:factory": "python scripts/verify_opportunity_factory.py",
+    "test:admin": "tsx scripts/verify-admin-operations.ts",
     "test:ai-cost": "tsx scripts/verify-ai-cost-safety.ts",
     "test:server-env": "tsx scripts/verify-netlify-server-env.ts",
     "test:analytics": "tsx scripts/verify-admin-analytics.ts && tsx scripts/verify-consent-ads.ts && playwright test tests/visual/analytics-consent.spec.ts --project=chromium-desktop",

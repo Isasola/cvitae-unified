@@ -244,9 +244,14 @@ export function isEligibleForProfile(opp, profileLocation) {
     ...toStrings(opp.eligible_countries),
     ...toStrings(opp.eligible_regions)
   ].map((v)=>normalize(v)).filter(Boolean);
-  if (!declared.length) return true;
-  const profile = normalize(`${profileLocation} paraguay py latinoamerica latino america latam sudamerica south america`);
-  return declared.some((v)=>v === 'py' || v.includes('paraguay') || v.includes('latam') || v.includes('latin america') || v.includes('latinoamerica') || v.includes('south america') || v.includes('sudamerica') || v.includes('worldwide') || v.includes('all countr') || profile.includes(v));
+  const text = normalize(`${opp.title ?? ''} ${opp.description ?? ''} ${opp.location ?? ''} ${declared.join(' ')}`);
+  // A remote flag never overrides an explicit regional restriction.
+  if (/\b(us only|usa only|united states only|canada only|north america|emea|europe only|eu only|uk only)\b/.test(text)) return false;
+  if (!declared.length) return !/(emea|north america|united states|canada only)/.test(text);
+  const profile = normalize(profileLocation);
+  const country = /\b(peru|lima|\bpe\b)\b/.test(profile) ? 'pe' : /\b(paraguay|asuncion|\bpy\b)\b/.test(profile) ? 'py' : '';
+  if (!country) return declared.some((v)=>/(worldwide|all countr|latam|latin america|south america)/.test(v));
+  return declared.some((v)=>v === country || (country === 'py' && v.includes('paraguay')) || (country === 'pe' && v.includes('peru')) || /(latam|latin america|latinoamerica|south america|sudamerica|worldwide|all countr)/.test(v));
 }
 export function isTender(opp) {
   return opp.opportunity_type === 'tender' || /(^|\s)(tender|licitacion|licitaciones|llamado a licitacion)(\s|$)/i.test(normalize(`${opp.title ?? ''} ${opp.type ?? ''} ${opp.opportunity_kind ?? ''} ${opp.rubro ?? ''}`));
@@ -277,7 +282,7 @@ export function isTender(opp) {
   const ta = a.replace(/[^a-z0-9]/g, '');
   const tb = b.replace(/[^a-z0-9]/g, '');
   if (ta.length >= 3 && tb.length >= 3 && ta === tb) return true;
-  // 3. Alias del diccionario: ambas pertenecen al mismo canonical. El Ã­ndice
+  // 3. Alias del diccionario: ambas pertenecen al mismo canonical. El índice
   // se construye una sola vez por diccionario para no recorrerlo por cada
   // habilidad de cada oportunidad.
   const index = dictionaryIndex(dictionary);
@@ -443,6 +448,7 @@ export function careerBonus(route, opp) {
   if (r === 'becaposgrado' && /(beca|posgrado|maestria|doctorado)/.test(text)) return 10;
   if (r === 'organismos' && /(ong|organismo|naciones unidas|bid|oea|pnud)/.test(text)) return 8;
   if (r === 'emprendimiento' && /(startup|emprendimiento|innovacion)/.test(text)) return 7;
+  if (r === 'freelance' && /(freelance|freelancer|contract|contrato|proyecto)/.test(text)) return 9;
   if (r === 'empleolocal' && /(paraguay|asuncion|central)/.test(text)) return 5;
   return 0;
 }

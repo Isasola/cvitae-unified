@@ -1,62 +1,78 @@
-name: CVitae — Actualizar embeddings
+name: CVitae - Fabrica incremental de oportunidades
 
 on:
   schedule:
-    # Red de seguridad diaria; la ejecución principal ocurre al terminar scrapers.
+    # Red de seguridad: solo procesa cambios pendientes, nunca hace backfill completo.
     - cron: '30 15 * * *'
   workflow_run:
     workflows: ['CVitae Scrapers']
     types: [completed]
   workflow_dispatch:
     inputs:
-      max_batches:
-        description: 'Cantidad maxima de lotes de 5 (50 normal; hasta 250 para backfill controlado)'
+      limit:
+        description: 'Maximo de oportunidades pendientes (1-50)'
         required: false
         default: '50'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: cvitae-opportunity-factory
+  cancel-in-progress: false
+
 jobs:
-  refresh-opportunities:
+  seal-and-embed:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    concurrency:
-      group: cvitae-opportunity-embeddings
-      cancel-in-progress: false
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      FACTORY_LIMIT: ${{ github.event.inputs.limit || '50' }}
+      HF_HOME: ~/.cache/huggingface
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
     steps:
-      - name: Generar embeddings pendientes
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          MAX_BATCHES: ${{ github.event.inputs.max_batches || '50' }}
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: scripts/requirements-opportunity-factory.txt
+
+      - name: Consultar cola pendiente
+        id: queue
+        run: python scripts/check_opportunity_factory_queue.py
+
+      - name: Restaurar modelo local
+        if: steps.queue.outputs.pending == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: cvitae-gte-small-${{ runner.os }}-${{ hashFiles('scripts/requirements-opportunity-factory.txt') }}
+          restore-keys: |
+            cvitae-gte-small-${{ runner.os }}-
+
+      - name: Instalar fabrica local
+        if: steps.queue.outputs.pending == 'true'
+        run: pip install --requirement scripts/requirements-opportunity-factory.txt
+
+      - name: Validar limite
+        if: steps.queue.outputs.pending == 'true'
+        shell: bash
         run: |
-          if ! [[ "$MAX_BATCHES" =~ ^[0-9]+$ ]] || (( MAX_BATCHES < 1 || MAX_BATCHES > 250 )); then
-            echo "::error::max_batches debe estar entre 1 y 250."
+          if ! [[ "$FACTORY_LIMIT" =~ ^[0-9]+$ ]] || (( FACTORY_LIMIT < 1 || FACTORY_LIMIT > 50 )); then
+            echo "::error::limit debe estar entre 1 y 50"
             exit 1
           fi
-          total_processed=0
-          for ((batch=1; batch<=MAX_BATCHES; batch++)); do
-            raw=$(curl --silent --show-error \
-              --request POST "$SUPABASE_URL/functions/v1/embed-opportunities" \
-              --header "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-              --header "Content-Type: application/json" \
-              --write-out $'\n%{http_code}' \
-              --data '{"limit":5}')
-            status="${raw##*$'\n'}"
-            response="${raw%$'\n'*}"
-            echo "Batch $batch (HTTP $status): $response"
-            if [[ "$status" == "200" && "$response" =~ \"processed\":([0-9]+) ]]; then
-              total_processed=$((total_processed + BASH_REMATCH[1]))
-            fi
-            if [[ "$status" == "200" && "$response" == *'"done":true'* ]]; then
-              echo "Cola completada. Embeddings generados: $total_processed"
-              break
-            fi
-            if [[ "$status" == "546" ]]; then
-              echo "::warning::Supabase alcanzó el límite del worker; el próximo ciclo continuará desde este punto."
-              break
-            fi
-            if [[ "$status" != "200" ]]; then
-              echo "::error::La actualización de embeddings respondió HTTP $status."
-              exit 1
-            fi
-          done
-          echo "Embeddings generados en esta ejecucion: $total_processed"
+
+      - name: Sellar y generar embeddings locales pendientes
+        if: steps.queue.outputs.pending == 'true'
+        run: python scripts/opportunity_factory.py --limit "$FACTORY_LIMIT"
+
+      - name: Cola al dia
+        if: steps.queue.outputs.pending != 'true'
+        run: echo "No hay oportunidades nuevas o modificadas; no se carga el modelo."

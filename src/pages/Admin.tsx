@@ -82,6 +82,12 @@ interface OpportunityReview {
   deletion_review_status: 'pending' | 'approved' | 'cancelled' | null
   deletion_requested_at: string | null
   created_at: string
+  updated_at: string
+  factory_status?: 'pending' | 'ready' | 'review' | 'blocked' | 'failed'
+  content_fingerprint?: string | null
+  semantic_fingerprint?: string | null
+  embedding_model?: string | null
+  embedding_updated_at?: string | null
 }
 
 interface ProductFeedback {
@@ -135,6 +141,8 @@ const REVIEW_CRITERIA = [
 
 const CATEGORIES = ['Tecnología', 'Administración', 'Ventas', 'Marketing', 'Salud', 'Educación', 'Logística', 'Otros']
 
+const REVIEW_PAGE_SIZE = 50
+const QUICK_REVIEW_LABELS = ['APROBAR', 'CUARENTENA', 'RECHAZAR'] as const
 const MONO = "'JetBrains Mono', 'Courier New', monospace"
 const ADMIN_PREVIEW_MODE = ['127.0.0.1', 'localhost'].includes(window.location.hostname)
   ? new URLSearchParams(window.location.search).get('admin-preview')
@@ -271,9 +279,11 @@ export default function Admin() {
   const [feedbackNote, setFeedbackNote] = useState('')
   const [feedbackAssignee, setFeedbackAssignee] = useState('')
   const [opportunityReviews, setOpportunityReviews] = useState<OpportunityReview[]>([])
+  const [reviewTotal, setReviewTotal] = useState(0)
+  const [reviewPage, setReviewPage] = useState(0)
   const [reviewSummary, setReviewSummary] = useState<Record<string, number>>({})
   const [opportunityInventory, setOpportunityInventory] = useState<{ total: number; published: number; archived: number; deleted: number; deletion_pending: number; by_type: Record<string, number> }>({ total: 0, published: 0, archived: 0, deleted: 0, deletion_pending: 0, by_type: {} })
-  const [reviewStatus, setReviewStatus] = useState('in_review')
+  const [reviewStatus, setReviewStatus] = useState('needs_review')
   const [reviewSource, setReviewSource] = useState('all')
   const [reviewSearch, setReviewSearch] = useState('')
   const [reviewCountryFilter, setReviewCountryFilter] = useState('all')
@@ -292,7 +302,7 @@ export default function Admin() {
   const [batchAction, setBatchAction] = useState<'verified' | 'rejected' | 'quarantined'>('rejected')
   const [batchLoading, setBatchLoading] = useState(false)
   const [aggregatorConfirmPanel, setAggregatorConfirmPanel] = useState(false)
-  const [batchPreviewData, setBatchPreviewData] = useState<{ eligible: { id: string; title: string; organization: string | null; source_authority: string; original_source_url: string | null }[]; ineligible: { id: string; title: string; reason: string }[]; source_trusted?: boolean } | null>(null)
+  const [batchPreviewData, setBatchPreviewData] = useState<{ eligible: { id: string; title: string; organization: string | null; source_authority: string; original_source_url: string | null; updated_at: string }[]; ineligible: { id: string; title: string; reason: string }[]; source_trusted?: boolean } | null>(null)
   const [batchPreviewLoading, setBatchPreviewLoading] = useState(false)
   const [batchPreviewSelectedIds, setBatchPreviewSelectedIds] = useState<string[]>([])
   const [batchFeatures, setBatchFeatures] = useState({ catalog: true, matching: false, alerts: false, seo: false })
@@ -313,6 +323,7 @@ export default function Admin() {
   const [msgSending, setMsgSending] = useState(false)
   const [selectedControl, setSelectedControl] = useState<{ kind: 'scraper' | 'source'; data: any } | null>(null)
   const [controlSaved, setControlSaved] = useState(false)
+  const [controlSaving, setControlSaving] = useState(false)
   const [controlFormValues, setControlFormValues] = useState<Record<string, any>>({})
 
   const [formData, setFormData] = useState<ContentItem>({
@@ -326,6 +337,7 @@ export default function Admin() {
   // Tokens state
   const [tokens, setTokens] = useState<any[]>([])
   const [tokenEmail, setTokenEmail] = useState('')
+  const [tokenCompanyName, setTokenCompanyName] = useState('')
   const [tokenBalance, setTokenBalance] = useState(10)
   const [tokenPlan, setTokenPlan] = useState('starter')
 
@@ -423,6 +435,12 @@ export default function Admin() {
 
   useEffect(() => {
     if (isAuthenticated && activeTab === 'moderacion') loadOpportunityReviews()
+  }, [reviewPage])
+
+  useEffect(() => {
+    if (!isAuthenticated || activeTab !== 'moderacion') return
+    setReviewPage(0)
+    loadOpportunityReviews(0)
   }, [reviewStatus, reviewSource, reviewLifecycle, reviewCountryFilter])
 
   useEffect(() => {
@@ -543,10 +561,19 @@ export default function Admin() {
     } catch { /* migration may not be available yet */ }
   }
 
-  const loadOpportunityReviews = async () => {
+  const loadOpportunityReviews = async (page = reviewPage) => {
     try {
-      const json = await adminFetch('list_opportunity_reviews', { status: reviewStatus, source: reviewSource, search: reviewSearch, lifecycle: reviewLifecycle, country_filter: reviewCountryFilter })
+      const json = await adminFetch('list_opportunity_reviews', {
+        status: reviewStatus,
+        source: reviewSource,
+        search: reviewSearch,
+        lifecycle: reviewLifecycle,
+        country_filter: reviewCountryFilter,
+        limit: REVIEW_PAGE_SIZE,
+        offset: page * REVIEW_PAGE_SIZE,
+      })
       setOpportunityReviews(json.data || [])
+      setReviewTotal(Number(json.count) || 0)
       setReviewSources(json.sources || [])
       if (selectedReview && !(json.data || []).some((item: OpportunityReview) => item.id === selectedReview.id)) setSelectedReview(null)
     } catch (err: any) {
@@ -606,6 +633,7 @@ export default function Admin() {
     try {
       await adminFetch('review_opportunity', {
         id: selectedReview.id, status, criteria: selectedCriteria, note: reviewNote, score: reviewScore, features: reviewFeatures,
+        expected_updated_at: selectedReview.updated_at,
       })
       setNotification({ type: 'success', message: status === 'verified' ? 'Oportunidad habilitada para matching' : 'Decisión guardada; el registro se conserva' })
       setSelectedReview(null)
@@ -627,12 +655,38 @@ export default function Admin() {
       await adminFetch('review_opportunity', {
         id: selectedReview.id, status: 'verified', original_source_verified: true,
         criteria: selectedCriteria, note: reviewNote, score: reviewScore, features: reviewFeatures,
+        expected_updated_at: selectedReview.updated_at,
       })
       setNotification({ type: 'success', message: 'Oportunidad habilitada y fuente original marcada como verificada' })
       setSelectedReview(null)
       await Promise.all([loadOpportunityReviews(), loadReviewSummary(), loadScraperReport()])
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message })
+    } finally { setLoading(false) }
+  }
+
+  const submitQuickReview = async (opportunity: OpportunityReview, status: 'verified' | 'quarantined' | 'rejected') => {
+    setLoading(true)
+    try {
+      await adminFetch('review_opportunity', {
+        id: opportunity.id,
+        status,
+        criteria: status === 'verified' ? ['quick_action'] : [],
+        note: `Acción rápida desde la cola: ${status}`,
+        score: opportunity.verification_score ?? 70,
+        features: reviewFeatures,
+        expected_updated_at: opportunity.updated_at,
+      })
+      setNotification({ type: 'success', message: status === 'verified' ? 'Oportunidad habilitada para matching' : 'Decisión guardada; el registro se conserva' })
+      setSelectedReview(current => current?.id === opportunity.id ? null : current)
+      await Promise.all([loadOpportunityReviews(), loadReviewSummary(), loadScraperReport()])
+    } catch (err: any) {
+      if ((err as any).status === 409 && status === 'verified') {
+        setSelectedReview(opportunity)
+        setAggregatorConfirmPanel(true)
+      } else {
+        setNotification({ type: 'error', message: err.message })
+      }
     } finally { setLoading(false) }
   }
 
@@ -680,6 +734,7 @@ export default function Admin() {
           rules_version: batchBotResults[id].rulesVersion,
           review_bot_version: batchBotResults[id].reviewBotVersion,
           ai_provider: batchBotResults[id].ai?.used ? batchBotResults[id].ai.provider : null,
+          record_updated_at: batchPreviewData?.eligible.find(item => item.id === id)?.updated_at || null,
         })),
       })
       setNotification({ type: 'success', message: `Aprobadas: ${json.processed}${json.skipped ? ` · Omitidas: ${json.skipped}` : ''}` })
@@ -694,21 +749,20 @@ export default function Admin() {
   }
 
   const runBatchReviewBot = async () => {
-    if (!batchPreviewData?.eligible.length) return
+    if (!batchPreviewData) return
     setBatchBotLoading(true)
     try {
-      const ids = batchPreviewData.eligible.map(item => item.id)
+      const ids = [...batchPreviewData.eligible, ...batchPreviewData.ineligible].map(item => item.id).slice(0, 25)
+      if (!ids.length) return
       const collected: Record<string, any> = {}
-      for (let start = 0; start < ids.length; start += 25) {
-        const response = await fetch('/.netlify/functions/admin-review-bot', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPasswordRef.current },
-          body: JSON.stringify({ opportunityIds: ids.slice(start, start + 25), allowAi: false }),
-        })
-        const payload = await response.json()
-        if (!response.ok) throw new Error(payload.error || 'No se pudo completar Review Bot')
-        for (const item of payload.results || []) collected[item.id] = item.result
-      }
+      const response = await fetch('/.netlify/functions/admin-review-bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPasswordRef.current },
+        body: JSON.stringify({ opportunityIds: ids, allowAi: false }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'No se pudo completar Review Bot')
+      for (const item of payload.results || []) collected[item.id] = item.result
       setBatchBotResults(collected)
       setBatchPreviewSelectedIds(ids.filter(id => collected[id]?.recommendation === 'approve'))
     } catch (err: any) {
@@ -752,11 +806,20 @@ export default function Admin() {
   const saveOpportunityEdit = async () => {
     if (!selectedReview) return
     try {
-      await adminFetch('update_opportunity', { id: selectedReview.id, data: reviewEditData })
-      setSelectedReview(current => current ? { ...current, ...reviewEditData } as OpportunityReview : current)
+      const result = await adminFetch('update_opportunity', { id: selectedReview.id, data: reviewEditData, expected_updated_at: selectedReview.updated_at })
+      setSelectedReview(current => current ? {
+        ...current,
+        ...reviewEditData,
+        verification_status: result.review_invalidated ? 'in_review' : current.verification_status,
+        is_active: result.review_invalidated ? false : current.is_active,
+        catalog_eligible: result.review_invalidated ? false : current.catalog_eligible,
+        match_eligible: result.review_invalidated ? false : current.match_eligible,
+        alerts_eligible: result.review_invalidated ? false : current.alerts_eligible,
+        seo_eligible: result.review_invalidated ? false : current.seo_eligible,
+      } as OpportunityReview : current)
       setEditingReview(false)
       await loadOpportunityReviews()
-      setNotification({ type: 'success', message: 'Cambios guardados; la decisión de verificación no fue alterada' })
+      setNotification({ type: 'success', message: result.review_invalidated ? 'Cambios guardados; la aprobación anterior fue invalidada de forma segura' : 'Cambios guardados' })
     } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
   }
 
@@ -790,26 +853,66 @@ export default function Admin() {
       if (control?.quality_status !== 'healthy' && !window.confirm('Este scraper no figura como saludable. ¿Querés habilitarlo igualmente con revisión obligatoria?')) return
       if (control?.quality_status !== 'healthy') data.require_review = true
     }
-    await adminFetch('update_scraper_control', { scraper_id: scraperId, data })
-    setSelectedControl(current => current?.kind === 'scraper' && current.data.scraper_id === scraperId ? { ...current, data: { ...current.data, ...data } } : current)
-    setControlSaved(true)
-    setTimeout(() => setControlSaved(false), 2500)
-    await loadControlCenter()
+    setControlSaving(true)
+    try {
+      const currentControl = scraperControls.find(item => item.scraper_id === scraperId)
+      await adminFetch('update_scraper_control', { scraper_id: scraperId, data, expected_updated_at: currentControl?.updated_at || null })
+      setSelectedControl(current => current?.kind === 'scraper' && current.data.scraper_id === scraperId ? { ...current, data: { ...current.data, ...data } } : current)
+      setControlSaved(true)
+      setTimeout(() => setControlSaved(false), 2500)
+      await loadControlCenter()
+    } catch (err: any) {
+      setNotification({ type: 'error', message: `No se guardó el control: ${err.message}` })
+    } finally {
+      setControlSaving(false)
+    }
   }
 
   const updateSourcePolicy = async (source: string, data: Record<string, any>) => {
-    if (data.auto_verify === true && !window.confirm('La verificación automática permitirá aprobar nuevos registros sin revisión manual. Usala sólo después de auditar esta fuente. ¿Continuar?')) return
-    if (data.trust_level === 'blocked' && !window.confirm('Bloquear la fuente enviará los registros nuevos a cuarentena. Los datos existentes se conservarán. ¿Continuar?')) return
-    await adminFetch('update_source_policy', { source, data })
-    setSelectedControl(current => current?.kind === 'source' && current.data.source === source ? { ...current, data: { ...current.data, ...data } } : current)
-    setControlSaved(true)
-    setTimeout(() => setControlSaved(false), 2500)
-    await loadControlCenter()
+    setControlSaving(true)
+    try {
+      const current = sourcePolicies.find(item => item.source === source)
+      const riskyKeys = ['trust_level', 'auto_verify', 'is_enabled', 'catalog_enabled', 'matching_enabled', 'alerts_enabled', 'seo_enabled']
+      if (Object.keys(data).some(key => riskyKeys.includes(key))) {
+        const preview = await adminFetch('preview_source_policy', { source, data })
+        const changes = Object.entries(data).map(([key, value]) => `${key}: ${String(value)}`).join('\n')
+        if (!window.confirm(`Fuente: ${current?.display_name || source}\nRegistros publicados potencialmente afectados: ${preview.impacted_rows}\n\n${changes}\n\n¿Aplicar este cambio?`)) return
+      }
+      await adminFetch('update_source_policy', { source, data, expected_updated_at: current?.updated_at || null })
+      setSelectedControl(current => current?.kind === 'source' && current.data.source === source ? { ...current, data: { ...current.data, ...data } } : current)
+      setControlSaved(true)
+      setTimeout(() => setControlSaved(false), 2500)
+      await loadControlCenter()
+    } catch (err: any) {
+      setNotification({ type: 'error', message: `No se guardó la política: ${err.message}` })
+    } finally {
+      setControlSaving(false)
+    }
+  }
+
+  const saveScraperLimits = async () => {
+    if (selectedControl?.kind !== 'scraper') return
+    await updateScraperControl(selectedControl.data.scraper_id, {
+      max_items_per_run: Number(controlFormValues.max_items_per_run),
+      max_runtime_seconds: Number(controlFormValues.max_runtime_seconds),
+      consecutive_failures_before_pause: Number(controlFormValues.consecutive_failures_before_pause),
+      allowed_country_codes: String(controlFormValues.allowed_country_codes_str || '').split(',').map(item => item.trim().toUpperCase()).filter(Boolean),
+    })
+  }
+
+  const saveSourceLimits = async () => {
+    if (selectedControl?.kind !== 'source') return
+    await updateSourcePolicy(selectedControl.data.source, {
+      max_items_per_day: Number(controlFormValues.max_items_per_day),
+      retention_days: Number(controlFormValues.retention_days),
+      allowed_country_codes: String(controlFormValues.allowed_country_codes_str || '').split(',').map(item => item.trim().toUpperCase()).filter(Boolean),
+    })
   }
 
   const reviewRecruiter = async (id: string, status: 'verified' | 'rejected' | 'in_review') => {
     try {
-      await adminFetch('review_recruiter', { id, status })
+      const current = tokens.find(token => token.id === id)
+      await adminFetch('review_recruiter', { id, status, expected_updated_at: current?.updated_at || null })
       await loadTokens()
       setNotification({ type: 'success', message: status === 'verified' ? 'Empresa verificada y acceso habilitado' : 'Estado de empresa actualizado' })
     } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
@@ -927,15 +1030,19 @@ export default function Admin() {
   }
 
   const approveSkill = async (id: number) => {
-    await adminFetch('set_skill_status', { id, status: 'approved' })
-    loadSkillCandidates()
-    setNotification({ type: 'success', message: 'Habilidad aprobada' })
+    try {
+      await adminFetch('set_skill_status', { id, status: 'approved' })
+      await loadSkillCandidates()
+      setNotification({ type: 'success', message: 'Habilidad aprobada' })
+    } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
   }
 
   const rejectSkill = async (id: number) => {
-    await adminFetch('set_skill_status', { id, status: 'rejected' })
-    loadSkillCandidates()
-    setNotification({ type: 'success', message: 'Habilidad rechazada' })
+    try {
+      await adminFetch('set_skill_status', { id, status: 'rejected' })
+      await loadSkillCandidates()
+      setNotification({ type: 'success', message: 'Habilidad rechazada' })
+    } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
   }
 
   const generateToken = async (e: React.FormEvent) => {
@@ -945,11 +1052,12 @@ export default function Admin() {
       const response = await fetch('/.netlify/functions/generate-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPasswordRef.current, email: tokenEmail, token_balance: tokenBalance, plan_type: tokenPlan }),
+        body: JSON.stringify({ password: adminPasswordRef.current, email: tokenEmail, company_name: tokenCompanyName, token_balance: tokenBalance, plan_type: tokenPlan }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Error generando token')
       setNotification({ type: 'success', message: 'Token generado con éxito' })
+      setTokenCompanyName('')
       setTokenEmail('')
       loadTokens()
     } catch (err: any) {
@@ -960,14 +1068,19 @@ export default function Admin() {
   }
 
   const toggleStatus = async (item: ContentItem) => {
-    await adminFetch('set_content_active', { id: item.id, value: !item.is_active })
-    loadContent()
+    try {
+      await adminFetch('set_content_active', { id: item.id, value: !item.is_active })
+      await loadContent()
+    } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
   }
 
   const deleteItem = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar este contenido?')) return
-    await adminFetch('delete_content', { id })
-    loadContent()
+    if (!confirm('¿Archivar este contenido? Dejará de publicarse pero podrás recuperarlo.')) return
+    try {
+      await adminFetch('delete_content', { id })
+      await loadContent()
+      setNotification({ type: 'success', message: 'Contenido archivado de forma recuperable' })
+    } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
   }
 
   const resetForm = () => {
@@ -1033,6 +1146,16 @@ export default function Admin() {
     setActiveTab(tab)
     setIsSidebarOpen(false)
   }, [])
+
+  const logout = () => {
+    adminPasswordRef.current = ''
+    setPassword('')
+    setSelectedReview(null)
+    setSelectedControl(null)
+    setDrawerProfileId(null)
+    setDrawerData(null)
+    setIsAuthenticated(false)
+  }
 
   if (!isAuthenticated) {
     return (
@@ -1144,7 +1267,7 @@ export default function Admin() {
             {new Date().toLocaleDateString('es-PY')} {new Date().toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })}
           </p>
           <button
-            onClick={() => setIsAuthenticated(false)}
+            onClick={logout}
             className="mt-3 text-xs text-red-400/60 hover:text-red-400 transition-colors"
           >
             ↩ Salir
@@ -1200,11 +1323,11 @@ export default function Admin() {
               {/* ── HOY ────────────────────────────────────────────────── */}
               {activeTab === 'hoy' && (
                 <div>
-                  {(reviewSummary.in_review || 0) > 0 && (
+                  {((reviewSummary.pending || 0) + (reviewSummary.in_review || 0)) > 0 && (
                     <div className="mb-4 flex items-center justify-between border border-white/[0.07] px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <span className={`text-xl font-semibold tabular-nums ${(reviewSummary.in_review || 0) > 100 ? 'text-red-400' : 'text-amber-300'}`} style={{ fontFamily: MONO }}>{reviewSummary.in_review || 0}</span>
-                        <span className="text-sm text-white/45">oportunidades en revisión sin aprobar</span>
+                        <span className={`text-xl font-semibold tabular-nums ${((reviewSummary.pending || 0) + (reviewSummary.in_review || 0)) > 100 ? 'text-red-400' : 'text-amber-300'}`} style={{ fontFamily: MONO }}>{(reviewSummary.pending || 0) + (reviewSummary.in_review || 0)}</span>
+                        <span className="text-sm text-white/45">oportunidades por decidir</span>
                       </div>
                       <button onClick={() => setActiveTab('moderacion')} className="border border-[#c9a84c]/30 px-3 py-1.5 text-[10px] text-[#c9a84c] hover:bg-[#c9a84c]/10 transition" style={{ fontFamily: MONO }}>MODERAR →</button>
                     </div>
@@ -1628,8 +1751,14 @@ export default function Admin() {
                               onClick={e => e.stopPropagation()}
                               onChange={async e => {
                                 e.stopPropagation()
-                                await adminFetch('update_source_tier', { source: source.source, tier: e.target.value })
-                                await loadControlCenter()
+                                const nextTier = e.target.value
+                                if (!window.confirm(`¿Cambiar ${source.display_name} de nivel ${tier} a ${nextTier}?`)) return
+                                try {
+                                  await updateSourcePolicy(source.source, { source_tier: nextTier })
+                                  await loadControlCenter()
+                                } catch (err: any) {
+                                  setNotification({ type: 'error', message: `No se cambió el nivel: ${err.message}` })
+                                }
                               }}
                               className={`border px-2 py-1 text-[10px] bg-transparent cursor-pointer ${tierColor}`}
                               style={{ fontFamily: MONO }}
@@ -1667,12 +1796,13 @@ export default function Admin() {
                               ['collection_enabled', 'Ejecutar automáticamente', 'Si está apagado, GitHub registra la pausa y no abre el scraper.'],
                               ['require_review', 'Revisión obligatoria', 'Todo resultado nuevo queda pendiente aunque la fuente sea conocida.'],
                               ['auto_pause_on_failure', 'Pausa por fallas repetidas', 'Detiene el ejecutor al superar el umbral configurado.'],
-                            ].map(([key, title, description]) => <label key={key} className="flex cursor-pointer items-center justify-between gap-6 py-4"><span><span className="block text-sm text-[#e8e8e0]">{title}</span><span className="mt-1 block text-xs text-white/35">{description}</span></span><input type="checkbox" checked={!!selectedControl.data[key]} onChange={() => updateScraperControl(selectedControl.data.scraper_id, { [key]: !selectedControl.data[key] })} className="h-5 w-9 shrink-0 appearance-none rounded-full border border-white/15 bg-white/5 transition before:block before:h-4 before:w-4 before:rounded-full before:bg-white/30 before:transition checked:border-emerald-400/40 checked:bg-emerald-400/10 checked:before:translate-x-4 checked:before:bg-emerald-400" /></label>)}
+                            ].map(([key, title, description]) => <label key={key} className="flex cursor-pointer items-center justify-between gap-6 py-4"><span><span className="block text-sm text-[#e8e8e0]">{title}</span><span className="mt-1 block text-xs text-white/35">{description}</span></span><input type="checkbox" disabled={controlSaving} checked={!!selectedControl.data[key]} onChange={() => updateScraperControl(selectedControl.data.scraper_id, { [key]: !selectedControl.data[key] })} className="h-5 w-9 shrink-0 appearance-none rounded-full border border-white/15 bg-white/5 transition before:block before:h-4 before:w-4 before:rounded-full before:bg-white/30 before:transition checked:border-emerald-400/40 checked:bg-emerald-400/10 checked:before:translate-x-4 checked:before:bg-emerald-400 disabled:opacity-40" /></label>)}
                           </div>
                           <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                            {[['max_items_per_run', 'Máximo por corrida', 1, 5000], ['max_runtime_seconds', 'Tiempo máximo (s)', 30, 3600], ['consecutive_failures_before_pause', 'Fallas antes de pausar', 1, 20]].map(([key, label, min, max]) => <label key={String(key)} className="text-[10px] uppercase tracking-[0.1em] text-white/35">{label}<input type="number" min={Number(min)} max={Number(max)} value={String(controlFormValues[String(key)] ?? '')} onChange={event => setControlFormValues(v => ({ ...v, [String(key)]: event.target.value }))} onBlur={event => updateScraperControl(selectedControl.data.scraper_id, { [String(key)]: Number(event.target.value) })} className={`${inputCls} mt-2`} /></label>)}
+                            {[['max_items_per_run', 'Máximo por corrida', 1, 5000], ['max_runtime_seconds', 'Tiempo máximo (s)', 30, 3600], ['consecutive_failures_before_pause', 'Fallas antes de pausar', 1, 20]].map(([key, label, min, max]) => <label key={String(key)} className="text-[10px] uppercase tracking-[0.1em] text-white/35">{label}<input type="number" min={Number(min)} max={Number(max)} value={String(controlFormValues[String(key)] ?? '')} onChange={event => setControlFormValues(v => ({ ...v, [String(key)]: event.target.value }))} className={`${inputCls} mt-2`} /></label>)}
                           </div>
-                          <label className="mt-5 block text-[10px] uppercase tracking-[0.1em] text-white/35">Países permitidos<input value={controlFormValues.allowed_country_codes_str ?? ''} onChange={event => setControlFormValues(v => ({ ...v, allowed_country_codes_str: event.target.value }))} onBlur={event => updateScraperControl(selectedControl.data.scraper_id, { allowed_country_codes: event.target.value.split(',').map(item => item.trim().toUpperCase()).filter(Boolean) })} className={`${inputCls} mt-2`} /></label>
+                          <label className="mt-5 block text-[10px] uppercase tracking-[0.1em] text-white/35">Países permitidos<input value={controlFormValues.allowed_country_codes_str ?? ''} onChange={event => setControlFormValues(v => ({ ...v, allowed_country_codes_str: event.target.value }))} className={`${inputCls} mt-2`} /></label>
+                          <div className="mt-4 flex justify-end"><button onClick={saveScraperLimits} disabled={controlSaving} className="bg-[#c9a84c] px-4 py-2 text-xs font-medium text-black disabled:opacity-40">{controlSaving ? 'GUARDANDO…' : 'Guardar límites'}</button></div>
                           <p className="mt-4 border-l-2 border-white/[0.07] pl-3 text-[10px] leading-relaxed text-white/25" style={{ fontFamily: MONO }}>Los cambios aplican en el próximo ciclo de GitHub Actions. El toggle <span className="text-white/40">Ejecutar automáticamente</span> es el control principal.</p>
                           {selectedControl.data.paused_reason && <p className="mt-5 border-l-2 border-amber-300/40 pl-3 text-xs leading-relaxed text-amber-100/60">Pausa: {selectedControl.data.paused_reason}</p>}
                         </div>
@@ -1698,13 +1828,14 @@ export default function Admin() {
                               ['matching_enabled', 'Usar en matching', 'Permite recomendar verificadas según cada perfil.'],
                               ['alerts_enabled', 'Incluir en alertas', 'Permite notificaciones personalizadas.'],
                               ['seo_enabled', 'Publicar en SEO', 'Incluye páginas verificadas en sitemap y JobPosting.'],
-                            ].map(([key, title, description]) => <label key={key} className="flex cursor-pointer items-center justify-between gap-6 py-3.5"><span><span className="block text-sm text-[#e8e8e0]">{title}</span><span className="mt-0.5 block text-xs text-white/35">{description}</span></span><input type="checkbox" checked={!!selectedControl.data[key]} onChange={() => updateSourcePolicy(selectedControl.data.source, { [key]: !selectedControl.data[key] })} className="h-5 w-9 shrink-0 appearance-none rounded-full border border-white/15 bg-white/5 transition before:block before:h-4 before:w-4 before:rounded-full before:bg-white/30 before:transition checked:border-[#c9a84c]/45 checked:bg-[#c9a84c]/10 checked:before:translate-x-4 checked:before:bg-[#c9a84c]" /></label>)}
+                            ].map(([key, title, description]) => <label key={key} className="flex cursor-pointer items-center justify-between gap-6 py-3.5"><span><span className="block text-sm text-[#e8e8e0]">{title}</span><span className="mt-0.5 block text-xs text-white/35">{description}</span></span><input type="checkbox" disabled={controlSaving} checked={!!selectedControl.data[key]} onChange={() => updateSourcePolicy(selectedControl.data.source, { [key]: !selectedControl.data[key] })} className="h-5 w-9 shrink-0 appearance-none rounded-full border border-white/15 bg-white/5 transition before:block before:h-4 before:w-4 before:rounded-full before:bg-white/30 before:transition checked:border-[#c9a84c]/45 checked:bg-[#c9a84c]/10 checked:before:translate-x-4 checked:before:bg-[#c9a84c] disabled:opacity-40" /></label>)}
                           </div>
                           <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                            <label className="text-[10px] uppercase tracking-[0.1em] text-white/35">Máximo diario<input type="number" min="1" max="5000" value={String(controlFormValues.max_items_per_day ?? '')} onChange={event => setControlFormValues(v => ({ ...v, max_items_per_day: event.target.value }))} onBlur={event => updateSourcePolicy(selectedControl.data.source, { max_items_per_day: Number(event.target.value) })} className={`${inputCls} mt-2`} /></label>
-                            <label className="text-[10px] uppercase tracking-[0.1em] text-white/35">Retención (días)<input type="number" min="1" max="365" value={String(controlFormValues.retention_days ?? '')} onChange={event => setControlFormValues(v => ({ ...v, retention_days: event.target.value }))} onBlur={event => updateSourcePolicy(selectedControl.data.source, { retention_days: Number(event.target.value) })} className={`${inputCls} mt-2`} /></label>
+                            <label className="text-[10px] uppercase tracking-[0.1em] text-white/35">Máximo diario<input type="number" min="1" max="5000" value={String(controlFormValues.max_items_per_day ?? '')} onChange={event => setControlFormValues(v => ({ ...v, max_items_per_day: event.target.value }))} className={`${inputCls} mt-2`} /></label>
+                            <label className="text-[10px] uppercase tracking-[0.1em] text-white/35">Retención (días)<input type="number" min="1" max="365" value={String(controlFormValues.retention_days ?? '')} onChange={event => setControlFormValues(v => ({ ...v, retention_days: event.target.value }))} className={`${inputCls} mt-2`} /></label>
                           </div>
-                          <label className="mt-5 block text-[10px] uppercase tracking-[0.1em] text-white/35">Países permitidos<input value={controlFormValues.allowed_country_codes_str ?? ''} onChange={event => setControlFormValues(v => ({ ...v, allowed_country_codes_str: event.target.value }))} onBlur={event => updateSourcePolicy(selectedControl.data.source, { allowed_country_codes: event.target.value.split(',').map(item => item.trim().toUpperCase()).filter(Boolean) })} className={`${inputCls} mt-2`} /></label>
+                          <label className="mt-5 block text-[10px] uppercase tracking-[0.1em] text-white/35">Países permitidos<input value={controlFormValues.allowed_country_codes_str ?? ''} onChange={event => setControlFormValues(v => ({ ...v, allowed_country_codes_str: event.target.value }))} className={`${inputCls} mt-2`} /></label>
+                          <div className="mt-4 flex justify-end"><button onClick={saveSourceLimits} disabled={controlSaving} className="bg-[#c9a84c] px-4 py-2 text-xs font-medium text-black disabled:opacity-40">{controlSaving ? 'GUARDANDO…' : 'Guardar límites'}</button></div>
                         </div>
                       )}
                     </div>
@@ -1727,12 +1858,12 @@ export default function Admin() {
                     <button onClick={() => { loadOpportunityReviews(); loadReviewSummary() }} className="border border-white/10 px-3 py-2 text-xs text-white/50 transition hover:text-white" style={{ fontFamily: MONO }}>↻ ACTUALIZAR</button>
                   </div>
 
-                  <div className="mb-5 grid grid-cols-2 gap-px border border-white/[0.07] bg-white/[0.07] sm:grid-cols-5">
+                  <div className="mb-5 grid grid-cols-2 gap-px border border-white/[0.07] bg-white/[0.07] sm:grid-cols-6">
                     {[
-                      ['pending', 'Pendientes'], ['in_review', 'En revisión'], ['verified', 'Verificadas'], ['rejected', 'Rechazadas'], ['quarantined', 'Cuarentena'],
+                      ['needs_review', 'Por decidir'], ['pending', 'Pendientes'], ['in_review', 'En revisión'], ['verified', 'Verificadas'], ['rejected', 'Rechazadas'], ['quarantined', 'Cuarentena'],
                     ].map(([status, label]) => (
                       <button key={status} onClick={() => setReviewStatus(status)} className={`bg-[#0a0a0a] px-4 py-3 text-left transition ${reviewStatus === status ? 'text-[#c9a84c]' : 'text-white/45 hover:text-white/70'}`}>
-                        <span className="block text-xl text-inherit">{reviewSummary[status] || 0}</span>
+                        <span className="block text-xl text-inherit">{status === 'needs_review' ? (reviewSummary.pending || 0) + (reviewSummary.in_review || 0) : reviewSummary[status] || 0}</span>
                         <span className="text-[10px] uppercase tracking-[0.12em]" style={{ fontFamily: MONO }}>{label}</span>
                       </button>
                     ))}
@@ -1749,7 +1880,7 @@ export default function Admin() {
                   </div>
 
                   <div className="mb-5 grid gap-2 sm:grid-cols-[1fr_180px_140px_140px_auto]">
-                    <input value={reviewSearch} onChange={event => setReviewSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') loadOpportunityReviews() }} placeholder="Buscar cargo o empresa" className={inputCls} />
+                    <input value={reviewSearch} onChange={event => setReviewSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { setReviewPage(0); loadOpportunityReviews(0) } }} placeholder="Buscar cargo o empresa" className={inputCls} />
                     <select value={reviewSource} onChange={event => setReviewSource(event.target.value)} className={inputCls}>
                       <option value="all">Todas las fuentes</option>
                       {reviewSources.map(source => <option key={source.source} value={source.source}>{source.display_name}</option>)}
@@ -1764,12 +1895,12 @@ export default function Admin() {
                       <option value="WORLDWIDE">Global / Remoto</option>
                     </select>
                     <select value={reviewLifecycle} onChange={event => setReviewLifecycle(event.target.value)} className={inputCls}>
-                      <option value="active">Activas</option>
+                      <option value="active">Actuales (incluye revisión)</option>
                       <option value="deletion_pending">Pendientes de eliminación</option>
                       <option value="archived">Archivadas</option>
                       <option value="deleted">Eliminadas</option>
                     </select>
-                    <button onClick={loadOpportunityReviews} className="border border-[#c9a84c]/40 px-5 text-xs text-[#c9a84c] transition hover:bg-[#c9a84c]/10" style={{ fontFamily: MONO }}>FILTRAR</button>
+                    <button onClick={() => { setReviewPage(0); loadOpportunityReviews(0) }} className="border border-[#c9a84c]/40 px-5 text-xs text-[#c9a84c] transition hover:bg-[#c9a84c]/10" style={{ fontFamily: MONO }}>FILTRAR</button>
                   </div>
 
                   <div className="mb-5 border border-white/[0.07] bg-white/[0.015] p-4">
@@ -1796,7 +1927,7 @@ export default function Admin() {
                       <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3">
                         <p className="text-[10px] uppercase tracking-[0.14em] text-white/30" style={{ fontFamily: MONO }}>Preview de aprobación — {batchSource}</p>
                         <div className="flex items-center gap-2">
-                          <button onClick={runBatchReviewBot} disabled={batchBotLoading || batchPreviewData.eligible.length === 0} className="border border-sky-300/25 px-3 py-1.5 text-xs text-sky-200/75 disabled:opacity-40">{batchBotLoading ? 'REVISANDO…' : 'EJECUTAR REVIEW BOT · 0 IA'}</button>
+                          <button onClick={runBatchReviewBot} disabled={batchBotLoading || (batchPreviewData.eligible.length + batchPreviewData.ineligible.length) === 0} className="border border-sky-300/25 px-3 py-1.5 text-xs text-sky-200/75 disabled:opacity-40">{batchBotLoading ? 'REVISANDO…' : 'REVISAR TODA LA COLA · 0 IA'}</button>
                           <button onClick={() => { setBatchPreviewData(null); setBatchPreviewSelectedIds([]); setBatchBotResults({}) }} className="text-xs text-white/35 hover:text-white transition-colors">✕ Cerrar</button>
                         </div>
                       </div>
@@ -1908,15 +2039,20 @@ export default function Admin() {
                               <p className="mt-2 line-clamp-2 text-sm leading-snug text-[#e8e8e0]">{opportunity.title}</p>
                               <p className="mt-1 truncate text-xs text-white/40">{opportunity.organization || 'Organización no informada'} · {opportunity.location || 'Sin ubicación'}</p>
                             </button>
-                            {reviewStatus === 'in_review' && (
+                            {['needs_review', 'pending', 'in_review'].includes(reviewStatus) && (
                               <div className="flex items-center gap-1.5 px-4 pb-3">
-                                <button disabled={loading} onClick={e => { e.stopPropagation(); setSelectedReview(opportunity); setTimeout(() => submitOpportunityReview('verified'), 50) }} className="border border-emerald-500/30 px-3 py-1.5 text-[10px] text-emerald-400/80 hover:bg-emerald-500/10 active:bg-emerald-500/20 transition disabled:opacity-30" style={{ fontFamily: MONO }} title="Verificar">APROBAR</button>
-                                <button disabled={loading} onClick={e => { e.stopPropagation(); setSelectedReview(opportunity); setTimeout(() => submitOpportunityReview('quarantined'), 50) }} className="border border-amber-500/20 px-3 py-1.5 text-[10px] text-amber-400/70 hover:bg-amber-500/10 active:bg-amber-500/20 transition disabled:opacity-30" style={{ fontFamily: MONO }} title="Cuarentena">HOLD</button>
-                                <button disabled={loading} onClick={e => { e.stopPropagation(); setSelectedReview(opportunity); setTimeout(() => submitOpportunityReview('rejected'), 50) }} className="border border-red-500/20 px-3 py-1.5 text-[10px] text-red-400/70 hover:bg-red-500/10 active:bg-red-500/20 transition disabled:opacity-30" style={{ fontFamily: MONO }} title="Rechazar">✕</button>
+                                <button disabled={loading} onClick={e => { e.stopPropagation(); submitQuickReview(opportunity, 'verified') }} className="border border-emerald-500/30 px-3 py-1.5 text-[10px] text-emerald-400/80 hover:bg-emerald-500/10 active:bg-emerald-500/20 transition disabled:opacity-30" style={{ fontFamily: MONO }} title="Verificar">{QUICK_REVIEW_LABELS[0]}</button>
+                                <button disabled={loading} onClick={e => { e.stopPropagation(); submitQuickReview(opportunity, 'quarantined') }} className="border border-amber-500/20 px-3 py-1.5 text-[10px] text-amber-400/70 hover:bg-amber-500/10 active:bg-amber-500/20 transition disabled:opacity-30" style={{ fontFamily: MONO }} title="Cuarentena">{QUICK_REVIEW_LABELS[1]}</button>
+                                <button disabled={loading} onClick={e => { e.stopPropagation(); submitQuickReview(opportunity, 'rejected') }} className="border border-red-500/20 px-3 py-1.5 text-[10px] text-red-400/70 hover:bg-red-500/10 active:bg-red-500/20 transition disabled:opacity-30" style={{ fontFamily: MONO }} title="Rechazar">{QUICK_REVIEW_LABELS[2]}</button>
                               </div>
                             )}
                           </div>
                         ))}
+                      </div>
+                      <div className="flex items-center justify-between border-t border-white/[0.07] px-4 py-3 text-[10px] text-white/35" style={{ fontFamily: MONO }}>
+                        <button disabled={reviewPage === 0} onClick={() => setReviewPage(page => Math.max(0, page - 1))} className="border border-white/10 px-2 py-1 disabled:opacity-25">ANTERIOR</button>
+                        <span>{reviewTotal === 0 ? '0' : `${reviewPage * REVIEW_PAGE_SIZE + 1}-${Math.min(reviewTotal, (reviewPage + 1) * REVIEW_PAGE_SIZE)}`} / {reviewTotal}</span>
+                        <button disabled={(reviewPage + 1) * REVIEW_PAGE_SIZE >= reviewTotal} onClick={() => setReviewPage(page => page + 1)} className="border border-white/10 px-2 py-1 disabled:opacity-25">SIGUIENTE</button>
                       </div>
                     </div>
 
@@ -1938,6 +2074,12 @@ export default function Admin() {
                               <span className="border border-white/10 px-2 py-1 text-white/45">{(selectedReview.opportunity_type || selectedReview.opportunity_kind || 'sin tipo').replaceAll('_', ' ')}</span>
                               <span className={`border px-2 py-1 ${selectedReview.source_authority === 'original' || selectedReview.original_source_verified ? 'border-emerald-400/25 text-emerald-300/70' : 'border-amber-300/25 text-amber-200/70'}`}>
                                 {selectedReview.source_authority === 'original' || selectedReview.original_source_verified ? 'origen verificado' : 'falta verificar origen'}
+                              </span>
+                              <span className={`border px-2 py-1 ${selectedReview.factory_status === 'ready' ? 'border-emerald-400/25 text-emerald-300/70' : selectedReview.factory_status === 'blocked' || selectedReview.factory_status === 'failed' ? 'border-red-400/25 text-red-300/70' : 'border-sky-300/20 text-sky-200/60'}`}>
+                                fábrica: {selectedReview.factory_status || 'pendiente'}
+                              </span>
+                              <span className={`border px-2 py-1 ${selectedReview.embedding_model ? 'border-emerald-400/25 text-emerald-300/70' : 'border-white/10 text-white/35'}`}>
+                                embedding: {selectedReview.embedding_model || 'pendiente'}
                               </span>
                               {selectedReview.deadline && <span className="border border-white/10 px-2 py-1 text-white/45">cierra {new Date(selectedReview.deadline).toLocaleDateString('es-PY')}</span>}
                             </div>
@@ -2465,6 +2607,16 @@ export default function Admin() {
                           style={{ fontFamily: MONO, fontSize: '12px' }}
                         />
                         <input
+                          value={tokenCompanyName}
+                          onChange={e => setTokenCompanyName(e.target.value)}
+                          placeholder="Nombre de empresa"
+                          minLength={2}
+                          maxLength={240}
+                          required
+                          className={inputCls}
+                          style={{ fontFamily: MONO, fontSize: '12px' }}
+                        />
+                        <input
                           type="number"
                           value={tokenBalance}
                           onChange={e => setTokenBalance(parseInt(e.target.value))}
@@ -2697,7 +2849,7 @@ export default function Admin() {
                       </p>
                     </div>
                   </div>
-                  <AdminSeoControlCenter adminPassword={adminPasswordRef.current} />
+                  <AdminSeoControlCenter adminPassword={adminPasswordRef.current} onOpenModeration={() => navTo('moderacion')} />
                 </div>
               )}
 

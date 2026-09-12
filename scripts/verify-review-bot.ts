@@ -33,8 +33,9 @@ const mixedSourceRecords = [
   reviewOpportunityDeterministic({ ...base, id: 'clasipar-doubtful', source: 'clasipar', source_authority: 'aggregator', original_source_verified: true, deadline: null }, page, [], now),
   reviewOpportunityDeterministic({ ...base, id: 'clasipar-expired', source: 'clasipar', source_authority: 'aggregator', original_source_verified: true, deadline: '2026-01-01' }, page, [], now),
 ]
-assert.deepEqual(mixedSourceRecords.map(result => result.recommendation), ['approve', 'review', 'do_not_publish'],
+assert.deepEqual(mixedSourceRecords.map(result => result.recommendation), ['approve', 'approve', 'do_not_publish'],
   'one mixed source must yield independent record-level decisions')
+assert(!mixedSourceRecords[1].issues.some(issue => issue.code === 'MISSING_DEADLINE'), 'missing deadline is not an expiry or automatic review')
 
 const expired = reviewOpportunityDeterministic({ ...base, deadline: '2026-01-01' }, page, [], now)
 assert.equal(expired.recommendation, 'do_not_publish')
@@ -104,13 +105,15 @@ assert(/idempotency/i.test(mailerSource) && /Resend/.test(mailerSource), 'Foundi
 const batchPayload = {
   ids: ['fixture-1'], note: 'Fixture approval', idempotency_key: 'snapshot-fixture-1',
   features: { catalog: true, matching: true, alerts: false, seo: false },
-  review_snapshot: [{ id: 'fixture-1', recommendation: 'approve', rules_version: 'fixture' }],
+  review_snapshot: [{ id: 'fixture-1', recommendation: 'approve', rules_version: 'fixture', record_updated_at: '2026-08-20T10:00:00Z' }],
 }
-const batchCandidate = [{ id: 'fixture-1', verification_status: 'in_review', source_authority: 'original', original_source_verified: true }]
+const batchCandidate = [{ id: 'fixture-1', updated_at: '2026-08-20T10:00:00Z', verification_status: 'in_review', source_authority: 'original', original_source_verified: true }]
 const batchValid = validateBatchApprovalSnapshot(batchCandidate, batchPayload)
 assert.equal(batchValid.ok, true, 'snapshot with explicit mixed flags must pass')
 if (batchValid.ok) assert.deepEqual(batchValid.features, batchPayload.features)
 assert.equal(validateBatchApprovalSnapshot(batchCandidate, { ...batchPayload, features: { catalog: true } }).ok, false, 'implicit flags must fail')
+assert.equal(validateBatchApprovalSnapshot(batchCandidate, { ...batchPayload, review_snapshot: [{ ...batchPayload.review_snapshot[0], recommendation: 'review' }] }).ok, false, 'non-approve Review Bot evidence must fail')
+assert.equal(validateBatchApprovalSnapshot([{ ...batchCandidate[0], updated_at: '2026-08-20T10:01:00Z' }], batchPayload).ok, false, 'changed records after preview must fail')
 const doubleSubmit = validateBatchApprovalSnapshot([], batchPayload)
 assert.equal(doubleSubmit.ok, false, 'a second submit after rows leave review state is stale/idempotent')
 if (!doubleSubmit.ok) assert.equal(doubleSubmit.status, 409)

@@ -172,6 +172,60 @@ export const handler = async (event: any) => {
     const limited = await mutationLimit(event, user.id)
     if (limited) return limited
 
+    if (action === 'save_intent') {
+      const profile = await resolveProfile(supabase, user, true)
+      const incoming = body.intent || {}
+      const previousIntent = {
+        career_route: cleanText(profile.profile_data?.career_route, 80),
+        desired_role_1y: cleanText(profile.profile_data?.desired_role_1y, 300),
+        career_interests: cleanStringList(profile.profile_data?.career_interests).slice(0, 12),
+      }
+      const nextIntent = {
+        career_route: cleanText(incoming.career_route, 80),
+        desired_role_1y: cleanText(incoming.desired_role_1y, 300),
+        career_interests: cleanStringList(incoming.career_interests).slice(0, 12),
+      }
+      if (JSON.stringify(previousIntent) === JSON.stringify(nextIntent)) {
+        return jsonResponse(event, 200, { profile: publicProfile(profile), unchanged: true })
+      }
+      const profileData = {
+        ...(profile.profile_data || {}),
+        ...nextIntent,
+      }
+      const { data: saved, error } = await supabase.from('user_master_profiles').update({
+        profile_data: profileData,
+        embedding: null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', profile.id).eq('user_id', user.id).select(PROFILE_FIELDS).single()
+      if (error) throw error
+      await refreshProfileEmbedding(user.id)
+      return jsonResponse(event, 200, { profile: publicProfile(saved) })
+    }
+
+    if (action === 'opportunity_preference') {
+      const opportunityId = cleanText(body.opportunity_id, 120)
+      if (!opportunityId || ['__proto__', 'prototype', 'constructor'].includes(opportunityId)) {
+        return jsonResponse(event, 400, { error: 'Oportunidad requerida' })
+      }
+      const profile = await resolveProfile(supabase, user, true)
+      const current = cleanStringList(profile.profile_data?.liked_opportunity_ids).slice(0, 50)
+      const currentGaps = profile.profile_data?.liked_opportunity_gaps && typeof profile.profile_data.liked_opportunity_gaps === 'object'
+        ? profile.profile_data.liked_opportunity_gaps
+        : {}
+      const liked = body.liked !== false
+      const next = liked
+        ? [...new Set([opportunityId, ...current])].slice(0, 50)
+        : current.filter(id => id !== opportunityId)
+      const nextGaps = { ...currentGaps }
+      if (liked) nextGaps[opportunityId] = cleanStringList(body.missing_skills).slice(0, 12)
+      else delete nextGaps[opportunityId]
+      const { error } = await supabase.from('user_master_profiles').update({
+        profile_data: { ...(profile.profile_data || {}), liked_opportunity_ids: next, liked_opportunity_gaps: nextGaps },
+      }).eq('id', profile.id).eq('user_id', user.id)
+      if (error) throw error
+      return jsonResponse(event, 200, { liked_opportunity_ids: next })
+    }
+
     if (action === 'save') {
       const profile = await resolveProfile(supabase, user, true)
       const incoming = body.profile || {}
@@ -183,6 +237,8 @@ export const handler = async (event: any) => {
         location: cleanText(incoming.location, 160),
         modality: cleanText(incoming.modality, 80),
         career_route: cleanText(incoming.career_route, 80),
+        desired_role_1y: cleanText(incoming.desired_role_1y, 300),
+        career_interests: cleanStringList(incoming.career_interests).slice(0, 12),
       }
       const { data: saved, error } = await supabase
         .from('user_master_profiles')

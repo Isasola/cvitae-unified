@@ -102,11 +102,20 @@ const VALIDITY_STYLE: Record<string, { label: string; color: string }> = {
 
 interface Props {
   adminPassword: string
+  onOpenModeration?: () => void
 }
 
-export default function AdminSeoControlCenter({ adminPassword }: Props) {
+async function readAdminResponse(res: Response) {
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Error del servidor (${res.status})`)
+  return data
+}
+
+export default function AdminSeoControlCenter({ adminPassword, onOpenModeration }: Props) {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [items, setItems] = useState<SeoItem[]>([])
+  const [itemCount, setItemCount] = useState(0)
+  const [page, setPage] = useState(0)
   const [seoFilter, setSeoFilter] = useState<SeoFilter>('unchecked')
   const [pubFilter, setPubFilter] = useState<PubFilter>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
@@ -133,34 +142,43 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
     items: Array<{ id: string; title: string; source: string; publicationDecision: string; reasons: ClassificationReason[] }>
   } | null>(null)
   const [autoApproveResult, setAutoApproveResult] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
-  const load = useCallback(async (f: SeoFilter = seoFilter) => {
+  const load = useCallback(async (f: SeoFilter = seoFilter, requestedPage = page) => {
     setLoading(true)
+    setActionError(null)
     try {
-      const res = await fetch(`${API_BASE}/admin-seo?filter=${f}&limit=100`, {
+      const res = await fetch(`${API_BASE}/admin-seo?filter=${f}&limit=100&offset=${requestedPage * 100}`, {
         headers: { 'x-admin-password': adminPassword },
       })
-      const data = await res.json()
+      const data = await readAdminResponse(res)
       setSummary(data.summary)
       setItems(data.items || [])
-    } catch (err) {
+      setItemCount(Number(data.count) || 0)
+    } catch (err: any) {
       console.error('[AdminSeoControlCenter]', err)
+      setActionError(err.message || 'No se pudo cargar SEO')
     } finally {
       setLoading(false)
     }
-  }, [adminPassword, seoFilter])
+  }, [adminPassword, seoFilter, page])
 
-  useEffect(() => { load(seoFilter) }, [seoFilter])
+  useEffect(() => { setPage(0); load(seoFilter, 0) }, [seoFilter])
+  useEffect(() => { if (page > 0) load(seoFilter, page) }, [page])
 
   const runPipeline = async (id: string) => {
     setRunningId(id)
+    setActionError(null)
     try {
-      await fetch(`${API_BASE}/admin-seo`, {
+      const res = await fetch(`${API_BASE}/admin-seo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
         body: JSON.stringify({ action: 'run_pipeline', opportunityId: id }),
       })
+      await readAdminResponse(res)
       await load(seoFilter)
+    } catch (err: any) {
+      setActionError(err.message || 'No se pudo ejecutar el pipeline')
     } finally {
       setRunningId(null)
     }
@@ -175,11 +193,13 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
         headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
         body: JSON.stringify({ action: 'run_bulk_pipeline' }),
       })
-      const data = await res.json()
+      const data = await readAdminResponse(res)
       if (data.skipped) setLastBulkResult('Pipeline desactivado (flag SEO_PIPELINE_V2 = off)')
       else if (data.dryRun) setLastBulkResult(`DRY RUN: ${data.processed} procesados — ${data.ok} ok, ${data.failed} fallidos`)
       else setLastBulkResult(`${data.processed} procesados — ${data.ok} ok, ${data.failed} fallidos`)
       await load(seoFilter)
+    } catch (err: any) {
+      setActionError(err.message || 'No se pudo ejecutar el lote SEO')
     } finally {
       setRunningBulk(false)
     }
@@ -193,8 +213,10 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
         headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
         body: JSON.stringify({ action: 'google_queue_recent' }),
       })
-      const data = await res.json()
+      const data = await readAdminResponse(res)
       setQueueEntries(data.entries || [])
+    } catch (err: any) {
+      setActionError(err.message || 'No se pudo cargar la cola de Google')
     } finally {
       setLoadingQueue(false)
     }
@@ -212,10 +234,12 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
         headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
         body: JSON.stringify({ urls: [url] }),
       })
-      const data = await res.json()
+      const data = await readAdminResponse(res)
       const result = data.results?.[0] ?? null
       setCrawlResults(prev => ({ ...prev, [item.id]: result }))
       setExpanded(prev => ({ ...prev, [item.id]: true }))
+    } catch (err: any) {
+      setActionError(err.message || 'No se pudo comprobar la URL publicada')
     } finally {
       setCrawlingId(null)
     }
@@ -232,8 +256,10 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
         headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
         body: JSON.stringify({ action: 'get_suggestions', opportunityId: oppId }),
       })
-      const data = await res.json()
+      const data = await readAdminResponse(res)
       setSuggestions(prev => ({ ...prev, [oppId]: data.suggestions || [] }))
+    } catch (err: any) {
+      setActionError(err.message || 'No se pudieron cargar sugerencias')
     } finally {
       setLoadingSugg(prev => ({ ...prev, [oppId]: false }))
     }
@@ -242,43 +268,52 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
   const generateSuggestions = async (oppId: string) => {
     setLoadingSugg(prev => ({ ...prev, [oppId]: true }))
     try {
-      await fetch(`${API_BASE}/admin-seo`, {
+      const res = await fetch(`${API_BASE}/admin-seo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
         body: JSON.stringify({ action: 'generate_suggestions', opportunityId: oppId }),
       })
+      await readAdminResponse(res)
       await loadSuggestions(oppId)
+    } catch (err: any) {
+      setActionError(err.message || 'No se pudieron generar sugerencias')
     } finally {
       setLoadingSugg(prev => ({ ...prev, [oppId]: false }))
     }
   }
 
   const acceptSuggestion = async (suggId: string, oppId: string) => {
-    await fetch(`${API_BASE}/admin-seo`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-      body: JSON.stringify({ action: 'accept_suggestion', suggestionId: suggId }),
-    })
-    setSuggestions(prev => ({ ...prev, [oppId]: (prev[oppId] || []).filter(s => s.id !== suggId) }))
+    try {
+      const res = await fetch(`${API_BASE}/admin-seo`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify({ action: 'accept_suggestion', suggestionId: suggId }),
+      })
+      await readAdminResponse(res)
+      setSuggestions(prev => ({ ...prev, [oppId]: (prev[oppId] || []).filter(s => s.id !== suggId) }))
+    } catch (err: any) { setActionError(err.message || 'No se pudo aceptar la sugerencia') }
   }
 
   const editSuggestion = async (suggId: string, oppId: string, newValue: string) => {
-    await fetch(`${API_BASE}/admin-seo`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-      body: JSON.stringify({ action: 'edit_suggestion', suggestionId: suggId, newValue }),
-    })
-    setEditingId(null)
-    setSuggestions(prev => ({ ...prev, [oppId]: (prev[oppId] || []).filter(s => s.id !== suggId) }))
+    try {
+      const res = await fetch(`${API_BASE}/admin-seo`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify({ action: 'edit_suggestion', suggestionId: suggId, newValue }),
+      })
+      await readAdminResponse(res)
+      setEditingId(null)
+      setSuggestions(prev => ({ ...prev, [oppId]: (prev[oppId] || []).filter(s => s.id !== suggId) }))
+    } catch (err: any) { setActionError(err.message || 'No se pudo editar la sugerencia') }
   }
 
   const ignoreSuggestion = async (suggId: string, oppId: string) => {
-    await fetch(`${API_BASE}/admin-seo`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-      body: JSON.stringify({ action: 'ignore_suggestion', suggestionId: suggId }),
-    })
-    setSuggestions(prev => ({ ...prev, [oppId]: (prev[oppId] || []).filter(s => s.id !== suggId) }))
+    try {
+      const res = await fetch(`${API_BASE}/admin-seo`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify({ action: 'ignore_suggestion', suggestionId: suggId }),
+      })
+      await readAdminResponse(res)
+      setSuggestions(prev => ({ ...prev, [oppId]: (prev[oppId] || []).filter(s => s.id !== suggId) }))
+    } catch (err: any) { setActionError(err.message || 'No se pudo ignorar la sugerencia') }
   }
 
   const batchAcceptSafe = async () => {
@@ -289,9 +324,11 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
         headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
         body: JSON.stringify({ action: 'batch_accept_safe' }),
       })
-      const data = await res.json()
+      const data = await readAdminResponse(res)
       setLastBulkResult(`Batch-accept: ${data.accepted} aceptadas, ${data.skipped} omitidas (solo campos seguros, conf ≥ 0.95)`)
       setSuggestions({})
+    } catch (err: any) {
+      setActionError(err.message || 'No se pudo aplicar el lote seguro')
     } finally {
       setBatchAccepting(false)
     }
@@ -306,27 +343,10 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
         headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
         body: JSON.stringify({ action: 'auto_approve_classified', payload: { mode: 'preview' } }),
       })
-      const data = await res.json()
+      const data = await readAdminResponse(res)
       setAutoApprovePreviewData(data)
-    } finally {
-      setAutoApproveLoading(false)
-    }
-  }
-
-  const confirmAutoApprove = async () => {
-    const candidateIds = autoApprovePreviewData?.autoApproveIds
-    if (!candidateIds?.length) return
-    setAutoApproveLoading(true)
-    try {
-      const res = await fetch(`${API_BASE}/admin-data`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-        body: JSON.stringify({ action: 'auto_approve_classified', payload: { mode: 'confirm', candidateIds } }),
-      })
-      const data = await res.json()
-      setAutoApproveResult(`Confirmado: ${data.confirmed} aprobados, ${data.skipped} omitidos`)
-      setAutoApprovePreviewData(null)
-      await load(seoFilter)
+    } catch (err: any) {
+      setActionError(err.message || 'No se pudo generar el preview')
     } finally {
       setAutoApproveLoading(false)
     }
@@ -376,7 +396,7 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
           <button onClick={() => { setShowAutoApprove(v => !v); if (!showAutoApprove) previewAutoApprove() }}
             className="flex items-center gap-2 border border-emerald-400/30 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-300 transition hover:bg-emerald-400/10 disabled:opacity-40"
             disabled={autoApproveLoading}>
-            <Zap className="h-3.5 w-3.5" /> Procesar seguros
+            <Zap className="h-3.5 w-3.5" /> Revisar candidatos
           </button>
         </div>
       </div>
@@ -399,12 +419,18 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
       {lastBulkResult && (
         <p className="border border-[#c9a84c]/25 bg-[#c9a84c]/5 px-4 py-2.5 text-xs text-[#c9a84c]">{lastBulkResult}</p>
       )}
+      {actionError && (
+        <div role="alert" className="flex items-center justify-between gap-3 border border-red-400/25 bg-red-400/5 px-4 py-2.5 text-xs text-red-300">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} aria-label="Cerrar error"><X className="h-3.5 w-3.5" /></button>
+        </div>
+      )}
 
       {/* Auto-approve panel */}
       {showAutoApprove && (
         <div className="border border-emerald-400/20 bg-[#060606] p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-wider text-emerald-300/60">Aprobación automática — pendientes/en_revisión (lote máx. 25)</p>
+            <p className="text-[10px] uppercase tracking-wider text-emerald-300/60">Candidatos determinísticos — solo preview (lote máx. 25)</p>
             {autoApproveLoading && <RefreshCw className="h-3 w-3 animate-spin text-white/30" />}
           </div>
           {autoApproveResult && (
@@ -441,10 +467,10 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
                 </div>
               )}
               {autoApprovePreviewData.autoApprove > 0 && (
-                <button onClick={confirmAutoApprove} disabled={autoApproveLoading}
+                <button onClick={onOpenModeration} disabled={!onOpenModeration}
                   className="flex items-center gap-2 border border-emerald-400/40 bg-emerald-400/10 px-4 py-2 text-xs text-emerald-300 transition hover:bg-emerald-400/20 disabled:opacity-40">
                   <Check className="h-3.5 w-3.5" />
-                  Confirmar — aprobar {autoApprovePreviewData.autoApprove} registro{autoApprovePreviewData.autoApprove !== 1 ? 's' : ''}
+                  Abrir verificación segura ({autoApprovePreviewData.autoApprove})
                 </button>
               )}
               {autoApprovePreviewData.autoApprove === 0 && (
@@ -786,6 +812,12 @@ export default function AdminSeoControlCenter({ adminPassword }: Props) {
           })}
         </div>
       )}
+
+      <div className="flex items-center justify-between border border-white/[0.07] px-4 py-3 text-[10px] text-white/35" style={{ fontFamily: MONO }}>
+        <button disabled={page === 0 || loading} onClick={() => setPage(value => Math.max(0, value - 1))} className="border border-white/10 px-3 py-1.5 disabled:opacity-25">ANTERIOR</button>
+        <span>{itemCount === 0 ? '0' : `${page * 100 + 1}-${Math.min(itemCount, (page + 1) * 100)}`} / {itemCount}</span>
+        <button disabled={(page + 1) * 100 >= itemCount || loading} onClick={() => setPage(value => value + 1)} className="border border-white/10 px-3 py-1.5 disabled:opacity-25">SIGUIENTE</button>
+      </div>
 
       {/* Footer note */}
       <p className="text-[11px] text-white/20">

@@ -29,6 +29,22 @@ ALLOWED_FIELDS = {
     "original_source_verified", "verified_at",
 }
 
+CONTENT_FINGERPRINT_FIELDS = (
+    "title", "organization", "description", "application_url", "source", "deadline",
+    "published_at", "country_code", "department", "city", "location", "remote",
+    "onsite_country", "eligible_countries", "eligible_regions", "opportunity_kind",
+    "opportunity_type", "type", "rubro", "tags", "source_authority",
+    "original_source_url", "original_source_verified", "age_min", "age_max",
+    "education_level", "experience_required", "citizenship_requirement",
+    "residency_requirement",
+)
+
+SEMANTIC_FINGERPRINT_FIELDS = (
+    "title", "organization", "rubro", "type", "opportunity_type",
+    "opportunity_kind", "tags", "location", "country_code", "eligible_countries",
+    "description",
+)
+
 GENERIC_TITLES = re.compile(
     r"^(login|concursos?|all jobs|types of opportunities|how we hire|internships|"
     r"terms of use|privacy notice|opens in a new tab\.?|facebook|instagram|linkedin|"
@@ -90,6 +106,7 @@ class IngestionSummary:
     unique: int = 0
     inserted: int = 0
     updated: int = 0
+    unchanged: int = 0
     duplicates_in_run: int = 0
     rejected: int = 0
     errors: list[str] = field(default_factory=list)
@@ -100,6 +117,19 @@ class IngestionSummary:
 
 def _text(value: Any, limit: int) -> str:
     return " ".join(str(value or "").split())[:limit]
+
+
+def _fingerprint(item: dict[str, Any], fields: tuple[str, ...]) -> str:
+    payload: dict[str, Any] = {}
+    for key in fields:
+        value = item.get(key)
+        if isinstance(value, list):
+            value = sorted({_text(entry, 500) for entry in value if _text(entry, 500)})
+        elif isinstance(value, str):
+            value = _text(value, 5000)
+        payload[key] = value
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def _slug(title: str, application_url: str) -> str:
@@ -181,6 +211,9 @@ def normalize_opportunity(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, s
     country = _text(item.get("country_code"), 2).upper()
     if allowed_countries and country not in allowed_countries:
         return None, f"país fuera de política: {country or 'sin país'}"
+    item["content_fingerprint"] = _fingerprint(item, CONTENT_FINGERPRINT_FIELDS)
+    item["semantic_fingerprint"] = _fingerprint(item, SEMANTIC_FINGERPRINT_FIELDS)
+    item["factory_status"] = "pending"
     return item, None
 
 
@@ -216,7 +249,7 @@ class OpportunitySink:
             response = self.session.get(
                 self.table_url,
                 headers=self.headers,
-                params={"select": "application_url,slug,verification_status,is_active,catalog_eligible,match_eligible,alerts_eligible,seo_eligible", "application_url": f"in.({expression})"},
+                params={"select": "application_url,slug,verification_status,is_active,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,content_fingerprint,semantic_fingerprint", "application_url": f"in.({expression})"},
                 timeout=30,
             )
             response.raise_for_status()
@@ -265,20 +298,38 @@ class OpportunitySink:
         try:
             existing = self._existing_urls(list(unique))
         except requests.RequestException as exc:
-            existing = {}
             summary.errors.append(f"No se pudo consultar deduplicación previa: {type(exc).__name__}")
+            summary.rejected += len(items)
+            return summary
 
         # Preserve the first public slug when a source later corrects its title.
         # This keeps indexed URLs and shared links stable across updates.
+        changed_items: list[dict[str, Any]] = []
         for item in items:
             previous = existing.get(item["application_url"])
             if previous and previous.get("slug"):
                 item["slug"] = _text(previous["slug"], 120)
+            if previous and previous.get("content_fingerprint") == item["content_fingerprint"]:
+                summary.unchanged += 1
+                continue
             if previous and previous.get("verification_status") == "verified":
-                item["verification_status"] = "verified"
-                item["is_active"] = bool(previous.get("is_active"))
-                for field in ("catalog_eligible", "match_eligible", "alerts_eligible", "seo_eligible"):
-                    item[field] = bool(previous.get(field))
+                if previous.get("content_fingerprint"):
+                    item["verification_status"] = "in_review"
+                    item["is_active"] = False
+                    for field in ("catalog_eligible", "match_eligible", "alerts_eligible", "seo_eligible"):
+                        item[field] = False
+                    item["verification_reasons"] = ["Contenido modificado por la fuente; requiere revalidación"]
+                else:
+                    # Bootstrap rows created before fingerprints without taking them offline.
+                    item["verification_status"] = "verified"
+                    item["is_active"] = bool(previous.get("is_active"))
+                    for field in ("catalog_eligible", "match_eligible", "alerts_eligible", "seo_eligible"):
+                        item[field] = bool(previous.get(field))
+            changed_items.append(item)
+
+        items = changed_items
+        if not items:
+            return summary
 
         for start in range(0, len(items), batch_size):
             batch = items[start:start + batch_size]

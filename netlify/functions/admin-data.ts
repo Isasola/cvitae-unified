@@ -45,7 +45,8 @@ export function zonedDayStart(value: Date, timeZone = OPERATIONS_TIME_ZONE): Dat
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
 
-  const headerPassword = event.headers['x-admin-password'] || event.headers['authorization']?.replace('Bearer ', '')
+  const headers = event.headers || {}
+  const headerPassword = headers['x-admin-password'] || headers['authorization']?.replace('Bearer ', '')
   let body: Record<string, any> = {}
   try { body = JSON.parse(event.body || '{}') } catch { /* empty ok */ }
   const { action, payload } = body
@@ -176,15 +177,18 @@ const handler: Handler = async (event) => {
     }
 
     if (action === "list_opportunity_reviews") {
-      const status = String(payload?.status || "pending")
+      const status = String(payload?.status || "needs_review")
       const source = String(payload?.source || "all")
       const search = String(payload?.search || "").trim()
+      const limit = Math.max(10, Math.min(100, Number(payload?.limit) || 50))
+      const offset = Math.max(0, Number(payload?.offset) || 0)
       let query = supabase
         .from("opportunities")
-        .select("id,slug,title,organization,location,country_code,city,department,type,opportunity_kind,opportunity_type,rubro,description,application_url,source,source_authority,original_source_url,original_source_verified,eligible_countries,eligible_regions,deadline,is_active,verification_status,verification_score,verification_reasons,verification_note,reviewed_at,reviewed_by,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,policy_overrides,archived_at,deleted_at,deletion_reason,deletion_review_status,deletion_requested_at,created_at,updated_at", { count: "exact" })
+        .select("id,slug,title,organization,location,country_code,city,department,type,opportunity_kind,opportunity_type,rubro,description,application_url,source,source_authority,original_source_url,original_source_verified,eligible_countries,eligible_regions,deadline,is_active,verification_status,verification_score,verification_reasons,verification_note,reviewed_at,reviewed_by,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,policy_overrides,archived_at,deleted_at,deletion_reason,deletion_review_status,deletion_requested_at,created_at,updated_at,factory_status,content_fingerprint,semantic_fingerprint,embedding_model,embedding_updated_at", { count: "exact" })
         .order("created_at", { ascending: false })
-        .limit(100)
-      if (status !== "all") query = query.eq("verification_status", status)
+        .range(offset, offset + limit - 1)
+      if (status === "needs_review") query = query.in("verification_status", ["pending", "in_review"])
+      else if (status !== "all") query = query.eq("verification_status", status)
       if (source !== "all") query = query.eq("source", source)
       if (payload?.lifecycle === "deletion_pending") query = query.eq("deletion_review_status", "pending").is("deleted_at", null)
       else if (payload?.lifecycle === "archived") query = query.not("archived_at", "is", null).is("deleted_at", null)
@@ -206,21 +210,15 @@ const handler: Handler = async (event) => {
     }
 
     if (action === "list_control_center") {
-      const [controlsRes, sourcesRes, opportunitiesRes] = await Promise.all([
+      const [controlsRes, sourcesRes, dashboardRes] = await Promise.all([
         supabase.from("scraper_controls").select("*").order("scraper_name"),
         supabase.from("opportunity_sources").select("*").order("display_name"),
-        supabase.from("opportunities").select("source,verification_status,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,deleted_at").limit(5000),
+        supabase.rpc("admin_opportunity_pipeline_dashboard"),
       ])
       if (controlsRes.error) throw controlsRes.error
       if (sourcesRes.error) throw sourcesRes.error
-      const sourceStats: Record<string, any> = {}
-      for (const row of opportunitiesRes.data || []) {
-        const key = row.source || "unknown"
-        const stats = sourceStats[key] ||= { total: 0, pending: 0, verified: 0, quarantined: 0, deleted: 0 }
-        stats.total++
-        if (row.deleted_at) stats.deleted++
-        else if (row.verification_status in stats) stats[row.verification_status]++
-      }
+      if (dashboardRes.error) throw dashboardRes.error
+      const sourceStats: Record<string, any> = dashboardRes.data?.sources || {}
       let reconciliation: any[] = []
       try {
         const registry = JSON.parse(readFileSync(resolve(process.cwd(), "scrapers/source_registry.json"), "utf8"))
@@ -233,29 +231,14 @@ const handler: Handler = async (event) => {
     }
 
     if (action === "opportunity_review_summary") {
-      const statuses = ["pending", "in_review", "verified", "rejected", "quarantined"]
-      const [results, rowsRes] = await Promise.all([
-        Promise.all(statuses.map(status => supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("verification_status", status))),
-        supabase.from("opportunities").select("opportunity_kind,is_active,catalog_eligible,archived_at,deleted_at,deletion_review_status").limit(5000),
-      ])
-      if (rowsRes.error) throw rowsRes.error
-      const byType: Record<string, number> = {}
-      let published = 0, archived = 0, deleted = 0, deletionPending = 0
-      for (const row of rowsRes.data || []) {
-        const type = String(row.opportunity_kind || "sin_tipo").trim().toLowerCase()
-        byType[type] = (byType[type] || 0) + 1
-        if (row.is_active && row.catalog_eligible && !row.archived_at && !row.deleted_at) published++
-        if (row.archived_at) archived++
-        if (row.deleted_at) deleted++
-        if (row.deletion_review_status === "pending" && !row.deleted_at) deletionPending++
-      }
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          summary: Object.fromEntries(statuses.map((status, index) => [status, results[index].count || 0])),
-          inventory: { total: (rowsRes.data || []).length, published, archived, deleted, deletion_pending: deletionPending, by_type: byType },
-        }),
-      }
+      const { data, error } = await supabase.rpc("admin_opportunity_pipeline_dashboard")
+      if (error) throw error
+      const counts = data?.counts || {}
+      return { statusCode: 200, body: JSON.stringify({
+        summary: { pending: counts.pending || 0, in_review: counts.in_review || 0, verified: counts.verified || 0, rejected: counts.rejected || 0, quarantined: counts.quarantined || 0 },
+        inventory: { total: counts.total || 0, published: counts.published || 0, archived: 0, deleted: 0, deletion_pending: 0, by_type: data?.types || {} },
+        pipeline: data,
+      }) }
     }
 
     if (action === "scraper_report") {
@@ -578,9 +561,11 @@ const handler: Handler = async (event) => {
 
     if (action === "delete_content") {
       if (!payload?.id) return { statusCode: 400, body: JSON.stringify({ error: "id requerido" }) }
-      const { error } = await supabase.from("content_hub").delete().eq("id", payload.id)
+      // Content can already be indexed. Admin deletion is therefore a reversible
+      // archive; physical deletion requires a separate audited maintenance path.
+      const { error } = await supabase.from("content_hub").update({ is_active: false, updated_at: new Date().toISOString() }).eq("id", payload.id)
       if (error) throw error
-      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+      return { statusCode: 200, body: JSON.stringify({ ok: true, archived: true }) }
     }
 
     if (action === "set_skill_status") {
@@ -605,35 +590,24 @@ const handler: Handler = async (event) => {
       const criteria = Array.isArray(payload.criteria) ? payload.criteria.map(String).slice(0, 20) : []
       const note = String(payload.note || "").trim().slice(0, 1000) || null
       const score = Number.isFinite(Number(payload.score)) ? Math.max(0, Math.min(100, Number(payload.score))) : null
-      const reviewedAt = new Date().toISOString()
       const features = payload.features && typeof payload.features === "object" ? payload.features : {}
       const verified = payload.status === "verified"
-      const reviewUpdate: Record<string, any> = {
-        verification_status: payload.status,
-        verification_score: score,
-        verification_reasons: criteria,
-        verification_note: note,
-        reviewed_at: reviewedAt,
-        reviewed_by: "admin",
-        is_active: verified,
-        catalog_eligible: verified && features.catalog !== false,
-        match_eligible: verified && features.matching !== false,
-        alerts_eligible: verified && features.alerts !== false,
-        seo_eligible: verified && features.seo !== false,
-        policy_overrides: verified ? features : {},
-      }
-      if (forceVerified) reviewUpdate.original_source_verified = true
-      const { error } = await supabase.from("opportunities").update(reviewUpdate).eq("id", payload.id)
-      if (error) throw error
-      const { error: auditError } = await supabase.from("opportunity_review_events").insert({
-        opportunity_id: payload.id,
-        previous_status: current.verification_status,
-        new_status: payload.status,
-        criteria,
-        note,
-        actor: "admin",
+      const { data: reviewResult, error } = await supabase.rpc("admin_review_opportunity_atomic", {
+        p_id: String(payload.id),
+        p_status: String(payload.status),
+        p_criteria: criteria,
+        p_note: note,
+        p_score: score,
+        p_features: features,
+        p_original_source_verified: forceVerified,
+        p_expected_updated_at: payload.expected_updated_at || null,
+        p_actor: "admin",
       })
-      if (auditError) throw auditError
+      if (error) {
+        if (String(error.message).includes("stale_opportunity")) return { statusCode: 409, body: JSON.stringify({ error: "La oportunidad cambiÃ³ mientras la revisabas. RecargÃ¡ antes de decidir." }) }
+        if (String(error.message).includes("original_source_required")) return { statusCode: 409, body: JSON.stringify({ error: "VerificÃ¡ la convocatoria en su fuente original antes de aprobarla" }) }
+        throw error
+      }
       // Fire SEO pipeline after approval — failures never block the approve response
       if (verified && process.env.SEO_PIPELINE_V2 === "true") {
         const dryRun = process.env.SEO_DRY_RUN !== "false"
@@ -641,7 +615,7 @@ const handler: Handler = async (event) => {
           console.error("[seo-pipeline] fire-and-forget error", payload.id, err?.message)
         )
       }
-      return { statusCode: 200, body: JSON.stringify({ ok: true, reviewed_at: reviewedAt }) }
+      return { statusCode: 200, body: JSON.stringify(reviewResult || { ok: true }) }
     }
 
     if (action === "update_opportunity") {
@@ -649,9 +623,17 @@ const handler: Handler = async (event) => {
       const allowed = ["title", "organization", "location", "country_code", "department", "city", "type", "opportunity_kind", "opportunity_type", "rubro", "description", "application_url", "source_authority", "original_source_url", "original_source_verified"]
       const update = Object.fromEntries(Object.entries(payload.data).filter(([key]) => allowed.includes(key)).map(([key, value]) => [key, typeof value === "string" ? value.trim().slice(0, key === "description" ? 4000 : 2000) : value]))
       if (!update.title && "title" in update) return { statusCode: 400, body: JSON.stringify({ error: "El título no puede quedar vacío" }) }
-      const { error } = await supabase.from("opportunities").update(update).eq("id", payload.id)
-      if (error) throw error
-      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+      const { data: updateResult, error } = await supabase.rpc("admin_update_opportunity_atomic", {
+        p_id: String(payload.id),
+        p_changes: update,
+        p_expected_updated_at: payload.expected_updated_at || null,
+        p_actor: "admin",
+      })
+      if (error) {
+        if (String(error.message).includes("stale_opportunity")) return { statusCode: 409, body: JSON.stringify({ error: "La oportunidad cambió. Recargá antes de guardar." }) }
+        throw error
+      }
+      return { statusCode: 200, body: JSON.stringify(updateResult || { ok: true }) }
     }
 
     if (action === "set_opportunity_lifecycle") {
@@ -694,58 +676,63 @@ const handler: Handler = async (event) => {
       if ("max_items_per_run" in update) update.max_items_per_run = Math.max(1, Math.min(5000, Number(update.max_items_per_run)))
       if ("max_runtime_seconds" in update) update.max_runtime_seconds = Math.max(30, Math.min(3600, Number(update.max_runtime_seconds)))
       if ("consecutive_failures_before_pause" in update) update.consecutive_failures_before_pause = Math.max(1, Math.min(20, Number(update.consecutive_failures_before_pause)))
-      update.updated_at = new Date().toISOString(); update.updated_by = "admin"
-      const { error } = await supabase.from("scraper_controls").update(update).eq("scraper_id", payload.scraper_id)
-      if (error) throw error
-      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+      const { data: result, error } = await supabase.rpc("admin_update_scraper_control_atomic", {
+        p_scraper_id: String(payload.scraper_id),
+        p_changes: update,
+        p_expected_updated_at: payload.expected_updated_at || null,
+        p_actor: "admin",
+      })
+      if (error) {
+        if (String(error.message).includes("stale_scraper_control")) return { statusCode: 409, body: JSON.stringify({ error: "El control cambio. Recarga antes de guardar." }) }
+        throw error
+      }
+      return { statusCode: 200, body: JSON.stringify(result || { ok: true }) }
+    }
+
+    if (action === "preview_source_policy") {
+      if (!payload?.source || !payload.data || typeof payload.data !== "object") return { statusCode: 400, body: JSON.stringify({ error: "Fuente inválida" }) }
+      const { data: current, error: sourceError } = await supabase.from("opportunity_sources").select("*").eq("source", payload.source).single()
+      if (sourceError || !current) throw sourceError || new Error("Fuente no encontrada")
+      const { count, error: countError } = await supabase.from("opportunities").select("id", { count: "exact", head: true })
+        .eq("source", payload.source).eq("verification_status", "verified").eq("is_active", true).is("deleted_at", null)
+      if (countError) throw countError
+      return { statusCode: 200, body: JSON.stringify({ current, changes: payload.data, impacted_rows: count || 0 }) }
     }
 
     if (action === "update_source_policy") {
       if (!payload?.source || !payload.data) return { statusCode: 400, body: JSON.stringify({ error: "Fuente inválida" }) }
-      const allowed = ["display_name", "trust_level", "auto_verify", "is_enabled", "catalog_enabled", "matching_enabled", "alerts_enabled", "seo_enabled", "allowed_country_codes", "allowed_opportunity_types", "max_items_per_day", "retention_days", "verification_criteria", "notes"]
+      const allowed = ["display_name", "source_tier", "trust_level", "auto_verify", "is_enabled", "catalog_enabled", "matching_enabled", "alerts_enabled", "seo_enabled", "allowed_country_codes", "allowed_opportunity_types", "max_items_per_day", "retention_days", "verification_criteria", "notes"]
       const update: Record<string, any> = Object.fromEntries(Object.entries(payload.data).filter(([key]) => allowed.includes(key)))
-      update.updated_at = new Date().toISOString(); update.updated_by = "admin"
-      const { error } = await supabase.from("opportunity_sources").update(update).eq("source", payload.source)
-      if (error) throw error
-      const propagation: Record<string, boolean> = {}
-      if ("catalog_enabled" in update) propagation.catalog_eligible = update.catalog_enabled === true
-      if ("matching_enabled" in update) propagation.match_eligible = update.matching_enabled === true
-      if ("alerts_enabled" in update) propagation.alerts_eligible = update.alerts_enabled === true
-      if ("seo_enabled" in update) propagation.seo_eligible = update.seo_enabled === true
-      if (Object.keys(propagation).length) {
-        const { error: propagationError } = await supabase.from("opportunities").update(propagation)
-          .eq("source", payload.source).eq("verification_status", "verified").eq("is_active", true).is("deleted_at", null)
-        if (propagationError) throw propagationError
+      const { data: result, error } = await supabase.rpc("admin_update_source_policy_atomic", {
+        p_source: String(payload.source),
+        p_changes: update,
+        p_expected_updated_at: payload.expected_updated_at || null,
+        p_actor: "admin",
+      })
+      if (error) {
+        if (String(error.message).includes("stale_source_policy")) return { statusCode: 409, body: JSON.stringify({ error: "La política cambió. Recargá antes de guardar." }) }
+        throw error
       }
-      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+      return { statusCode: 200, body: JSON.stringify(result || { ok: true }) }
     }
 
     if (action === "review_recruiter") {
       if (!payload?.id || !["verified", "rejected", "in_review", "pending"].includes(payload.status)) {
         return { statusCode: 400, body: JSON.stringify({ error: "Estado de empresa inválido" }) }
       }
-      const verified = payload.status === "verified"
-      const { data: current, error: currentError } = await supabase.from("recruiter_tokens")
-        .select("id,verification_status").eq("id", payload.id).single()
-      if (currentError || !current) throw currentError || new Error("Empresa no encontrada")
-      const update: Record<string, any> = {
-        verification_status: payload.status,
-        verified_at: verified ? new Date().toISOString() : null,
-        verified_by: verified ? "admin" : null,
-        is_active: verified,
-      }
-      if (payload.verification_data && typeof payload.verification_data === "object") update.verification_data = payload.verification_data
-      const { error } = await supabase.from("recruiter_tokens").update(update).eq("id", payload.id)
-      if (error) throw error
-      const { error: auditError } = await supabase.from("recruiter_review_events").insert({
-        recruiter_token_id: payload.id,
-        previous_status: current.verification_status,
-        new_status: payload.status,
-        note: String(payload.note || "").slice(0, 1000) || null,
-        actor: "admin",
+      const { data: result, error } = await supabase.rpc("admin_review_recruiter_atomic", {
+        p_id: String(payload.id),
+        p_status: String(payload.status),
+        p_verification_data: payload.verification_data && typeof payload.verification_data === "object" ? payload.verification_data : null,
+        p_note: String(payload.note || "").slice(0, 1000) || null,
+        p_expected_updated_at: payload.expected_updated_at || null,
+        p_actor: "admin",
       })
-      if (auditError) throw auditError
-      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+      if (error) {
+        if (String(error.message).includes("stale_recruiter")) return { statusCode: 409, body: JSON.stringify({ error: "La empresa cambio. Recarga antes de decidir." }) }
+        throw error
+      }
+      return { statusCode: 200, body: JSON.stringify(result || { ok: true }) }
     }
 
     if (action === "update_product_feedback") {
@@ -900,11 +887,10 @@ const handler: Handler = async (event) => {
       const requestedIds = Array.isArray(payload.ids) ? [...new Set(payload.ids.map(String))] : []
       if (requestedIds.length > 500) return { statusCode: 400, body: JSON.stringify({ error: "El lote no puede superar 500 IDs" }) }
       const maxBatch = requestedIds.length || Math.min(Number(payload.limit) || 200, 500)
-      const reviewedAt = new Date().toISOString()
 
       let candidateQuery = supabase
         .from("opportunities")
-        .select("id,source_authority,original_source_verified,verification_status,catalog_eligible,match_eligible,alerts_eligible,seo_eligible")
+        .select("id,updated_at,source_authority,original_source_verified,verification_status,catalog_eligible,match_eligible,alerts_eligible,seo_eligible")
         .eq("source", source)
         .in("verification_status", fromStatuses)
         .is("deleted_at", null)
@@ -916,13 +902,13 @@ const handler: Handler = async (event) => {
         return { statusCode: 200, body: JSON.stringify({ ok: true, processed: 0, skipped: 0, message: "No hay registros elegibles para ese filtro" }) }
       }
 
-      // Source-level trust: if catalog_enabled=true the admin already blessed this aggregator source
+      // Distribution and provenance are independent: catalog access never implies trust.
       const { data: sourceConfig } = await supabase
         .from("opportunity_sources")
-        .select("catalog_enabled")
+        .select("trust_level,is_enabled")
         .eq("source", source)
         .maybeSingle()
-      const sourceTrusted = sourceConfig?.catalog_enabled === true
+      const sourceTrusted = sourceConfig?.trust_level === "trusted" && sourceConfig?.is_enabled === true
 
       let toProcess = candidates
       let skipped = 0
@@ -948,45 +934,27 @@ const handler: Handler = async (event) => {
       }
 
       const ids = toProcess.map(c => c.id)
-      const verified = status === "verified"
-      const { error: updateError } = await supabase
-        .from("opportunities")
-        .update({
-          verification_status: status,
-          verification_note: note,
-          reviewed_at: reviewedAt,
-          reviewed_by: "admin_batch",
-          is_active: verified,
-          catalog_eligible: verified && features.catalog === true,
-          match_eligible: verified && features.matching === true,
-          alerts_eligible: verified && features.alerts === true,
-          seo_eligible: verified && features.seo === true,
-          policy_overrides: verified ? features : {},
-        })
-        .in("id", ids)
-      if (updateError) throw updateError
+      const mutationSnapshot = status === "verified"
+        ? payload.review_snapshot
+        : toProcess.map(candidate => ({ id: candidate.id, record_updated_at: candidate.updated_at }))
+      const auditNote = [
+        note || `Revisión en lote — fuente: ${source}`,
+        payload.idempotency_key ? `snapshot:${String(payload.idempotency_key).slice(0, 120)}` : null,
+      ].filter(Boolean).join(" | ").slice(0, 1000)
+      const { data: batchResult, error: updateError } = await supabase.rpc("admin_batch_review_opportunities_atomic", {
+        p_ids: ids,
+        p_status: status,
+        p_note: auditNote,
+        p_features: features,
+        p_review_snapshot: mutationSnapshot,
+        p_actor: "admin_batch",
+      })
+      if (updateError) {
+        if (String(updateError.message).includes("stale_batch")) return { statusCode: 409, body: JSON.stringify({ error: "El lote cambió mientras se procesaba. Generá un preview nuevo." }) }
+        throw updateError
+      }
 
-      const auditRows = ids.map(id => ({
-        opportunity_id: id,
-        previous_status: candidates.find(c => c.id === id)?.verification_status || "unknown",
-        new_status: status,
-        criteria: verified
-          ? [
-              "batch_review",
-              `snapshot:${String(payload.idempotency_key).slice(0, 120)}`,
-              `review:${String((payload.review_snapshot || []).find((item: any) => String(item.id) === String(id))?.recommendation || "unknown")}`,
-              `rules:${String((payload.review_snapshot || []).find((item: any) => String(item.id) === String(id))?.rules_version || "unknown").slice(0, 80)}`,
-              `flags_before:${JSON.stringify({ catalog: candidates.find(c => c.id === id)?.catalog_eligible, matching: candidates.find(c => c.id === id)?.match_eligible, alerts: candidates.find(c => c.id === id)?.alerts_eligible, seo: candidates.find(c => c.id === id)?.seo_eligible })}`,
-              `flags_after:${JSON.stringify(features)}`,
-            ]
-          : ["batch_review"],
-        note: note || `Revisión en lote — fuente: ${source}`,
-        actor: "admin_batch",
-      }))
-      const { error: auditError } = await supabase.from("opportunity_review_events").insert(auditRows)
-      if (auditError) throw auditError
-
-      return { statusCode: 200, body: JSON.stringify({ ok: true, processed: ids.length, skipped, reviewed_at: reviewedAt }) }
+      return { statusCode: 200, body: JSON.stringify({ ...(batchResult || { ok: true, processed: ids.length }), skipped }) }
     }
 
     if (action === "batch_review_preview") {
@@ -996,7 +964,7 @@ const handler: Handler = async (event) => {
       const previewSource = String(payload.source)
       const { data: previewCandidates, error: previewError } = await supabase
         .from("opportunities")
-        .select("id,title,organization,source_authority,original_source_url,original_source_verified,verification_status")
+        .select("id,title,organization,source_authority,original_source_url,original_source_verified,verification_status,updated_at")
         .eq("source", previewSource)
         .in("verification_status", ["pending", "in_review"])
         .is("deleted_at", null)
@@ -1006,16 +974,16 @@ const handler: Handler = async (event) => {
       // Source-level trust: trusted aggregators are eligible for batch approval
       const { data: previewSourceConfig } = await supabase
         .from("opportunity_sources")
-        .select("catalog_enabled")
+        .select("trust_level,is_enabled")
         .eq("source", previewSource)
         .maybeSingle()
-      const previewSourceTrusted = previewSourceConfig?.catalog_enabled === true
+      const previewSourceTrusted = previewSourceConfig?.trust_level === "trusted" && previewSourceConfig?.is_enabled === true
 
       const eligible: any[] = []
       const ineligible: any[] = []
       for (const c of (previewCandidates || [])) {
         if (c.source_authority === "original" || c.original_source_verified || previewSourceTrusted) {
-          eligible.push({ id: c.id, title: c.title, organization: c.organization, source_authority: c.source_authority, original_source_url: c.original_source_url })
+          eligible.push({ id: c.id, title: c.title, organization: c.organization, source_authority: c.source_authority, original_source_url: c.original_source_url, updated_at: c.updated_at })
         } else {
           ineligible.push({ id: c.id, title: c.title, reason: "aggregator_no_url" })
         }
@@ -1156,12 +1124,14 @@ const handler: Handler = async (event) => {
       const tier = String(payload?.tier || "A")
       if (!source) throw new Error("source required")
       if (!["SS", "S", "A", "B"].includes(tier)) throw new Error("tier inválido")
-      const { error } = await supabase
-        .from("opportunity_sources")
-        .update({ source_tier: tier })
-        .eq("source", source)
+      const { data: result, error } = await supabase.rpc("admin_update_source_policy_atomic", {
+        p_source: source,
+        p_changes: { source_tier: tier },
+        p_expected_updated_at: payload.expected_updated_at || null,
+        p_actor: "admin",
+      })
       if (error) throw error
-      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+      return { statusCode: 200, body: JSON.stringify(result || { ok: true }) }
     }
 
     return { statusCode: 400, body: JSON.stringify({ error: "Acción desconocida" }) }

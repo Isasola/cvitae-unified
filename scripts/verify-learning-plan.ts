@@ -13,7 +13,7 @@ const unauthorized = await handler({
 assert(unauthorized.statusCode === 401, 'El plan privado debe exigir una sesión válida')
 
 const sources = [
-  { id: 'job-1', slug: 'analista-power-bi', title: 'Analista Power BI', organization: 'Empresa A', updated_at: '2026-08-13T10:00:00Z' },
+  { id: 'job-1', slug: 'analista-power-bi', title: 'Analista Power BI', organization: 'Empresa A', updated_at: '2026-08-13T10:00:00Z', preferred: true },
   { id: 'job-2', slug: 'especialista-datos', title: 'Especialista de datos', organization: 'Empresa B', updated_at: '2026-08-13T11:00:00Z' },
 ]
 const normalized = normalizeLearningRecommendations([
@@ -37,13 +37,14 @@ const normalized = normalizeLearningRecommendations([
 ], [
   { skill: 'Power BI', normalizedSkill: 'power bi', sources },
   { skill: 'AWS', normalizedSkill: 'aws', sources: [sources[0]] },
-])
+], { goal: 'trabajar como analista cloud en un año' })
 
 assert(normalized.length === 2, 'Debe conservar una recomendación por brecha corroborada')
 assert(normalized[0].provider_key === 'microsoft_learn', 'Power BI debe caer en Microsoft Learn si Gemini propone un proveedor inválido')
 assert(normalized[1].provider_key === 'aws_skill_builder', 'AWS debe usar el catálogo oficial de AWS')
 assert(normalized[0].title === 'Ruta práctica de Power BI', 'El servidor debe construir un título determinista, no aceptar uno inventado')
-assert(normalized[0].why === 'Esta brecha aparece en 2 oportunidades verificadas entre tus mejores coincidencias.', 'La justificación debe construirse desde evidencia, no desde texto del modelo')
+assert(normalized[0].why.includes('oportunidad que marcaste como interesante'), 'La justificación debe priorizar oportunidades guardadas')
+assert(normalized[0].why.includes('trabajar como analista cloud en un año'), 'La justificación debe conectar la brecha con la meta declarada')
 assert(normalized[0].source_snapshot.length === 2, 'Debe preservar la evidencia de oportunidades')
 assert(normalized.every((item) => !item.resource_url.includes('evil.example')), 'Gemini no debe controlar ninguna URL')
 assert(normalized.every((item) => [
@@ -59,9 +60,17 @@ assert(endpoint.includes(".eq('is_active', true).eq('verification_status', 'veri
 assert(endpoint.includes(".eq('match_eligible', true)"), 'Las brechas deben provenir de oportunidades elegibles para matching')
 assert(endpoint.includes("normalizedSkill.length < 2"), 'Debe rechazar skills demasiado cortas que generen falsos positivos')
 assert(endpoint.includes("insertError.code === '23505'"), 'La recomendación debe tolerar solicitudes concurrentes idempotentes')
+assert(endpoint.includes('liked_opportunity_ids'), 'El plan debe incorporar oportunidades marcadas por el usuario')
+assert(endpoint.includes('liked_opportunity_gaps'), 'Las brechas de una oportunidad guardada deben seguir priorizadas aunque salga del top actual')
+assert(endpoint.includes('desired_role_1y') && endpoint.includes('career_interests'), 'Gemini debe recibir meta e intereses declarados')
+assert(endpoint.includes("officialProvider === 'aws_skill_builder'"), 'Las brechas AWS deben usar el catálogo oficial de AWS')
 assert(migration.includes('learning_recommendations') && migration.includes('update_learning_recommendation_status'), 'El plan y su avance deben persistirse en base de datos')
 assert(migration.includes('deleted_learning_recommendations'), 'El borrado de cuenta debe incluir el historial de aprendizaje')
 assert(page.includes('/oportunidades/${source.slug}'), 'La evidencia debe enlazar a la ruta canónica de oportunidades')
 assert(page.includes("action: 'status'"), 'La interfaz debe guardar los cambios de avance')
+assert(page.includes("action: 'save_intent'"), 'La interfaz debe guardar el norte profesional antes de recalcular')
+assert(page.includes('No se guardan como skills del CV'), 'Los intereses no deben presentarse como habilidades confirmadas')
+assert(page.includes('https://skillbuilder.aws/') && page.includes('/trabajos?q=freelance'), 'El norte debe ofrecer recursos oficiales de AWS y oportunidades freelance cuando correspondan')
+assert(page.includes('planCacheKey(userId)') && page.includes('PLAN_CACHE_TTL'), 'El plan debe usar caché aislada por usuario con vencimiento')
 
-console.log('Learning plan: 19 verificaciones focalizadas superadas.')
+console.log('Learning plan: verificaciones focalizadas superadas.')

@@ -65,6 +65,7 @@ const handler: Handler = async (event) => {
     const params = new URLSearchParams(event.rawQuery || '')
     const filter = params.get('filter') || 'all'  // all | eligible | review | blocked | unchecked
     const limit = Math.min(Number(params.get('limit') || '100'), 500)
+    const offset = Math.max(0, Number(params.get('offset') || '0'))
 
     // Summary counts
     const [eligible, review, blocked, unchecked] = await Promise.all([
@@ -89,16 +90,16 @@ const handler: Handler = async (event) => {
     // Per-item details — include fields needed for classifyOpportunity
     let query = supabase
       .from('opportunities')
-      .select('id,slug,title,description,organization,city,location,application_url,deadline,source,opportunity_type,opportunity_kind,type,seo_status,jobposting_validity,seo_issues,seo_missing_fields,seo_checked_at,verification_status,is_active,deleted_at,archived_at,created_at')
+      .select('id,slug,title,description,organization,city,location,application_url,deadline,source,opportunity_type,opportunity_kind,type,seo_status,jobposting_validity,seo_issues,seo_missing_fields,seo_checked_at,verification_status,is_active,deleted_at,archived_at,created_at', { count: 'exact' })
       .order('seo_checked_at', { ascending: false, nullsFirst: false })
-      .limit(limit)
+      .range(offset, offset + limit - 1)
 
     if (filter === 'eligible') query = query.eq('seo_status', 'eligible')
     else if (filter === 'review') query = query.eq('seo_status', 'review')
     else if (filter === 'blocked') query = query.eq('seo_status', 'blocked')
     else if (filter === 'unchecked') query = query.is('seo_status', null).eq('verification_status', 'verified').eq('is_active', true)
 
-    const { data: items, error } = await query
+    const { data: items, error, count } = await query
     if (error) {
       console.error('[admin-seo] fetch error', error)
       return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
@@ -129,7 +130,7 @@ const handler: Handler = async (event) => {
       }),
     }))
 
-    return { statusCode: 200, body: JSON.stringify({ summary, items: enriched }) }
+    return { statusCode: 200, body: JSON.stringify({ summary, items: enriched, count: count || 0, offset, limit }) }
   }
 
   // ─── POST: run pipeline ────────────────────────────────────────────────────

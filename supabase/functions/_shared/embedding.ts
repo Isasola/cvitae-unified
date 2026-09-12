@@ -11,11 +11,14 @@ function cleanSegment(value: unknown, maxLength: number): string {
 export function buildProfileEmbeddingText(profile: Record<string, any>): string {
   const data = profile.profile_data ?? {}
   const skills = Array.isArray(data.habilidades) ? data.habilidades.join(', ') : ''
+  const interests = Array.isArray(data.career_interests) ? data.career_interests.join(', ') : ''
   const parts = [
     `Título: ${cleanSegment(profile.professional_title, 140)}`,
     `Skills: ${cleanSegment(skills, 320)}`,
     `Senioridad: ${cleanSegment(data.seniority, 60)}`,
     `Ruta: ${cleanSegment(data.career_route, 100)}`,
+    `Meta a un año: ${cleanSegment(data.desired_role_1y, 300)}`,
+    `Intereses: ${cleanSegment(interests, 240)}`,
     `Ubicación: ${cleanSegment(data.location, 120)}`,
     `Resumen: ${cleanSegment(profile.summary, 320)}`,
     `Experiencia CV: ${cleanSegment(profile.cv_text, 900)}`,

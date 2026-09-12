@@ -64,6 +64,12 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/sitemap-:segment.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+  force = true
+
 # Dynamic routes: if no prerendered file exists, return real 404 (not Soft 404)
 # When a prerendered file exists in dist/, Netlify serves it directly (these rules never fire)
 [[redirects]]

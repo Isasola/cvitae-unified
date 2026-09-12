@@ -5,6 +5,7 @@ import {
   Sparkles, Search, MapPin, Lock,
   Bell, BookOpen, ArrowRight, Target,
   Mail, ExternalLink, ChevronRight, RefreshCw, AlertCircle,
+  Heart,
 } from 'lucide-react'
 import { GrowthLine, CompatibilityTrace, Connector, Eyebrow } from '@/components/cv/visuals'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
@@ -26,6 +27,7 @@ interface MatchItem {
   ubicacion: string; organization: string; application_url: string
   skillsScore: number; seniorityScore: number; locationScore: number
   finalScore: number; vacancySkills: string[]
+  missingSkills?: string[]
 }
 interface CourseRecommendation {
   id: string; skill: string; course: string; platform: string; url: string; why: string
@@ -304,7 +306,7 @@ function ScoreHero({ score }: { score: number }) {
 
 // ─── Opportunity card ─────────────────────────────────────────────────────────
 
-function OpportunityCard({ m, featured }: { m: MatchItem; featured?: boolean }) {
+function OpportunityCard({ m, featured, liked, onToggleLike }: { m: MatchItem; featured?: boolean; liked?: boolean; onToggleLike?: (opportunity: MatchItem) => void }) {
   return (
     <article
       className={`rounded-2xl border p-5 transition-all hover:border-[#c9a84c]/25 ${
@@ -340,6 +342,15 @@ function OpportunityCard({ m, featured }: { m: MatchItem; featured?: boolean }) 
             >
               Detalle
             </a>
+            <button
+              type="button"
+              onClick={() => onToggleLike?.(m)}
+              aria-label={liked ? 'Quitar de mis intereses' : 'Me interesa esta oportunidad'}
+              title={liked ? 'Quitar de mis intereses' : 'Usar en mi plan'}
+              className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1.5 transition ${liked ? 'border-rose-300/35 bg-rose-300/10 text-rose-200' : 'border-white/10 text-muted-foreground hover:text-rose-200'}`}
+            >
+              <Heart className={`h-3.5 w-3.5 ${liked ? 'fill-current' : ''}`} />
+            </button>
           </div>
         </div>
       </div>
@@ -372,6 +383,7 @@ export default function Dashboard() {
   const [serverMissingSkills, setServerMissingSkills] = useState<string[]>([])
   const [dashboardError, setDashboardError] = useState('')
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null)
+  const [likedOpportunityIds, setLikedOpportunityIds] = useState<Set<string>>(new Set())
 
   const foundingBeta = useFoundingBeta(user?.id || null)
 
@@ -422,6 +434,7 @@ export default function Dashboard() {
         .select('professional_title, profile_data, updated_at').eq('user_id', user.id).maybeSingle()
       if (profileError) throw profileError
       setProfile(prof)
+      setLikedOpportunityIds(new Set((prof?.profile_data?.liked_opportunity_ids || []).map(String)))
 
       const signature = profileSignature(prof)
       const cached = !force ? readCache(user.id, signature) : null
@@ -521,6 +534,29 @@ export default function Dashboard() {
   }, [matches, profileSkills, serverMissingSkills])
 
   const employabilityScore = useMemo(() => deriveScore(matches), [matches])
+
+  const toggleOpportunityPreference = async (opportunity: MatchItem) => {
+    const wasLiked = likedOpportunityIds.has(opportunity.id)
+    const optimistic = new Set(likedOpportunityIds)
+    if (wasLiked) optimistic.delete(opportunity.id)
+    else optimistic.add(opportunity.id)
+    setLikedOpportunityIds(optimistic)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Sesión expirada')
+      const response = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'opportunity_preference', opportunity_id: opportunity.id, missing_skills: opportunity.missingSkills || [], liked: !wasLiked }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error || 'No pudimos guardar tu preferencia')
+      setLikedOpportunityIds(new Set((payload.liked_opportunity_ids || []).map(String)))
+    } catch (error: any) {
+      setLikedOpportunityIds(new Set(likedOpportunityIds))
+      setDashboardError(error?.message || 'No pudimos guardar tu preferencia.')
+    }
+  }
 
   const nextStep = useMemo(() => {
     if (!hasProfile) return { label: 'Completar mi perfil', detail: 'Necesitamos tus habilidades para encontrarte el trabajo ideal.', href: '/mi-carrera/perfil' }
@@ -623,10 +659,10 @@ export default function Dashboard() {
                     </div>
                   ) : (
                     <>
-                      <OpportunityCard m={matches[0]} featured />
+                      <OpportunityCard m={matches[0]} featured liked={likedOpportunityIds.has(matches[0].id)} onToggleLike={toggleOpportunityPreference} />
                       <div className="space-y-3">
                         {matches.slice(1, isSubscribed ? undefined : 1).map((m) => (
-                          <OpportunityCard key={m.id} m={m} />
+                          <OpportunityCard key={m.id} m={m} liked={likedOpportunityIds.has(m.id)} onToggleLike={toggleOpportunityPreference} />
                         ))}
                         {!isSubscribed && matches.length > 1 && (
                           <div className="rounded-2xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.03] p-6 text-center">
@@ -693,6 +729,7 @@ export default function Dashboard() {
                             'beca-posgrado': '🎓 Beca / posgrado',
                             'organismos': '🌐 Organismos internacionales',
                             'emprendimiento': '🚀 Emprendimiento',
+                            'freelance': '🧩 Trabajo freelance',
                             'cambio-area': '🔄 Cambio de área',
                           }[profile.profile_data.career_route] || profile.profile_data.career_route}
                         </span>

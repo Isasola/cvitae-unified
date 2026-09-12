@@ -42,12 +42,32 @@ function absoluteUrl(value: string | null, base: string): string | null {
   try { return new URL(value, base).toString() } catch { return null }
 }
 
+function cleanText(value: unknown, limit = 4000): string | null {
+  if (typeof value !== 'string') return null
+  const text = value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, limit)
+  return text || null
+}
+
+function jsonLdJobPosting(html: string): Record<string, any> | null {
+  const scripts = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi) || []
+  for (const script of scripts) {
+    const raw = script.replace(/^.*?>/s, '').replace(/<\/script>$/i, '')
+    try {
+      const parsed = JSON.parse(raw); const values = Array.isArray(parsed) ? parsed : [parsed, ...(parsed['@graph'] || [])]
+      const job = values.find((value: any) => value && (value['@type'] === 'JobPosting' || value['@type']?.includes?.('JobPosting')))
+      if (job) return job
+    } catch { /* invalid publisher JSON-LD is non-fatal */ }
+  }
+  return null
+}
+
 function extract(html: string, finalUrl: string, status: number, redirects: string[]): PageObservation {
+  const job = jsonLdJobPosting(html)
   const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() || null
   const canonicalRaw = html.match(/<link[^>]+rel=["'][^"']*canonical[^"']*["'][^>]+href=["']([^"']+)["']/i)?.[1]
     || html.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["'][^"']*canonical[^"']*["']/i)?.[1]
     || null
-  const organization = html.match(/"hiringOrganization"\s*:\s*\{[\s\S]{0,1500}?"name"\s*:\s*"([^"]+)"/i)?.[1]
+  const organization = cleanText(job?.hiringOrganization?.name, 240) || html.match(/"hiringOrganization"\s*:\s*\{[\s\S]{0,1500}?"name"\s*:\s*"([^"]+)"/i)?.[1]
     || html.match(/"organization"\s*:\s*"([^"]+)"/i)?.[1]
     || null
   const closedSignal = html.match(CLOSED_RE)?.[0] || null
@@ -69,6 +89,14 @@ function extract(html: string, finalUrl: string, status: number, redirects: stri
     canonical: absoluteUrl(canonicalRaw, finalUrl),
     title,
     organization,
+    description: cleanText(job?.description) || cleanText(html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)/i)?.[1]) || cleanText(html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)/i)?.[1]),
+    salary: cleanText(job?.baseSalary?.value?.value ?? job?.baseSalary?.value ?? job?.baseSalary, 160),
+    salaryCurrency: cleanText(job?.baseSalary?.currency, 12),
+    datePosted: cleanText(job?.datePosted, 64),
+    validThrough: cleanText(job?.validThrough, 64),
+    employmentType: cleanText(Array.isArray(job?.employmentType) ? job.employmentType.join(', ') : job?.employmentType, 160),
+    jobLocation: cleanText(job?.jobLocation?.address?.addressCountry ?? job?.jobLocation?.address?.addressLocality ?? job?.jobLocation, 240),
+    applicantLocationRequirements: cleanText(job?.applicantLocationRequirements?.name ?? job?.applicantLocationRequirements, 240),
     hasStructuredData: /<script[^>]+type=["']application\/ld\+json["']/i.test(html),
     closedSignal,
     pageKind,

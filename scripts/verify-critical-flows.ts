@@ -340,5 +340,9 @@ for (const relativePath of ['../netlify/functions/founding-beta-action.ts', '../
 }
 const b2cProfileFunction = readFileSync(new URL('../netlify/functions/b2c-profile.ts', import.meta.url), 'utf8')
 assert(b2cProfileFunction.includes('await refreshProfileEmbedding(user.id)'), 'Guardar el perfil debe generar su embedding antes del matching')
+assert(b2cProfileFunction.includes("action === 'save_intent'"), 'El perfil debe guardar la meta e intereses profesionales por separado del CV')
+assert(b2cProfileFunction.includes("action === 'opportunity_preference'"), 'El perfil debe persistir oportunidades de interés sin convertirlas en skills')
+assert(b2cProfileFunction.includes('liked_opportunity_gaps'), 'Las preferencias deben conservar brechas limitadas para el plan, separadas de las habilidades confirmadas')
+assert(b2cProfileFunction.includes('unchanged: true'), 'Guardar el mismo norte no debe regenerar embeddings ni consumir IA innecesariamente')
 
 console.log('Critical flow checks passed: multi-PDF, persistent limits, B2C/B2B auth, ATS diagnostics/questions, evidence-grounded rewrites and application prep, profile ownership, protected CORS, ledger/batch invariants, alert idempotency and Gemini auth.')
