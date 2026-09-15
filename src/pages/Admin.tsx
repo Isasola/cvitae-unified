@@ -269,6 +269,7 @@ export default function Admin() {
   const [externalMetrics, setExternalMetrics] = useState<any>(ADMIN_PREVIEW_MODE?.startsWith('brief') ? BRIEF_PREVIEW_EXTERNAL : null)
   const [briefLoading, setBriefLoading] = useState(false)
   const [briefError, setBriefError] = useState<string | null>(null)
+  const [metricsError, setMetricsError] = useState<string | null>(null)
   const [foundingStats, setFoundingStats] = useState<any>(null)
   const [foundingStatsLoading, setFoundingStatsLoading] = useState(false)
   const [b2bProspects, setB2bProspects] = useState<any[]>([])
@@ -280,6 +281,7 @@ export default function Admin() {
   const [feedbackAssignee, setFeedbackAssignee] = useState('')
   const [opportunityReviews, setOpportunityReviews] = useState<OpportunityReview[]>([])
   const [reviewTotal, setReviewTotal] = useState(0)
+  const [reviewLoadError, setReviewLoadError] = useState<string | null>(null)
   const [reviewPage, setReviewPage] = useState(0)
   const [reviewSummary, setReviewSummary] = useState<Record<string, number>>({})
   const [opportunityInventory, setOpportunityInventory] = useState<{ total: number; published: number; archived: number; deleted: number; deletion_pending: number; by_type: Record<string, number> }>({ total: 0, published: 0, archived: 0, deleted: 0, deletion_pending: 0, by_type: {} })
@@ -315,6 +317,8 @@ export default function Admin() {
   const [sourcePolicies, setSourcePolicies] = useState<any[]>([])
   const [sourceStats, setSourceStats] = useState<Record<string, any>>({})
   const [sourceIntelligence, setSourceIntelligence] = useState<any[]>([])
+  const [controlCenterError, setControlCenterError] = useState<string | null>(null)
+  const [sourceIntelligenceError, setSourceIntelligenceError] = useState<string | null>(null)
   const [selectedSourceIntelligence, setSelectedSourceIntelligence] = useState<string | null>(null)
   // Direct message modal state
   const [msgUserId, setMsgUserId] = useState<string | null>(null)
@@ -490,7 +494,9 @@ export default function Admin() {
         generatedAt: json.generatedAt || null,
         timeZone: json.timeZone || 'America/Asuncion',
       })
+      setMetricsError(null)
     } catch (error: any) {
+      setMetricsError(error.message)
       setBriefError(`Base operativa: ${error.message}`)
     }
   }
@@ -576,8 +582,10 @@ export default function Admin() {
       setOpportunityReviews(json.data || [])
       setReviewTotal(Number(json.count) || 0)
       setReviewSources(json.sources || [])
+      setReviewLoadError(null)
       if (selectedReview && !(json.data || []).some((item: OpportunityReview) => item.id === selectedReview.id)) setSelectedReview(null)
     } catch (err: any) {
+      setReviewLoadError(err.message)
       setNotification({ type: 'error', message: `No se pudo cargar la bandeja: ${err.message}` })
     }
   }
@@ -839,13 +847,27 @@ export default function Admin() {
   }
 
   const loadControlCenter = async () => {
-    try {
-      const json = await adminFetch('list_control_center')
+    const [controlResult, intelligenceResult] = await Promise.allSettled([
+      adminFetch('list_control_center'),
+      adminFetch('source_intelligence_snapshot'),
+    ])
+    if (controlResult.status === 'fulfilled') {
+      const json = controlResult.value
       setScraperControls(json.controls || [])
       setSourcePolicies(json.sources || [])
       setSourceStats(json.sourceStats || {})
-      setSourceIntelligence(json.sourceIntelligence?.sources || [])
-    } catch (err: any) { setNotification({ type: 'error', message: `No se pudo cargar controles: ${err.message}` }) }
+      setControlCenterError(null)
+    } else {
+      const message = controlResult.reason?.message || 'Error desconocido'
+      setControlCenterError(message)
+      setNotification({ type: 'error', message: `No se pudo cargar controles: ${message}` })
+    }
+    if (intelligenceResult.status === 'fulfilled') {
+      setSourceIntelligence(intelligenceResult.value.sources || [])
+      setSourceIntelligenceError(null)
+    } else {
+      setSourceIntelligenceError(intelligenceResult.reason?.message || 'Error desconocido')
+    }
   }
 
   const updateScraperControl = async (scraperId: string, data: Record<string, any>) => {
@@ -1196,6 +1218,17 @@ export default function Admin() {
 
   // ── MAIN CONSOLE ──────────────────────────────────────────────────────────
 
+  const gateReasonLabel = (code: string) => ({
+    AUTO_DISABLED_BY_POLICY: 'Automatización desactivada por configuración',
+    AUTOMATION_DISABLED_BY_POLICY: 'Automatización desactivada por configuración',
+    SOURCE_NOT_CERTIFIED: 'La fuente todavía no está certificada para automatizar',
+    BLOCKED_BY_PREVIOUS_GATE: 'No evaluado: hay una puerta anterior pendiente',
+    PARTIALLY_ALLOWED: 'Distribución permitida sólo en algunas superficies',
+    RESTRICTED_BY_POLICY: 'Distribución restringida por configuración',
+    POLICY_NOT_DEFINED: 'Todavía no existe una política definida para esta superficie',
+    READY_FOR_AUTOMATION: 'Lista para automatización',
+  } as Record<string, string>)[code] || code
+
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: '#080808' }}>
 
@@ -1339,6 +1372,7 @@ export default function Admin() {
                     foundingStats={foundingStats}
                     foundingStatsLoading={foundingStatsLoading}
                   />
+                  {metricsError && <div className="mt-4 border border-red-400/20 bg-red-400/[0.04] px-4 py-3 text-xs text-red-300" style={{ fontFamily: MONO }}>No se pudieron cargar las métricas: {metricsError}. Los ceros no representan datos confirmados.</div>}
                 </div>
               )}
 
@@ -1708,14 +1742,19 @@ export default function Admin() {
                     <button onClick={loadControlCenter} className="border border-white/10 px-3 py-2 text-xs text-white/50 transition hover:text-white" style={{ fontFamily: MONO }}>↻ ACTUALIZAR</button>
                   </div>
 
-                  <details className="mb-5 border border-white/[0.07] bg-white/[0.015]">
+                  {controlCenterError && <div className="mb-4 border border-red-400/20 bg-red-400/[0.04] px-4 py-3 text-xs text-red-300" style={{ fontFamily: MONO }}>Controles de fuentes no disponibles: {controlCenterError}. Source Intelligence se carga por separado.</div>}
+                  <details open className="mb-5 border border-white/[0.07] bg-white/[0.015]">
                     <summary className="cursor-pointer px-4 py-3 text-[10px] uppercase tracking-[0.14em] text-white/40" style={{ fontFamily: MONO }}>
-                      Source Intelligence V2 · {sourceIntelligence.filter(row => !row.certified).length} pendientes de certificación
+                      Source Intelligence — Eight Gates · {sourceIntelligence.filter(row => !row.certified).length} pendientes de certificación
                     </summary>
+                    {sourceIntelligenceError && <div className="border-t border-red-400/20 bg-red-400/[0.04] px-4 py-3 text-xs text-red-300" style={{ fontFamily: MONO }}>Eight Gates no disponible: {sourceIntelligenceError}. Los controles de fuentes siguen disponibles por separado.</div>}
+                    <div className="border-t border-white/[0.07] px-4 py-2 text-[10px] text-white/40">
+                      Gate 7: {gateReasonLabel('AUTO_DISABLED_BY_POLICY')}. Gate 8: {gateReasonLabel('PARTIALLY_ALLOWED')}; {gateReasonLabel('POLICY_NOT_DEFINED')}.
+                    </div>
                     <div className="max-h-80 overflow-auto border-t border-white/[0.07]">
                       <table className="w-full text-left text-xs">
-                        <thead className="sticky top-0 bg-[#080808] text-[9px] uppercase text-white/25"><tr><th className="px-3 py-2">Fuente</th><th>Estado</th><th>Health</th><th>Contrato</th><th>Cert.</th><th>Auto</th><th>Inventario</th><th>Observado</th><th>Catálogo</th><th>Match</th><th>Emb. pend.</th><th>Última evidencia</th></tr></thead>
-                        <tbody className="divide-y divide-white/[0.04]">{sourceIntelligence.map(row => <React.Fragment key={row.canonical_source}><tr onClick={() => setSelectedSourceIntelligence(selectedSourceIntelligence === row.canonical_source ? null : row.canonical_source)} className="cursor-pointer hover:bg-white/[0.025]"><td className="px-3 py-2 font-mono text-white/60">{row.canonical_source}</td><td>{row.source_status || 'YELLOW'}</td><td>{row.operational_health || 'UNKNOWN'}</td><td>{row.contract_covered ? row.semantic_version : 'incompleto'}</td><td>{row.certified ? 'sí' : 'no'}</td><td>{row.auto_enabled ? 'on' : 'off'}</td><td>{row.pools?.inventory || 0}</td><td>{row.observation?.observation_coverage_pct == null ? '—' : `${row.observation.observation_coverage_pct}%`}</td><td>{row.pools?.catalog || 0}</td><td>{row.pools?.matching || 0}</td><td>{row.semantic?.embedding_pending ?? '—'}</td><td>{row.observation?.last_observed_at || row.execution?.last_run || '—'}</td></tr>{selectedSourceIntelligence === row.canonical_source && <tr className="bg-white/[0.015]"><td colSpan={12} className="px-4 py-3 text-xs text-white/45"><div className="grid gap-3 md:grid-cols-4"><div><b className="text-white/70">Identity / health</b><br />{row.source_family} · {row.adapter_version}<br />{row.source_status || 'YELLOW'} · {row.operational_health || 'UNKNOWN'} · aliases: {(row.emitted_aliases || []).join(', ') || '—'}</div><div><b className="text-white/70">Evidence / policy</b><br />Fresh {row.observation?.fresh ?? '—'} · stale {row.observation?.stale ?? '—'} · unknown {row.observation?.unknown ?? '—'}<br />Dead {row.policy?.hard_dead_evidence ?? '—'} · suppressed {row.policy?.suppressed_count ?? '—'} · restored {row.policy?.restored_count ?? '—'}</div><div><b className="text-white/70">Quality / pipeline</b><br />Thin description {row.quality?.thin_description ?? '—'} · missing geo {row.quality?.missing_country ?? '—'}<br />Fingerprint pending {row.semantic?.fingerprint_pending ?? '—'} · embeddings {row.semantic?.embedding_pending ?? 'unavailable'}<br />Last impact: {row.latest_impact ? JSON.stringify(row.latest_impact) : 'unavailable'}</div><div><b className="text-white/70">Certification / safe actions</b><br />Covered {row.contract_covered ? 'sí' : 'no'} · blockers: {(row.blocking_requirements || []).join(', ') || '—'}<br />Diagnose / maintenance: DRY-RUN only<br />Apply disabled · restore {row.policy?.restore_capability || 'unavailable'}<br />Exceptions: {(row.exceptions || []).join(', ') || '—'}</div></div></td></tr>}</React.Fragment>)}</tbody>
+                        <thead className="sticky top-0 bg-[#080808] text-[9px] uppercase text-white/25"><tr><th className="px-3 py-2">Fuente</th><th>Eight Gates</th><th>Health</th><th>Contrato</th><th>Auto</th><th>Inventario</th><th>Última evidencia</th></tr></thead>
+                        <tbody className="divide-y divide-white/[0.04]">{sourceIntelligence.map(row => <React.Fragment key={row.canonical_source}><tr onClick={() => setSelectedSourceIntelligence(selectedSourceIntelligence === row.canonical_source ? null : row.canonical_source)} className="cursor-pointer hover:bg-white/[0.025]"><td className="px-3 py-2 font-mono text-white/60">{row.canonical_source}</td><td className="font-mono text-[10px]">{(row.eight_gates?.gates || []).map((gate: any, index: number) => <span key={index} title={`Gate ${index + 1}: ${gate.reason_code}`} className={gate.status === 'PASS' ? 'text-emerald-300' : gate.status === 'FAIL' ? 'text-red-300' : gate.status === 'WARNING' ? 'text-amber-300' : 'text-white/30'}>●</span>)}</td><td>{row.eight_gates?.gates?.[5]?.reason_code || row.operational_health || 'UNKNOWN'}</td><td>{row.contract_covered ? row.semantic_version : 'incompleto'}</td><td>{row.auto_enabled ? 'on' : 'off'}</td><td>{row.pools?.inventory || 0}</td><td>{row.observation?.last_observed_at || row.execution?.last_run || '—'}</td></tr>{selectedSourceIntelligence === row.canonical_source && <tr className="bg-white/[0.015]"><td colSpan={7} className="px-4 py-3 text-xs text-white/45"><div className="mb-3 text-[10px] uppercase tracking-[0.14em] text-white/60">Source Intelligence — Eight Gates</div><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">{(row.eight_gates?.gates || []).map((gate: any, index: number) => <div key={index} className="border border-white/[0.08] p-3"><div className="flex justify-between text-white/75"><b>Gate {index + 1}</b><span className={gate.status === 'PASS' ? 'text-emerald-300' : gate.status === 'FAIL' ? 'text-red-300' : gate.status === 'WARNING' ? 'text-amber-300' : 'text-white/40'}>{gate.status}</span></div><div className="mt-1 font-mono text-[10px] text-white/55">{gate.reason_code}</div><div className="mt-2 text-[11px]">{Object.entries(gate.metrics || {}).slice(0, 5).map(([key, value]) => <div key={key}>{key}: {typeof value === 'object' ? 'available' : String(value ?? '—')}</div>)}</div></div>)}</div><div className="mt-3 grid gap-3 md:grid-cols-3"><div><b className="text-white/70">Runtime</b><br />{row.operational_health || 'UNKNOWN'} · last run {row.execution?.last_run || '—'}</div><div><b className="text-white/70">Data health</b><br />Thin description {row.quality?.thin_description ?? '—'} · missing geo {row.quality?.missing_country ?? '—'}</div><div><b className="text-white/70">Policy</b><br />AUTO {row.auto_enabled ? 'enabled' : 'disabled'} · catalog {row.distribution_policy?.web_catalog_allowed ? 'allowed' : 'restricted'}</div></div></td></tr>}</React.Fragment>)}</tbody>
                       </table>
                     </div>
                   </details>
@@ -2029,8 +2068,9 @@ export default function Admin() {
                   <div className="grid min-h-[620px] border border-white/[0.07] lg:grid-cols-[380px_1fr]">
                     <div className="border-b border-white/[0.07] lg:border-b-0 lg:border-r">
                       <div className="border-b border-white/[0.07] px-4 py-3 text-[10px] uppercase tracking-[0.14em] text-white/30" style={{ fontFamily: MONO }}>{opportunityReviews.length} resultados cargados</div>
+                      {reviewLoadError && <div className="border-b border-red-400/20 bg-red-400/[0.04] px-4 py-3 text-xs text-red-300">No se pudo cargar esta bandeja: {reviewLoadError}. La lista vacía no confirma que no existan registros.</div>}
                       <div className="max-h-[680px] overflow-y-auto">
-                        {opportunityReviews.length === 0 ? <p className="p-8 text-center text-sm text-white/35">No hay registros con este filtro.</p> : opportunityReviews.map(opportunity => (
+                        {opportunityReviews.length === 0 ? <p className="p-8 text-center text-sm text-white/35">{reviewLoadError ? 'No hay datos disponibles mientras falla la carga.' : 'No hay registros con este filtro.'}</p> : opportunityReviews.map(opportunity => (
                           <div key={opportunity.id} className={`relative border-b border-white/[0.05] transition ${selectedReview?.id === opportunity.id ? 'bg-white/[0.06]' : 'hover:bg-white/[0.025]'}`}>
                             <button onClick={() => openReview(opportunity)} className="w-full px-4 py-4 text-left">
                               <div className="flex items-center justify-between gap-3">

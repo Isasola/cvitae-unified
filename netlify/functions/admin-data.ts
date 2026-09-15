@@ -7,6 +7,7 @@ import { enqueueIndexingEvent } from "./lib/indexing-queue"
 import { selectBatchMutationCandidates, validateBatchApprovalSnapshot } from "./lib/batch-review-snapshot"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
+import { evaluateEightGates } from "./lib/eight-gates"
 
 function sourceIntelligenceRegistry() {
   return JSON.parse(readFileSync(resolve(process.cwd(), "src/generated/source-intelligence-registry.json"), "utf8"))
@@ -17,18 +18,20 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
   // aliases, certification and semantics remain owned by that core.
   const registry = sourceIntelligenceRegistry()
   const stats: Record<string, any> = dashboard?.sources || {}
-  const [observationsRes, policyRes, runsRes, fingerprintsRes] = await Promise.all([
+  const [observationsRes, policyRes, runsRes, fingerprintsRes, enrichmentRes] = await Promise.all([
     supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at").order("observed_at", { ascending: false }).limit(10000),
     supabase.from("opportunity_source_policy_events").select("opportunity_id,source,action,created_at").order("created_at", { ascending: false }).limit(10000),
     supabase.from("scraper_runs").select("scraper_id,status,started_at,finished_at,error_summary,adapter_version,extraction_metrics").order("started_at", { ascending: false }).limit(1000),
     // Do not read embedding vectors: source-level pending counts are only
     // exposed when their lightweight inputs are available.
-    supabase.from("opportunities").select("source,semantic_fingerprint,match_eligible").is("deleted_at", null).is("archived_at", null).limit(10000),
+    supabase.from("opportunities").select("source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope").is("deleted_at", null).is("archived_at", null).limit(10000),
+    supabase.from("opportunity_enrichment_events").select("opportunity_id,source,changed_fields,created_at").order("created_at", { ascending: false }).limit(10000),
   ])
   const observationRows = observationsRes.error ? [] : (observationsRes.data || [])
   const policyRows = policyRes.error ? [] : (policyRes.data || [])
   const runRows = runsRes.error ? [] : (runsRes.data || [])
   const fingerprintRows = fingerprintsRes.error ? [] : (fingerprintsRes.data || [])
+  const enrichmentRows = enrichmentRes.error ? [] : (enrichmentRes.data || [])
   const knownAliases = new Set<string>((registry.sources || []).flatMap((profile: any) => profile.emitted_aliases || []).map((value: string) => value.toLowerCase()))
   const unresolvedEmittedSources = Object.keys(stats).filter(source => !knownAliases.has(source.toLowerCase()))
   const now = Date.now()
@@ -77,6 +80,8 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       : operationalHealth === "DEGRADED" ? "RED"
       : !profile.contract_covered || !profile.certified || operationalHealth === "UNKNOWN" ? "YELLOW"
       : "GREEN"
+    const sourceRows = fingerprintRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase()))
+    const eightGates = evaluateEightGates(profile, sourceRows, latestRun, observations, enrichmentRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase())))
     return {
       ...profile, pools,
       operational_health: operationalHealth,
@@ -101,6 +106,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       exceptions: exceptionReasons,
       latest_impact: latestImpact,
       maintenance_action: "DRY_RUN_ONLY", apply_enabled: false,
+      eight_gates: eightGates,
     }
   })
   const exceptionGroups: Record<string, { count: number, sources: string[] }> = {}
@@ -321,16 +327,21 @@ const handler: Handler = async (event) => {
       if (sourcesRes.error) throw sourcesRes.error
       if (dashboardRes.error) throw dashboardRes.error
       const sourceStats: Record<string, any> = dashboardRes.data?.sources || {}
-      const sourceIntelligence = await sourceIntelligenceSnapshot(supabase, dashboardRes.data, controlsRes.data || [])
-      return { statusCode: 200, body: JSON.stringify({ controls: controlsRes.data || [], sources: sourcesRes.data || [], sourceStats, sourceIntelligence }) }
+      // Eight Gates is requested independently so its registry/evidence path can
+      // never turn an otherwise usable controls response into a 500.
+      return { statusCode: 200, body: JSON.stringify({ controls: controlsRes.data || [], sources: sourcesRes.data || [], sourceStats }) }
     }
 
     if (action === "source_intelligence_snapshot") {
       // The static registry is generated only by scripts/export_source_intelligence_snapshot.py
       // from Python V2 core. This endpoint merely joins live DB metrics; it owns no source rules.
-      const { data, error } = await supabase.rpc("admin_opportunity_pipeline_dashboard")
+      const [dashboardRes, controlsRes] = await Promise.all([
+        supabase.rpc("admin_opportunity_pipeline_dashboard"),
+        supabase.from("scraper_controls").select("scraper_id,collection_enabled"),
+      ])
+      const { data, error } = dashboardRes
       if (error) throw error
-      return { statusCode: 200, body: JSON.stringify(await sourceIntelligenceSnapshot(supabase, data)) }
+      return { statusCode: 200, body: JSON.stringify(await sourceIntelligenceSnapshot(supabase, data, controlsRes.error ? [] : (controlsRes.data || []))) }
     }
 
     if (action === "opportunity_review_summary") {

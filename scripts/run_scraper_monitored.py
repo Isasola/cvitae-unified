@@ -23,6 +23,7 @@ WARNING_RE = re.compile(r"(warning|advertencia|deprecated)", re.IGNORECASE)
 FOUND_RE = re.compile(r"(?:encontrad[ao]s?|totales?)\D{0,12}(\d+)", re.IGNORECASE)
 INSERTED_RE = re.compile(r"(?:insertad[ao]s?|nuev[ao]s?|guardad[ao]s?)\D{0,12}(\d+)", re.IGNORECASE)
 SUMMARY_RE = re.compile(r"^CVITAE_INGESTION_SUMMARY=(\{.*\})$", re.MULTILINE)
+ADAPTER_METRICS_RE = re.compile(r"^CVITAE_ADAPTER_METRICS=(\{.*\})$", re.MULTILINE)
 BLOCKED_RE = re.compile(r"(block|captcha|login|autentic|forbidden|403)", re.IGNORECASE)
 
 
@@ -124,7 +125,7 @@ def maybe_auto_pause(control: dict, scraper_id: str, current_status: str) -> Non
     print(f"[monitor] {reason}")
 
 
-def update_control_quality(scraper_id: str, status: str, summary: dict | None, error_lines: list[str], finished_at: str) -> None:
+def update_control_quality(scraper_id: str, status: str, summary: dict | None, error_lines: list[str], finished_at: str, adapter_metrics: dict | None = None) -> None:
     found = summary.get("found") if summary else None
     inserted = summary.get("inserted") if summary else None
     quality = (
@@ -134,6 +135,9 @@ def update_control_quality(scraper_id: str, status: str, summary: dict | None, e
         else "unproductive" if found == 0
         else "degraded"
     )
+    adapter_health = ((adapter_metrics or {}).get("extraction_metrics") or {}).get("health", {}).get("status")
+    if adapter_health == "DEGRADED":
+        quality = "degraded"
     base = os.environ["SUPABASE_URL"].rstrip("/") + "/rest/v1/scraper_controls"
     response = requests.patch(
         f"{base}?scraper_id=eq.{quote(scraper_id)}",
@@ -167,6 +171,14 @@ def structured_summary(text: str) -> dict | None:
         return value if isinstance(value, dict) else None
     except json.JSONDecodeError:
         return None
+
+def structured_adapter_metrics(text: str) -> dict | None:
+    match = ADAPTER_METRICS_RE.search(text)
+    if not match: return None
+    try:
+        value = json.loads(match.group(1))
+        return value if isinstance(value, dict) else None
+    except json.JSONDecodeError: return None
 
 
 def main() -> int:
@@ -240,6 +252,7 @@ def main() -> int:
         telemetry_ok = False
 
     summary = None
+    adapter_metrics = None
     try:
         child_env = os.environ.copy()
         child_env["CVITAE_MAX_ITEMS"] = str(control.get("max_items_per_run") or 250)
@@ -260,6 +273,7 @@ def main() -> int:
         )
         output = (result.stdout + "\n" + result.stderr).strip()
         summary = structured_summary(output)
+        adapter_metrics = structured_adapter_metrics(output)
         error_lines = [line.strip() for line in output.splitlines() if ERROR_RE.search(line)]
         if summary:
             error_lines = [str(item) for item in summary.get("errors", []) if item]
@@ -289,7 +303,7 @@ def main() -> int:
             save({
                 "status": db_status(status),
                 "exit_code": exit_code,
-                "found_count": summary.get("found") if summary else last_number(FOUND_RE, output),
+                "found_count": summary.get("found") if summary else (adapter_metrics or {}).get("extraction_metrics", {}).get("found", last_number(FOUND_RE, output)),
                 "inserted_count": summary.get("inserted") if summary else last_number(INSERTED_RE, output),
                 "valid_count": summary.get("valid") if summary else None,
                 "unique_count": summary.get("unique") if summary else None,
@@ -303,6 +317,8 @@ def main() -> int:
                 "finished_at": finished.isoformat(),
                 "duration_seconds": duration,
                 "updated_at": finished.isoformat(),
+                "adapter_version": adapter_metrics.get("adapter_version") if adapter_metrics else None,
+                "extraction_metrics": adapter_metrics.get("extraction_metrics") if adapter_metrics else None,
             }, record_id)
         except Exception as exc:
             print(f"[monitor] No se pudo finalizar telemetría: {type(exc).__name__}", file=sys.stderr)
@@ -313,7 +329,7 @@ def main() -> int:
     except Exception as exc:
         print(f"[monitor] No se pudo evaluar autopausa: {type(exc).__name__}", file=sys.stderr)
     try:
-        update_control_quality(args.scraper_id, status, summary, error_lines, finished.isoformat())
+        update_control_quality(args.scraper_id, status, summary, error_lines, finished.isoformat(), adapter_metrics)
     except Exception as exc:
         print(f"[monitor] No se pudo actualizar calidad del scraper: {type(exc).__name__}", file=sys.stderr)
 
