@@ -11,7 +11,7 @@ from urllib.parse import urlparse, urlunparse
 import requests
 
 from opportunity_sink import OpportunitySink
-from source_adapters import AdapterResult, AtomicEnricher, clean, coverage, health, recommend
+from source_adapters import AdapterResult, AtomicEnricher, RunLineageWriter, build_scan_lineage, clean, coverage, health, recommend
 from source_evidence import runtime_telemetry, eight_gates_run_evidence
 
 API_URL = "https://himalayas.app/jobs/api"
@@ -299,6 +299,7 @@ def main() -> None:
             else:
                 new_jobs.append(job)
     summary = OpportunitySink().upsert(new_jobs) if new_jobs else None
+    metrics_lineage = RunLineageWriter(SUPABASE_URL, SUPABASE_KEY).record(details) if SUPABASE_KEY else build_scan_lineage(details, run_id=os.getenv("CVITAE_SCRAPER_RUN_ID"), scan_request_id=os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID"))
     valid = sum(bool(item.title) for item in details)
     rejected = max(0, len(seen) - valid)
     provider_health = "HEALTHY"
@@ -309,7 +310,7 @@ def main() -> None:
     coverage_stop = "complete" if inventory.complete else (inventory.error or "incomplete")
     metrics = {"found": len(seen), "valid": valid, "processed": len(details), "rejected": rejected,
       "detail_pages_attempted": len(details), "detail_pages_success": sum(item.source_status == 200 for item in details), "parsed": valid,
-      "coverage": coverage(details), "enrichment": enrichment,
+      "coverage": coverage(details), "enrichment": enrichment, "scan_lineage": metrics_lineage,
       "classification": {key: sum(item.recommendation == key for item in details) for key in ("AUTO_PUBLISH", "AUTO_BLOCK", "HUMAN_REVIEW")}}
     # Provider health is deliberately independent from a bounded inventory walk
     # and minor row rejections.  The monitor persists this shape in

@@ -12,7 +12,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from opportunity_sink import OpportunitySink
-from source_adapters import AdapterResult, AtomicEnricher, clean, coverage, geo_from_detail, health, recommend
+from source_adapters import AdapterResult, AtomicEnricher, RunLineageWriter, build_scan_lineage, clean, coverage, geo_from_detail, health, recommend
 from source_evidence import runtime_telemetry, eight_gates_run_evidence
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
@@ -227,7 +227,8 @@ def main() -> None:
                 new_jobs.append(job)
         time.sleep(1.5)
     summary = OpportunitySink().upsert(new_jobs) if new_jobs else None
-    metrics = {"found": len(seen), "detail_pages_attempted": len(details), "detail_pages_success": sum(item.source_status == 200 for item in details), "parsed": sum(bool(item.title) for item in details), "coverage": coverage(details), "enrichment": enrichment, "classification": {key: sum(item.recommendation == key for item in details) for key in ("AUTO_PUBLISH", "AUTO_BLOCK", "HUMAN_REVIEW")}}
+    metrics_lineage = RunLineageWriter(SUPABASE_URL, SUPABASE_KEY).record(details) if SUPABASE_KEY else build_scan_lineage(details, run_id=os.getenv("CVITAE_SCRAPER_RUN_ID"), scan_request_id=os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID"))
+    metrics = {"found": len(seen), "detail_pages_attempted": len(details), "detail_pages_success": sum(item.source_status == 200 for item in details), "parsed": sum(bool(item.title) for item in details), "coverage": coverage(details), "enrichment": enrichment, "scan_lineage": metrics_lineage, "classification": {key: sum(item.recommendation == key for item in details) for key in ("AUTO_PUBLISH", "AUTO_BLOCK", "HUMAN_REVIEW")}}
     baseline = enricher.recent_healthy_baseline("unjobs_scraper") if enricher else None
     status, reasons = health(metrics, baseline); metrics["health"] = {"status": status, "reasons": reasons}
     metrics.update(runtime_telemetry(provider_health="DEGRADED" if status == "DEGRADED" else "HEALTHY", coverage_complete=False, coverage_stop_reason="configured_listing_pages", found=len(seen), valid=metrics["parsed"], processed=len(details), rejected=max(0,len(seen)-metrics["parsed"]), rejection_reasons={"detail_parse": max(0,len(seen)-metrics["parsed"])}))

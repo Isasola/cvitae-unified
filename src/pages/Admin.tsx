@@ -7,6 +7,7 @@ import AdminGrowthCenter from '@/components/admin/AdminGrowthCenter'
 import AdminSeoControlCenter from '@/components/admin/AdminSeoControlCenter'
 import { AdminCeoHoy } from '@/components/admin/AdminCeoHoy'
 import { UserDetailDrawer } from '@/components/admin/UserDetailDrawer'
+import SourceOperationsView from '@/components/admin/SourceOperationsView'
 import ReactMarkdown from 'react-markdown'
 import rehypeSanitize from 'rehype-sanitize'
 
@@ -320,6 +321,8 @@ export default function Admin() {
   const [controlCenterError, setControlCenterError] = useState<string | null>(null)
   const [sourceIntelligenceError, setSourceIntelligenceError] = useState<string | null>(null)
   const [selectedSourceIntelligence, setSelectedSourceIntelligence] = useState<string | null>(null)
+  const [sourceScan, setSourceScan] = useState<any | null>(null)
+  const [sourceScanLoading, setSourceScanLoading] = useState(false)
   // Direct message modal state
   const [msgUserId, setMsgUserId] = useState<string | null>(null)
   const [msgUserEmail, setMsgUserEmail] = useState('')
@@ -868,6 +871,25 @@ export default function Admin() {
     } else {
       setSourceIntelligenceError(intelligenceResult.reason?.message || 'Error desconocido')
     }
+  }
+
+  const executeSourceScan = async (source: string) => {
+    setSourceScanLoading(true)
+    try {
+      const queued = await adminFetch('trigger_source_scan', { source })
+      setSourceScan({ source, status: queued.status || 'QUEUED', requestId: queued.request_id })
+      const poll = async () => {
+        try {
+          const next = await adminFetch('source_scan_status', { source, request_id: queued.request_id })
+          setSourceScan({ source, status: next.status, requestId: queued.request_id, run: next.run || null, error: next.error || null })
+          if (['COMPLETED', 'FAILED', 'BLOCKED'].includes(next.status)) await loadControlCenter()
+          else window.setTimeout(poll, 5000)
+        } catch (error: any) { setSourceScan({ source, status: 'FAILED', requestId: queued.request_id, error: error.message }) }
+      }
+      window.setTimeout(poll, 2500)
+    } catch (error: any) {
+      setSourceScan({ source, status: 'FAILED', error: error.message })
+    } finally { setSourceScanLoading(false) }
   }
 
   const updateScraperControl = async (scraperId: string, data: Record<string, any>) => {
@@ -1742,6 +1764,17 @@ export default function Admin() {
                     <button onClick={loadControlCenter} className="border border-white/10 px-3 py-2 text-xs text-white/50 transition hover:text-white" style={{ fontFamily: MONO }}>↻ ACTUALIZAR</button>
                   </div>
 
+                  <SourceOperationsView
+                    sources={sourceIntelligence}
+                    selectedSource={selectedSourceIntelligence}
+                    onSelect={setSelectedSourceIntelligence}
+                    onScan={executeSourceScan}
+                    scan={sourceScan}
+                    loading={sourceScanLoading}
+                  />
+
+                  <details className="border border-white/[0.08] bg-white/[0.01]">
+                    <summary className="cursor-pointer px-4 py-3 text-xs text-white/55">Configuración avanzada · controles, políticas y límites existentes</summary>
                   {controlCenterError && <div className="mb-4 border border-red-400/20 bg-red-400/[0.04] px-4 py-3 text-xs text-red-300" style={{ fontFamily: MONO }}>Controles de fuentes no disponibles: {controlCenterError}. Source Intelligence se carga por separado.</div>}
                   <details open className="mb-5 border border-white/[0.07] bg-white/[0.015]">
                     <summary className="cursor-pointer px-4 py-3 text-[10px] uppercase tracking-[0.14em] text-white/40" style={{ fontFamily: MONO }}>
@@ -1880,6 +1913,7 @@ export default function Admin() {
                       )}
                     </div>
                   </div>
+                  </details>
                 </div>
               )}
 

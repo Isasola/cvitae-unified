@@ -6,6 +6,7 @@ All helpers are pure so runners can use them without creating observations.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -100,7 +101,7 @@ def eight_gates_run_evidence(
     )
     detail_status = "FAIL" if total and success == 0 else "WARNING" if total and parsed < total else "PASS" if total else "NOT_EVALUATED"
     rejected = int((summary or {}).get("rejected", 0) or 0)
-    context = {"source": source, "run_id": None, "opportunity_id": None, "adapter_version": adapter_version, "semantic_version": semantic_version}
+    context = {"source": source, "run_id": os.getenv("CVITAE_SCRAPER_RUN_ID") or os.getenv("GITHUB_RUN_ID") or None, "opportunity_id": None, "adapter_version": adapter_version, "semantic_version": semantic_version}
     gates = {
         "gate_1": {"status": "FAIL" if discovery_status == "PROVIDER_UNREACHABLE" else "WARNING" if discovery_status in {"NO_RESULTS", "PARTIAL_COVERAGE"} else "PASS", "reason_code": discovery_status, "metrics": {"found": found, "detail_attempted": total, "detail_success": success}},
         "gate_2": {"status": detail_status, "reason_code": "DETAIL_TRANSLATED" if detail_status == "PASS" else "DETAIL_PARTIAL" if detail_status == "WARNING" else "DETAIL_UNAVAILABLE", "metrics": {"parsed": parsed, "attempted": total, "fields": field_states}},

@@ -7,7 +7,12 @@ import { enqueueIndexingEvent } from "./lib/indexing-queue"
 import { selectBatchMutationCandidates, validateBatchApprovalSnapshot } from "./lib/batch-review-snapshot"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
+import { randomUUID } from "node:crypto"
 import { evaluateEightGates } from "./lib/eight-gates"
+
+const SOURCE_SCAN_SCRAPERS: Record<string, string> = {
+  unjobs: "unjobs_scraper", himalayas: "himalayas_scraper", talentcom: "talentcom_scraper", weworkremotely: "weworkremotely_scraper",
+}
 
 function sourceIntelligenceRegistry() {
   return JSON.parse(readFileSync(resolve(process.cwd(), "src/generated/source-intelligence-registry.json"), "utf8"))
@@ -21,10 +26,10 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
   const [observationsRes, policyRes, runsRes, fingerprintsRes, enrichmentRes] = await Promise.all([
     supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at").order("observed_at", { ascending: false }).limit(10000),
     supabase.from("opportunity_source_policy_events").select("opportunity_id,source,action,created_at").order("created_at", { ascending: false }).limit(10000),
-    supabase.from("scraper_runs").select("scraper_id,status,started_at,finished_at,error_summary,adapter_version,extraction_metrics").order("started_at", { ascending: false }).limit(1000),
+    supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,duration_seconds,error_count,found_count,valid_count,inserted_count,updated_count,error_summary,adapter_version,extraction_metrics").order("started_at", { ascending: false }).limit(1000),
     // Do not read embedding vectors: source-level pending counts are only
     // exposed when their lightweight inputs are available.
-    supabase.from("opportunities").select("source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope").is("deleted_at", null).is("archived_at", null).limit(10000),
+    supabase.from("opportunities").select("id,title,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope").is("deleted_at", null).is("archived_at", null).limit(10000),
     supabase.from("opportunity_enrichment_events").select("opportunity_id,source,changed_fields,created_at").order("created_at", { ascending: false }).limit(10000),
   ])
   const observationRows = observationsRes.error ? [] : (observationsRes.data || [])
@@ -82,6 +87,17 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       : "GREEN"
     const sourceRows = fingerprintRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase()))
     const eightGates = evaluateEightGates(profile, sourceRows, latestRun, observations, enrichmentRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase())))
+    const history = runRows.filter((item: any) => aliasSet.has(String(item.scraper_id || '').toLowerCase()) || item.scraper_id === profile.canonical_source).slice(0, 12)
+    const previousRun = history[1]
+    const latestMetrics = latestRun?.extraction_metrics || {}
+    const previousMetrics = previousRun?.extraction_metrics || {}
+    const driftFields = ["found", "parsed"]
+    const driftSignals = driftFields.filter((field) => Number(previousMetrics[field] || 0) > 0 && Number(latestMetrics[field] || 0) < Number(previousMetrics[field]) * 0.5)
+    for (const field of ["description", "source_url"]) {
+      const before = Number(previousMetrics?.coverage?.[field] || 0)
+      const after = Number(latestMetrics?.coverage?.[field] || 0)
+      if (before > 0 && after < before * 0.5) driftSignals.push(`${field}_coverage`)
+    }
     return {
       ...profile, pools,
       operational_health: operationalHealth,
@@ -103,6 +119,9 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       quality: { thin_description: pools.thin_description, missing_country: pools.missing_country },
       semantic: { fingerprint_pending: fingerprintsRes.error ? null : fingerprintPending, embedding_pending: null },
       execution: { last_run: latestRun?.started_at || null, last_success: latestRun?.status === "success" ? latestRun.finished_at || latestRun.started_at : null, last_failure: runFailed ? latestRun?.started_at || null : null, adapter_version: latestRun?.adapter_version || profile.adapter_version, circuit_breaker: latestRun?.extraction_metrics?.circuit_breaker || null },
+      history,
+      drift: previousRun ? { status: driftSignals.length ? "POSSIBLE_SOURCE_DRIFT" : "NO_SIGNIFICANT_DRIFT", compared_run_id: previousRun.run_id, signals: driftSignals } : null,
+      recent_rows: sourceRows.slice(0, 20),
       exceptions: exceptionReasons,
       latest_impact: latestImpact,
       maintenance_action: "DRY_RUN_ONLY", apply_enabled: false,
@@ -342,6 +361,37 @@ const handler: Handler = async (event) => {
       const { data, error } = dashboardRes
       if (error) throw error
       return { statusCode: 200, body: JSON.stringify(await sourceIntelligenceSnapshot(supabase, data, controlsRes.error ? [] : (controlsRes.data || []))) }
+    }
+
+    if (action === "trigger_source_scan") {
+      const source = String(payload?.source || "").toLowerCase()
+      const scraper = SOURCE_SCAN_SCRAPERS[source]
+      if (!scraper) return { statusCode: 400, body: JSON.stringify({ error: "Esta fuente no admite escaneo manual" }) }
+      const token = process.env.GITHUB_ACTIONS_TOKEN
+      if (!token) return { statusCode: 503, body: JSON.stringify({ error: "Escaneo manual no configurado: falta GITHUB_ACTIONS_TOKEN en el servidor" }) }
+      const requestId = randomUUID()
+      const repository = process.env.GITHUB_REPOSITORY_SLUG || "Isasola/cvitae-unified"
+      const ref = process.env.SOURCE_SCAN_WORKFLOW_REF || "feature/aws-migration"
+      const dispatch = await fetch(`https://api.github.com/repos/${repository}/actions/workflows/scrapers.yml/dispatches`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28" },
+        body: JSON.stringify({ ref, inputs: { scraper: source, scan_request_id: requestId } }),
+      })
+      if (!dispatch.ok) return { statusCode: 502, body: JSON.stringify({ error: `No se pudo encolar el escaneo (${dispatch.status})` }) }
+      return { statusCode: 202, body: JSON.stringify({ status: "QUEUED", source, request_id: requestId }) }
+    }
+
+    if (action === "source_scan_status") {
+      const source = String(payload?.source || "").toLowerCase()
+      const scraper = SOURCE_SCAN_SCRAPERS[source]
+      const requestId = String(payload?.request_id || "")
+      if (!scraper || !requestId) return { statusCode: 400, body: JSON.stringify({ error: "Solicitud de escaneo inválida" }) }
+      const { data, error } = await supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,duration_seconds,found_count,valid_count,inserted_count,updated_count,error_count,error_summary,extraction_metrics,github_run_url").eq("scraper_id", scraper).eq("trigger_type", `scan:${requestId}`).order("started_at", { ascending: false }).limit(1)
+      if (error) throw error
+      const run = data?.[0]
+      if (!run) return { statusCode: 200, body: JSON.stringify({ status: "QUEUED" }) }
+      const status = !run.finished_at ? "RUNNING" : run.status === "failed" ? "FAILED" : String(run.error_summary || "").startsWith("[BLOCKED]") ? "BLOCKED" : "COMPLETED"
+      return { statusCode: 200, body: JSON.stringify({ status, run, error: status === "FAILED" ? run.error_summary : null }) }
     }
 
     if (action === "opportunity_review_summary") {

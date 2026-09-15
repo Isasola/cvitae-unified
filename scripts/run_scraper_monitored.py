@@ -191,7 +191,8 @@ def main() -> int:
 
     run_id = os.getenv("GITHUB_RUN_ID", f"local-{int(time.time())}")
     trigger = os.getenv("GITHUB_EVENT_NAME", "local")
-    trigger_type = "schedule" if trigger == "schedule" else "manual" if trigger == "workflow_dispatch" else "local"
+    scan_request_id = os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID", "").strip()
+    trigger_type = f"scan:{scan_request_id}" if scan_request_id else "schedule" if trigger == "schedule" else "manual" if trigger == "workflow_dispatch" else "local"
     server = os.getenv("GITHUB_SERVER_URL", "https://github.com")
     repo = os.getenv("GITHUB_REPOSITORY", "")
     github_url = f"{server}/{repo}/actions/runs/{run_id}" if repo else None
@@ -255,6 +256,10 @@ def main() -> int:
     adapter_metrics = None
     try:
         child_env = os.environ.copy()
+        # Propagate the durable monitored-run identity into adapter evidence.
+        # The child never derives lineage from wall-clock timestamps.
+        child_env["CVITAE_SCRAPER_RUN_ID"] = run_id
+        child_env["CVITAE_SOURCE_SCAN_REQUEST_ID"] = scan_request_id
         child_env["CVITAE_MAX_ITEMS"] = str(control.get("max_items_per_run") or 250)
         child_env["CVITAE_ALLOWED_COUNTRIES"] = ",".join(control.get("allowed_country_codes") or [])
         child_env["CVITAE_REQUIRE_REVIEW"] = "1" if control.get("require_review", True) else "0"

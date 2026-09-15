@@ -10,6 +10,10 @@ on:
         description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi | arbeitnow | himalayas | jobicy | weworkremotely | sicca | ministerios | bancos | cooperativas | callcenters | seguros | universidades | constructoras | vierci | cartes | hospitales | foros | supermercados | ongs | tech_local | jooble | talentcom | googlejobs | automotriz | farmacias | gastronomia | agroindustria | frigorificos | industria | telecomunicaciones | medios | retail_malls | logistica | energia | puertos | cde_frontera | workday | bolsas_locales'
         required: false
         default: 'all'
+      scan_request_id:
+        description: 'Correlación interna del escaneo manual desde Source Intelligence'
+        required: false
+        default: ''
 
 jobs:
   run-scrapers:
@@ -20,6 +24,7 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
+      CVITAE_SOURCE_SCAN_REQUEST_ID: ${{ inputs.scan_request_id }}
 
     steps:
       - uses: actions/checkout@v4

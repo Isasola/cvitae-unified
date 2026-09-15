@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+import os
+from collections import Counter
 from datetime import date
 from dataclasses import dataclass, field
 from typing import Any
@@ -217,6 +219,14 @@ class AtomicEnricher:
             patch = build_rpc_patch(result, row)
             if not patch:
                 return EnrichmentOutcome("noop", retries=attempt)
+            # The database RPC already creates the durable enrichment event.
+            # Carry the monitored run identity into that event so an opportunity
+            # can be traced back to the exact scan without using timestamps.
+            evidence = dict(result.evidence or {})
+            if os.getenv("CVITAE_SCRAPER_RUN_ID"):
+                evidence["run_id"] = os.environ["CVITAE_SCRAPER_RUN_ID"]
+            if os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID"):
+                evidence["scan_request_id"] = os.environ["CVITAE_SOURCE_SCAN_REQUEST_ID"]
             payload = {
                 "p_opportunity_id": row["id"],
                 "p_expected_updated_at": row["updated_at"],
@@ -224,7 +234,7 @@ class AtomicEnricher:
                 "p_source_url": result.source_url,
                 "p_canonical_url": result.canonical_url,
                 "p_patch": patch,
-                "p_evidence": result.evidence,
+                "p_evidence": evidence,
             }
             response = self.session.post(
                 f"{self.base_url}/rpc/apply_opportunity_enrichment_atomic",
@@ -272,3 +282,105 @@ class AtomicEnricher:
             return None
         keys = {key for item in coverages for key in item}
         return {"coverage": {key: sum(float(item.get(key, 0)) for item in coverages) / len(coverages) for key in keys}}
+
+
+def _lineage_identity(result: AdapterResult) -> str | None:
+    return result.apply_url or result.source_url or result.canonical_url
+
+
+def build_scan_lineage(
+    details: list[AdapterResult], *, run_id: str | None, scan_request_id: str | None,
+    persisted: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Build the compact, durable manifest for one monitored scraper run.
+
+    ``persisted`` is keyed by an exact source/application identity.  A missing
+    row is intentionally not attributed to a historical opportunity.
+    """
+    persisted = persisted or {}
+    items: list[dict[str, Any]] = []
+    issue_groups: Counter[str] = Counter()
+    for result in details:
+        identity = _lineage_identity(result)
+        opportunity_id = persisted.get(identity or "")
+        if not identity:
+            persistence, reason = "NOT_PERSISTED", "IDENTITY_LOOKUP_FAILED"
+        elif opportunity_id:
+            persistence, reason = "PERSISTED", None
+        else:
+            persistence, reason = "NOT_PERSISTED", "ROW_NOT_FOUND_AFTER_SINK"
+        if result.source_status in {404, 410}:
+            reason = "DETAIL_NOT_FOUND"
+        elif not result.description:
+            reason = reason or "DESCRIPTION_NOT_EXTRACTED"
+        if reason:
+            issue_groups[reason] += 1
+        items.append({
+            "identity": identity,
+            "opportunity_id": opportunity_id,
+            "title": clean(result.title, 240),
+            "organization": clean(result.organization, 240),
+            "location": clean(result.location, 240),
+            "description_length": len(result.description or ""),
+            "application_url": result.apply_url,
+            "source_url": result.source_url,
+            "detail_status": result.source_status,
+            "persistence": persistence,
+            "reason_code": reason,
+            "recommendation": result.recommendation,
+        })
+    return {
+        "version": "scan-lineage:v1",
+        "run_id": run_id,
+        "scan_request_id": scan_request_id,
+        "items": items,
+        "counts": dict(Counter(item["persistence"] for item in items)),
+        "issue_groups": dict(issue_groups),
+    }
+
+
+class RunLineageWriter:
+    """Persist scan-to-opportunity lineage using existing run/event evidence."""
+
+    def __init__(self, supabase_url: str, service_key: str, session: requests.Session | None = None):
+        self.base_url = supabase_url.rstrip("/") + "/rest/v1"
+        self.headers = {"apikey": service_key, "Authorization": f"Bearer {service_key}", "Content-Type": "application/json"}
+        self.session = session or requests.Session()
+
+    def _lookup(self, result: AdapterResult) -> str | None:
+        for field, value in (("application_url", result.apply_url), ("source_url", result.source_url)):
+            if not value:
+                continue
+            response = self.session.get(f"{self.base_url}/opportunities", headers=self.headers, params={field: f"eq.{value}", "select": "id", "limit": "1"}, timeout=20)
+            response.raise_for_status()
+            rows = response.json()
+            if rows:
+                return str(rows[0]["id"])
+        return None
+
+    def record(self, details: list[AdapterResult]) -> dict[str, Any]:
+        run_id = os.getenv("CVITAE_SCRAPER_RUN_ID") or os.getenv("GITHUB_RUN_ID") or None
+        scan_request_id = os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID") or None
+        persisted: dict[str, str] = {}
+        events: list[dict[str, Any]] = []
+        for result in details:
+            identity = _lineage_identity(result)
+            if not identity:
+                continue
+            try:
+                opportunity_id = self._lookup(result)
+            except requests.RequestException:
+                continue
+            if not opportunity_id:
+                continue
+            persisted[identity] = opportunity_id
+            events.append({"opportunity_id": opportunity_id, "source": result.source, "adapter_version": result.adapter_version,
+                "source_url": result.source_url, "canonical_url": result.canonical_url, "changed_fields": [],
+                "before_fields": {}, "after_fields": {}, "evidence": {"event": "scan_lineage", "run_id": run_id,
+                "scan_request_id": scan_request_id, "persistence": "PERSISTED"}})
+        # Existing append-only evidence table makes reverse lookup durable even
+        # when a detail produced no enrichment patch.
+        if events:
+            response = self.session.post(f"{self.base_url}/opportunity_enrichment_events", headers={**self.headers, "Prefer": "return=minimal"}, json=events, timeout=30)
+            response.raise_for_status()
+        return build_scan_lineage(details, run_id=run_id, scan_request_id=scan_request_id, persisted=persisted)

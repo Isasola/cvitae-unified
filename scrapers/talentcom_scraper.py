@@ -10,7 +10,7 @@ import re
 import json
 from urllib.parse import urljoin
 from source_adapters import (
-    AdapterResult, AtomicEnricher, clean, coverage, geo_from_detail, health,
+    AdapterResult, AtomicEnricher, RunLineageWriter, build_scan_lineage, clean, coverage, geo_from_detail, health,
     native_id, recommend,
 )
 from opportunity_sink import OpportunitySink
@@ -303,6 +303,7 @@ def main():
         time.sleep(1.5)
 
     summary = OpportunitySink().upsert(new_jobs) if new_jobs else None
+    metrics_lineage = RunLineageWriter(SUPABASE_URL, SUPABASE_KEY).record(detail_results) if SUPABASE_KEY else build_scan_lineage(detail_results, run_id=os.getenv("CVITAE_SCRAPER_RUN_ID"), scan_request_id=os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID"))
     inserted = (summary.inserted + summary.updated) if summary else 0
     metrics = {
         "found": total_found,
@@ -310,7 +311,7 @@ def main():
         "detail_pages_success": sum(item.source_status == 200 for item in detail_results),
         "parsed": sum(bool(item.title) for item in detail_results),
         "coverage": coverage(detail_results),
-        "enrichment": enrichment,
+        "enrichment": enrichment, "scan_lineage": metrics_lineage,
         "classification": {key: sum(item.recommendation == key for item in detail_results) for key in ("AUTO_PUBLISH", "AUTO_BLOCK", "HUMAN_REVIEW")},
     }
     baseline = enricher.recent_healthy_baseline("talentcom_scraper") if enricher else None
