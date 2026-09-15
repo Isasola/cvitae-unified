@@ -35,7 +35,17 @@
   timeout = 30
 
 [functions."admin-data"]
-  included_files = ["scrapers/source_registry.json", ".github/workflows/scrapers.yml"]
+  included_files = ["scrapers/source_registry.json", ".github/workflows/scrapers.yml", "src/generated/source-intelligence-registry.json"]
+
+# The helper resolves PDF.js dynamically to preserve its native ESM top-level
+# await. Include both pnpm's link and its physical store path in the only
+# functions that parse PDFs; no package source is copied into this repository.
+[functions."extract-pdf-text"]
+  included_files = ["node_modules/pdfjs-dist/**", "node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/**"]
+
+[functions."submit-lead"]
+  included_files = ["node_modules/pdfjs-dist/**", "node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/**"]
+
 
 [functions."cv-ats-workspace"]
   timeout = 30

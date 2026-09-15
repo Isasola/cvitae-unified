@@ -314,7 +314,8 @@ export default function Admin() {
   const [scraperControls, setScraperControls] = useState<any[]>([])
   const [sourcePolicies, setSourcePolicies] = useState<any[]>([])
   const [sourceStats, setSourceStats] = useState<Record<string, any>>({})
-  const [sourceReconciliation, setSourceReconciliation] = useState<any[]>([])
+  const [sourceIntelligence, setSourceIntelligence] = useState<any[]>([])
+  const [selectedSourceIntelligence, setSelectedSourceIntelligence] = useState<string | null>(null)
   // Direct message modal state
   const [msgUserId, setMsgUserId] = useState<string | null>(null)
   const [msgUserEmail, setMsgUserEmail] = useState('')
@@ -843,7 +844,7 @@ export default function Admin() {
       setScraperControls(json.controls || [])
       setSourcePolicies(json.sources || [])
       setSourceStats(json.sourceStats || {})
-      setSourceReconciliation(json.reconciliation || [])
+      setSourceIntelligence(json.sourceIntelligence?.sources || [])
     } catch (err: any) { setNotification({ type: 'error', message: `No se pudo cargar controles: ${err.message}` }) }
   }
 
@@ -1709,12 +1710,12 @@ export default function Admin() {
 
                   <details className="mb-5 border border-white/[0.07] bg-white/[0.015]">
                     <summary className="cursor-pointer px-4 py-3 text-[10px] uppercase tracking-[0.14em] text-white/40" style={{ fontFamily: MONO }}>
-                      Reconciliación registry / workflow / runtime · {sourceReconciliation.filter(row => !(row.in_registry && row.in_workflow && row.in_runtime)).length} diferencias
+                      Source Intelligence V2 · {sourceIntelligence.filter(row => !row.certified).length} pendientes de certificación
                     </summary>
                     <div className="max-h-80 overflow-auto border-t border-white/[0.07]">
                       <table className="w-full text-left text-xs">
-                        <thead className="sticky top-0 bg-[#080808] text-[9px] uppercase text-white/25"><tr><th className="px-3 py-2">Fuente</th><th>Registry</th><th>Workflow</th><th>Runtime</th><th>Collect</th><th>Review</th><th>Último estado</th><th>Bloqueo/error</th></tr></thead>
-                        <tbody className="divide-y divide-white/[0.04]">{sourceReconciliation.map(row => <tr key={row.key}><td className="px-3 py-2 font-mono text-white/60">{row.key}</td><td>{row.in_registry ? 'sí' : 'no'}</td><td>{row.in_workflow ? 'sí' : 'no'}</td><td>{row.in_runtime ? 'sí' : 'no'}</td><td>{row.collection_enabled ? 'on' : 'off'}</td><td>{row.require_review ? 'sí' : 'no'}</td><td>{row.last_run_status || '—'}</td><td className="max-w-[280px] truncate pr-3 text-white/35" title={row.blocked_reason || row.error || ''}>{row.blocked_reason || row.error || '—'}</td></tr>)}</tbody>
+                        <thead className="sticky top-0 bg-[#080808] text-[9px] uppercase text-white/25"><tr><th className="px-3 py-2">Fuente</th><th>Estado</th><th>Health</th><th>Contrato</th><th>Cert.</th><th>Auto</th><th>Inventario</th><th>Observado</th><th>Catálogo</th><th>Match</th><th>Emb. pend.</th><th>Última evidencia</th></tr></thead>
+                        <tbody className="divide-y divide-white/[0.04]">{sourceIntelligence.map(row => <React.Fragment key={row.canonical_source}><tr onClick={() => setSelectedSourceIntelligence(selectedSourceIntelligence === row.canonical_source ? null : row.canonical_source)} className="cursor-pointer hover:bg-white/[0.025]"><td className="px-3 py-2 font-mono text-white/60">{row.canonical_source}</td><td>{row.source_status || 'YELLOW'}</td><td>{row.operational_health || 'UNKNOWN'}</td><td>{row.contract_covered ? row.semantic_version : 'incompleto'}</td><td>{row.certified ? 'sí' : 'no'}</td><td>{row.auto_enabled ? 'on' : 'off'}</td><td>{row.pools?.inventory || 0}</td><td>{row.observation?.observation_coverage_pct == null ? '—' : `${row.observation.observation_coverage_pct}%`}</td><td>{row.pools?.catalog || 0}</td><td>{row.pools?.matching || 0}</td><td>{row.semantic?.embedding_pending ?? '—'}</td><td>{row.observation?.last_observed_at || row.execution?.last_run || '—'}</td></tr>{selectedSourceIntelligence === row.canonical_source && <tr className="bg-white/[0.015]"><td colSpan={12} className="px-4 py-3 text-xs text-white/45"><div className="grid gap-3 md:grid-cols-4"><div><b className="text-white/70">Identity / health</b><br />{row.source_family} · {row.adapter_version}<br />{row.source_status || 'YELLOW'} · {row.operational_health || 'UNKNOWN'} · aliases: {(row.emitted_aliases || []).join(', ') || '—'}</div><div><b className="text-white/70">Evidence / policy</b><br />Fresh {row.observation?.fresh ?? '—'} · stale {row.observation?.stale ?? '—'} · unknown {row.observation?.unknown ?? '—'}<br />Dead {row.policy?.hard_dead_evidence ?? '—'} · suppressed {row.policy?.suppressed_count ?? '—'} · restored {row.policy?.restored_count ?? '—'}</div><div><b className="text-white/70">Quality / pipeline</b><br />Thin description {row.quality?.thin_description ?? '—'} · missing geo {row.quality?.missing_country ?? '—'}<br />Fingerprint pending {row.semantic?.fingerprint_pending ?? '—'} · embeddings {row.semantic?.embedding_pending ?? 'unavailable'}<br />Last impact: {row.latest_impact ? JSON.stringify(row.latest_impact) : 'unavailable'}</div><div><b className="text-white/70">Certification / safe actions</b><br />Covered {row.contract_covered ? 'sí' : 'no'} · blockers: {(row.blocking_requirements || []).join(', ') || '—'}<br />Diagnose / maintenance: DRY-RUN only<br />Apply disabled · restore {row.policy?.restore_capability || 'unavailable'}<br />Exceptions: {(row.exceptions || []).join(', ') || '—'}</div></div></td></tr>}</React.Fragment>)}</tbody>
                       </table>
                     </div>
                   </details>

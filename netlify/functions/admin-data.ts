@@ -7,7 +7,109 @@ import { enqueueIndexingEvent } from "./lib/indexing-queue"
 import { selectBatchMutationCandidates, validateBatchApprovalSnapshot } from "./lib/batch-review-snapshot"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { reconcileSources } from "./lib/source-reconciliation"
+
+function sourceIntelligenceRegistry() {
+  return JSON.parse(readFileSync(resolve(process.cwd(), "src/generated/source-intelligence-registry.json"), "utf8"))
+}
+
+async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, controls: any[] = []) {
+  // Generated from the Python V2 core. This function joins read-only DB facts;
+  // aliases, certification and semantics remain owned by that core.
+  const registry = sourceIntelligenceRegistry()
+  const stats: Record<string, any> = dashboard?.sources || {}
+  const [observationsRes, policyRes, runsRes, fingerprintsRes] = await Promise.all([
+    supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at").order("observed_at", { ascending: false }).limit(10000),
+    supabase.from("opportunity_source_policy_events").select("opportunity_id,source,action,created_at").order("created_at", { ascending: false }).limit(10000),
+    supabase.from("scraper_runs").select("scraper_id,status,started_at,finished_at,error_summary,adapter_version,extraction_metrics").order("started_at", { ascending: false }).limit(1000),
+    // Do not read embedding vectors: source-level pending counts are only
+    // exposed when their lightweight inputs are available.
+    supabase.from("opportunities").select("source,semantic_fingerprint,match_eligible").is("deleted_at", null).is("archived_at", null).limit(10000),
+  ])
+  const observationRows = observationsRes.error ? [] : (observationsRes.data || [])
+  const policyRows = policyRes.error ? [] : (policyRes.data || [])
+  const runRows = runsRes.error ? [] : (runsRes.data || [])
+  const fingerprintRows = fingerprintsRes.error ? [] : (fingerprintsRes.data || [])
+  const knownAliases = new Set<string>((registry.sources || []).flatMap((profile: any) => profile.emitted_aliases || []).map((value: string) => value.toLowerCase()))
+  const unresolvedEmittedSources = Object.keys(stats).filter(source => !knownAliases.has(source.toLowerCase()))
+  const now = Date.now()
+  const sources = (registry.sources || []).map((profile: any) => {
+    const aliases = profile.emitted_aliases || [profile.canonical_source]
+    const aliasSet = new Set<string>(aliases.map((value: string) => value.toLowerCase()))
+    const pools = aliases.reduce((acc: any, emitted: string) => {
+      const statKey = Object.keys(stats).find(key => key.toLowerCase() === emitted.toLowerCase())
+      const value = stats[emitted] || (statKey ? stats[statKey] : {}) || {}
+      acc.inventory += Number(value.total || 0); acc.catalog += Number(value.catalog || 0)
+      acc.matching += Number(value.matching || 0); acc.seo += Number(value.seo || 0)
+      acc.thin_description += Number(value.thin_description || 0); acc.missing_country += Number(value.missing_country || 0)
+      return acc
+    }, { inventory: 0, catalog: 0, matching: 0, seo: 0, thin_description: 0, missing_country: 0 })
+    const latestObservationByOpportunity = new Map<string, any>()
+    observationRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase())).forEach((item: any) => {
+      if (!latestObservationByOpportunity.has(String(item.opportunity_id))) latestObservationByOpportunity.set(String(item.opportunity_id), item)
+    })
+    const observations = [...latestObservationByOpportunity.values()]
+    const ttlMs = Number(profile.freshness_ttl_hours || 0) * 60 * 60 * 1000
+    const fresh = observations.filter((item: any) => ttlMs > 0 && now - Date.parse(item.observed_at) <= ttlMs).length
+    const stale = observations.length - fresh
+    const latestPolicyByOpportunity = new Map<string, any>()
+    policyRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase())).forEach((item: any) => {
+      if (!latestPolicyByOpportunity.has(String(item.opportunity_id))) latestPolicyByOpportunity.set(String(item.opportunity_id), item)
+    })
+    const policyLatest = [...latestPolicyByOpportunity.values()]
+    const latestRun = runRows.find((item: any) => aliasSet.has(String(item.scraper_id || '').toLowerCase()) || item.scraper_id === profile.canonical_source) || null
+    const control = controls.find((item: any) => aliasSet.has(String(item.scraper_id || '').toLowerCase()) || item.scraper_id === profile.canonical_source)
+    const extractionHealth = latestRun?.extraction_metrics?.health?.status
+    const runFailed = latestRun?.status === "failed" || Boolean(latestRun?.error_summary) || extractionHealth === "DEGRADED"
+    const operationalHealth = control && control.collection_enabled === false ? "PAUSED"
+      : profile.auto_enabled && !profile.certified ? "BLOCKED"
+      : runFailed ? "DEGRADED"
+      : !latestRun && observations.length === 0 ? "UNKNOWN"
+      : "HEALTHY"
+    const fingerprintPending = fingerprintRows.filter((item: any) => aliasSet.has(item.source) && item.match_eligible && !item.semantic_fingerprint).length
+    const latestObservation = observations[0] || null
+    const latestPolicyEvent = policyLatest[0] || null
+    const latestImpact = latestRun?.extraction_metrics?.reconciliation_impact || latestRun?.extraction_metrics?.impact || null
+    const exceptionReasons = [
+      ...(profile.blocking_requirements || []).map((reason: string) => `certification:${reason}`),
+      ...(runFailed ? ["latest_run_degraded"] : []),
+    ]
+    const sourceStatus = !profile.active || operationalHealth === "PAUSED" ? "DISABLED"
+      : operationalHealth === "DEGRADED" ? "RED"
+      : !profile.contract_covered || !profile.certified || operationalHealth === "UNKNOWN" ? "YELLOW"
+      : "GREEN"
+    return {
+      ...profile, pools,
+      operational_health: operationalHealth,
+      source_status: sourceStatus,
+      observation: {
+        observed_opportunities: observations.length,
+        observation_coverage_pct: pools.inventory ? Math.round(observations.length / pools.inventory * 10000) / 100 : null,
+        fresh, stale, unknown: Math.max(0, pools.inventory - observations.length),
+        last_observed_at: latestObservation?.observed_at || null,
+      },
+      policy: {
+        hard_dead_evidence: observations.filter((item: any) => ["REMOVED", "DEAD"].includes(item.identity_status) && [404, 410].includes(item.http_status)).length,
+        suppressed_count: policyLatest.filter((item: any) => item.action === "SUPPRESS").length,
+        restored_count: policyLatest.filter((item: any) => item.action === "RESTORE").length,
+        latest_policy_event: latestPolicyEvent?.action || null,
+        latest_policy_event_at: latestPolicyEvent?.created_at || null,
+        restore_capability: "UNAVAILABLE_PENDING_MIGRATION",
+      },
+      quality: { thin_description: pools.thin_description, missing_country: pools.missing_country },
+      semantic: { fingerprint_pending: fingerprintsRes.error ? null : fingerprintPending, embedding_pending: null },
+      execution: { last_run: latestRun?.started_at || null, last_success: latestRun?.status === "success" ? latestRun.finished_at || latestRun.started_at : null, last_failure: runFailed ? latestRun?.started_at || null : null, adapter_version: latestRun?.adapter_version || profile.adapter_version, circuit_breaker: latestRun?.extraction_metrics?.circuit_breaker || null },
+      exceptions: exceptionReasons,
+      latest_impact: latestImpact,
+      maintenance_action: "DRY_RUN_ONLY", apply_enabled: false,
+    }
+  })
+  const exceptionGroups: Record<string, { count: number, sources: string[] }> = {}
+  for (const source of sources) for (const reason of source.exceptions || []) {
+    const group = exceptionGroups[reason] || { count: 0, sources: [] }
+    group.count += 1; group.sources.push(source.canonical_source); exceptionGroups[reason] = group
+  }
+  return { registry: { profiles: registry.profiles, emitted_aliases: registry.emitted_aliases, alias_collisions: registry.alias_collisions, ambiguous_patterns: registry.ambiguous_patterns, alias_pattern_conflicts: registry.alias_pattern_conflicts || [], registry_hash: registry.registry_hash, schema_version: registry.schema_version, unresolved_emitted_sources: unresolvedEmittedSources, exception_groups: exceptionGroups, dynamic_metrics_unavailable: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null } }, sources }
+}
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
 if (!ADMIN_PASSWORD) throw new Error("ADMIN_PASSWORD env var not configured")
@@ -219,15 +321,16 @@ const handler: Handler = async (event) => {
       if (sourcesRes.error) throw sourcesRes.error
       if (dashboardRes.error) throw dashboardRes.error
       const sourceStats: Record<string, any> = dashboardRes.data?.sources || {}
-      let reconciliation: any[] = []
-      try {
-        const registry = JSON.parse(readFileSync(resolve(process.cwd(), "scrapers/source_registry.json"), "utf8"))
-        const workflow = readFileSync(resolve(process.cwd(), ".github/workflows/scrapers.yml"), "utf8")
-        reconciliation = reconcileSources(registry.sources || [], workflow, controlsRes.data || [], sourcesRes.data || [])
-      } catch (error: any) {
-        console.error("[source-reconciliation]", error?.message || error)
-      }
-      return { statusCode: 200, body: JSON.stringify({ controls: controlsRes.data || [], sources: sourcesRes.data || [], sourceStats, reconciliation }) }
+      const sourceIntelligence = await sourceIntelligenceSnapshot(supabase, dashboardRes.data, controlsRes.data || [])
+      return { statusCode: 200, body: JSON.stringify({ controls: controlsRes.data || [], sources: sourcesRes.data || [], sourceStats, sourceIntelligence }) }
+    }
+
+    if (action === "source_intelligence_snapshot") {
+      // The static registry is generated only by scripts/export_source_intelligence_snapshot.py
+      // from Python V2 core. This endpoint merely joins live DB metrics; it owns no source rules.
+      const { data, error } = await supabase.rpc("admin_opportunity_pipeline_dashboard")
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify(await sourceIntelligenceSnapshot(supabase, data)) }
     }
 
     if (action === "opportunity_review_summary") {
@@ -634,6 +737,23 @@ const handler: Handler = async (event) => {
         throw error
       }
       return { statusCode: 200, body: JSON.stringify(updateResult || { ok: true }) }
+    }
+
+    if (action === "execute_automation_transition") {
+      // This is deliberately a one-row server-side bridge. React never sees
+      // the service-role credential; the SQL RPC re-reads projection, health,
+      // freshness, optimistic lock and idempotency under its transaction.
+      const request = payload?.request
+      const keys = ["p_opportunity_id", "p_expected_updated_at", "p_expected_registry_hash", "p_expected_semantic_version", "p_policy_version", "p_decision", "p_reason_codes", "p_allowed_actions", "p_idempotency_key", "p_execution_id", "p_runtime_run_id"]
+      if (!request || typeof request !== "object" || Object.keys(request).length !== keys.length || !keys.every(key => key in request)) {
+        return { statusCode: 400, body: JSON.stringify({ error: "Solicitud de transición inválida" }) }
+      }
+      if (request.p_decision !== "AUTO_PROMOTE" || typeof request.p_opportunity_id !== "string" || !request.p_opportunity_id || !Array.isArray(request.p_reason_codes) || typeof request.p_allowed_actions !== "object" || !request.p_allowed_actions) {
+        return { statusCode: 400, body: JSON.stringify({ error: "La transición requiere AUTO_PROMOTE de una sola oportunidad" }) }
+      }
+      const { data, error } = await supabase.rpc("apply_opportunity_automation_transition", request)
+      if (error) return { statusCode: 409, body: JSON.stringify({ error: error.message || "Transición rechazada por gates runtime" }) }
+      return { statusCode: 200, body: JSON.stringify(data) }
     }
 
     if (action === "set_opportunity_lifecycle") {

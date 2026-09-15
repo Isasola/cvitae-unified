@@ -1,0 +1,2806 @@
+{
+  "alias_collisions": {},
+  "alias_pattern_conflicts": [],
+  "ambiguous_patterns": [],
+  "auto_enabled": 1,
+  "certified": 2,
+  "emitted_aliases": 147,
+  "pending_certification": 103,
+  "profiles": 105,
+  "registry_hash": "7767489bef67eaa3fe13f9ca8a7f2a867896d8721ce5091ebd3af2507af460a4",
+  "schema_version": "source-intelligence-registry:v2",
+  "sources": [
+    {
+      "active": true,
+      "adapter_version": "unjobs:v2.0.0",
+      "auto_enabled": true,
+      "blocking_requirements": [],
+      "canonical_source": "unjobs",
+      "certification_evidence": {},
+      "certified": true,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "un-jobs",
+        "unjobs"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "international_opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "himalayas:v2.0.0",
+      "auto_enabled": false,
+      "blocking_requirements": [],
+      "canonical_source": "himalayas",
+      "certification_evidence": {
+        "live_validation": {
+          "adapter_version": "himalayas:v2.0.0",
+          "observed_metrics": {
+            "blocked": 0,
+            "human_review": 287,
+            "ready_for_ingestion": 4824,
+            "unique_new_candidates_total": 5111
+          },
+          "semantic_version": "source-contract:v2.0",
+          "stable_evidence": {
+            "accidental_publication": false,
+            "canonical_identity_validation": "passed",
+            "conservative_exception_handling": "passed",
+            "distribution_policy_validated": true,
+            "factory_automation_canary": "8/8",
+            "fingerprints_stable": true,
+            "live_api_validation": "passed",
+            "production_hidden_canary": "8/8",
+            "semantic_validation": "passed"
+          },
+          "status": "passed",
+          "validated_at": "2026-09-14"
+        }
+      },
+      "certified": true,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": true,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": true
+      },
+      "emitted_aliases": [
+        "himalayas"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_api"
+    },
+    {
+      "active": true,
+      "adapter_version": "talent:v2.0.0",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "live_validation"
+      ],
+      "canonical_source": "talentcom",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "talent",
+        "talent.com",
+        "talentcom"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "aggregator"
+    },
+    {
+      "active": true,
+      "adapter_version": "wwr:v2.0.0",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "live_validation"
+      ],
+      "canonical_source": "weworkremotely",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "we-work-remotely",
+        "weworkremotely",
+        "wwr"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "remote_job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "empleapy_mtess",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "empleapy_mtess",
+        "mtess"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "mef_inapp_becas",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "mef_inapp_becas"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "conacyt_convocatorias",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "conacyt_convocatorias"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "institutional_or_local_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "mitic_opportunities",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "mitic_opportunities"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "innovandopy_startups",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "innovandopy_startups"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "mic_portal_emprendedor",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "mic_portal_emprendedor"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "reemujerpy_mipymes",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "reemujerpy_mipymes"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "snj_paraguay",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "snj_paraguay"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "ipa_convocatorias",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "ipa_convocatorias"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "aecid_paraguay_calls",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "aecid_paraguay_calls"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "us_embassy_paraguay",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "us_embassy_paraguay"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "institutional_or_local_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "eu_delegation_paraguay",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "eu_delegation_paraguay"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "institutional_or_local_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "becas_gobierno_itaipu",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "becas_gobierno_itaipu"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "institutional_or_local_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "eby_yacyreta",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "eby_yacyreta"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "wwf_paraguay_calls",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "wwf_paraguay_calls"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "cird_competitions_tenders",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "cird_competitions_tenders"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "pro_ong_conevio",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "pro_ong_conevio"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "fiuna_job_board",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "fiuna_job_board"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "institutional_or_local_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "ucom_job_board",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "ucom_job_board"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "fcq_una_job_board",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "fcq_una_job_board"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "institutional_or_local_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "chevening",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "chevening"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "erasmus_mundus",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "erasmus_mundus"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "oas_scholarships",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "oas_scholarships"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "daad",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "daad"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "coimbra_group",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "coimbra_group"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "santander_open_academy",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "santander_open_academy"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "one_young_world_scholarships",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "one_young_world_scholarships"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "500_latam",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "500_latam"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "google_startups_latam",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "google_startups_latam"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "startup_chile",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "startup_chile"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "idb_calls",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "idb_calls"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "caf_calls",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "caf_calls"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "mit_solve",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "mit_solve"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "eu_lac_accelerator",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "eu_lac_accelerator"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "f6s_latam",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "f6s_latam"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "devex",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "devex"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "developmentaid",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "developmentaid"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "impactpool",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "impactpool"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "globaljobs",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "globaljobs"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "vc4a_pes_latam",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "vc4a_pes_latam"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "computrabajo",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "computrabajo",
+        "computrabajo_pe"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "buscojobs",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "buscojobs"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "scrapper",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "clasipar",
+        "scrapper"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "abc",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "abc",
+        "abc_color"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "fundacion",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "fundacion",
+        "fundacionparaguaya"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "remotive",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "remotive"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "oya",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "oya",
+        "oyaop"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "opportunitydesk",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "opportunitydesk"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "becal",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "becal"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "fundacion_carolina",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "fundacion_carolina"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "arbeitnow",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "arbeitnow"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "jobicy",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "jobicy"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "sicca",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "sicca"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "ministerios",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "ministerios"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "institutional_or_local_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "bancos",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "bancos"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "cooperativas",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "cooperativas"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "seguros",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "seguros",
+        "seguros_unimedica"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "callcenters",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "callcenters",
+        "cc_atento"
+      ],
+      "emitted_patterns": [
+        "^cc_[a-z0-9_]+$"
+      ],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "universidades",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "universidades"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "institutional_or_local_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "constructoras",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "constructoras"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "grupovierci",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "grupo_vierci",
+        "grupovierci"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "grupocarteshs",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "grupo_cartes",
+        "grupocarteshs"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "hospitales",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "hospitales"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "supermercados",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "supermercados"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "ongs",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "ong_bid_py",
+        "ong_giz_py",
+        "ong_oas_py",
+        "ongs"
+      ],
+      "emitted_patterns": [
+        "^ong_(?:bid|giz|oas)_[a-z0-9_]+$"
+      ],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "tech_local",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "tech_local"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "foros",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "foroparaguay",
+        "foros",
+        "zonajobs_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "jooble",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "jooble",
+        "jooble_pe"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "googlejobs_v2",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "googlejobs",
+        "googlejobs_v2"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "googlejobs_v3",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "googlejobs_v3"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "automotriz",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "automotriz",
+        "automotriz_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "farmacias",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "farmacias",
+        "farmacias_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "gastronomia_hoteles",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "gastronomia_hoteles",
+        "gastronomia_hoteles_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "agroindustria",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "agroindustria",
+        "agroindustria_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "frigorificos",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "frigorificos",
+        "frigorificos_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "industria_manufactura",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "industria_manufactura",
+        "industria_manufactura_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "telecomunicaciones",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "telecomunicaciones",
+        "telecomunicaciones_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "medios_comunicacion",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "medios_comunicacion",
+        "medios_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "retail_malls",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "retail_malls",
+        "retail_malls_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "logistica_transporte",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "logistica_transporte",
+        "logistica_transporte_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "energia_utilities",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "energia_utilities",
+        "energia_utilities_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "puertos_importadoras",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "puertos_importadoras",
+        "puertos_importadoras_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "cde_frontera",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "cde_frontera",
+        "cde_frontera_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "workday_multinacionales",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "workday_multinacionales"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "bolsas_locales",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "bolsas_locales",
+        "bolsas_locales_py"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "aptitus",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "aptitus",
+        "aptitus_pe"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "bumeran",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "bumeran",
+        "bumeran_pe"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "indeed",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "indeed",
+        "indeed_pe"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "laborum",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "laborum",
+        "laborum_pe"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "reddit",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "reddit",
+        "reddit_py",
+        "reddit_py_trabajo"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "copaco",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "copaco"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "hireon",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "hireon"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "idealist",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "idealist"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "itau",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "itau"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "merienderos",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "merienderos"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "ofertaslaborales",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "ofertaslaborales"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "personal",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "personal"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "pivot_jobs",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "pivot_jobs"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "reliefweb",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "reliefweb"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "scholarship_corner",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "scholarship_corner"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "opportunity_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "unvalidated",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "tigo",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "source_attribution_required": false,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "tigo"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "job_board"
+    }
+  ]
+}

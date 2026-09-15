@@ -1,5 +1,13 @@
+import { createRequire } from "node:module"
+
+const runtimeRequire = createRequire(__filename)
+
 export async function extractPdfText(buffer: Buffer): Promise<string> {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs")
+  // Resolve the literal package path for Netlify's dependency tracer, then
+  // dynamically import the resolved ESM file at runtime. This prevents esbuild
+  // from converting PDF.js' top-level-await module to CJS.
+  const pdfjsModule = runtimeRequire.resolve("pdfjs-dist/legacy/build/pdf.mjs")
+  const pdfjs = await import(pdfjsModule)
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buffer),
     disableFontFace: true,
