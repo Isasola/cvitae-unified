@@ -14,7 +14,6 @@ import { auth, supabase } from '@/lib/supabase'
 import { CVLoader } from '@/components/cv/CVLoader'
 import { playComplete } from '@/lib/sounds'
 import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
 
 const MATCH_BATCH_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1/match-batch'
 const ease = [0.22, 1, 0.36, 1] as const
@@ -81,6 +80,18 @@ export default function CVVivo() {
   const pendingEvidence = evidence.filter((item) => item.status === 'pending')
   const confirmedEvidence = evidence.filter((item) => item.status === 'confirmed')
   const selectedVersion = versions.find((version) => version.id === selectedVersionId) || null
+  const readinessChecks = [
+    { label: 'Nombre', ok: Boolean(profile?.full_name || confirmedEvidence.some((item) => item.category === 'identity')) },
+    { label: 'Título profesional', ok: Boolean(profile?.professional_title || confirmedEvidence.some((item) => item.category === 'title')) },
+    { label: 'Experiencia', ok: confirmedEvidence.some((item) => item.category === 'experience') || Boolean(profile?.profile_data?.experience?.length) },
+    { label: 'Educación', ok: confirmedEvidence.some((item) => item.category === 'education') || Boolean(profile?.profile_data?.education?.length) },
+    { label: 'Skills', ok: confirmedEvidence.filter((item) => item.category === 'skill').length >= 5 || (profile?.profile_data?.habilidades?.length || 0) >= 5 },
+    { label: 'Idiomas', ok: confirmedEvidence.some((item) => item.category === 'language') || Boolean(profile?.profile_data?.languages?.length) },
+    { label: 'Logros medibles', ok: confirmedEvidence.some((item) => item.category === 'achievement') },
+    { label: 'LinkedIn', ok: Boolean(profile?.profile_data?.linkedin) },
+  ]
+  const readinessScore = Math.round((readinessChecks.filter((item) => item.ok).length / readinessChecks.length) * 100)
+  const readinessMissing = readinessChecks.filter((item) => !item.ok)
 
   useEffect(() => {
     auth.getUser().then(setUser)
@@ -297,33 +308,64 @@ export default function CVVivo() {
     }
   }
 
-  const downloadPDF = async () => {
-    if (!cvRef.current) return
-    const el = cvRef.current
-    const prevMaxHeight = el.style.maxHeight
-    el.style.maxHeight = 'none'
-    await new Promise(r => setTimeout(r, 150))
-    const canvas = await html2canvas(el, {
-      scale: 2,
-      backgroundColor: darkMode ? '#111111' : '#ffffff',
-      useCORS: true, logging: false,
-      windowWidth: el.scrollWidth, windowHeight: el.scrollHeight,
-    })
-    el.style.maxHeight = prevMaxHeight
-    const imgData = canvas.toDataURL('image/png')
+  const downloadPDF = () => {
+    const source = (editMode ? editableCV : generatedCV).trim()
+    if (!source) return
+
+    // Export a real text PDF instead of rasterizing the preview. This keeps the
+    // document selectable/searchable and avoids image-only PDFs for ATS readers.
     const pdf = new jsPDF('p', 'mm', 'a4')
-    const pdfW = pdf.internal.pageSize.getWidth()
-    const pdfH = pdf.internal.pageSize.getHeight()
-    const ratio = canvas.width / pdfW
-    const totalH = canvas.height / ratio
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfW, totalH)
-    let remaining = totalH - pdfH, page = 1
-    while (remaining > 0) {
-      pdf.addPage()
-      pdf.addImage(imgData, 'PNG', 0, -(pdfH * page), pdfW, totalH)
-      remaining -= pdfH; page++
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    const margin = 16
+    const usableWidth = pageWidth - (margin * 2)
+    const bottom = pageHeight - margin
+    let y = margin
+
+    const addLines = (text: string, size: number, style: 'normal' | 'bold' = 'normal', gap = 1.8) => {
+      pdf.setFont('helvetica', style)
+      pdf.setFontSize(size)
+      const lines = pdf.splitTextToSize(text, usableWidth) as string[]
+      const lineHeight = size * 0.42
+      for (const line of lines) {
+        if (y + lineHeight > bottom) {
+          pdf.addPage()
+          y = margin
+        }
+        pdf.text(line, margin, y)
+        y += lineHeight
+      }
+      y += gap
     }
+
+    for (const rawLine of source.split(/\r?\n/)) {
+      const line = rawLine.trim()
+      if (!line) { y += 2; continue }
+      if (line.startsWith('# ')) addLines(line.slice(2), 18, 'bold', 3)
+      else if (line.startsWith('## ')) addLines(line.slice(3).toUpperCase(), 11, 'bold', 2.5)
+      else if (line.startsWith('### ')) addLines(line.slice(4), 11, 'bold', 1.5)
+      else if (/^[-*]\s+/.test(line)) addLines(`• ${line.replace(/^[-*]\s+/, '')}`, 10, 'normal', 1)
+      else addLines(line.replace(/\*\*/g, ''), 10, 'normal', 1.2)
+    }
+
     pdf.save(`CVitae_${profile?.full_name || 'Candidato'}_${new Date().toISOString().split('T')[0]}.pdf`)
+  }
+
+  const downloadOriginalCV = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Tu sesión expiró. Volvé a ingresar.')
+      const response = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'download_cv' }),
+      })
+      const data = await response.json()
+      if (!response.ok || !data.url) throw new Error(data.error || 'No pudimos preparar la descarga')
+      window.open(data.url, '_blank', 'noopener,noreferrer')
+    } catch (error: any) {
+      setWorkspaceError(error?.message || 'No pudimos descargar tu CV original.')
+    }
   }
 
   const handleCopy = () => {
@@ -360,12 +402,11 @@ export default function CVVivo() {
         <div className="flex flex-col justify-between gap-6 md:flex-row md:items-start">
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="font-display text-3xl text-white">CV Vivo</h1>
+              <h1 className="font-display text-3xl text-white">Mi CV</h1>
               <span className="rounded-full border border-[#c9a84c]/30 px-2.5 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[#c9a84c]">Híbrido ATS</span>
             </div>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              La IA mejora el <strong className="text-white">contenido y las palabras</strong> para pasar filtros ATS.
-              Elegí una vacante de CVitae o pegá una descripción externa.
+              Tu información, CV general, adaptaciones y versiones en un solo lugar. La IA puede mejorar el <strong className="text-white">orden y la redacción</strong> sin inventar hechos.
             </p>
             {fromCache && (
               <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] px-3 py-1">
@@ -448,6 +489,33 @@ export default function CVVivo() {
             <span>{workspaceError}</span>
           </div>
         )}
+
+        <section className="rounded-3xl border border-white/10 bg-white/[0.02] p-5 sm:p-6">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[#c9a84c]">Preparación del CV</p>
+              <div className="mt-2 flex items-end gap-3">
+                <span className="font-display text-3xl text-white">{readinessScore}%</span>
+                <span className="pb-1 text-xs text-white/45">listo con datos verificables</span>
+              </div>
+              <p className="mt-2 max-w-2xl text-xs leading-relaxed text-white/45">
+                {readinessMissing.length
+                  ? `Podemos trabajar con tu información actual, pero tu CV quedará más fuerte si completás ${readinessMissing.length === 1 ? 'este dato' : `estos ${readinessMissing.length} datos`}.`
+                  : 'Tu información base está suficientemente completa para generar y adaptar versiones.'}
+              </p>
+            </div>
+            <a href="/mi-carrera/perfil" className="inline-flex h-9 shrink-0 items-center justify-center rounded-full border border-white/10 px-4 text-xs text-white/70 transition hover:border-[#c9a84c]/30 hover:text-[#e6cf8a]">
+              Completar / editar información
+            </a>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {readinessChecks.map((item) => (
+              <span key={item.label} className={`rounded-full border px-2.5 py-1 text-[11px] ${item.ok ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200' : 'border-amber-300/20 bg-amber-300/[0.05] text-amber-200'}`}>
+                {item.ok ? '✓' : '!'} {item.label}
+              </span>
+            ))}
+          </div>
+        </section>
 
         <section className={`overflow-hidden rounded-3xl border transition-colors ${
           pendingEvidence.length
@@ -557,6 +625,27 @@ export default function CVVivo() {
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Left panel */}
           <div className="space-y-4 lg:col-span-1">
+            <div className="glass-card rounded-3xl p-5">
+              <h3 className="font-display text-base text-white">Mi información</h3>
+              <div className="mt-4 space-y-3 text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-white/45">CV original</span>
+                  <span className="max-w-[170px] truncate text-white/75">{profile?.cv_file_name || 'No cargado'}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-white/45">Perfil</span>
+                  <span className="text-white/75">{profile?.profile_data?.onboarding_status === 'completed' ? 'Confirmado' : 'En revisión'}</span>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <a href="/mi-carrera/perfil" className="inline-flex h-9 items-center justify-center rounded-full border border-white/10 text-xs text-white/65 transition hover:border-[#c9a84c]/30 hover:text-[#e6cf8a]">
+                  Editar / reemplazar
+                </a>
+                <button type="button" onClick={downloadOriginalCV} disabled={!profile?.cv_file_name} className="inline-flex h-9 items-center justify-center rounded-full border border-white/10 text-xs text-white/65 transition hover:border-[#c9a84c]/30 hover:text-[#e6cf8a] disabled:cursor-not-allowed disabled:opacity-35">
+                  Descargar original
+                </button>
+              </div>
+            </div>
             <div className="glass-card rounded-3xl p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h3 className="flex items-center gap-2 font-display text-base text-white">

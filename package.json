@@ -23,7 +23,8 @@
     "qa:b2b-fixtures": "tsx scripts/generate-b2b-pdf-fixtures.ts",
     "test:visual": "playwright test tests/visual/",
     "test:visual:ui": "playwright test tests/visual/ --ui",
-    "test:visual:report": "playwright show-report artifacts/visual/report"
+    "test:visual:report": "playwright show-report artifacts/visual/report",
+    "test:b2c-polish": "tsx scripts/verify-b2c-cv-polish.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1072.0",
