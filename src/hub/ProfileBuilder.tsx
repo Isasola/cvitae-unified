@@ -179,38 +179,13 @@ export default function ProfileBuilder() {
         'Authorization': `Bearer ${session.access_token}`,
       }
       const fileBase64 = await fileToBase64(file)
-      let text = ''
-      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-        const res = await fetch('/.netlify/functions/extract-pdf-text', {
-          method: 'POST', headers: authenticatedHeaders,
-          body: JSON.stringify({ pdfBase64: fileBase64 }),
-        })
-        if (!res.ok) throw new Error('Error extrayendo texto del PDF')
-        const data = await res.json()
-        text = data.text || ''
-      } else if (file.name.endsWith('.docx')) {
-        const mammoth = await import('mammoth')
-        const arrayBuffer = await file.arrayBuffer()
-        const result = await mammoth.extractRawText({ arrayBuffer })
-        text = result.value
-      }
 
-      if (!text || text.trim().length < 50) {
-        throw new Error('No pudimos leer el contenido del archivo. Intentá con otro PDF o completá manualmente.')
-      }
-
-      // Guardamos el original antes de pedir el autocompletado. El CV debe
-      // seguir disponible aunque el proveedor de IA o la importación de
-      // evidencias fallen después.
+      // PASO 1: guardar el archivo original primero. El CV debe quedar en
+      // storage incluso si la extracción de texto o el autocompletado fallan.
       const persistRes = await fetch('/.netlify/functions/b2c-profile', {
         method: 'POST',
         headers: authenticatedHeaders,
-        body: JSON.stringify({
-          action: 'upload_cv',
-          file_name: file.name,
-          file_base64: fileBase64,
-          cv_text: text,
-        }),
+        body: JSON.stringify({ action: 'upload_cv', file_name: file.name, file_base64: fileBase64 }),
       })
       const persisted = await persistRes.json()
       if (!persistRes.ok) throw new Error(persisted.error || 'No pudimos guardar el CV en tu perfil')
@@ -221,32 +196,86 @@ export default function ProfileBuilder() {
       })
       cvStored = true
 
+      // PASO 2: extraer texto del CV guardado
+      let text = ''
+      if (lowerName.endsWith('.pdf')) {
+        const res = await fetch('/.netlify/functions/extract-pdf-text', {
+          method: 'POST',
+          headers: authenticatedHeaders,
+          body: JSON.stringify({ pdfBase64: fileBase64, fileName: file.name }),
+        })
+        const payload = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          const code = payload.code || null
+          if (code === 'PDF_NO_TEXT' || (res.status === 422 && !code)) {
+            setAnalyzeError('Guardamos tu CV, pero parece ser un PDF escaneado o con poco texto seleccionable. Podés completar tus datos manualmente; no necesitás volver a subir el archivo.')
+            return
+          }
+          if (code === 'PDF_PROTECTED_OR_DAMAGED') {
+            setAnalyzeError('Guardamos tu CV, pero no pudimos leer su contenido. Puede estar protegido con contraseña o tener un formato que no podemos procesar. Podés continuar manualmente.')
+            return
+          }
+          if (code === 'PDF_INVALID') {
+            setAnalyzeError('Guardamos el archivo, pero no pudimos reconocerlo como un PDF válido. Podés continuar manualmente o reemplazarlo.')
+            return
+          }
+          if (code === 'PDF_TOO_LARGE') {
+            setAnalyzeError(payload.error || 'El archivo supera el límite de tamaño. Podés continuar manualmente.')
+            return
+          }
+          if (code === 'EXTRACTION_BUSY') {
+            setAnalyzeError('Tu CV quedó guardado, pero el lector está temporalmente ocupado. Podés continuar manualmente o intentar el autocompletado más tarde.')
+            return
+          }
+          setAnalyzeError(payload.error || 'No pudimos extraer el texto del PDF. Podés continuar manualmente.')
+          return
+        }
+        text = payload.text || ''
+      } else if (lowerName.endsWith('.docx')) {
+        const mammoth = await import('mammoth')
+        const arrayBuffer = await file.arrayBuffer()
+        const result = await mammoth.extractRawText({ arrayBuffer })
+        text = result.value
+      }
+
+      if (!text || text.trim().length < 50) {
+        setAnalyzeError('Guardamos tu CV, pero parece ser un PDF escaneado o con poco texto seleccionable. Podés completar tus datos manualmente; no necesitás volver a subir el archivo.')
+        return
+      }
+
+      // PASO 3: persistir el texto extraído en el perfil
+      const saveTextRes = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: authenticatedHeaders,
+        body: JSON.stringify({ action: 'save_cv_text', cv_text: text }),
+      })
+      if (!saveTextRes.ok) {
+        setAnalyzeError('Tu CV quedó guardado, pero no pudimos registrar el texto para autocompletar. Podés continuar manualmente o intentar de nuevo.')
+        return
+      }
+
+      // PASO 4: autocompletar con IA
       const analyzeRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
-        method: 'POST', headers: authenticatedHeaders,
+        method: 'POST',
+        headers: authenticatedHeaders,
         body: JSON.stringify({ cvText: text, mode: 'extract' }),
       })
-      if (!analyzeRes.ok) throw new Error('Error analizando el CV')
+      if (!analyzeRes.ok) throw new Error('AI_ANALYZE_FAILED')
       const extracted = await analyzeRes.json()
 
+      // PASO 5: preparar evidencias
       const evidenceRes = await fetch('/.netlify/functions/cv-workspace', {
         method: 'POST',
         headers: authenticatedHeaders,
-        body: JSON.stringify({
-          action: 'import_extraction',
-          extracted,
-          sourceFileName: file.name,
-        }),
+        body: JSON.stringify({ action: 'import_extraction', extracted, sourceFileName: file.name }),
       })
       if (!evidenceRes.ok) throw new Error('No pudimos preparar las evidencias del CV para tu revisión')
 
+      // PASO 6: persistir el draft para revisión
       const draftRes = await fetch('/.netlify/functions/b2c-profile', {
         method: 'POST',
         headers: authenticatedHeaders,
-        body: JSON.stringify({
-          action: 'save_import_draft',
-          extracted,
-          source_file_name: file.name,
-        }),
+        body: JSON.stringify({ action: 'save_import_draft', extracted, source_file_name: file.name }),
       })
       if (!draftRes.ok) throw new Error('Tu CV quedó guardado, pero no pudimos persistir el autocompletado para revisión')
 
@@ -267,9 +296,14 @@ export default function ProfileBuilder() {
         languages: Array.isArray(extracted.languages) ? extracted.languages : prev.languages,
       }))
     } catch (err: any) {
-      setAnalyzeError(cvStored
-        ? 'Tu CV quedó guardado, pero no pudimos autocompletar el perfil. Podés completarlo manualmente.'
-        : (err.message || 'No pudimos autocompletar. Completá manualmente.'))
+      const msg = err?.message || ''
+      if (msg === 'AI_ANALYZE_FAILED') {
+        setAnalyzeError('Tu CV quedó guardado y leído, pero no pudimos autocompletar el perfil. Podés continuar manualmente.')
+      } else if (cvStored) {
+        setAnalyzeError('Tu CV quedó guardado, pero no pudimos autocompletar el perfil. Podés completarlo manualmente.')
+      } else {
+        setAnalyzeError(msg || 'No pudimos guardar el CV. Intentá de nuevo.')
+      }
     } finally {
       setAnalyzing(false)
     }

@@ -349,6 +349,23 @@ export const handler = async (event: any) => {
       return jsonResponse(event, 200, { profile: publicProfile(saved) })
     }
 
+    if (action === 'save_cv_text') {
+      const cvText = String(body.cv_text || '').replace(/ /g, '').trim().slice(0, 100_000)
+      if (!cvText) return jsonResponse(event, 400, { error: 'Texto del CV requerido' })
+      const profile = await resolveProfile(supabase, user, false)
+      if (!profile) return jsonResponse(event, 404, { error: 'Perfil no encontrado' })
+      const { data: saved, error } = await supabase
+        .from('user_master_profiles')
+        .update({ cv_text: cvText, embedding: null, updated_at: new Date().toISOString() })
+        .eq('id', profile.id)
+        .eq('user_id', user.id)
+        .select(PROFILE_FIELDS)
+        .single()
+      if (error) throw error
+      await refreshProfileEmbedding(user.id)
+      return jsonResponse(event, 200, { profile: publicProfile(saved) })
+    }
+
     return jsonResponse(event, 400, { error: 'Acción inválida' })
   } catch (error: any) {
     console.error('[b2c-profile]', error?.message)
