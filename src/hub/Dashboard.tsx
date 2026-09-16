@@ -407,8 +407,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) {
-      supabase.from('user_master_profiles').select('id').eq('user_id', user.id).maybeSingle()
-        .then(({ data }) => setHasProfile(!!data))
+      supabase.from('user_master_profiles').select('profile_data').eq('user_id', user.id).maybeSingle()
+        .then(({ data }) => setHasProfile(data?.profile_data?.onboarding_status === 'completed'))
     }
   }, [user])
 

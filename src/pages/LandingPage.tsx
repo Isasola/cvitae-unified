@@ -321,31 +321,14 @@ function Analizador() {
 
 function RegistroBlock() {
   const [email, setEmail] = useState('')
-  const [file, setFile] = useState<File | null>(null)
   const [step, setStep] = useState<'idle' | 'loading' | 'sent' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  const handleFile = (f: File) => {
-    if (f.size > 5 * 1024 * 1024) { setErrorMsg('El archivo no puede superar 5 MB.'); return }
-    setFile(f); setErrorMsg('')
-  }
-
   const handleSubmit = async () => {
-    if (!email.trim() || !file) return
+    if (!email.trim()) return
     setStep('loading'); setErrorMsg('')
     try {
       const { error: authError } = await auth.signInWithMagicLink(email.trim())
       if (authError) throw authError
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const base64 = (e.target?.result as string)?.split(',')[1]
-        if (base64) {
-          sessionStorage.setItem('pending_cv', JSON.stringify({ name: file!.name, type: file!.type, base64 }))
-        }
-      }
-      reader.readAsDataURL(file)
-      analytics.cvAnalyzed('hero_onboarding')
       setStep('sent')
     } catch (err: any) {
       setErrorMsg(err.message || 'Ocurrió un error. Intentá de nuevo.')
@@ -366,7 +349,7 @@ function RegistroBlock() {
           <h2 className="font-display mt-6 text-2xl text-cream">¡Revisá tu correo!</h2>
           <p className="mt-3 text-sm text-muted-foreground">
             Te enviamos un enlace mágico a <strong className="text-white">{email}</strong>.
-            Tu CV queda guardado para cuando ingreses.
+            Abrí el enlace para ingresar. Después te llevamos a cargar tu CV de forma privada y persistente.
           </p>
         </motion.div>
       </section>
@@ -381,12 +364,12 @@ function RegistroBlock() {
           <div>
             <Eyebrow>Registro en un solo paso</Eyebrow>
             <h2 className="font-display mt-2 text-3xl leading-tight text-cream sm:text-4xl">
-              Subís tu CV y tu correo.
-              <br />La IA <em>arma tu perfil</em> al instante.
+              Entrás con tu correo.
+              <br />Después <em>cargás tu CV una sola vez</em>.
             </h2>
             <p className="mt-4 max-w-md text-muted-foreground">
-              Sin formularios de 5 pasos. La IA lee tu PDF, extrae nombre, título,
-              habilidades, experiencia y cursos, y deja tu perfil listo para recibir matches.
+              Primero protegemos tu sesión. Ya dentro de CVitae, subís tu PDF o DOCX: la IA extrae
+              nombre, título, habilidades, experiencia y estudios para que los revises antes de usarlos.
             </p>
             <ul className="mt-6 space-y-2 text-sm text-cream/90">
               {['Extracción automática del CV', 'Score de empleabilidad inicial', 'Primeros matches en menos de 1 minuto'].map((item) => (
@@ -397,28 +380,15 @@ function RegistroBlock() {
             </ul>
           </div>
           <div className="space-y-3">
-            <label
-              className="glass-card block cursor-pointer rounded-2xl p-6 text-center transition hover:border-[#c9a84c]/40"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
-            >
-              {file ? (
-                <>
-                  <FileText className="mx-auto h-6 w-6 text-[#c9a84c]" />
-                  <p className="font-display mt-3 truncate text-base text-cream">{file.name}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB · listo</p>
-                  <button onClick={(e) => { e.preventDefault(); setFile(null) }} className="mt-1 text-xs text-muted-foreground underline hover:text-cream">cambiar</button>
-                </>
-              ) : (
-                <>
-                  <Upload className="mx-auto h-6 w-6 text-[#c9a84c]" />
-                  <p className="font-display mt-3 text-lg text-cream">Arrastrá tu CV aquí</p>
-                  <p className="mt-1 text-xs text-muted-foreground">PDF · hasta 5 MB</p>
-                </>
-              )}
-              <input ref={fileRef} type="file" accept="application/pdf,.docx,.txt" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
-            </label>
+            <div className="glass-card rounded-2xl p-5">
+              <div className="flex items-start gap-3">
+                <Upload className="mt-0.5 h-5 w-5 shrink-0 text-[#c9a84c]" />
+                <div>
+                  <p className="font-display text-base text-cream">Tu CV se carga después de ingresar</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Así el archivo original queda asociado a tu cuenta y puede recuperarse en tu próxima sesión.</p>
+                </div>
+              </div>
+            </div>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -430,12 +400,12 @@ function RegistroBlock() {
             {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}
             <button
               onClick={handleSubmit}
-              disabled={!email.trim() || !file || step === 'loading'}
+              disabled={!email.trim() || step === 'loading'}
               className="inline-flex w-full h-11 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
             >
               {step === 'loading'
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</>
-                : <>Crear mi perfil con IA <ArrowRight className="h-4 w-4" /></>}
+                : <>Ingresar y crear mi perfil <ArrowRight className="h-4 w-4" /></>}
             </button>
             <p className="text-center text-[11px] text-muted-foreground">Sin contraseña. Te enviamos un enlace mágico.</p>
           </div>

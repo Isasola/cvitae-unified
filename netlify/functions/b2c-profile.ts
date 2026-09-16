@@ -226,9 +226,43 @@ export const handler = async (event: any) => {
       return jsonResponse(event, 200, { liked_opportunity_ids: next })
     }
 
+    if (action === 'save_import_draft') {
+      const profile = await resolveProfile(supabase, user, true)
+      const extracted = body.extracted || {}
+      const draft = {
+        full_name: cleanText(extracted.full_name, 180),
+        email: cleanText(extracted.email, 320),
+        professional_title: cleanText(extracted.professional_title, 180),
+        location: cleanText(extracted.location, 160),
+        seniority: cleanText(extracted.seniority, 80) || 'Junior',
+        skills: cleanStringList(extracted.skills),
+        education: Array.isArray(extracted.education) ? extracted.education.slice(0, 30) : [],
+        experience: Array.isArray(extracted.experience) ? extracted.experience.slice(0, 40) : [],
+        languages: Array.isArray(extracted.languages) ? extracted.languages.slice(0, 20) : [],
+        source_file_name: cleanText(body.source_file_name, 180),
+        saved_at: new Date().toISOString(),
+        status: 'needs_review',
+      }
+      const profileData = {
+        ...(profile.profile_data || {}),
+        cv_import_draft: draft,
+        onboarding_status: 'needs_review',
+      }
+      const { data: saved, error } = await supabase
+        .from('user_master_profiles')
+        .update({ profile_data: profileData, updated_at: new Date().toISOString() })
+        .eq('id', profile.id)
+        .eq('user_id', user.id)
+        .select(PROFILE_FIELDS)
+        .single()
+      if (error) throw error
+      return jsonResponse(event, 200, { profile: publicProfile(saved), draft })
+    }
+
     if (action === 'save') {
       const profile = await resolveProfile(supabase, user, true)
       const incoming = body.profile || {}
+      const currentDraft = profile.profile_data?.cv_import_draft || {}
       const profileData = {
         ...(profile.profile_data || {}),
         habilidades: cleanStringList(incoming.skills),
@@ -239,6 +273,12 @@ export const handler = async (event: any) => {
         career_route: cleanText(incoming.career_route, 80),
         desired_role_1y: cleanText(incoming.desired_role_1y, 300),
         career_interests: cleanStringList(incoming.career_interests).slice(0, 12),
+        education: Array.isArray(incoming.education) ? incoming.education.slice(0, 30) : (Array.isArray(currentDraft.education) ? currentDraft.education.slice(0, 30) : []),
+        experience: Array.isArray(incoming.experience) ? incoming.experience.slice(0, 40) : (Array.isArray(currentDraft.experience) ? currentDraft.experience.slice(0, 40) : []),
+        languages: Array.isArray(incoming.languages) ? incoming.languages.slice(0, 20) : (Array.isArray(currentDraft.languages) ? currentDraft.languages.slice(0, 20) : []),
+        cv_import_draft: null,
+        onboarding_status: 'completed',
+        onboarding_completed_at: new Date().toISOString(),
       }
       const { data: saved, error } = await supabase
         .from('user_master_profiles')

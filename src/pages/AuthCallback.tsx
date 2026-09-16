@@ -26,7 +26,7 @@ export default function AuthCallback() {
           if (data.session) {
             setStatus('success')
             setMessage('¡Sesión iniciada correctamente!')
-            setTimeout(() => setLocation('/mi-carrera'), 900)
+            setTimeout(() => setLocation('/mi-carrera/perfil'), 900)
           } else {
             setStatus('error')
             setMessage('No se pudo procesar el enlace. Inténtalo nuevamente.')
@@ -47,7 +47,7 @@ export default function AuthCallback() {
       if (session && isMounted) {
         setStatus('success')
         setMessage('¡Bienvenido!')
-        setTimeout(() => setLocation('/mi-carrera'), 700)
+        setTimeout(() => setLocation('/mi-carrera/perfil'), 700)
       }
     })
 

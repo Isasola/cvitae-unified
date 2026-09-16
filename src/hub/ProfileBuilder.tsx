@@ -91,6 +91,9 @@ export default function ProfileBuilder() {
     career_route: '' as string,
     desired_role_1y: '',
     career_interests: [] as string[],
+    education: [] as any[],
+    experience: [] as any[],
+    languages: [] as any[],
   })
   const [newCurso, setNewCurso] = useState('')
   const [newSkill, setNewSkill] = useState('')
@@ -121,18 +124,22 @@ export default function ProfileBuilder() {
       if (!response.ok) return
       const { profile: data } = await response.json()
       if (data) {
+          const draft = data.profile_data?.cv_import_draft || {}
           setFormData({
-            full_name: data.full_name || '',
-            professional_title: data.professional_title || '',
-            location: data.profile_data?.location || '',
-            seniority: data.profile_data?.seniority || 'Junior',
+            full_name: data.full_name || draft.full_name || '',
+            professional_title: data.professional_title || draft.professional_title || '',
+            location: data.profile_data?.location || draft.location || '',
+            seniority: data.profile_data?.seniority || draft.seniority || 'Junior',
             summary: data.summary || '',
             modality: data.profile_data?.modality || '',
-            skills: data.profile_data?.habilidades || [],
-            cursos: data.profile_data?.cursos || [],
+            skills: data.profile_data?.habilidades?.length ? data.profile_data.habilidades : (draft.skills || []),
+            cursos: data.profile_data?.cursos?.length ? data.profile_data.cursos : ((draft.education || []).map((e: any) => [e.degree, e.institution].filter(Boolean).join(' — ')).filter(Boolean)),
             career_route: data.profile_data?.career_route || '',
             desired_role_1y: data.profile_data?.desired_role_1y || '',
             career_interests: data.profile_data?.career_interests || [],
+            education: data.profile_data?.education?.length ? data.profile_data.education : (draft.education || []),
+            experience: data.profile_data?.experience?.length ? data.profile_data.experience : (draft.experience || []),
+            languages: data.profile_data?.languages?.length ? data.profile_data.languages : (draft.languages || []),
           })
           setCurrentCV(data.has_cv || data.cv_reupload_required ? {
             file_name: data.cv_file_name || 'CV anterior',
@@ -232,6 +239,17 @@ export default function ProfileBuilder() {
       })
       if (!evidenceRes.ok) throw new Error('No pudimos preparar las evidencias del CV para tu revisión')
 
+      const draftRes = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: authenticatedHeaders,
+        body: JSON.stringify({
+          action: 'save_import_draft',
+          extracted,
+          source_file_name: file.name,
+        }),
+      })
+      if (!draftRes.ok) throw new Error('Tu CV quedó guardado, pero no pudimos persistir el autocompletado para revisión')
+
       analytics.cvAnalyzed('profile_builder')
       setFormData(prev => ({
         ...prev,
@@ -243,7 +261,10 @@ export default function ProfileBuilder() {
         // convierten automáticamente en el resumen del perfil.
         summary: prev.summary,
         skills: extracted.skills?.length > 0 ? extracted.skills : prev.skills,
-        cursos: extracted.education?.map((e: any) => `${e.degree} — ${e.institution}`).filter(Boolean) || prev.cursos,
+        cursos: extracted.education?.map((e: any) => [e.degree, e.institution].filter(Boolean).join(' — ')).filter(Boolean) || prev.cursos,
+        education: Array.isArray(extracted.education) ? extracted.education : prev.education,
+        experience: Array.isArray(extracted.experience) ? extracted.experience : prev.experience,
+        languages: Array.isArray(extracted.languages) ? extracted.languages : prev.languages,
       }))
     } catch (err: any) {
       setAnalyzeError(cvStored

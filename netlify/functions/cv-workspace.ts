@@ -100,7 +100,7 @@ export const handler = async (event: any) => {
       if (profileError) throw profileError
       const drafts = evidenceFromExtraction(body.extracted, String(body.sourceFileName || 'CV cargado'))
       if (!drafts.length) return jsonResponse(event, 400, { error: 'No encontramos evidencias para revisar' })
-      await syncEvidence(supabase, user.id, profile?.id || null, drafts)
+      await syncEvidence(supabase, user.id, profile?.id || null, drafts, 'uploaded_cv')
       return jsonResponse(event, 200, { imported: drafts.length })
     }
 
