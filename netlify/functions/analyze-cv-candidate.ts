@@ -1,6 +1,6 @@
 // ⚠️ Netlify Free: límite 10s. Para migrar a Lambda: scripts/deploy-lambda.sh
 import { Handler } from "@netlify/functions"
-import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
+import { BedrockRuntimeClient, ConverseCommand, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
 import { observeAiCall } from './lib/ai-telemetry'
 import { makeSupabaseAdmin } from "./_supabase"
 import {
@@ -12,8 +12,7 @@ import {
   securityHeaders,
 } from "./lib/b2c-security"
 
-// AWS Bedrock requires the version suffix for Claude Haiku 4.5 inference profiles.
-const MODEL_ID_EXTRACT = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+const MODEL_ID_EXTRACT = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
 const MODEL_ID_ANALYZE = "global.anthropic.claude-sonnet-4-6"
 const bedrockClient = new BedrockRuntimeClient({
   region: process.env.CVITAE_AWS_REGION || "us-east-1",
@@ -50,6 +49,105 @@ async function invokeModel(system: string, userPrompt: string, maxTokens: number
   return result.content[0]?.text ?? ""
 }
 
+// ─── Multimodal file extraction ───────────────────────────────────────────────
+
+const BEDROCK_IMAGE_FORMATS: Record<string, string> = {
+  jpg: 'jpeg', jpeg: 'jpeg', png: 'png', webp: 'webp', gif: 'gif',
+}
+const BEDROCK_DOC_FORMATS = ['pdf', 'docx', 'doc', 'txt', 'md', 'html', 'csv']
+
+const EXTRACT_FILE_SYSTEM =
+  "Sos un analista experto de CVs latinoamericano. Respondés ÚNICAMENTE con JSON válido y bien formateado, sin texto adicional, sin markdown."
+
+const EXTRACT_FILE_PROMPT = `Analizá el documento o imagen de CV que se adjunta.
+
+Respondé ÚNICAMENTE con el siguiente JSON (sin texto adicional, sin markdown):
+{
+  "rawText": "transcripción completa y fiel de todo el texto visible en el CV",
+  "extracted": {
+    "full_name": "nombre completo o null",
+    "email": "email o null",
+    "professional_title": "título o cargo profesional o null",
+    "skills": ["skill1", "skill2"],
+    "location": "ciudad, país o null",
+    "seniority": "junior|semi-senior|senior",
+    "education": [{"institution": "...", "degree": "...", "year": 2020}],
+    "experience": [{"company": "...", "position": "...", "years": 2, "achievements": ["..."]}],
+    "languages": [{"language": "...", "level": "básico|intermedio|avanzado|nativo"}]
+  }
+}
+
+REGLAS CRÍTICAS para extracted:
+- Usar SOLO información explícitamente visible en el documento
+- Campos no encontrados: null o []
+- NUNCA inventar, inferir ni completar información faltante`
+
+async function extractFromFile(
+  fileBase64: string,
+  fileName: string,
+): Promise<{ rawText: string; extracted: any }> {
+  const ext = (fileName.toLowerCase().split('.').pop() ?? '').replace(/[^a-z0-9]/g, '')
+  const imgFormat = BEDROCK_IMAGE_FORMATS[ext]
+  const isDocFormat = BEDROCK_DOC_FORMATS.includes(ext)
+
+  if (!imgFormat && !isDocFormat) throw new Error(`Formato no soportado para análisis multimodal: .${ext}`)
+
+  let responseText: string
+
+  if (imgFormat) {
+    // Images → InvokeModelCommand with Anthropic native image block
+    const command = new InvokeModelCommand({
+      modelId: MODEL_ID_EXTRACT,
+      contentType: 'application/json',
+      accept: 'application/json',
+      body: JSON.stringify({
+        anthropic_version: 'bedrock-2023-05-31',
+        max_tokens: 2500,
+        system: EXTRACT_FILE_SYSTEM,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: `image/${imgFormat}`, data: fileBase64 } },
+            { type: 'text', text: EXTRACT_FILE_PROMPT },
+          ],
+        }],
+      }),
+    })
+    const resp = await observeAiCall(
+      { provider: 'bedrock', model: MODEL_ID_EXTRACT, feature: 'cv_file_extraction', trigger: 'user_action', actor: 'user' },
+      () => bedrockClient.send(command),
+    )
+    const result = JSON.parse(new TextDecoder().decode(resp.body))
+    responseText = result.content[0]?.text ?? ''
+  } else {
+    // Documents → ConverseCommand with DocumentBlock
+    const docFmt = (['pdf', 'docx', 'doc', 'txt', 'md', 'html', 'csv'].includes(ext) ? ext : 'pdf') as any
+    const command = new ConverseCommand({
+      modelId: MODEL_ID_EXTRACT,
+      messages: [{
+        role: 'user',
+        content: [
+          { document: { format: docFmt, name: 'cv', source: { bytes: Buffer.from(fileBase64, 'base64') } } },
+          { text: EXTRACT_FILE_PROMPT },
+        ] as any,
+      }],
+      system: [{ text: EXTRACT_FILE_SYSTEM }],
+      inferenceConfig: { maxTokens: 2500 },
+    })
+    const resp = await bedrockClient.send(command)
+    responseText = ((resp.output?.message?.content ?? [])[0] as any)?.text ?? ''
+  }
+
+  const parsed = extractJSON(responseText)
+  if (!parsed || typeof parsed !== 'object') throw new Error('El análisis multimodal no devolvió una respuesta válida')
+  return {
+    rawText: String(parsed.rawText || ''),
+    extracted: parsed.extracted ?? parsed,
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 const handler: Handler = async (event) => {
   const originError = rejectInvalidOrigin(event)
   if (originError) return originError
@@ -61,10 +159,10 @@ const handler: Handler = async (event) => {
   }
   let reservedRecruiter: { id: string; operationId: string; balance: number } | null = null
   try {
-    const { cvText, mode, jobTitle, jobDescription, recruiterToken, fileName, operationId } = JSON.parse(event.body || "{}")
+    const { cvText, mode, jobTitle, jobDescription, recruiterToken, fileName, operationId, fileBase64 } = JSON.parse(event.body || "{}")
     const recruiterMode = mode === 'analyze' || mode === 'batch_analyze'
     if (!recruiterMode) {
-      if (mode != null && mode !== 'extract' && mode !== 'b2c_analyze') {
+      if (mode != null && mode !== 'extract' && mode !== 'b2c_analyze' && mode !== 'extract_file') {
         return jsonResponse(event, 400, { error: "Modo de análisis inválido" })
       }
       const authResult = await authenticatedUser(event)
@@ -86,6 +184,19 @@ const handler: Handler = async (event) => {
         )
       }
     }
+    // ── extract_file mode: multimodal analysis from document or image ─────────
+    if (mode === 'extract_file') {
+      if (typeof fileBase64 !== 'string' || !fileBase64) {
+        return jsonResponse(event, 400, { error: 'El archivo es obligatorio para este modo' })
+      }
+      if (fileBase64.length > 6_000_000) {
+        return jsonResponse(event, 413, { error: 'El archivo supera el límite para análisis multimodal (≈4.5 MB)' })
+      }
+      const result = await extractFromFile(fileBase64, String(fileName || 'cv.pdf'))
+      return jsonResponse(event, 200, result)
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     if (!cvText?.trim()) {
       return jsonResponse(event, 400, { error: "El texto del CV es obligatorio" })
     }

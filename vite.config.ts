@@ -31,6 +31,8 @@ export default defineConfig({
             id.includes('/react/') || id.includes('/react-dom/') ||
             id.includes('/scheduler/') || id.includes('/use-sync-external-store/')
           ) return 'vendor-react'
+          // heic-to: lazy-loaded only on HEIC conversion failure — keep out of initial bundle
+          if (id.includes("heic-to")) return undefined
           // Everything else — shared vendor chunk
           return 'vendor'
         },

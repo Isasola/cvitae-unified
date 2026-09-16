@@ -352,11 +352,23 @@ export const handler = async (event: any) => {
     if (action === 'save_cv_text') {
       const cvText = String(body.cv_text || '').replace(/ /g, '').trim().slice(0, 100_000)
       if (!cvText) return jsonResponse(event, 400, { error: 'Texto del CV requerido' })
+      const VALID_METHODS = ['pdf_text','docx_text','text_file','bedrock_document','bedrock_image','heic_to_jpeg_bedrock']
+      const VALID_STATUSES = ['processing','extracted','needs_manual','error']
+      const processingMethod = VALID_METHODS.includes(body.processing_method) ? body.processing_method : null
+      const processingStatus = VALID_STATUSES.includes(body.processing_status) ? body.processing_status : null
       const profile = await resolveProfile(supabase, user, false)
       if (!profile) return jsonResponse(event, 404, { error: 'Perfil no encontrado' })
+      const updateFields: Record<string, any> = { cv_text: cvText, embedding: null, updated_at: new Date().toISOString() }
+      if (processingMethod || processingStatus) {
+        updateFields.profile_data = {
+          ...(profile.profile_data || {}),
+          ...(processingMethod ? { cv_processing_method: processingMethod } : {}),
+          ...(processingStatus ? { cv_processing_status: processingStatus } : {}),
+        }
+      }
       const { data: saved, error } = await supabase
         .from('user_master_profiles')
-        .update({ cv_text: cvText, embedding: null, updated_at: new Date().toISOString() })
+        .update(updateFields)
         .eq('id', profile.id)
         .eq('user_id', user.id)
         .select(PROFILE_FIELDS)

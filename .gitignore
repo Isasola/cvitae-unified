@@ -26,6 +26,10 @@ __pycache__/
 supabase/.temp/
 graphify-out/
 
+# Local test fixtures — never commit real CVs
+.local-fixtures/
+*.local-cv.*
+
 # Local visual test output
 *-server.log
 audit-redesign-*.png

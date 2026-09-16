@@ -14,7 +14,7 @@
 
 # Funciones con riesgo de timeout (análisis con Bedrock)
 [functions."analyze-cv-candidate"]
-  timeout = 30
+  timeout = 45
 
 [functions."generate-cv-vivo"]
   timeout = 30

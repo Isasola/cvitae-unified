@@ -24,7 +24,9 @@
     "test:visual": "playwright test tests/visual/",
     "test:visual:ui": "playwright test tests/visual/ --ui",
     "test:visual:report": "playwright show-report artifacts/visual/report",
-    "test:b2c-polish": "tsx scripts/verify-b2c-cv-polish.ts"
+    "test:b2c-polish": "tsx scripts/verify-b2c-cv-polish.ts",
+    "test:b2c-universal": "tsx scripts/verify-b2c-cv-universal.ts",
+    "test:bedrock-multimodal": "node scripts/test-bedrock-multimodal.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1072.0",
@@ -64,6 +66,7 @@
     "emailjs-com": "^3.2.0",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.23.22",
+    "heic-to": "^1.5.2",
     "html2canvas": "^1.4.1",
     "input-otp": "^1.4.2",
     "jspdf": "^4.2.1",

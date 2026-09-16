@@ -46,12 +46,66 @@ const SUMMARY_EXAMPLES = [
   'Contador con experiencia en pymes paraguayas, manejo de impuestos SET y facturación electrónica. Busco rol en empresa en crecimiento.',
 ]
 
-async function fileToBase64(file: File): Promise<string> {
+async function fileToBase64(file: File | Blob): Promise<string> {
   const reader = new FileReader()
   return new Promise((resolve, reject) => {
     reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '')
     reader.onerror = reject
     reader.readAsDataURL(file)
+  })
+}
+
+async function convertHeicToJpeg(file: File): Promise<File> {
+  // 1st attempt: native createImageBitmap — zero download cost, works on Safari/iOS
+  try {
+    const bitmap = await createImageBitmap(file)
+    const maxDim = 3000
+    let w = bitmap.width, h = bitmap.height
+    if (w > maxDim || h > maxDim) {
+      const s = Math.min(maxDim / w, maxDim / h)
+      w = Math.round(w * s); h = Math.round(h * s)
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = w; canvas.height = h
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h)
+    return await new Promise<File>((res, rej) =>
+      canvas.toBlob(
+        blob => blob
+          ? res(new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' }))
+          : rej(new Error('canvas blob failed')),
+        'image/jpeg', 0.85,
+      )
+    )
+  } catch {
+    // 2nd attempt: lazy-load heic-to/csp (only downloaded when native fails)
+    try {
+      const { heicTo } = await import('heic-to/csp')
+      const blob = await heicTo({ blob: file, type: 'image/jpeg', quality: 0.85 })
+      return new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' })
+    } catch {
+      throw new Error('No pudimos convertir el archivo HEIC. En tu iPhone, compartí la foto como JPG e intentá de nuevo.')
+    }
+  }
+}
+
+async function compressImageForBedrock(base64: string, maxBytes = 4_000_000): Promise<string> {
+  if (base64.length <= maxBytes) return base64
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const maxDim = 2000
+      let w = img.naturalWidth, h = img.naturalHeight
+      if (w > maxDim || h > maxDim) {
+        const s = Math.min(maxDim / w, maxDim / h)
+        w = Math.round(w * s); h = Math.round(h * s)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/jpeg', 0.75).split(',')[1])
+    }
+    img.onerror = () => resolve(base64)
+    img.src = `data:image/jpeg;base64,${base64}`
   })
 }
 
@@ -99,6 +153,7 @@ export default function ProfileBuilder() {
   const [newSkill, setNewSkill] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
+  const [analyzeStatus, setAnalyzeStatus] = useState<string>('')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -154,8 +209,17 @@ export default function ProfileBuilder() {
     const file = e.target.files?.[0]
     if (!file) return
     const lowerName = file.name.toLowerCase()
-    if (!lowerName.endsWith('.pdf') && !lowerName.endsWith('.docx')) {
-      setAnalyzeError('Formato no compatible. Subí un archivo PDF o DOCX.')
+
+    const isPdf   = lowerName.endsWith('.pdf')
+    const isDocx  = lowerName.endsWith('.docx')
+    const isDoc   = lowerName.endsWith('.doc') && !lowerName.endsWith('.docx')
+    const isTxt   = lowerName.endsWith('.txt')
+    const isImage = ['.jpg','.jpeg','.png','.webp'].some(ext => lowerName.endsWith(ext))
+    const isHeic  = lowerName.endsWith('.heic') || lowerName.endsWith('.heif')
+    const isSupported = isPdf || isDocx || isDoc || isTxt || isImage || isHeic
+
+    if (!isSupported) {
+      setAnalyzeError('Formato no compatible. Podés subir PDF, Word (DOCX/DOC), TXT, o una imagen (JPG, PNG, WEBP, HEIC).')
       e.target.value = ''
       return
     }
@@ -164,13 +228,24 @@ export default function ProfileBuilder() {
       e.target.value = ''
       return
     }
-    if (file.size > 4 * 1024 * 1024) {
+    // Documents: hard 4 MB limit.
+    // Images: no hard rejection — auto-compressed below if needed.
+    if ((isPdf || isDocx || isDoc || isTxt) && file.size > 4 * 1024 * 1024) {
       setAnalyzeError('El archivo no puede superar 4 MB.')
       e.target.value = ''
       return
     }
-    setAnalyzing(true); setAnalyzeError(null)
+    if ((isImage || isHeic) && file.size > 20 * 1024 * 1024) {
+      setAnalyzeError('La imagen no puede superar 20 MB.')
+      e.target.value = ''
+      return
+    }
+
+    setAnalyzing(true)
+    setAnalyzeError(null)
+    setAnalyzeStatus('Guardando tu CV...')
     let cvStored = false
+
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) throw new Error('Tu sesión expiró. Volvé a ingresar.')
@@ -178,14 +253,40 @@ export default function ProfileBuilder() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
       }
-      const fileBase64 = await fileToBase64(file)
 
-      // PASO 1: guardar el archivo original primero. El CV debe quedar en
-      // storage incluso si la extracción de texto o el autocompletado fallan.
+      // HEIC → JPEG para análisis (original se sube tal cual)
+      let analysisFile: File = file
+      if (isHeic) {
+        setAnalyzeStatus('Convirtiendo imagen...')
+        try {
+          analysisFile = await convertHeicToJpeg(file)
+        } catch (err: any) {
+          setAnalyzeError(err?.message || 'No pudimos convertir el archivo HEIC. Intentá con una imagen JPG.')
+          return
+        }
+      }
+
+      const fileBase64 = await fileToBase64(file)
+      const analysisBase64 = analysisFile === file ? fileBase64 : await fileToBase64(analysisFile)
+
+      // Para imágenes > 4 MB: comprimir ANTES del upload (el backend rechaza > 4 MB).
+      // La compresión produce JPEG — la extensión se normaliza a .jpg para coherencia
+      // entre bytes enviados y fileName declarado (upload_cv + Bedrock ImageBlock).
+      let uploadBase64 = (isImage || isHeic) ? analysisBase64 : fileBase64
+      let uploadFileName = analysisFile.name  // HEIC→JPEG ya tiene .jpg; resto se ajusta abajo
+      if ((isImage || isHeic) && file.size > 4 * 1024 * 1024) {
+        setAnalyzeStatus('Optimizando tu imagen...')
+        // 4_700_000 base64 chars ≈ 3.5 MB decoded — margen seguro bajo el límite de 4 MB del backend
+        uploadBase64 = await compressImageForBedrock(analysisBase64, 4_700_000)
+        // La compresión siempre produce JPEG → unificar extensión
+        uploadFileName = analysisFile.name.replace(/\.[^.]+$/, '.jpg')
+      }
+
+      // PASO 1: guardar el archivo primero — el CV no se pierde aunque falle el análisis
       const persistRes = await fetch('/.netlify/functions/b2c-profile', {
         method: 'POST',
         headers: authenticatedHeaders,
-        body: JSON.stringify({ action: 'upload_cv', file_name: file.name, file_base64: fileBase64 }),
+        body: JSON.stringify({ action: 'upload_cv', file_name: uploadFileName, file_base64: uploadBase64 }),
       })
       const persisted = await persistRes.json()
       if (!persistRes.ok) throw new Error(persisted.error || 'No pudimos guardar el CV en tu perfil')
@@ -195,75 +296,180 @@ export default function ProfileBuilder() {
         status: 'stored',
       })
       cvStored = true
+      setAnalyzeStatus('CV guardado ✓')
 
-      // PASO 2: extraer texto del CV guardado
-      let text = ''
-      if (lowerName.endsWith('.pdf')) {
-        const res = await fetch('/.netlify/functions/extract-pdf-text', {
+      let text = ''           // texto extraído por ruta barata
+      let extracted: any = null
+      let rawText = ''        // transcripción del multimodal
+      let usedMultimodal = false
+      let processingMethod = isPdf ? 'pdf_text' : isDocx ? 'docx_text' : isTxt ? 'text_file' : isDoc ? 'bedrock_document' : isHeic ? 'heic_to_jpeg_bedrock' : 'bedrock_image'
+
+      setAnalyzeStatus('Leyendo tu CV...')
+
+      // ── PASO 2: extracción ───────────────────────────────────────────────────
+
+      if (isPdf) {
+        // Intentar extracción nativa (barata) primero
+        const extractRes = await fetch('/.netlify/functions/extract-pdf-text', {
           method: 'POST',
           headers: authenticatedHeaders,
           body: JSON.stringify({ pdfBase64: fileBase64, fileName: file.name }),
         })
-        const payload = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          const code = payload.code || null
-          if (code === 'PDF_NO_TEXT' || (res.status === 422 && !code)) {
-            setAnalyzeError('Guardamos tu CV, pero parece ser un PDF escaneado o con poco texto seleccionable. Podés completar tus datos manualmente; no necesitás volver a subir el archivo.')
+        const extractPayload = await extractRes.json().catch(() => ({}))
+
+        if (extractRes.ok) {
+          text = extractPayload.text || ''
+          processingMethod = 'pdf_text'
+        } else {
+          const code = extractPayload.code || null
+
+          if (code === 'PDF_NO_TEXT' || (extractRes.status === 422 && !code)) {
+            // PDF escaneado → multimodal automático
+            setAnalyzeStatus('Este CV parece escaneado. Lo estamos leyendo como imagen...')
+            processingMethod = 'bedrock_document'
+          } else if (code === 'PDF_PROTECTED_OR_DAMAGED') {
+            setAnalyzeError('Guardamos tu CV, pero no pudimos leer su contenido. Puede estar protegido con contraseña o dañado. Podés continuar manualmente.')
             return
-          }
-          if (code === 'PDF_PROTECTED_OR_DAMAGED') {
-            setAnalyzeError('Guardamos tu CV, pero no pudimos leer su contenido. Puede estar protegido con contraseña o tener un formato que no podemos procesar. Podés continuar manualmente.')
-            return
-          }
-          if (code === 'PDF_INVALID') {
+          } else if (code === 'PDF_INVALID') {
             setAnalyzeError('Guardamos el archivo, pero no pudimos reconocerlo como un PDF válido. Podés continuar manualmente o reemplazarlo.')
             return
-          }
-          if (code === 'PDF_TOO_LARGE') {
-            setAnalyzeError(payload.error || 'El archivo supera el límite de tamaño. Podés continuar manualmente.')
+          } else if (code === 'PDF_TOO_LARGE') {
+            setAnalyzeError(extractPayload.error || 'El archivo supera el límite de tamaño. Podés continuar manualmente.')
+            return
+          } else if (code === 'EXTRACTION_BUSY') {
+            setAnalyzeError('Tu CV quedó guardado, pero el lector está temporalmente ocupado. Podés continuar manualmente o intentar de nuevo.')
+            return
+          } else {
+            setAnalyzeError(extractPayload.error || 'No pudimos extraer el texto del PDF. Podés continuar manualmente.')
             return
           }
-          if (code === 'EXTRACTION_BUSY') {
-            setAnalyzeError('Tu CV quedó guardado, pero el lector está temporalmente ocupado. Podés continuar manualmente o intentar el autocompletado más tarde.')
+
+          // Fallback multimodal para PDF escaneado u otros errores sin código
+          const multiRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
+            method: 'POST',
+            headers: authenticatedHeaders,
+            body: JSON.stringify({ mode: 'extract_file', fileBase64, fileName: file.name }),
+          })
+          if (!multiRes.ok) {
+            setAnalyzeError('Guardamos tu CV, pero no pudimos leerlo automáticamente. Podés reemplazarlo o continuar manualmente.')
             return
           }
-          setAnalyzeError(payload.error || 'No pudimos extraer el texto del PDF. Podés continuar manualmente.')
+          const multi = await multiRes.json()
+          rawText = multi.rawText || ''
+          extracted = multi.extracted
+          usedMultimodal = true
+          if (!rawText || rawText.trim().length < 20) {
+            setAnalyzeError('Guardamos tu CV, pero no pudimos leer su contenido. Podés reemplazarlo o continuar manualmente.')
+            return
+          }
+        }
+
+      } else if (isDocx) {
+        try {
+          const mammoth = await import('mammoth')
+          const arrayBuffer = await file.arrayBuffer()
+          text = (await mammoth.extractRawText({ arrayBuffer })).value
+        } catch { text = '' }
+
+        if (!text || text.trim().length < 50) {
+          // Mammoth sin texto suficiente → Bedrock documento
+          processingMethod = 'bedrock_document'
+          const multiRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
+            method: 'POST',
+            headers: authenticatedHeaders,
+            body: JSON.stringify({ mode: 'extract_file', fileBase64, fileName: file.name }),
+          })
+          if (!multiRes.ok) {
+            setAnalyzeError('Guardamos tu CV, pero no pudimos procesarlo. Podés continuar manualmente.')
+            return
+          }
+          const multi = await multiRes.json()
+          rawText = multi.rawText || ''; extracted = multi.extracted; usedMultimodal = true; text = ''
+        } else {
+          processingMethod = 'docx_text'
+        }
+
+      } else if (isDoc) {
+        // DOC → directo a Bedrock
+        const multiRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
+          method: 'POST',
+          headers: authenticatedHeaders,
+          body: JSON.stringify({ mode: 'extract_file', fileBase64, fileName: file.name }),
+        })
+        if (!multiRes.ok) {
+          setAnalyzeError('Guardamos tu CV, pero no pudimos procesarlo. Podés continuar manualmente.')
           return
         }
-        text = payload.text || ''
-      } else if (lowerName.endsWith('.docx')) {
-        const mammoth = await import('mammoth')
-        const arrayBuffer = await file.arrayBuffer()
-        const result = await mammoth.extractRawText({ arrayBuffer })
-        text = result.value
+        const multi = await multiRes.json()
+        rawText = multi.rawText || ''; extracted = multi.extracted; usedMultimodal = true
+
+      } else if (isTxt) {
+        text = await file.text()
+        processingMethod = 'text_file'
+
+      } else if (isImage || isHeic) {
+        // Imagen → multimodal.
+        // Garantizar que base64 y fileName sean coherentes: si los bytes son JPEG, el nombre es .jpg.
+        let bedrockBase64: string
+        let bedrockFileName: string
+        if (file.size > 4 * 1024 * 1024) {
+          // Grande: ya comprimido para upload → reusar (bytes JPEG, nombre .jpg)
+          bedrockBase64 = uploadBase64
+          bedrockFileName = uploadFileName
+        } else {
+          // Pequeño: comprimir solo si necesario para el límite de Bedrock
+          const candidate = await compressImageForBedrock(analysisBase64)
+          const wasCompressed = candidate !== analysisBase64
+          bedrockBase64 = candidate
+          bedrockFileName = wasCompressed
+            ? analysisFile.name.replace(/\.[^.]+$/, '.jpg')
+            : analysisFile.name
+        }
+        const multiRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
+          method: 'POST',
+          headers: authenticatedHeaders,
+          body: JSON.stringify({ mode: 'extract_file', fileBase64: bedrockBase64, fileName: bedrockFileName }),
+        })
+        if (!multiRes.ok) {
+          setAnalyzeError('Guardamos tu CV, pero no pudimos leer la imagen. Podés continuar manualmente.')
+          return
+        }
+        const multi = await multiRes.json()
+        rawText = multi.rawText || ''; extracted = multi.extracted; usedMultimodal = true
       }
 
-      if (!text || text.trim().length < 50) {
-        setAnalyzeError('Guardamos tu CV, pero parece ser un PDF escaneado o con poco texto seleccionable. Podés completar tus datos manualmente; no necesitás volver a subir el archivo.')
+      // Texto insuficiente (solo ruta barata)
+      if (!usedMultimodal && (!text || text.trim().length < 50)) {
+        setAnalyzeError('Guardamos tu CV, pero el contenido es demasiado corto. Podés completar tus datos manualmente.')
         return
       }
 
-      // PASO 3: persistir el texto extraído en el perfil
+      // ── PASO 3: persistir texto ──────────────────────────────────────────────
+      const cvTextToSave = usedMultimodal ? rawText : text
       const saveTextRes = await fetch('/.netlify/functions/b2c-profile', {
         method: 'POST',
         headers: authenticatedHeaders,
-        body: JSON.stringify({ action: 'save_cv_text', cv_text: text }),
+        body: JSON.stringify({ action: 'save_cv_text', cv_text: cvTextToSave, processing_method: processingMethod, processing_status: 'extracted' }),
       })
       if (!saveTextRes.ok) {
-        setAnalyzeError('Tu CV quedó guardado, pero no pudimos registrar el texto para autocompletar. Podés continuar manualmente o intentar de nuevo.')
+        setAnalyzeError('Tu CV quedó guardado, pero no pudimos registrar el texto para autocompletar. Podés continuar manualmente.')
         return
       }
 
-      // PASO 4: autocompletar con IA
-      const analyzeRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
-        method: 'POST',
-        headers: authenticatedHeaders,
-        body: JSON.stringify({ cvText: text, mode: 'extract' }),
-      })
-      if (!analyzeRes.ok) throw new Error('AI_ANALYZE_FAILED')
-      const extracted = await analyzeRes.json()
+      // ── PASO 4: obtener extracted (solo si no vino del multimodal) ────────────
+      if (!usedMultimodal) {
+        const analyzeRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
+          method: 'POST',
+          headers: authenticatedHeaders,
+          body: JSON.stringify({ cvText: text, mode: 'extract' }),
+        })
+        if (!analyzeRes.ok) throw new Error('AI_ANALYZE_FAILED')
+        extracted = await analyzeRes.json()
+      }
 
-      // PASO 5: preparar evidencias
+      setAnalyzeStatus('Encontramos tus datos ✓')
+
+      // ── PASO 5: evidencias ───────────────────────────────────────────────────
       const evidenceRes = await fetch('/.netlify/functions/cv-workspace', {
         method: 'POST',
         headers: authenticatedHeaders,
@@ -271,7 +477,7 @@ export default function ProfileBuilder() {
       })
       if (!evidenceRes.ok) throw new Error('No pudimos preparar las evidencias del CV para tu revisión')
 
-      // PASO 6: persistir el draft para revisión
+      // ── PASO 6: draft ────────────────────────────────────────────────────────
       const draftRes = await fetch('/.netlify/functions/b2c-profile', {
         method: 'POST',
         headers: authenticatedHeaders,
@@ -306,6 +512,7 @@ export default function ProfileBuilder() {
       }
     } finally {
       setAnalyzing(false)
+      setAnalyzeStatus('')
     }
   }
 
@@ -447,17 +654,17 @@ export default function ProfileBuilder() {
                 {analyzing ? (
                   <div className="flex flex-col items-center">
                     <Brain className="mb-3 h-8 w-8 animate-pulse text-[#c9a84c]" />
-                    <span className="font-medium text-white">Analizando tu CV con IA…</span>
+                    <span className="font-medium text-white">{analyzeStatus || 'Analizando tu CV con IA…'}</span>
                     <span className="mt-1 text-xs text-muted-foreground">Esto tarda unos segundos</span>
                   </div>
                 ) : (
                   <>
                     <Upload className="mb-3 h-8 w-8 text-[#c9a84c]" />
                     <span className="font-display text-base text-white">Subir mi CV y autocompletar</span>
-                    <span className="mt-1 text-xs text-muted-foreground">PDF o DOCX — la IA completa el formulario por vos</span>
+                    <span className="mt-1 text-xs text-muted-foreground">PDF, Word, imagen (JPG/PNG/HEIC) o TXT — la IA completa el formulario</span>
                   </>
                 )}
-                <input type="file" className="hidden" accept=".pdf,.docx" onChange={handleCVUpload} disabled={analyzing} />
+                <input type="file" className="hidden" accept=".pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.webp,.heic,.heif" onChange={handleCVUpload} disabled={analyzing} />
               </label>
               <AnimatePresence>
                 {analyzeError && (
