@@ -19,6 +19,6 @@ if (!endpoint.includes('GITHUB_ACTIONS_TOKEN') || !endpoint.includes('scan:${req
 if (!admin.includes('SourceOperationsView') || !admin.includes('executeSourceScan') || !admin.includes('Configuración avanzada')) throw new Error('Admin does not expose the operational source view safely')
 if (!endpoint.includes('execute_automation_transition') || !endpoint.includes('apply_opportunity_automation_transition')) throw new Error('missing server-only automation bridge')
 if (admin.includes('SUPABASE_SERVICE_ROLE_KEY')) throw new Error('service role key leaked to Admin client')
-if (!admin.includes('sourceIntelligence') || !admin.includes('operational_health') || !admin.includes('Eight Gates') || !admin.includes('sourceIntelligenceError')) throw new Error('Admin cockpit is not consuming the operational snapshot independently')
+if (!admin.includes('sourceIntelligence') || !admin.includes('SourceOperationsView') || !admin.includes('sourceIntelligenceError') || admin.includes('React.Fragment')) throw new Error('Admin cockpit is not consuming the operational snapshot independently')
 if (endpoint.includes('apply_source_policy_suppression_atomic')) throw new Error('Admin source snapshot must not own policy apply')
 console.log('verify_admin_source_intelligence: PASS')

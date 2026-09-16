@@ -1240,17 +1240,6 @@ export default function Admin() {
 
   // ── MAIN CONSOLE ──────────────────────────────────────────────────────────
 
-  const gateReasonLabel = (code: string) => ({
-    AUTO_DISABLED_BY_POLICY: 'Automatización desactivada por configuración',
-    AUTOMATION_DISABLED_BY_POLICY: 'Automatización desactivada por configuración',
-    SOURCE_NOT_CERTIFIED: 'La fuente todavía no está certificada para automatizar',
-    BLOCKED_BY_PREVIOUS_GATE: 'No evaluado: hay una puerta anterior pendiente',
-    PARTIALLY_ALLOWED: 'Distribución permitida sólo en algunas superficies',
-    RESTRICTED_BY_POLICY: 'Distribución restringida por configuración',
-    POLICY_NOT_DEFINED: 'Todavía no existe una política definida para esta superficie',
-    READY_FOR_AUTOMATION: 'Lista para automatización',
-  } as Record<string, string>)[code] || code
-
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: '#080808' }}>
 
@@ -1764,6 +1753,7 @@ export default function Admin() {
                     <button onClick={loadControlCenter} className="border border-white/10 px-3 py-2 text-xs text-white/50 transition hover:text-white" style={{ fontFamily: MONO }}>↻ ACTUALIZAR</button>
                   </div>
 
+                  {sourceIntelligenceError && <div className="mb-4 border border-red-400/20 bg-red-400/[0.04] px-4 py-3 text-xs text-red-300" style={{ fontFamily: MONO }}>Source Intelligence no disponible: {sourceIntelligenceError}. Los controles avanzados siguen disponibles por separado.</div>}
                   <SourceOperationsView
                     sources={sourceIntelligence}
                     selectedSource={selectedSourceIntelligence}
@@ -1775,22 +1765,7 @@ export default function Admin() {
 
                   <details className="border border-white/[0.08] bg-white/[0.01]">
                     <summary className="cursor-pointer px-4 py-3 text-xs text-white/55">Configuración avanzada · controles, políticas y límites existentes</summary>
-                  {controlCenterError && <div className="mb-4 border border-red-400/20 bg-red-400/[0.04] px-4 py-3 text-xs text-red-300" style={{ fontFamily: MONO }}>Controles de fuentes no disponibles: {controlCenterError}. Source Intelligence se carga por separado.</div>}
-                  <details open className="mb-5 border border-white/[0.07] bg-white/[0.015]">
-                    <summary className="cursor-pointer px-4 py-3 text-[10px] uppercase tracking-[0.14em] text-white/40" style={{ fontFamily: MONO }}>
-                      Source Intelligence — Eight Gates · {sourceIntelligence.filter(row => !row.certified).length} pendientes de certificación
-                    </summary>
-                    {sourceIntelligenceError && <div className="border-t border-red-400/20 bg-red-400/[0.04] px-4 py-3 text-xs text-red-300" style={{ fontFamily: MONO }}>Eight Gates no disponible: {sourceIntelligenceError}. Los controles de fuentes siguen disponibles por separado.</div>}
-                    <div className="border-t border-white/[0.07] px-4 py-2 text-[10px] text-white/40">
-                      Gate 7: {gateReasonLabel('AUTO_DISABLED_BY_POLICY')}. Gate 8: {gateReasonLabel('PARTIALLY_ALLOWED')}; {gateReasonLabel('POLICY_NOT_DEFINED')}.
-                    </div>
-                    <div className="max-h-80 overflow-auto border-t border-white/[0.07]">
-                      <table className="w-full text-left text-xs">
-                        <thead className="sticky top-0 bg-[#080808] text-[9px] uppercase text-white/25"><tr><th className="px-3 py-2">Fuente</th><th>Eight Gates</th><th>Health</th><th>Contrato</th><th>Auto</th><th>Inventario</th><th>Última evidencia</th></tr></thead>
-                        <tbody className="divide-y divide-white/[0.04]">{sourceIntelligence.map(row => <React.Fragment key={row.canonical_source}><tr onClick={() => setSelectedSourceIntelligence(selectedSourceIntelligence === row.canonical_source ? null : row.canonical_source)} className="cursor-pointer hover:bg-white/[0.025]"><td className="px-3 py-2 font-mono text-white/60">{row.canonical_source}</td><td className="font-mono text-[10px]">{(row.eight_gates?.gates || []).map((gate: any, index: number) => <span key={index} title={`Gate ${index + 1}: ${gate.reason_code}`} className={gate.status === 'PASS' ? 'text-emerald-300' : gate.status === 'FAIL' ? 'text-red-300' : gate.status === 'WARNING' ? 'text-amber-300' : 'text-white/30'}>●</span>)}</td><td>{row.eight_gates?.gates?.[5]?.reason_code || row.operational_health || 'UNKNOWN'}</td><td>{row.contract_covered ? row.semantic_version : 'incompleto'}</td><td>{row.auto_enabled ? 'on' : 'off'}</td><td>{row.pools?.inventory || 0}</td><td>{row.observation?.last_observed_at || row.execution?.last_run || '—'}</td></tr>{selectedSourceIntelligence === row.canonical_source && <tr className="bg-white/[0.015]"><td colSpan={7} className="px-4 py-3 text-xs text-white/45"><div className="mb-3 text-[10px] uppercase tracking-[0.14em] text-white/60">Source Intelligence — Eight Gates</div><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">{(row.eight_gates?.gates || []).map((gate: any, index: number) => <div key={index} className="border border-white/[0.08] p-3"><div className="flex justify-between text-white/75"><b>Gate {index + 1}</b><span className={gate.status === 'PASS' ? 'text-emerald-300' : gate.status === 'FAIL' ? 'text-red-300' : gate.status === 'WARNING' ? 'text-amber-300' : 'text-white/40'}>{gate.status}</span></div><div className="mt-1 font-mono text-[10px] text-white/55">{gate.reason_code}</div><div className="mt-2 text-[11px]">{Object.entries(gate.metrics || {}).slice(0, 5).map(([key, value]) => <div key={key}>{key}: {typeof value === 'object' ? 'available' : String(value ?? '—')}</div>)}</div></div>)}</div><div className="mt-3 grid gap-3 md:grid-cols-3"><div><b className="text-white/70">Runtime</b><br />{row.operational_health || 'UNKNOWN'} · last run {row.execution?.last_run || '—'}</div><div><b className="text-white/70">Data health</b><br />Thin description {row.quality?.thin_description ?? '—'} · missing geo {row.quality?.missing_country ?? '—'}</div><div><b className="text-white/70">Policy</b><br />AUTO {row.auto_enabled ? 'enabled' : 'disabled'} · catalog {row.distribution_policy?.web_catalog_allowed ? 'allowed' : 'restricted'}</div></div></td></tr>}</React.Fragment>)}</tbody>
-                      </table>
-                    </div>
-                  </details>
+                  {controlCenterError && <div className="mb-4 border border-red-400/20 bg-red-400/[0.04] px-4 py-3 text-xs text-red-300" style={{ fontFamily: MONO }}>Controles de fuentes no disponibles: {controlCenterError}.</div>}
 
                   <div className="grid min-h-[700px] border border-white/[0.07] xl:grid-cols-[440px_1fr]">
                     <div className="border-b border-white/[0.07] xl:border-b-0 xl:border-r">
