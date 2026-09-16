@@ -131,6 +131,11 @@ jobs:
         run: python scripts/run_scraper_monitored.py himalayas_scraper himalayas_scraper scrapers/himalayas_scraper.py
         continue-on-error: true
 
+      - name: Automation Bridge — Himalayas
+        if: ${{ github.event.inputs.scraper == 'himalayas' && github.event.inputs.scan_request_id != '' }}
+        run: python scripts/run_source_scan_automation_bridge.py --run-id "$GITHUB_RUN_ID"
+        continue-on-error: true
+
       - name: Jobicy — remotos por industria (50×12 = 600)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'jobicy' || github.event_name == 'schedule' }}
         run: python scripts/run_scraper_monitored.py jobicy_scraper jobicy_scraper scrapers/jobicy_scraper.py
@@ -141,11 +146,21 @@ jobs:
         run: python scripts/run_scraper_monitored.py weworkremotely_scraper weworkremotely_scraper scrapers/weworkremotely_scraper.py
         continue-on-error: true
 
+      - name: Automation Bridge — WeWorkRemotely
+        if: ${{ github.event.inputs.scraper == 'weworkremotely' && github.event.inputs.scan_request_id != '' }}
+        run: python scripts/run_source_scan_automation_bridge.py --run-id "$GITHUB_RUN_ID"
+        continue-on-error: true
+
       # ── Organismos internacionales ────────────────────────────────────────
 
       - name: UNJobs — ONU, UNDP, UNICEF, BID (PY + LatAm)
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'unjobs' || github.event_name == 'schedule' }}
         run: python scripts/run_scraper_monitored.py unjobs_scraper unjobs_scraper scrapers/unjobs_scraper.py
+        continue-on-error: true
+
+      - name: Automation Bridge — UNJobs
+        if: ${{ github.event.inputs.scraper == 'unjobs' && github.event.inputs.scan_request_id != '' }}
+        run: python scripts/run_source_scan_automation_bridge.py --run-id "$GITHUB_RUN_ID"
         continue-on-error: true
 
       # ── Paraguay — sector público y gobierno ─────────────────────────────
@@ -422,6 +437,11 @@ jobs:
       - name: Talent.com — agregador global con foco Paraguay/LatAm
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'talentcom' || github.event_name == 'schedule' }}
         run: python scripts/run_scraper_monitored.py talentcom_scraper talentcom_scraper scrapers/talentcom_scraper.py
+        continue-on-error: true
+
+      - name: Automation Bridge — Talent.com
+        if: ${{ github.event.inputs.scraper == 'talentcom' && github.event.inputs.scan_request_id != '' }}
+        run: python scripts/run_source_scan_automation_bridge.py --run-id "$GITHUB_RUN_ID"
         continue-on-error: true
 
       # ── Google Jobs (Playwright) ─────────────────────────────────────────

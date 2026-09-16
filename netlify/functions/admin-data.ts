@@ -23,7 +23,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
   // aliases, certification and semantics remain owned by that core.
   const registry = sourceIntelligenceRegistry()
   const stats: Record<string, any> = dashboard?.sources || {}
-  const [observationsRes, policyRes, runsRes, fingerprintsRes, enrichmentRes] = await Promise.all([
+  const [observationsRes, policyRes, runsRes, fingerprintsRes, enrichmentRes, sourceCapRes] = await Promise.all([
     supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at").order("observed_at", { ascending: false }).limit(10000),
     supabase.from("opportunity_source_policy_events").select("opportunity_id,source,action,created_at").order("created_at", { ascending: false }).limit(10000),
     supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,duration_seconds,error_count,found_count,valid_count,inserted_count,updated_count,error_summary,adapter_version,extraction_metrics").order("started_at", { ascending: false }).limit(1000),
@@ -31,18 +31,28 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
     // exposed when their lightweight inputs are available.
     supabase.from("opportunities").select("id,title,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope").is("deleted_at", null).is("archived_at", null).limit(10000),
     supabase.from("opportunity_enrichment_events").select("opportunity_id,source,changed_fields,created_at").order("created_at", { ascending: false }).limit(10000),
+    supabase.from("opportunity_sources").select("source,catalog_enabled,matching_enabled,alerts_enabled,seo_enabled").limit(500),
   ])
   const observationRows = observationsRes.error ? [] : (observationsRes.data || [])
   const policyRows = policyRes.error ? [] : (policyRes.data || [])
   const runRows = runsRes.error ? [] : (runsRes.data || [])
   const fingerprintRows = fingerprintsRes.error ? [] : (fingerprintsRes.data || [])
   const enrichmentRows = enrichmentRes.error ? [] : (enrichmentRes.data || [])
+  const sourceCapRows: any[] = sourceCapRes.error ? [] : (sourceCapRes.data || [])
   const knownAliases = new Set<string>((registry.sources || []).flatMap((profile: any) => profile.emitted_aliases || []).map((value: string) => value.toLowerCase()))
   const unresolvedEmittedSources = Object.keys(stats).filter(source => !knownAliases.has(source.toLowerCase()))
   const now = Date.now()
   const sources = (registry.sources || []).map((profile: any) => {
     const aliases = profile.emitted_aliases || [profile.canonical_source]
     const aliasSet = new Set<string>(aliases.map((value: string) => value.toLowerCase()))
+    // Merge durable DB capability flags into profile for Gate 8 independent surface display
+    const srcCap = sourceCapRows.find((item: any) => aliasSet.has(String(item.source || '').toLowerCase()))
+    const capabilityFlags = srcCap ? {
+      catalog_enabled: Boolean(srcCap.catalog_enabled),
+      matching_enabled: Boolean(srcCap.matching_enabled),
+      alerts_enabled: Boolean(srcCap.alerts_enabled),
+      seo_enabled: Boolean(srcCap.seo_enabled),
+    } : {}
     const pools = aliases.reduce((acc: any, emitted: string) => {
       const statKey = Object.keys(stats).find(key => key.toLowerCase() === emitted.toLowerCase())
       const value = stats[emitted] || (statKey ? stats[statKey] : {}) || {}
@@ -86,7 +96,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       : !profile.contract_covered || !profile.certified || operationalHealth === "UNKNOWN" ? "YELLOW"
       : "GREEN"
     const sourceRows = fingerprintRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase()))
-    const eightGates = evaluateEightGates(profile, sourceRows, latestRun, observations, enrichmentRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase())))
+    const eightGates = evaluateEightGates({ ...profile, ...capabilityFlags }, sourceRows, latestRun, observations, enrichmentRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase())))
     const history = runRows.filter((item: any) => aliasSet.has(String(item.scraper_id || '').toLowerCase()) || item.scraper_id === profile.canonical_source).slice(0, 12)
     const previousRun = history[1]
     const latestMetrics = latestRun?.extraction_metrics || {}
@@ -99,7 +109,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       if (before > 0 && after < before * 0.5) driftSignals.push(`${field}_coverage`)
     }
     return {
-      ...profile, pools,
+      ...profile, ...capabilityFlags, pools,
       operational_health: operationalHealth,
       source_status: sourceStatus,
       observation: {
@@ -118,7 +128,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       },
       quality: { thin_description: pools.thin_description, missing_country: pools.missing_country },
       semantic: { fingerprint_pending: fingerprintsRes.error ? null : fingerprintPending, embedding_pending: null },
-      execution: { last_run: latestRun?.started_at || null, last_success: latestRun?.status === "success" ? latestRun.finished_at || latestRun.started_at : null, last_failure: runFailed ? latestRun?.started_at || null : null, adapter_version: latestRun?.adapter_version || profile.adapter_version, circuit_breaker: latestRun?.extraction_metrics?.circuit_breaker || null },
+      execution: { last_run: latestRun?.started_at || null, last_success: ["success", "healthy"].includes(String(latestRun?.status || "")) ? latestRun.finished_at || latestRun.started_at : null, last_failure: runFailed ? latestRun?.started_at || null : null, adapter_version: latestRun?.adapter_version || profile.adapter_version, circuit_breaker: latestRun?.extraction_metrics?.circuit_breaker || null },
       history,
       drift: previousRun ? { status: driftSignals.length ? "POSSIBLE_SOURCE_DRIFT" : "NO_SIGNIFICANT_DRIFT", compared_run_id: previousRun.run_id, signals: driftSignals } : null,
       recent_rows: sourceRows.slice(0, 20),

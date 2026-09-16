@@ -29,6 +29,7 @@ from scrapers.opportunity_sink import (
 MODEL_ID = "Supabase/gte-small"
 MODEL_VERSION = "Supabase/gte-small@1"
 PIPELINE_VERSION = "opportunity-factory-v1"
+EMBEDDING_INPUT_VERSION = "opportunity-embedding-v2"
 RULES_VERSION = "factory-rules-2026-09-10"
 ALLOWED_TYPES = {
     "job", "internship", "consultancy", "scholarship", "fellowship", "grant",
@@ -44,9 +45,11 @@ def clean_segment(value: Any, max_length: int) -> str:
     return " ".join(text.split())[:max_length]
 
 
-def embedding_text(row: dict[str, Any]) -> str:
+def build_opportunity_embedding_text(row: dict[str, Any]) -> str:
+    """Deterministic semantic input; never include URLs or raw source HTML."""
     tags = ", ".join(row.get("tags") or [])
     eligible = ", ".join(row.get("eligible_countries") or [])
+    regions = ", ".join(row.get("eligible_regions") or [])
     parts = [
         f"Cargo: {clean_segment(row.get('title'), 180)}",
         f"Organización: {clean_segment(row.get('organization'), 140)}",
@@ -57,7 +60,15 @@ def embedding_text(row: dict[str, Any]) -> str:
         f"Países elegibles: {clean_segment(eligible or row.get('country_code'), 100)}",
         f"Descripción: {clean_segment(row.get('description'), 1000)}",
     ]
+    # Keep location eligibility distinct while avoiding raw source URLs/HTML.
+    parts.extend([
+        f"Remote scope: {clean_segment(row.get('remote_scope'), 40)}",
+        f"Eligible regions: {clean_segment(regions, 100)}",
+    ])
     return " | ".join(part for part in parts if not part.endswith(": "))[:1800]
+
+
+embedding_text = build_opportunity_embedding_text
 
 
 def seal(row: dict[str, Any], now: datetime) -> tuple[str, dict[str, Any], dict[str, Any]]:
@@ -78,8 +89,11 @@ def seal(row: dict[str, Any], now: datetime) -> tuple[str, dict[str, Any], dict[
     deadline_ok = True
     if row.get("deadline"):
         try:
+            comparison_now = now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
             deadline = datetime.fromisoformat(str(row["deadline"]).replace("Z", "+00:00"))
-            deadline_ok = deadline >= now
+            if deadline.tzinfo is None:
+                deadline = deadline.replace(tzinfo=comparison_now.tzinfo or timezone.utc)
+            deadline_ok = deadline >= comparison_now
         except ValueError:
             deadline_ok = False
     stamps["validity"] = "pass" if deadline_ok else "block"
@@ -89,15 +103,33 @@ def seal(row: dict[str, Any], now: datetime) -> tuple[str, dict[str, Any], dict[
     stamps["classification"] = "pass" if opportunity_type in ALLOWED_TYPES else "review"
     geo_known = bool(row.get("country_code") or row.get("eligible_countries") or row.get("eligible_regions") or row.get("remote"))
     stamps["geo"] = "pass" if geo_known else "review"
-    stamps["content"] = "pass" if len(clean_segment(row.get("description"), 5000)) >= 80 else "review"
+    content_length = len(clean_segment(row.get("description"), 5000))
+    stamps["content"] = "pass" if content_length >= 80 else "review"
+    evidence["content"] = {"description_length": content_length, "minimum_length": 80}
 
-    if "block" in stamps.values():
+    # Provenance remains durable evidence, but it is deliberately not a
+    # structural-seal failure. A certified aggregator can provide a valid,
+    # identity-confirmed opportunity without pretending to be its employer.
+    # The source-aware automation policy decides whether that ready row may
+    # later move downstream.
+    structural_stamps = {key: value for key, value in stamps.items() if key != "provenance"}
+    if "block" in structural_stamps.values():
         status = "blocked"
-    elif "review" in stamps.values():
+    elif "review" in structural_stamps.values():
         status = "review"
     else:
         status = "ready"
     return status, stamps, evidence
+
+
+def should_generate_embedding(row: dict[str, Any], status: str, *, dry_run: bool) -> bool:
+    """Seal every eligible row, but vectorize only an existing match candidate.
+
+    ``match_eligible`` is the persisted downstream gate today. A future
+    Automation Core executor may grant it; hidden/pending rows must not cause
+    local model work merely because their structural seal is ready.
+    """
+    return not dry_run and status in {"ready", "review"} and row.get("match_eligible") is True
 
 
 class FactoryClient:
@@ -113,13 +145,16 @@ class FactoryClient:
 
     def candidates(self, limit: int) -> list[dict[str, Any]]:
         fields = sorted(set(CONTENT_FINGERPRINT_FIELDS + SEMANTIC_FINGERPRINT_FIELDS + (
-            "id", "updated_at", "factory_status", "embedding_model",
+            "id", "updated_at", "factory_status", "embedding_model", "match_eligible",
+            "embedding", "verification_status", "is_active",
         )))
-        response = self.session.get(
+        select = ",".join(fields)
+        # Class A: structural sealing needed
+        class_a_response = self.session.get(
             f"{self.base}/opportunities",
             headers=self.headers,
             params={
-                "select": ",".join(fields),
+                "select": select,
                 "verification_status": "in.(pending,in_review,verified)",
                 "deleted_at": "is.null",
                 "archived_at": "is.null",
@@ -129,8 +164,63 @@ class FactoryClient:
             },
             timeout=45,
         )
+        class_a_response.raise_for_status()
+        class_a = class_a_response.json()
+        if len(class_a) >= limit:
+            return class_a
+        # Class B: embedding missing for already-ready verified active match candidates (B2C priority)
+        remaining = limit - len(class_a)
+        class_a_ids = {str(row["id"]) for row in class_a}
+        class_b_response = self.session.get(
+            f"{self.base}/opportunities",
+            headers=self.headers,
+            params={
+                "select": select,
+                "match_eligible": "eq.true",
+                "embedding": "is.null",
+                "verification_status": "eq.verified",
+                "is_active": "eq.true",
+                "factory_status": "eq.ready",
+                "deleted_at": "is.null",
+                "archived_at": "is.null",
+                "order": "updated_at.asc,id.asc",
+                "limit": str(remaining),
+            },
+            timeout=45,
+        )
+        class_b_response.raise_for_status()
+        class_b = [row for row in class_b_response.json() if str(row["id"]) not in class_a_ids]
+        return class_a + class_b
+
+    def candidates_by_ids(self, opportunity_ids: list[str]) -> list[dict[str, Any]]:
+        """Bounded maintenance fetch: only active matching rows that need a vector."""
+        if not opportunity_ids:
+            return []
+        fields = sorted(set(CONTENT_FINGERPRINT_FIELDS + SEMANTIC_FINGERPRINT_FIELDS + (
+            "id", "updated_at", "factory_status", "embedding_model", "embedding",
+        )))
+        quoted = ",".join(f'"{str(value).replace(chr(34), "")}"' for value in opportunity_ids[:50])
+        response = self.session.get(
+            f"{self.base}/opportunities", headers=self.headers,
+            params={"select": ",".join(fields), "id": f"in.({quoted})", "match_eligible": "eq.true", "deleted_at": "is.null", "archived_at": "is.null"}, timeout=45,
+        )
         response.raise_for_status()
-        return response.json()
+        return [row for row in response.json() if row.get("factory_status") in {"pending", "failed"} or row.get("embedding") is None]
+
+    def seal_candidates_by_ids(self, opportunity_ids: list[str]) -> list[dict[str, Any]]:
+        """Exact structural sealing before matching or embeddings are allowed."""
+        if not opportunity_ids:
+            return []
+        fields = sorted(set(CONTENT_FINGERPRINT_FIELDS + SEMANTIC_FINGERPRINT_FIELDS + (
+            "id", "updated_at", "factory_status", "embedding_model", "embedding",
+        )))
+        quoted = ",".join(f'"{str(value).replace(chr(34), "")}"' for value in opportunity_ids[:50])
+        response = self.session.get(
+            f"{self.base}/opportunities", headers=self.headers,
+            params={"select": ",".join(fields), "id": f"in.({quoted})", "deleted_at": "is.null", "archived_at": "is.null"}, timeout=45,
+        )
+        response.raise_for_status()
+        return [row for row in response.json() if row.get("factory_status") in {"pending", "failed"}]
 
     def commit(self, row: dict[str, Any], snapshot: dict[str, Any], vector: list[float] | None) -> None:
         response = self.session.post(
@@ -159,11 +249,18 @@ class FactoryClient:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=500)
+    parser.add_argument("--ids", help="IDs de maintenance separados por comas (máximo 50)")
+    parser.add_argument("--seal-ids", help="IDs exactos para sealing estructural, sin matching ni embeddings")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     limit = max(1, min(args.limit, 1000))
     client = FactoryClient()
-    rows = client.candidates(limit)
+    if args.ids and args.seal_ids:
+        parser.error("--ids y --seal-ids son excluyentes")
+    ids = [value.strip() for value in ((args.seal_ids or args.ids) or "").split(",") if value.strip()]
+    if len(ids) > 50:
+        parser.error("--ids admite como máximo 50 oportunidades")
+    rows = client.seal_candidates_by_ids(ids) if args.seal_ids else client.candidates_by_ids(ids) if ids else client.candidates(limit)
     now = datetime.now(timezone.utc)
     model = None
     summary = {"selected": len(rows), "ready": 0, "review": 0, "blocked": 0, "failed": 0, "embedded": 0}
@@ -174,14 +271,12 @@ def main() -> int:
         status, stamps, evidence = seal(row, now)
         vector = None
         error = None
-        # Embeddings are evidence, not publication authority. Preparing review
-        # rows locally means a later human approval never needs a paid/manual step.
-        if status in {"ready", "review"} and not args.dry_run:
+        if should_generate_embedding(row, status, dry_run=args.dry_run):
             try:
                 if model is None:
                     from sentence_transformers import SentenceTransformer
                     model = SentenceTransformer(MODEL_ID)
-                vector = model.encode(embedding_text(row), normalize_embeddings=True).tolist()
+                vector = model.encode(build_opportunity_embedding_text(row), normalize_embeddings=True).tolist()
                 if len(vector) != 384:
                     raise ValueError(f"embedding_dimension_{len(vector)}")
                 summary["embedded"] += 1
@@ -194,7 +289,7 @@ def main() -> int:
             "opportunity_id": row["id"],
             "content_fingerprint": content_fingerprint,
             "semantic_fingerprint": semantic_fingerprint,
-            "pipeline_version": PIPELINE_VERSION,
+            "pipeline_version": f"{PIPELINE_VERSION}:{EMBEDDING_INPUT_VERSION}",
             "rules_version": RULES_VERSION,
             "status": status,
             "stamps": stamps,

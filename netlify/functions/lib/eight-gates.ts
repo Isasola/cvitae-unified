@@ -35,20 +35,33 @@ export function evaluateEightGates(profile: any, rows: any[], latestRun: any, ob
   const priorFailureIndex = preceding.findIndex(value => value.status === 'FAIL')
   const priorFailure = priorFailureIndex >= 0 ? preceding[priorFailureIndex] : null
   const automationEnabled = profile.automation_enabled !== false
-  const automation = gate(
-    priorFailure ? 'NOT_EVALUATED' : !automationEnabled || !profile.certified || !profile.auto_enabled ? 'NOT_APPLICABLE' : 'PASS',
-    priorFailure ? 'BLOCKED_BY_PREVIOUS_GATE' : !automationEnabled ? 'AUTOMATION_DISABLED_BY_POLICY' : !profile.certified ? 'SOURCE_NOT_CERTIFIED' : !profile.auto_enabled ? 'AUTO_DISABLED_BY_POLICY' : 'READY_FOR_AUTOMATION',
-    { auto_enabled: Boolean(profile.auto_enabled), automation_enabled: automationEnabled, certified: Boolean(profile.certified) },
-    { blocked_by_gate: priorFailure ? priorFailureIndex + 1 : null, blocked_by_reason: priorFailure?.reason_code || null }, runAt,
-  )
+  // Gate 7: use bridge execution evidence when available; policy disabled ≠ technical fail
+  const bridge = metrics.automation_bridge as any
+  const automation = (() => {
+    if (priorFailure) return gate('NOT_EVALUATED', 'BLOCKED_BY_PREVIOUS_GATE', { auto_enabled: Boolean(profile.auto_enabled), automation_enabled: automationEnabled, certified: Boolean(profile.certified) }, { blocked_by_gate: priorFailureIndex + 1, blocked_by_reason: priorFailure.reason_code || null }, runAt)
+    if (!automationEnabled) return gate('NOT_APPLICABLE', 'AUTOMATION_DISABLED_BY_POLICY', { auto_enabled: Boolean(profile.auto_enabled), automation_enabled: false, certified: Boolean(profile.certified) }, {}, runAt)
+    if (!profile.certified) return gate('NOT_APPLICABLE', 'SOURCE_NOT_CERTIFIED', { auto_enabled: Boolean(profile.auto_enabled), automation_enabled: automationEnabled, certified: false }, {}, runAt)
+    if (!profile.auto_enabled) return gate('NOT_APPLICABLE', 'AUTO_DISABLED_BY_POLICY', { auto_enabled: false, automation_enabled: automationEnabled, certified: Boolean(profile.certified) }, {}, runAt)
+    if (bridge) {
+      if (bridge.status === 'AUTOMATION_BRIDGE_FAILED') return gate('FAIL', 'AUTOMATION_BRIDGE_FAILED', { ...bridge, auto_enabled: true, certified: true }, {}, runAt)
+      const nonSystemic = (Number(bridge.human_review) || 0) + (Number(bridge.hold) || 0) > 0
+      return gate(nonSystemic ? 'WARNING' : 'PASS', nonSystemic ? 'BRIDGE_NON_SYSTEMIC_REVIEW' : 'AUTOMATION_BRIDGE_EXECUTED', { ...bridge, auto_enabled: true, certified: true }, {}, runAt)
+    }
+    return gate('PASS', 'READY_FOR_AUTOMATION', { auto_enabled: Boolean(profile.auto_enabled), automation_enabled: automationEnabled, certified: Boolean(profile.certified) }, { blocked_by_gate: null, blocked_by_reason: null }, runAt)
+  })()
   const policy = profile.distribution_policy
   const hasPolicy = Boolean(policy && typeof policy === 'object')
   const declared = (key: string) => hasPolicy && Object.prototype.hasOwnProperty.call(policy, key)
   const surface = (key: string, label: string) => !declared(key) ? { surface: label, state: 'POLICY_NOT_DEFINED' } : { surface: label, state: policy[key] ? 'ALLOWED' : 'RESTRICTED' }
+  // capability: use DB-level flag from profile if present, otherwise POLICY_NOT_DEFINED
+  const capability = (key: string, label: string) => typeof profile[key] === 'boolean' ? { surface: label, state: profile[key] ? 'ALLOWED' : 'RESTRICTED' } : { surface: label, state: 'POLICY_NOT_DEFINED' }
+  // catalog requires both web_catalog_allowed (policy) AND catalog_enabled (DB flag)
+  const catalogAllowed = declared('web_catalog_allowed') && policy.web_catalog_allowed && (typeof profile.catalog_enabled !== 'boolean' || profile.catalog_enabled)
   const surfaces = {
-    web_catalog: surface('web_catalog_allowed', 'web_catalog'),
-    matching: { surface: 'matching', state: 'POLICY_NOT_DEFINED' },
-    seo: { surface: 'seo', state: 'POLICY_NOT_DEFINED' }, aeo: { surface: 'aeo', state: 'POLICY_NOT_DEFINED' }, geo: { surface: 'geo', state: 'POLICY_NOT_DEFINED' },
+    web_catalog: !declared('web_catalog_allowed') ? { surface: 'web_catalog', state: 'POLICY_NOT_DEFINED' } : { surface: 'web_catalog', state: catalogAllowed ? 'ALLOWED' : 'RESTRICTED' },
+    matching: capability('matching_enabled', 'matching'),
+    alerts: capability('alerts_enabled', 'alerts'),
+    organic_seo: capability('seo_enabled', 'organic_seo'),
     google_jobs: surface('google_jobs_distribution_allowed', 'google_jobs'),
     third_party_distribution: surface('third_party_job_distribution_allowed', 'third_party_distribution'),
     attribution_required: !declared('source_attribution_required') ? { surface: 'attribution_required', state: 'POLICY_NOT_DEFINED' } : { surface: 'attribution_required', state: policy.source_attribution_required ? 'REQUIRED' : 'NOT_REQUIRED' },

@@ -35,6 +35,16 @@ function metric(gate: any) {
   if (typeof m.total === 'number') return `${number(m.total)} registros`
   if (typeof m.rejected === 'number') return `${number(m.rejected)} rechazadas`
   if (m.runtime_health) return `Runtime ${m.runtime_health} · Data ${m.data_health}`
+  // Gate 7: bridge execution stats when available
+  if (typeof m.evaluated === 'number') return `${number(m.evaluated)} evaluadas · ${number(m.promoted || 0)} promovidas · ${number(m.human_review || 0)} revisión`
+  // Gate 8: independent capability list
+  if (m.surfaces && typeof m.allowed === 'number') {
+    const s = m.surfaces as Record<string, any>
+    const caps = Object.entries(s)
+      .filter(([, v]) => v?.state === 'ALLOWED')
+      .map(([k]) => k.replace('_', ' ').toUpperCase())
+    return caps.length ? caps.join(' · ') : `${m.allowed} permitidas · ${m.restricted || 0} restringidas`
+  }
   if (typeof m.allowed === 'number') return `${m.allowed} superficies permitidas`
   return 'Sin métrica durable'
 }
@@ -58,7 +68,7 @@ export default function SourceOperationsView({ sources, selectedSource, onSelect
   const sourceRows = Array.isArray(lineage?.items) ? lineage.items : []
   const technicalFailure = gates.slice(0, 6).some((gate: any) => gate.status === 'FAIL')
   const policyBlocked = !technicalFailure && [gates[6], gates[7]].some((gate: any) => gate && ['NOT_APPLICABLE', 'NOT_EVALUATED'].includes(gate.status))
-  const rowOutcome = (row: any) => row.persistence !== 'PERSISTED' ? '✕ FALLÓ' : technicalFailure ? '✕ FALLÓ' : row.description_length < 80 ? '! REQUIERE REVISIÓN' : policyBlocked ? '■ BLOQUEADA POR POLÍTICA' : '✓ LISTA PARA PIPELINE'
+  const rowOutcome = (row: any) => row.persistence !== 'PERSISTED' ? '✕ FALLÓ' : technicalFailure ? '✕ FALLÓ' : row.description_length < 80 ? '! REQUIERE REVISIÓN' : policyBlocked ? '■ BLOQUEADA POR POLÍTICA' : '✓ LISTA PARA EVALUACIÓN'
   return <section className="mb-7 border border-[#c9a84c]/25 bg-[#0b0b0b]">
     <div className="border-b border-white/[0.08] p-5">
       <div className="flex flex-wrap items-start justify-between gap-5">

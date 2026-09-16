@@ -34,7 +34,7 @@ const himalayas = evaluateEightGates(profile({ canonical_source: 'himalayas', di
 assert.equal(himalayas.gates[6].reason_code, 'AUTO_DISABLED_BY_POLICY')
 assert.equal(himalayas.gates[7].status, 'WARNING')
 assert.equal(himalayas.gates[7].reason_code, 'PARTIALLY_ALLOWED')
-assert.equal(himalayas.gates[7].metrics.surfaces.seo.state, 'POLICY_NOT_DEFINED')
+assert.equal(himalayas.gates[7].metrics.surfaces.organic_seo.state, 'POLICY_NOT_DEFINED')
 
 const uncertified = evaluateEightGates(profile({ certified: false }), [row()], run(), [], [])
 assert.equal(uncertified.gates[6].status, 'NOT_APPLICABLE')
