@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'wouter'
 import { supabase } from '@/lib/supabase'
+import { isProfileComplete } from '@/lib/profile'
 import { motion } from 'framer-motion'
 
 export default function AuthCallback() {
@@ -10,6 +11,24 @@ export default function AuthCallback() {
 
   useEffect(() => {
     let isMounted = true
+    let redirected = false
+
+    const redirectAfterAuth = async (token: string) => {
+      if (redirected) return
+      redirected = true
+      try {
+        const res = await fetch('/.netlify/functions/b2c-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: 'status' }),
+        })
+        const payload = await res.json().catch(() => ({}))
+        const destination = isProfileComplete(payload.profile) ? '/mi-carrera' : '/mi-carrera/perfil'
+        if (isMounted) setTimeout(() => setLocation(destination), 700)
+      } catch {
+        if (isMounted) setTimeout(() => setLocation('/mi-carrera/perfil'), 700)
+      }
+    }
 
     const processCallback = async () => {
       try {
@@ -26,7 +45,7 @@ export default function AuthCallback() {
           if (data.session) {
             setStatus('success')
             setMessage('¡Sesión iniciada correctamente!')
-            setTimeout(() => setLocation('/mi-carrera/perfil'), 900)
+            await redirectAfterAuth(data.session.access_token)
           } else {
             setStatus('error')
             setMessage('No se pudo procesar el enlace. Inténtalo nuevamente.')
@@ -47,7 +66,7 @@ export default function AuthCallback() {
       if (session && isMounted) {
         setStatus('success')
         setMessage('¡Bienvenido!')
-        setTimeout(() => setLocation('/mi-carrera/perfil'), 700)
+        redirectAfterAuth(session.access_token)
       }
     })
 
