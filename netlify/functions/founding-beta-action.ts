@@ -29,7 +29,7 @@ export const handler: Handler = async (event) => {
 
   const { action } = body
 
-  if (!["accept", "get_status", "mark_offered", "increment_dismissed"].includes(action)) {
+  if (!["accept", "get_status", "mark_offered", "increment_dismissed", "decline"].includes(action)) {
     return { statusCode: 400, body: JSON.stringify({ error: `Acción inválida: ${action}` }) }
   }
 
@@ -78,11 +78,11 @@ export const handler: Handler = async (event) => {
       return { statusCode: 500, body: JSON.stringify({ error: "Error al obtener estado" }) }
     }
 
-    // Also check program capacity
+    // Count only truly granted slots — accepted (pending) does NOT occupy a slot
     const { count: activeCount } = await supabaseAdmin
       .from("founding_beta_enrollments")
       .select("id", { count: "exact", head: true })
-      .in("status", ["accepted", "active"])
+      .in("status", ["active", "completed"])
       .eq("program", "founding_50")
 
     // Fire-and-forget: notify founder on first visit of each real user (idempotent via email_log).
@@ -249,8 +249,9 @@ export const handler: Handler = async (event) => {
   }
 
   // ── accept ────────────────────────────────────────────────────────────────
-  // User explicitly accepts the Founding Beta offer.
-  // Calls the SECURITY DEFINER RPC which enforces the 50-user limit.
+  // User requests to join Founding Beta.
+  // Sets status='accepted' (pending admin review). Does NOT activate Pro.
+  // Admin approves via admin-data → admin_approve_founding_beta RPC → status='active'.
   if (action === "accept") {
     const { data: profile } = await supabaseAdmin
       .from("user_master_profiles")
@@ -276,58 +277,100 @@ export const handler: Handler = async (event) => {
       return { statusCode: 403, body: JSON.stringify({ error: "Tu acceso al Founding Beta estará disponible pronto." }) }
     }
 
-    const email = profile?.email || user.email || ""
+    const email = (profile as any)?.email || user.email || ""
+    const now = new Date().toISOString()
 
-    const { data, error } = await supabaseAdmin.rpc("accept_founding_beta", {
-      p_user_id: user.id,
-      p_email: email,
-      p_offer_version: "v1",
-    })
+    // Idempotent upsert: status='accepted' (pending review). Never auto-upgrade to active.
+    const { data: existing } = await supabaseAdmin
+      .from("founding_beta_enrollments")
+      .select("id, status")
+      .eq("user_id", user.id)
+      .eq("program", "founding_50")
+      .maybeSingle()
 
-    if (error) {
-      if (error.message?.includes("founding_50_full")) {
-        return { statusCode: 409, body: JSON.stringify({ error: "El programa ya está completo. Muchas gracias por tu interés.", program_full: true }) }
-      }
-      console.error("[founding-beta-action] accept error", error.message)
-      return { statusCode: 500, body: JSON.stringify({ error: "Error al procesar la aceptación" }) }
+    if (existing && ["active", "completed"].includes(existing.status)) {
+      // Already approved — return as-is
+      return { statusCode: 200, body: JSON.stringify({ ok: true, status: existing.status }) }
+    }
+    if (existing?.status === "declined") {
+      return { statusCode: 409, body: JSON.stringify({ error: "Tu solicitud fue revisada previamente.", program_full: false }) }
+    }
+    if (existing?.status === "accepted") {
+      // Idempotent: already pending
+      return { statusCode: 200, body: JSON.stringify({ ok: true, status: "pending_review" }) }
     }
 
-    // Product state is authoritative. Email failures are logged but do NOT rollback Pro.
-    const resend = new Resend(process.env.RESEND_API_KEY)
-    const enrollmentData = data?.[0] as any
+    // Upsert with status='accepted'
+    const { error: upsertError } = await supabaseAdmin
+      .from("founding_beta_enrollments")
+      .upsert({
+        user_id: user.id,
+        email: email.toLowerCase().trim(),
+        program: "founding_50",
+        status: "accepted",
+        offer_version: "v1",
+        accepted_at: now,
+        updated_at: now,
+      }, { onConflict: "user_id,program" })
 
-    // founding_welcome_v1 — idempotent
-    const welcomeResult = await sendFoundingEmail({
-      template: "founding_welcome_v1",
-      userId: user.id,
-      supabaseAdmin,
-      resend,
-    })
-    if (!welcomeResult.ok && !welcomeResult.already_sent) {
-      console.error("[founding-beta-action] welcome email failed", welcomeResult.error)
+    if (upsertError) {
+      console.error("[founding-beta-action] accept upsert error", upsertError.message)
+      return { statusCode: 500, body: JSON.stringify({ error: "Error al procesar la solicitud" }) }
     }
 
-    // Founder acceptance alert — idempotent
+    // Notify founder about new pending request — idempotent
     try {
+      const resend = new Resend(process.env.RESEND_API_KEY)
       await notifyFounderMilestone({
-        event: "founding_accepted",
+        event: "founding_requested",
         userId: user.id,
         userEmail: email,
         userName: (profile as any)?.full_name || undefined,
-        timestamp: enrollmentData?.accepted_at || new Date().toISOString(),
-        details: {
-          benefit_start: enrollmentData?.benefit_start,
-          benefit_end: enrollmentData?.benefit_end,
-          accepted_at: enrollmentData?.accepted_at,
-        },
+        timestamp: now,
         supabaseAdmin,
         resend,
       })
     } catch (err: any) {
-      console.error("[founding-beta-action] founder accept alert failed", err?.message)
+      console.error("[founding-beta-action] founder request notify failed", err?.message)
     }
 
-    return { statusCode: 200, body: JSON.stringify({ ok: true, enrollment: enrollmentData || null }) }
+    return { statusCode: 200, body: JSON.stringify({ ok: true, status: "pending_review" }) }
+  }
+
+  // ── decline ───────────────────────────────────────────────────────────────
+  // User explicitly declines the Founding Beta offer permanently.
+  // Persists status='declined' in DB so it survives browser/device changes.
+  if (action === "decline") {
+    const { data: existing } = await supabaseAdmin
+      .from("founding_beta_enrollments")
+      .select("id, status")
+      .eq("user_id", user.id)
+      .eq("program", "founding_50")
+      .maybeSingle()
+
+    if (existing && ["active", "completed", "accepted"].includes(existing.status)) {
+      // Do not override meaningful states
+      return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: true }) }
+    }
+
+    const email = user.email || ""
+    const { error: upsertError } = await supabaseAdmin
+      .from("founding_beta_enrollments")
+      .upsert({
+        user_id: user.id,
+        email: email.toLowerCase().trim(),
+        program: "founding_50",
+        status: "declined",
+        offer_version: "v1",
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,program" })
+
+    if (upsertError) {
+      console.error("[founding-beta-action] decline upsert error", upsertError.message)
+      return { statusCode: 500, body: JSON.stringify({ error: "Error al registrar preferencia" }) }
+    }
+
+    return { statusCode: 200, body: JSON.stringify({ ok: true }) }
   }
 
   return { statusCode: 400, body: JSON.stringify({ error: "Acción no procesada" }) }

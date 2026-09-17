@@ -1,7 +1,7 @@
 // src/components/cvitae/FoundingBetaModal.tsx
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Sparkles, X, Check } from 'lucide-react'
+import { Sparkles, X, Check, Clock } from 'lucide-react'
 
 interface FoundingBetaModalProps {
   slotsRemaining: number
@@ -13,7 +13,8 @@ interface FoundingBetaModalProps {
 
 export function FoundingBetaModal({ slotsRemaining, programFull, onAccept, onDismiss, onDecline }: FoundingBetaModalProps) {
   const [accepting, setAccepting] = useState(false)
-  const [accepted, setAccepted] = useState(false)
+  // 'idle' | 'pending_review' — active is handled via is_subscribed now
+  const [acceptedState, setAcceptedState] = useState<'idle' | 'pending_review'>('idle')
   const [error, setError] = useState('')
 
   const handleAccept = async () => {
@@ -21,8 +22,8 @@ export function FoundingBetaModal({ slotsRemaining, programFull, onAccept, onDis
     setAccepting(true); setError('')
     try {
       await onAccept()
-      setAccepted(true)
-      setTimeout(() => onDismiss(), 2500)
+      setAcceptedState('pending_review')
+      setTimeout(() => onDismiss(), 3000)
     } catch {
       setError('Hubo un error. Intentá de nuevo.')
     } finally {
@@ -54,17 +55,19 @@ export function FoundingBetaModal({ slotsRemaining, programFull, onAccept, onDis
         </button>
 
         <AnimatePresence mode="wait">
-          {accepted ? (
+          {acceptedState === 'pending_review' ? (
             <motion.div
-              key="success"
+              key="pending"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               className="text-center py-4"
             >
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#c9a84c]/15 border border-[#c9a84c]/30">
-                <Check className="h-7 w-7 text-[#c9a84c]" />
+                <Clock className="h-7 w-7 text-[#c9a84c]" />
               </div>
-              <h3 className="font-display text-xl text-cream">¡Sos parte del Founding 50!</h3>
-              <p className="mt-2 text-sm text-white/60">Tu acceso Pro por 6 meses ya está activo.</p>
+              <h3 className="font-display text-xl text-cream">¡Solicitud recibida!</h3>
+              <p className="mt-2 text-sm text-white/60">
+                Te avisaremos por email cuando tu acceso Founding Beta esté activo.
+              </p>
             </motion.div>
           ) : (
             <motion.div key="offer" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>

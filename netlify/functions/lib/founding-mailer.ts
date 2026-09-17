@@ -224,7 +224,7 @@ export async function notifyFounder({
   })
 }
 
-type FounderMilestoneEvent = "founding_offered" | "founding_accepted" | "first_value"
+type FounderMilestoneEvent = "founding_offered" | "founding_accepted" | "founding_requested" | "first_value"
 
 function buildFounderMilestoneEmail(
   event: FounderMilestoneEvent,
@@ -233,6 +233,26 @@ function buildFounderMilestoneEmail(
   const name = data.userName || data.userEmail
   const ts = new Date(data.timestamp).toLocaleString("es-PY", { timeZone: "America/Asuncion" })
   const adminLink = "https://cvitae.lat/admin"
+
+  if (event === "founding_requested") {
+    return {
+      subject: `[CVitae] Nueva solicitud Founding Beta — ${name}`,
+      html: `
+<div style="font-family:monospace;background:#0a0a0a;color:#f5f0e8;padding:20px;border-radius:8px;max-width:520px">
+  <div style="color:#c9a84c;font-weight:bold;margin-bottom:12px">FOUNDING REQUESTED — CVitae</div>
+  <div style="color:#a0a0a0;line-height:1.8">
+    <div><strong style="color:#f5f0e8">Nombre:</strong> ${name}</div>
+    <div><strong style="color:#f5f0e8">Email:</strong> ${data.userEmail}</div>
+    <div><strong style="color:#f5f0e8">Evento:</strong> SOLICITUD RECIBIDA</div>
+    <div><strong style="color:#f5f0e8">Timestamp:</strong> ${ts}</div>
+    <div><strong style="color:#f5f0e8">Estado:</strong> accepted → pendiente de aprobación</div>
+  </div>
+  <div style="margin-top:16px">
+    <a href="${adminLink}" style="color:#c9a84c;text-decoration:none;font-size:12px">Revisar en Admin → Aprobar / Rechazar</a>
+  </div>
+</div>`,
+    }
+  }
 
   if (event === "founding_offered") {
     return {

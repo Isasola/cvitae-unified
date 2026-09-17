@@ -592,10 +592,14 @@ const handler: Handler = async (event) => {
     }
 
     if (action === "founding_beta_stats") {
-      const [totalRes, activeRes, enrollmentsRes] = await Promise.all([
+      const [totalRes, grantedRes, pendingRes, enrollmentsRes] = await Promise.all([
         supabase.from("founding_beta_enrollments").select("id", { count: "exact", head: true }).eq("program", "founding_50"),
+        // Granted = active + completed (actual cupo usado)
         supabase.from("founding_beta_enrollments").select("id", { count: "exact", head: true })
-          .in("status", ["accepted", "active"]).eq("program", "founding_50"),
+          .in("status", ["active", "completed"]).eq("program", "founding_50"),
+        // Pending = accepted (solicitudes pendientes de aprobación)
+        supabase.from("founding_beta_enrollments").select("id", { count: "exact", head: true })
+          .eq("status", "accepted").eq("program", "founding_50"),
         supabase.from("founding_beta_enrollments")
           .select("id, user_id, email, status, offered_at, accepted_at, activated_at, benefit_end, dismissed_count, created_at")
           .eq("program", "founding_50")
@@ -603,17 +607,85 @@ const handler: Handler = async (event) => {
           .limit(100),
       ])
       if (enrollmentsRes.error) throw enrollmentsRes.error
+      const grantedCount = grantedRes.count || 0
       return {
         statusCode: 200,
         body: JSON.stringify({
           program: "founding_50",
           limit: 50,
           total_enrolled: totalRes.count || 0,
-          total_active: activeRes.count || 0,
-          slots_remaining: Math.max(0, 50 - (activeRes.count || 0)),
+          total_active: grantedCount,
+          pending_approval: pendingRes.count || 0,
+          slots_remaining: Math.max(0, 50 - grantedCount),
           enrollments: enrollmentsRes.data || [],
         })
       }
+    }
+
+    if (action === "founding_approve") {
+      if (!payload?.userId) return { statusCode: 400, body: JSON.stringify({ error: "userId requerido" }) }
+      const userId = String(payload.userId)
+
+      const { data: result, error: rpcError } = await supabase.rpc("admin_approve_founding_beta", { p_user_id: userId })
+      if (rpcError) {
+        console.error("[admin-data] founding_approve RPC error", rpcError.message)
+        return { statusCode: 500, body: JSON.stringify({ error: rpcError.message }) }
+      }
+      const outcome = result as any
+      if (outcome?.status === "full") {
+        return { statusCode: 409, body: JSON.stringify({ error: `Cupo Founding Beta completo: ${outcome.active_count}/50`, program_full: true }) }
+      }
+      if (outcome?.status === "not_found") {
+        return { statusCode: 404, body: JSON.stringify({ error: "No se encontró solicitud para este usuario" }) }
+      }
+      if (outcome?.status === "invalid_state") {
+        return { statusCode: 409, body: JSON.stringify({ error: `No se puede aprobar en estado: ${outcome.current_status}` }) }
+      }
+
+      // Send founding_welcome_v1 — idempotent
+      try {
+        const { Resend } = await import("resend")
+        const { sendFoundingEmail } = await import("./lib/founding-mailer")
+        const resend = new Resend(process.env.RESEND_API_KEY)
+        const welcomeResult = await sendFoundingEmail({ template: "founding_welcome_v1", userId, supabaseAdmin: supabase, resend })
+        if (!welcomeResult.ok && !welcomeResult.already_sent) {
+          console.error("[admin-data] founding welcome email failed", welcomeResult.error)
+        }
+      } catch (emailErr: any) {
+        console.error("[admin-data] founding_approve email error", emailErr?.message)
+      }
+
+      // Notify founder if program just filled up
+      if (outcome?.full_after_this) {
+        try {
+          const { Resend } = await import("resend")
+          const { notifyFounderMilestone } = await import("./lib/founding-mailer")
+          const resend = new Resend(process.env.RESEND_API_KEY)
+          await notifyFounderMilestone({
+            event: "founding_accepted",
+            userId,
+            userEmail: "contacto@cvitae.lat",
+            timestamp: new Date().toISOString(),
+            details: { note: "Founding Beta completado — 50/50 plazas otorgadas" },
+            supabaseAdmin: supabase,
+            resend,
+          })
+        } catch {}
+      }
+
+      return { statusCode: 200, body: JSON.stringify({ ok: true, active_count: outcome?.active_count, benefit_end: outcome?.benefit_end }) }
+    }
+
+    if (action === "founding_reject") {
+      if (!payload?.userId) return { statusCode: 400, body: JSON.stringify({ error: "userId requerido" }) }
+      const userId = String(payload.userId)
+
+      const { data: result, error: rpcError } = await supabase.rpc("admin_reject_founding_beta", { p_user_id: userId })
+      if (rpcError) {
+        console.error("[admin-data] founding_reject RPC error", rpcError.message)
+        return { statusCode: 500, body: JSON.stringify({ error: rpcError.message }) }
+      }
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
     if (action === "list_users_v2") {
@@ -673,7 +745,7 @@ const handler: Handler = async (event) => {
         authEmail = authUser?.user?.email || null
       }
 
-      const [foundingRes, eventsRes, emailsRes, acquisitionRes] = await Promise.all([
+      const [foundingRes, eventsRes, emailsRes, acquisitionRes, matchCountRes] = await Promise.all([
         supabase.from("founding_beta_enrollments")
           .select("*").eq("user_id", userId).maybeSingle(),
         supabase.from("user_events")
@@ -690,17 +762,60 @@ const handler: Handler = async (event) => {
           .select("source, medium, campaign, landing_page, referrer, created_at")
           .eq("user_id", userId)
           .maybeSingle(),
+        supabase.from("candidate_opportunity_matches")
+          .select("id, score, created_at", { count: "exact" })
+          .eq("candidate_id", userId)
+          .order("score", { ascending: false })
+          .limit(1),
       ])
+
+      // Derive profile health signals
+      const p = profile as any
+      const profileData = p.profile_data || {}
+      const skills = Array.isArray(profileData.habilidades) ? profileData.habilidades : []
+      const hasLocation = Boolean(profileData.location && String(profileData.location).trim().length > 1)
+      const hasCv = Boolean(p.cv_storage_path)
+      const hasEmbedding = Boolean(p.embedding)
+      const hasCvText = Boolean(p.cv_text && String(p.cv_text).trim().length > 50)
+      const completeness = [
+        Boolean(p.full_name), Boolean(p.professional_title), Boolean(p.summary),
+        skills.length > 0, hasLocation, hasCv || hasCvText,
+      ].filter(Boolean).length
+
+      const matchCount = matchCountRes.count || 0
+      const topMatchScore = matchCountRes.data?.[0]?.score ?? null
+
+      const warnings: string[] = []
+      if (!hasLocation) warnings.push("Sin ubicación — afecta el filtro geográfico del matching")
+      if (!hasEmbedding) warnings.push("Sin embedding — matching solo por keywords")
+      if (completeness >= 4 && matchCount <= 1) warnings.push("Perfil completo pero ≤1 match — investigar")
+      if (!hasCv && !hasCvText) warnings.push("Sin CV cargado")
 
       return {
         statusCode: 200,
         body: JSON.stringify({
           profile,
-          auth_email: authEmail,  // canonical email from auth.users when profile.email is null
+          auth_email: authEmail,
           founding_beta: foundingRes.data || null,
           events: eventsRes.data || [],
           emails_sent: emailsRes.data || [],
           acquisition: acquisitionRes.data || null,
+          profile_health: {
+            skills_count: skills.length,
+            has_location: hasLocation,
+            has_cv: hasCv,
+            cv_uploaded_at: p.cv_uploaded_at || null,
+            has_cv_text: hasCvText,
+            has_embedding: hasEmbedding,
+            completeness_score: completeness,
+            completeness_max: 6,
+          },
+          matching: {
+            match_count: matchCount,
+            top_score: topMatchScore,
+            last_match_at: matchCountRes.data?.[0]?.created_at || null,
+          },
+          warnings,
         })
       }
     }

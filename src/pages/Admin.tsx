@@ -3003,6 +3003,17 @@ export default function Admin() {
         onEnableFoundingOffer={async (userId) => {
           await adminFetch('enable_founding_offer', { userId })
         }}
+        onFoundingApprove={async (userId) => {
+          const result = await adminFetch('founding_approve', { userId })
+          if (result.status === 'full') throw new Error('El programa está lleno (50 cupos ocupados)')
+          if (result.status === 'not_found') throw new Error('Enrollment no encontrado')
+          if (result.status === 'invalid_state') throw new Error('Estado inválido para aprobar')
+          await loadFoundingStats()
+        }}
+        onFoundingReject={async (userId) => {
+          await adminFetch('founding_reject', { userId })
+          await loadFoundingStats()
+        }}
         onDetailRefresh={(profileId) => openDrawer(profileId)}
       />
 

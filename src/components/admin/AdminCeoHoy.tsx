@@ -23,6 +23,7 @@ interface AdminCeoHoyProps {
     limit: number
     total_enrolled: number
     total_active: number
+    pending_approval: number
     slots_remaining: number
     enrollments: any[]
   } | null
@@ -78,6 +79,9 @@ export function AdminCeoHoy({ metrics, externalMetrics, foundingStats, foundingS
         <QueueItem label="Oportunidades pendientes de revisión" count={metrics.queues.opportunityReview} tone="amber" />
         <QueueItem label="Reportes de producto abiertos" count={metrics.queues.feedbackOpen} tone="amber" />
         <QueueItem label="Empresas B2B pendientes de revisión" count={metrics.queues.recruiterReview} tone="amber" />
+        {foundingStats && foundingStats.pending_approval > 0 && (
+          <QueueItem label="Founding Beta — pendientes de aprobación" count={foundingStats.pending_approval} tone="amber" />
+        )}
         {emailsSent7d !== null && (
           <QueueItem label="Emails enviados (7 días)" count={emailsSent7d} tone="green" />
         )}
@@ -90,10 +94,14 @@ export function AdminCeoHoy({ metrics, externalMetrics, foundingStats, foundingS
             <Sparkles className="h-4 w-4 text-[#c9a84c]" />
             <h2 className="text-xs uppercase tracking-widest text-white/30">Founding 50</h2>
           </div>
-          <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="grid grid-cols-4 gap-3 mb-5">
             <div className="text-center">
               <p className="text-2xl font-bold text-white">{foundingStats.total_enrolled}</p>
               <p className="text-xs text-white/40 mt-0.5">Enrolled</p>
+            </div>
+            <div className="text-center">
+              <p className={`text-2xl font-bold ${foundingStats.pending_approval > 0 ? 'text-amber-400' : 'text-white/30'}`}>{foundingStats.pending_approval}</p>
+              <p className="text-xs text-white/40 mt-0.5">Pendientes</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-[#c9a84c]">{foundingStats.total_active}</p>

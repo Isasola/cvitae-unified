@@ -1,6 +1,8 @@
 // src/hooks/useFoundingBeta.ts
 // Manages Founding Beta offer state for the current authenticated user.
 // Calls /.netlify/functions/founding-beta-action for all operations.
+// accept() now submits a request → status='accepted' (pending admin review).
+// Admin approves → status='active' + is_subscribed=true.
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -22,6 +24,7 @@ interface FoundingBetaState {
   accept: () => Promise<void>
   decline: () => Promise<void>
   dismiss: () => void  // "Ahora no" — no API call, just hides modal for this session
+  triggerModal: () => void  // Re-show modal from a CTA (e.g., paywall block)
 }
 
 async function getToken(): Promise<string | null> {
@@ -55,13 +58,6 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
   useEffect(() => {
     if (!userId) { setLoading(false); return }
 
-    // Check for permanent decline in localStorage
-    if (localStorage.getItem('founding_beta_declined') === '1') {
-      setLoading(false)
-      setDismissed(true)
-      return
-    }
-
     const load = async () => {
       try {
         const token = await getToken()
@@ -69,7 +65,6 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
 
         const data = await callFoundingAction(token, 'get_status')
         if (data.ineligible) {
-          // Test/internal account, rollout deferred, or gate error — suppress modal
           setDismissed(true)
           return
         }
@@ -83,8 +78,6 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
         setSlotsRemaining(slots)
 
         // Wire mark_offered: call when modal would be shown.
-        // Fire-and-forget — modal displays immediately; email/notification happen server-side.
-        // Backend is idempotent: repeated logins do not produce repeated emails.
         const wouldShowModal = currentEnrollment === null
           ? !isFull
           : (currentEnrollment.status === 'eligible' || currentEnrollment.status === 'offered')
@@ -101,12 +94,11 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
     load()
   }, [userId])
 
-  // Determine if modal should be shown:
-  // Show when: user is loaded, not dismissed this session, enrollment is null or status='eligible' or status='offered',
-  // AND the program is not full (or enrollment exists).
+  // Show modal when: not dismissed, enrollment is null/eligible/offered.
+  // Do NOT show when status='accepted' (pending review), 'active', 'completed', or 'declined'.
   const showModal = !loading && !dismissed && (
     enrollment === null
-      ? !programFull  // new user, show only if slots available
+      ? !programFull
       : enrollment.status === 'eligible' || enrollment.status === 'offered'
   )
 
@@ -115,17 +107,20 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
     if (!token) return
     const data = await callFoundingAction(token, 'accept')
     if (data.ok) {
-      setEnrollment(data.enrollment || { ...enrollment, status: 'active' } as FoundingBetaEnrollment)
-      setDismissed(true)  // close modal after accept
+      const newStatus = data.status === 'pending_review' ? 'accepted' : (data.status || 'accepted')
+      setEnrollment(prev => ({ ...prev, status: newStatus, accepted_at: new Date().toISOString() } as FoundingBetaEnrollment))
+      setDismissed(true)
     }
-    // If program_full, modal should show the "full" state — handle in component
-  }, [enrollment])
+  }, [])
 
   const decline = useCallback(async () => {
-    // Explicit permanent opt-out
-    // For V1: permanent decline stored in localStorage (service_role required for DB write)
-    localStorage.setItem('founding_beta_declined', '1')
+    // Explicit permanent opt-out — persisted in DB for cross-device suppression
     setDismissed(true)
+    localStorage.setItem('founding_beta_declined', '1')
+    const token = await getToken()
+    if (token) {
+      callFoundingAction(token, 'decline').catch(() => {})
+    }
   }, [])
 
   const dismiss = useCallback(() => {
@@ -136,5 +131,10 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
     })
   }, [])
 
-  return { loading, enrollment, programFull, slotsRemaining, showModal, accept, decline, dismiss }
+  const triggerModal = useCallback(() => {
+    sessionStorage.removeItem('founding_beta_modal_seen')
+    setDismissed(false)
+  }, [])
+
+  return { loading, enrollment, programFull, slotsRemaining, showModal, accept, decline, dismiss, triggerModal }
 }

@@ -662,20 +662,36 @@ export default function Dashboard() {
                     <>
                       <OpportunityCard m={matches[0]} featured liked={likedOpportunityIds.has(matches[0].id)} onToggleLike={toggleOpportunityPreference} />
                       <div className="space-y-3">
-                        {matches.slice(1, isSubscribed ? undefined : 1).map((m) => (
+                        {matches.slice(1, isSubscribed ? undefined : 3).map((m) => (
                           <OpportunityCard key={m.id} m={m} liked={likedOpportunityIds.has(m.id)} onToggleLike={toggleOpportunityPreference} />
                         ))}
-                        {!isSubscribed && matches.length > 1 && (
+                        {!isSubscribed && matches.length > 3 && (
                           <div className="rounded-2xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.03] p-6 text-center">
                             <Lock className="mx-auto h-5 w-5 text-[#c9a84c] mb-3" />
-                            <p className="text-cream font-display text-xl">Hay {matches.length - 1} match{matches.length - 1 !== 1 ? 'es' : ''} más hoy.</p>
-                            <p className="mt-2 text-sm text-white/50 max-w-xs mx-auto">La beta fundadora ofrece acceso ampliado por cupos mientras medimos capacidad y calidad.</p>
-                            <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola, quiero solicitar acceso ampliado a la beta fundadora de CVitae.')}`}
-                              target="_blank" rel="noopener noreferrer"
-                              className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-6 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-[#e6cf8a] transition">
-                              Solicitar acceso beta
-                            </a>
-                            <p className="mt-3 text-xs text-white/30">Si se completa el cupo, podés volver mañana.</p>
+                            <p className="text-cream font-display text-xl">
+                              Hay {matches.length - 3} match{matches.length - 3 !== 1 ? 'es' : ''} más disponible{matches.length - 3 !== 1 ? 's' : ''}.
+                            </p>
+                            {foundingBeta.enrollment?.status === 'accepted' ? (
+                              <>
+                                <p className="mt-2 text-sm text-white/50 max-w-xs mx-auto">Tu solicitud Founding Beta está pendiente de aprobación. Te avisamos por email.</p>
+                              </>
+                            ) : foundingBeta.enrollment?.status === 'active' || foundingBeta.enrollment?.status === 'completed' ? null : (
+                              <>
+                                <p className="mt-2 text-sm text-white/50 max-w-xs mx-auto">
+                                  Los primeros 50 usuarios aprobados acceden a todos sus matches como <strong className="text-white/70">Founding Users</strong>.
+                                </p>
+                                {!foundingBeta.programFull ? (
+                                  <button
+                                    onClick={foundingBeta.triggerModal}
+                                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-6 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-[#e6cf8a] transition"
+                                  >
+                                    Solicitar acceso Founding Beta
+                                  </button>
+                                ) : (
+                                  <p className="mt-4 text-xs text-white/40">El programa Founding Beta está completo. Próximamente disponible como Pro.</p>
+                                )}
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
@@ -772,19 +788,28 @@ export default function Dashboard() {
                     <a href="/mi-carrera/alertas" className="mt-3 inline-flex items-center gap-1.5 text-xs text-[#c9a84c]">Configurar alertas <ArrowRight className="h-3 w-3" /></a>
                   </div>
 
-                  {/* Premium */}
-                  {!isSubscribed && matches.length > 1 && (
+                  {/* Founding Beta upsell — sidebar */}
+                  {!isSubscribed && matches.length > 3 && (
                     <div className="rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.04] p-5">
                       <Lock className="h-4 w-4 text-[#c9a84c]" />
-                      <h4 className="font-display mt-2 text-xl text-cream">Hay {matches.length - 1} match{matches.length - 1 !== 1 ? 'es' : ''} más hoy.</h4>
-                      <p className="mt-1 text-xs text-muted-foreground">Durante la beta fundadora habilitamos acceso ampliado por cupos para cuidar la calidad del servicio.</p>
-                      <a
-                        href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola, quiero solicitar acceso ampliado a la beta fundadora de CVitae.')}`}
-                        target="_blank" rel="noopener noreferrer"
-                        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c9a84c] py-2 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]"
-                      >
-                        Solicitar acceso beta
-                      </a>
+                      <h4 className="font-display mt-2 text-xl text-cream">
+                        +{matches.length - 3} match{matches.length - 3 !== 1 ? 'es' : ''} oculto{matches.length - 3 !== 1 ? 's' : ''}
+                      </h4>
+                      {foundingBeta.enrollment?.status === 'accepted' ? (
+                        <p className="mt-1 text-xs text-muted-foreground">Tu solicitud Founding Beta está pendiente. Te avisamos por email al aprobarla.</p>
+                      ) : (
+                        <>
+                          <p className="mt-1 text-xs text-muted-foreground">Los primeros 50 usuarios aprobados acceden a todos sus matches.</p>
+                          {!foundingBeta.programFull && (
+                            <button
+                              onClick={foundingBeta.triggerModal}
+                              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c9a84c] py-2 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]"
+                            >
+                              Solicitar acceso Founding
+                            </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
                 </aside>
@@ -800,6 +825,7 @@ export default function Dashboard() {
           { title: 'Completá tu perfil', description: 'Tus habilidades, experiencia, ubicación y objetivo profesional son la base del matching. Podés corregirlos cuando cambien.' },
           { title: 'Entendé cada match', description: 'CVitae muestra por qué una vacante encaja y qué habilidades faltan. Sólo usamos oportunidades que pasaron la verificación.' },
           { title: 'Elegí tu próxima acción', description: 'Abrí la fuente original, adaptá tu CV o reforzá una habilidad. El score orienta, pero vos decidís dónde postular.' },
+          { title: 'Explorá tus matches', description: 'Cada oportunidad compatible aparece ordenada por compatibilidad. Actualizá tu perfil para refrescar los resultados.' },
         ]}
       />
       {foundingBeta.showModal && (
