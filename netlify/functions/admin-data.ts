@@ -14,6 +14,24 @@ const SOURCE_SCAN_SCRAPERS: Record<string, string> = {
   unjobs: "unjobs_scraper", himalayas: "himalayas_scraper", talentcom: "talentcom_scraper", weworkremotely: "weworkremotely_scraper",
 }
 
+// Contract for all admin control-plane write actions.
+// Every action that mutates state returns this shape.
+interface AdminActionResult {
+  status: "ok" | "error" | "blocked" | "no_change"
+  executed: boolean
+  changed: boolean
+  source: string
+  action: string
+  reason: string
+  rows_scanned: number
+  rows_changed: number
+  started_at: string
+  finished_at: string
+  event_id: string | null
+  error: string | null
+  blockers: string[]
+}
+
 function sourceIntelligenceRegistry() {
   return JSON.parse(readFileSync(resolve(process.cwd(), "src/generated/source-intelligence-registry.json"), "utf8"))
 }
@@ -1423,6 +1441,306 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({
         confirmed: confirmed.length, skipped: skipped.length + notFound.length,
       }) }
+    }
+
+    if (action === "get_source_catalog") {
+      // Lightweight catalog of all 105 canonical sources: profile metadata + live DB
+      // capability flags. No Eight Gates computation — cheaper than source_intelligence_snapshot.
+      const registry = sourceIntelligenceRegistry()
+      const { data: capRows, error: capErr } = await supabase
+        .from("opportunity_sources")
+        .select("source,catalog_enabled,matching_enabled,alerts_enabled,seo_enabled,search_engine_indexing_allowed,web_catalog_allowed")
+        .limit(500)
+      const caps: Record<string, any> = {}
+      if (!capErr && capRows) {
+        for (const row of capRows) caps[String(row.source || "").toLowerCase()] = row
+      }
+      const catalog = (registry.sources || []).map((profile: any) => {
+        const aliases: string[] = (profile.emitted_aliases || [profile.canonical_source]).map((v: string) => v.toLowerCase())
+        const cap = aliases.map((a: string) => caps[a]).find(Boolean) || null
+        return {
+          source: profile.canonical_source,
+          display_name: profile.display_name || profile.canonical_source,
+          source_family: profile.source_family,
+          certified: Boolean(profile.certified),
+          auto_enabled: Boolean(profile.auto_enabled),
+          contract_covered: Boolean(profile.contract_covered),
+          adapter_version: profile.adapter_version,
+          search_engine_indexing_allowed: cap?.search_engine_indexing_allowed ?? null,
+          seo_enabled: cap?.seo_enabled ?? null,
+          catalog_enabled: cap?.catalog_enabled ?? null,
+          matching_enabled: cap?.matching_enabled ?? null,
+          web_catalog_allowed: cap?.web_catalog_allowed ?? (profile.distribution_policy?.web_catalog_allowed ?? null),
+        }
+      })
+      return { statusCode: 200, body: JSON.stringify({ catalog, total: catalog.length, fetched_at: new Date().toISOString() }) }
+    }
+
+    if (action === "enable_seo_for_source") {
+      // Server-side guarded SEO enablement. Refuses if preconditions are not met.
+      // Never mass-enables: source must be named explicitly.
+      const startedAt = new Date().toISOString()
+      const targetSource = String(payload?.source || "").toLowerCase()
+      if (!targetSource) return { statusCode: 400, body: JSON.stringify({ error: "source requerido" }) }
+      const blockers: string[] = []
+
+      // P1: source must exist in registry and be V2_CERTIFIED
+      const registry = sourceIntelligenceRegistry()
+      const profile = (registry.sources || []).find((s: any) => s.canonical_source === targetSource)
+      if (!profile) blockers.push("SOURCE_NOT_IN_REGISTRY")
+      else if (!profile.certified) blockers.push("SOURCE_NOT_CERTIFIED")
+
+      // P2: search_engine_indexing_allowed must be explicitly TRUE (approve_search_indexing_policy must run first)
+      const { data: capRow } = await supabase.from("opportunity_sources").select("source,seo_enabled,search_engine_indexing_allowed,web_catalog_allowed,catalog_enabled").eq("source", targetSource).maybeSingle()
+      if (capRow?.search_engine_indexing_allowed === false) blockers.push("POLICY_DENIED_BY_SOURCE_CONTRACT")
+      else if (capRow?.search_engine_indexing_allowed !== true) blockers.push("POLICY_NOT_EXPLICITLY_APPROVED")
+
+      // P3: must not already be enabled
+      if (capRow?.seo_enabled === true) blockers.push("ALREADY_ENABLED")
+
+      // P4: web_catalog_allowed is a prerequisite for SEO (content must be catalog-worthy first)
+      const webCatalogAllowed = capRow?.web_catalog_allowed ?? profile?.distribution_policy?.web_catalog_allowed ?? false
+      if (!webCatalogAllowed) blockers.push("WEB_CATALOG_NOT_ALLOWED")
+
+      // P5: minimum inventory — at least 50 live rows for the source
+      const { count: liveCount } = await supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("source", targetSource).is("deleted_at", null).is("archived_at", null)
+      if ((liveCount ?? 0) < 50) blockers.push(`INSUFFICIENT_INVENTORY_${liveCount ?? 0}`)
+
+      // P6: Eight Gates G1-G6 must not be in terminal FAIL (need snapshot)
+      const { data: latestRun } = await supabase.from("scraper_runs").select("status,extraction_metrics,finished_at").eq("scraper_id", targetSource + "_scraper").order("started_at", { ascending: false }).limit(1).maybeSingle()
+      if (latestRun?.status === "failed") blockers.push("LATEST_RUN_FAILED")
+
+      const finishedAt = new Date().toISOString()
+      if (blockers.length > 0) {
+        const { data: blockedAuditRow } = await supabase.from("source_control_audit_log").insert({
+          action: "enable_seo_for_source", source: targetSource,
+          admin_note: String(payload?.admin_note || "").trim() || null,
+          result_status: "blocked", blockers,
+          before_state: { seo_enabled: capRow?.seo_enabled ?? null, search_engine_indexing_allowed: capRow?.search_engine_indexing_allowed ?? null },
+          after_state: null,
+          result_detail: `Bloqueado: ${blockers.join(", ")}`,
+        }).select("id").maybeSingle()
+        const result: AdminActionResult = {
+          status: "blocked", executed: false, changed: false, source: targetSource,
+          action: "enable_seo_for_source", reason: `Bloqueado por ${blockers.length} precondición(es)`,
+          rows_scanned: 1, rows_changed: 0, started_at: startedAt, finished_at: finishedAt,
+          event_id: (blockedAuditRow as any)?.id || null, error: null, blockers,
+        }
+        return { statusCode: 200, body: JSON.stringify(result) }
+      }
+
+      const { error: updateErr } = await supabase.from("opportunity_sources").update({ seo_enabled: true }).eq("source", targetSource)
+      if (updateErr) {
+        const result: AdminActionResult = {
+          status: "error", executed: true, changed: false, source: targetSource,
+          action: "enable_seo_for_source", reason: updateErr.message,
+          rows_scanned: 1, rows_changed: 0, started_at: startedAt, finished_at: new Date().toISOString(),
+          event_id: null, error: updateErr.message, blockers: [],
+        }
+        return { statusCode: 500, body: JSON.stringify(result) }
+      }
+
+      const { data: auditRowSeo } = await supabase.from("source_control_audit_log").insert({
+        action: "enable_seo_for_source", source: targetSource,
+        admin_note: String(payload?.admin_note || "").trim() || null,
+        result_status: "ok", blockers: [],
+        before_state: { seo_enabled: false },
+        after_state: { seo_enabled: true },
+        result_detail: "Todas las precondiciones cumplidas — seo_enabled=true",
+      }).select("id").maybeSingle()
+
+      const result: AdminActionResult = {
+        status: "ok", executed: true, changed: true, source: targetSource,
+        action: "enable_seo_for_source", reason: "Todas las precondiciones cumplidas — seo_enabled=true",
+        rows_scanned: 1, rows_changed: 1, started_at: startedAt, finished_at: new Date().toISOString(),
+        event_id: (auditRowSeo as any)?.id || null, error: null, blockers: [],
+      }
+      return { statusCode: 200, body: JSON.stringify(result) }
+    }
+
+    if (action === "get_source_stats") {
+      // Per-canonical-source inventory stats: aliases summed, no Eight Gates computation.
+      const [dashRes, capRes] = await Promise.all([
+        supabase.rpc("admin_opportunity_pipeline_dashboard"),
+        supabase.from("opportunity_sources")
+          .select("source,catalog_enabled,matching_enabled,seo_enabled,search_engine_indexing_allowed,web_catalog_allowed")
+          .limit(500),
+      ])
+      const statsMap: Record<string, any> = dashRes.data?.sources || {}
+      const caps: Record<string, any> = {}
+      for (const row of (capRes.data || [])) caps[String(row.source || "").toLowerCase()] = row
+      const registry = sourceIntelligenceRegistry()
+      const result = (registry.sources || []).map((profile: any) => {
+        const aliases: string[] = (profile.emitted_aliases || [profile.canonical_source]).map((v: string) => v.toLowerCase())
+        const pools = aliases.reduce((acc: any, alias: string) => {
+          const statKey = Object.keys(statsMap).find(k => k.toLowerCase() === alias)
+          const v = statsMap[alias] || (statKey ? statsMap[statKey] : {}) || {}
+          acc.inventory += Number(v.total || 0)
+          acc.catalog += Number(v.catalog || 0)
+          acc.matching += Number(v.matching || 0)
+          acc.seo += Number(v.seo || 0)
+          return acc
+        }, { inventory: 0, catalog: 0, matching: 0, seo: 0 })
+        const cap = aliases.map((a: string) => caps[a]).find(Boolean) || null
+        return {
+          source: profile.canonical_source,
+          display_name: profile.display_name || profile.canonical_source,
+          implementation_state: profile.implementation_state || "NOT_IMPLEMENTED",
+          source_family: profile.source_family || null,
+          certified: Boolean(profile.certified),
+          auto_enabled: Boolean(profile.auto_enabled),
+          alias_count: aliases.length,
+          inventory: pools.inventory,
+          catalog: pools.catalog,
+          matching: pools.matching,
+          seo: pools.seo,
+          seo_enabled: cap?.seo_enabled ?? null,
+          catalog_enabled: cap?.catalog_enabled ?? null,
+          matching_enabled: cap?.matching_enabled ?? null,
+          search_engine_indexing_allowed: cap?.search_engine_indexing_allowed ?? null,
+          web_catalog_allowed: cap?.web_catalog_allowed ?? (profile.distribution_policy?.web_catalog_allowed ?? null),
+        }
+      })
+      return { statusCode: 200, body: JSON.stringify({ stats: result, total: result.length, generated_at: new Date().toISOString() }) }
+    }
+
+    if (action === "approve_search_indexing_policy") {
+      // Approve (NULL→TRUE) the search engine indexing policy for a source.
+      // FALSE is immutable by this action — contractual prohibition cannot be removed here.
+      // Requires explicit admin_note for the audit record.
+      const startedAt = new Date().toISOString()
+      const targetSource = String(payload?.source || "").toLowerCase()
+      const adminNote = String(payload?.admin_note || "").trim()
+      if (!targetSource) return { statusCode: 400, body: JSON.stringify({ error: "source requerido" }) }
+      if (!adminNote) return { statusCode: 400, body: JSON.stringify({ error: "admin_note requerido para la aprobación de política" }) }
+
+      const registry = sourceIntelligenceRegistry()
+      const profile = (registry.sources || []).find((s: any) => s.canonical_source === targetSource)
+      if (!profile) {
+        return { statusCode: 404, body: JSON.stringify({ error: "Fuente no encontrada en el registro" }) }
+      }
+
+      const { data: capRow } = await supabase.from("opportunity_sources")
+        .select("source,search_engine_indexing_allowed,seo_enabled")
+        .eq("source", targetSource).maybeSingle()
+
+      const beforeState = { search_engine_indexing_allowed: capRow?.search_engine_indexing_allowed ?? null }
+
+      if (capRow?.search_engine_indexing_allowed === false) {
+        await supabase.from("source_control_audit_log").insert({
+          action: "approve_search_indexing_policy", source: targetSource, admin_note: adminNote,
+          result_status: "blocked", blockers: ["POLICY_DENIED_IMMUTABLE"],
+          before_state: beforeState, after_state: null,
+          result_detail: "search_engine_indexing_allowed=false es inmutable vía esta acción",
+        })
+        const result: AdminActionResult = {
+          status: "blocked", executed: false, changed: false, source: targetSource,
+          action: "approve_search_indexing_policy",
+          reason: "La prohibición contractual de SEO es inmutable. Requiere revisión del contrato de fuente.",
+          rows_scanned: 1, rows_changed: 0, started_at: startedAt, finished_at: new Date().toISOString(),
+          event_id: null, error: null, blockers: ["POLICY_DENIED_IMMUTABLE"],
+        }
+        return { statusCode: 200, body: JSON.stringify(result) }
+      }
+
+      if (capRow?.search_engine_indexing_allowed === true) {
+        const result: AdminActionResult = {
+          status: "no_change", executed: false, changed: false, source: targetSource,
+          action: "approve_search_indexing_policy", reason: "La política ya está aprobada (TRUE)",
+          rows_scanned: 1, rows_changed: 0, started_at: startedAt, finished_at: new Date().toISOString(),
+          event_id: null, error: null, blockers: [],
+        }
+        return { statusCode: 200, body: JSON.stringify(result) }
+      }
+
+      const { error: updateErr } = await supabase.from("opportunity_sources")
+        .update({ search_engine_indexing_allowed: true }).eq("source", targetSource)
+      if (updateErr) {
+        return { statusCode: 500, body: JSON.stringify({ error: updateErr.message }) }
+      }
+
+      const { data: auditRow } = await supabase.from("source_control_audit_log").insert({
+        action: "approve_search_indexing_policy", source: targetSource, admin_note: adminNote,
+        result_status: "ok", blockers: [],
+        before_state: beforeState,
+        after_state: { search_engine_indexing_allowed: true },
+        result_detail: "Política SEO aprobada explícitamente — NULL→TRUE",
+      }).select("id").maybeSingle()
+
+      const result: AdminActionResult = {
+        status: "ok", executed: true, changed: true, source: targetSource,
+        action: "approve_search_indexing_policy",
+        reason: "search_engine_indexing_allowed actualizado a TRUE",
+        rows_scanned: 1, rows_changed: 1, started_at: startedAt, finished_at: new Date().toISOString(),
+        event_id: (auditRow as any)?.id || null, error: null, blockers: [],
+      }
+      return { statusCode: 200, body: JSON.stringify(result) }
+    }
+
+    if (action === "diagnose_source") {
+      // Read-only diagnostic for a single source: runs Eight Gates evaluation on live DB state.
+      // Does not mutate anything.
+      const targetSource = String(payload?.source || "").toLowerCase()
+      if (!targetSource) return { statusCode: 400, body: JSON.stringify({ error: "source requerido" }) }
+
+      const registry = sourceIntelligenceRegistry()
+      const profile = (registry.sources || []).find((s: any) => s.canonical_source === targetSource)
+      if (!profile) {
+        return { statusCode: 404, body: JSON.stringify({ error: "Fuente no encontrada en el registro" }) }
+      }
+
+      const aliases: string[] = (profile.emitted_aliases || [profile.canonical_source]).map((v: string) => v.toLowerCase())
+      const aliasSet = new Set<string>(aliases)
+
+      const [runsRes, sourceRowsRes, observationsRes, enrichmentRes, capRes] = await Promise.all([
+        supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,error_count,found_count,valid_count,inserted_count,updated_count,error_summary,adapter_version,extraction_metrics")
+          .in("scraper_id", [...aliases.map(a => `${a}_scraper`), targetSource + "_scraper"])
+          .order("started_at", { ascending: false }).limit(5),
+        supabase.from("opportunities").select("id,source,semantic_fingerprint,match_eligible,description,location,country_code")
+          .in("source", aliases).is("deleted_at", null).is("archived_at", null).limit(2000),
+        supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at")
+          .in("source", aliases).order("observed_at", { ascending: false }).limit(2000),
+        supabase.from("opportunity_enrichment_events").select("opportunity_id,source,changed_fields,created_at")
+          .in("source", aliases).order("created_at", { ascending: false }).limit(1000),
+        supabase.from("opportunity_sources").select("source,catalog_enabled,matching_enabled,alerts_enabled,seo_enabled,search_engine_indexing_allowed")
+          .in("source", aliases).limit(10),
+      ])
+
+      const latestRun = runsRes.data?.[0] || null
+      const sourceRows = sourceRowsRes.data || []
+      const observations = observationsRes.data || []
+      const enrichmentRows = enrichmentRes.data || []
+
+      const capRow = (capRes.data || []).find((r: any) => aliasSet.has(String(r.source || "").toLowerCase()))
+      const capabilityFlags = capRow ? {
+        catalog_enabled: Boolean(capRow.catalog_enabled),
+        matching_enabled: Boolean(capRow.matching_enabled),
+        alerts_enabled: Boolean(capRow.alerts_enabled),
+        seo_enabled: Boolean(capRow.seo_enabled),
+        search_engine_indexing_allowed: capRow.search_engine_indexing_allowed ?? null,
+      } : {}
+
+      const eightGates = evaluateEightGates({ ...profile, ...capabilityFlags }, sourceRows, latestRun, observations, enrichmentRows)
+
+      const failing = eightGates.gates.filter((g: any) => g.status === "FAIL")
+      const warnings = eightGates.gates.filter((g: any) => g.status === "WARNING")
+      const overallHealth = failing.length > 0 ? "CRITICAL" : warnings.length > 0 ? "DEGRADED" : "HEALTHY"
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          source: targetSource,
+          display_name: profile.display_name || targetSource,
+          overall_health: overallHealth,
+          failing_gates: failing.length,
+          warning_gates: warnings.length,
+          eight_gates: eightGates,
+          latest_run: latestRun ? { run_id: latestRun.run_id, status: latestRun.status, started_at: latestRun.started_at } : null,
+          inventory: sourceRows.length,
+          observations: observations.length,
+          diagnosed_at: new Date().toISOString(),
+        }),
+      }
     }
 
     if (action === "update_source_tier") {

@@ -57,11 +57,21 @@ export function evaluateEightGates(profile: any, rows: any[], latestRun: any, ob
   const capability = (key: string, label: string) => typeof profile[key] === 'boolean' ? { surface: label, state: profile[key] ? 'ALLOWED' : 'RESTRICTED' } : { surface: label, state: 'POLICY_NOT_DEFINED' }
   // catalog requires both web_catalog_allowed (policy) AND catalog_enabled (DB flag)
   const catalogAllowed = declared('web_catalog_allowed') && policy.web_catalog_allowed && (typeof profile.catalog_enabled !== 'boolean' || profile.catalog_enabled)
+  // organic_seo: tri-state policy check (search_engine_indexing_allowed)
+  //   false  → POLICY_DENIED (source contract prohibits SEO regardless of seo_enabled)
+  //   true   → policy permits; fall through to seo_enabled DB flag
+  //   null/undefined → legacy; seo_enabled DB flag governs (existing behaviour)
+  const seiAllowed = profile.search_engine_indexing_allowed
+  const organic_seo = seiAllowed === false
+    ? { surface: 'organic_seo', state: 'POLICY_DENIED' }
+    : seiAllowed === true
+      ? capability('seo_enabled', 'organic_seo')
+      : capability('seo_enabled', 'organic_seo')  // null = legacy path
   const surfaces = {
     web_catalog: !declared('web_catalog_allowed') ? { surface: 'web_catalog', state: 'POLICY_NOT_DEFINED' } : { surface: 'web_catalog', state: catalogAllowed ? 'ALLOWED' : 'RESTRICTED' },
     matching: capability('matching_enabled', 'matching'),
     alerts: capability('alerts_enabled', 'alerts'),
-    organic_seo: capability('seo_enabled', 'organic_seo'),
+    organic_seo,
     google_jobs: surface('google_jobs_distribution_allowed', 'google_jobs'),
     third_party_distribution: surface('third_party_job_distribution_allowed', 'third_party_distribution'),
     attribution_required: !declared('source_attribution_required') ? { surface: 'attribution_required', state: 'POLICY_NOT_DEFINED' } : { surface: 'attribution_required', state: policy.source_attribution_required ? 'REQUIRED' : 'NOT_REQUIRED' },

@@ -395,10 +395,9 @@ jobs:
         run: python scripts/run_scraper_monitored.py cird_competitions_tenders cird_competitions scrapers/cird_competitions_scraper.py
         continue-on-error: true
 
-      - name: VC4A PES LatAm — capital social y aceleradoras LATAM
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}
-        run: python scripts/run_scraper_monitored.py vc4a_pes_latam vc4a_pes_latam scrapers/vc4a_pes_latam_scraper.py
-        continue-on-error: true
+      # VC4A PES LatAm removed — scrapers/vc4a_pes_latam_scraper.py was never
+      # implemented (NOT_IMPLEMENTED status). Source remains in registry for
+      # diagnosis; no step runs until an adapter is written.
 
       - name: 500 LATAM — capital semilla USD 300k para startups
         if: ${{ github.event_name == 'schedule' || github.event.inputs.scraper == 'all' }}

@@ -265,7 +265,10 @@ function testRegressionAM() {
 
   // D. Double approve is idempotent: RPC returns invalid_state when already active
   assert('D: RPC guards against double-approve (invalid_state)', migration.includes("'invalid_state'"))
-  assert('D: invalid_state NOT IN (accepted, offered) guard present', migration.includes("NOT IN ('accepted', 'offered')"))
+  // After the Founding Beta bug fix, the guard is now != 'accepted' (not NOT IN).
+  // offered-only users cannot be approved — they must click Accept first.
+  assert('D: approval guard is != accepted (not NOT IN)', migration.includes("!= 'accepted'"))
+  assert('D: offered is removed from approval guard', !migration.includes("NOT IN ('accepted', 'offered')"))
   // admin-data handles invalid_state with a 409
   assert('D: admin-data handles invalid_state with 409', adminData.includes("invalid_state"))
 
@@ -295,6 +298,21 @@ function testRegressionAM() {
   // L. Location missing produces warning in admin drawer or admin-data
   assert('L: location warning present in admin-data or drawer',
     adminData.includes('has_location') || src('src/components/admin/UserDetailDrawer.tsx').includes('has_location'))
+
+  // K+1. offered → approve attempt must be REJECTED (bug fix regression)
+  // The RPC must NOT accept offered-only (user never clicked Accept)
+  assert('K+1: approval guard uses != accepted (not NOT IN offered)', migration.includes("!= 'accepted'"))
+  assert('K+1: offered status cannot bypass approval — guard excludes it', !migration.includes("NOT IN ('accepted', 'offered')"))
+
+  // K+2. accepted → approve is allowed (happy path)
+  assert('K+2: accepted status passes approval guard', migration.includes("!= 'accepted'") && migration.includes("status = 'active'"))
+
+  // K+3. active/completed → approve must be rejected (double-approve prevention)
+  // The guard !='accepted' blocks active, completed, declined, offered all at once
+  assert('K+3: double-approve returns invalid_state', migration.includes("'invalid_state'"))
+
+  // K+4. Comment in migration explains why offered is excluded
+  assert('K+4: migration comment explains offered exclusion and consent requirement', migration.includes('consent'))
 
   // M. Email idempotency keys are distinct per event
   const requestedKey = "founder_founding_requested:"   // from notifyFounderMilestone with event=founding_requested

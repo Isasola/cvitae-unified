@@ -41,7 +41,9 @@ BEGIN
     RETURN jsonb_build_object('status', 'not_found');
   END IF;
 
-  IF v_enrollment.status NOT IN ('accepted', 'offered') THEN
+  -- Only users who explicitly accepted (clicked the button) may be approved.
+  -- 'offered' alone (seen modal, never clicked) does NOT grant consent.
+  IF v_enrollment.status != 'accepted' THEN
     RETURN jsonb_build_object('status', 'invalid_state', 'current_status', v_enrollment.status);
   END IF;
 
@@ -100,6 +102,6 @@ REVOKE ALL ON FUNCTION public.admin_reject_founding_beta(UUID) FROM public, anon
 GRANT EXECUTE ON FUNCTION public.admin_reject_founding_beta(UUID) TO service_role;
 
 COMMENT ON FUNCTION public.admin_approve_founding_beta IS
-  'Admin-only: approve a Founding Beta request. Only active+completed rows count toward the 50-user cap.';
+  'Admin-only: approve a Founding Beta request. Only status=accepted (user gave explicit consent) is eligible. Only active+completed rows count toward the 50-user cap.';
 COMMENT ON FUNCTION public.admin_reject_founding_beta IS
   'Admin-only: reject a Founding Beta request. Sets status=declined.';

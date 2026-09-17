@@ -74,6 +74,21 @@
   status = 200
   force = true
 
+# Explicit child-sitemap routes: Netlify's :segment placeholder does not reliably
+# match paths containing dots (e.g. sitemap-static.xml), so we declare these before
+# the generic pattern and before the /* SPA fallback.
+[[redirects]]
+  from = "/sitemap-static.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/sitemap-opportunities-:page.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/sitemap-:segment.xml"
   to = "/.netlify/functions/sitemap"
