@@ -25,6 +25,8 @@ assert run_two["run_id"] == "run-two" and run_two["items"][0]["opportunity_id"] 
 assert run_one["items"][0]["identity"] != run_two["items"][0]["identity"]
 assert run_two["items"][0]["persistence"] == "NOT_PERSISTED"
 assert run_two["issue_groups"]["ROW_NOT_FOUND_AFTER_SINK"] == 1
+failed_lineage = build_scan_lineage([first], run_id="run-three", scan_request_id="request-three", persisted={first.apply_url: "opportunity-one"}, lineage_errors=["LINEAGE_EVENT_WRITE_FAILED"])
+assert failed_lineage["lineage_evidence"] == {"status": "WARNING", "reason_codes": ["LINEAGE_EVENT_WRITE_FAILED"]}
 
 runner = (ROOT / "scripts" / "run_scraper_monitored.py").read_text(encoding="utf8")
 workflow = (ROOT / ".github" / "workflows" / "scrapers.yml").read_text(encoding="utf8")
@@ -47,4 +49,8 @@ for field in ("description", "source_url"):
     if previous["coverage"][field] > 0 and latest["coverage"][field] < previous["coverage"][field] * 0.5:
         signals.append(f"{field}_coverage")
 assert signals == ["found", "description_coverage"]
+schema = (ROOT / "supabase" / "migrations" / "202609120002_opportunity_intelligence_v2_schema.sql").read_text(encoding="utf8")
+writer = (ROOT / "scrapers" / "source_adapters.py").read_text(encoding="utf8")
+for column in ("opportunity_id", "source", "adapter_version", "source_url", "canonical_url", "changed_fields", "before_fields", "after_fields", "evidence"):
+    assert column in schema and f'"{column}"' in writer
 print("PASS source scan lineage: isolated runs, durable identity, trigger correlation, allowlist, drift")

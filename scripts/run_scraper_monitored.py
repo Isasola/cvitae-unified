@@ -192,7 +192,7 @@ def main() -> int:
     run_id = os.getenv("GITHUB_RUN_ID", f"local-{int(time.time())}")
     trigger = os.getenv("GITHUB_EVENT_NAME", "local")
     scan_request_id = os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID", "").strip()
-    trigger_type = f"scan:{scan_request_id}" if scan_request_id else "schedule" if trigger == "schedule" else "manual" if trigger == "workflow_dispatch" else "local"
+    trigger_type = "scan" if scan_request_id else "schedule" if trigger == "schedule" else "manual" if trigger == "workflow_dispatch" else "local"
     server = os.getenv("GITHUB_SERVER_URL", "https://github.com")
     repo = os.getenv("GITHUB_REPOSITORY", "")
     github_url = f"{server}/{repo}/actions/runs/{run_id}" if repo else None
@@ -217,6 +217,7 @@ def main() -> int:
                 "scraper_name": args.scraper_name,
                 "script_path": args.script_path,
                 "trigger_type": trigger_type,
+                "scan_request_id": scan_request_id or None,
                 "status": db_status(explicit_status),
                 "warning_count": 1,
                 "error_count": 0,
@@ -243,6 +244,7 @@ def main() -> int:
             "scraper_name": args.scraper_name,
             "script_path": args.script_path,
             "trigger_type": trigger_type,
+            "scan_request_id": scan_request_id or None,
             "status": "running",
             "github_run_url": github_url,
             "started_at": started.isoformat(),
@@ -260,7 +262,15 @@ def main() -> int:
         # The child never derives lineage from wall-clock timestamps.
         child_env["CVITAE_SCRAPER_RUN_ID"] = run_id
         child_env["CVITAE_SOURCE_SCAN_REQUEST_ID"] = scan_request_id
-        child_env["CVITAE_MAX_ITEMS"] = str(control.get("max_items_per_run") or 250)
+        # scan (Admin Play): bounded diagnostic cap — never overwhelm production
+        # schedule (production cron): high fallback so full inventory is processed
+        # manual/local: operator-configured cap
+        if trigger_type == "scan":
+            child_env["CVITAE_MAX_ITEMS"] = str(control.get("max_items_per_run") or 50)
+        elif trigger_type == "schedule":
+            child_env["CVITAE_MAX_ITEMS"] = str(control.get("max_items_per_run") or 10000)
+        else:
+            child_env["CVITAE_MAX_ITEMS"] = str(control.get("max_items_per_run") or 250)
         child_env["CVITAE_ALLOWED_COUNTRIES"] = ",".join(control.get("allowed_country_codes") or [])
         child_env["CVITAE_REQUIRE_REVIEW"] = "1" if control.get("require_review", True) else "0"
         runtime_policy = os.path.abspath(os.path.join("scrapers", "runtime_policy"))
@@ -315,6 +325,7 @@ def main() -> int:
                 "updated_count": summary.get("updated") if summary else None,
                 "duplicate_count": summary.get("duplicates_in_run") if summary else None,
                 "rejected_count": summary.get("rejected") if summary else None,
+                "unchanged_count": summary.get("unchanged") if summary else None,
                 "warning_count": warning_count,
                 "error_count": error_count,
                 "error_summary": "\n".join(error_lines[:8])[:2000] or None,

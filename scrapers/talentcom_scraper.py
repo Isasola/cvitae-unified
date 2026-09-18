@@ -261,6 +261,7 @@ def insert_job(job):
 
 
 def main():
+    max_items = int(os.getenv("CVITAE_MAX_ITEMS", "250"))
     total_found = 0
     seen_urls = set()
     detail_results = []
@@ -269,6 +270,8 @@ def main():
     enricher = AtomicEnricher(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_KEY else None
 
     for keywords, location, rubro in SEARCHES:
+        if len(seen_urls) >= max_items:
+            break
         label = f"'{keywords}'" if keywords else "general"
         print(f"\nFetching Talent.com: {label} en {location}")
 
@@ -276,6 +279,8 @@ def main():
         jobs = parse_jobs(html, rubro, location)
 
         for job in jobs:
+            if len(seen_urls) >= max_items:
+                break
             if job["application_url"] in seen_urls:
                 continue
             seen_urls.add(job["application_url"])
@@ -317,7 +322,8 @@ def main():
     baseline = enricher.recent_healthy_baseline("talentcom_scraper") if enricher else None
     status, reasons = health(metrics, baseline)
     metrics["health"] = {"status": status, "reasons": reasons}
-    metrics.update(runtime_telemetry(provider_health="DEGRADED" if status == "DEGRADED" else "HEALTHY", coverage_complete=False, coverage_stop_reason="configured_search_set", found=total_found, valid=metrics["parsed"], processed=len(detail_results), rejected=max(0,total_found-metrics["parsed"]), rejection_reasons={"detail_parse": max(0,total_found-metrics["parsed"])}))
+    _coverage_stop = "record_budget_reached" if len(seen_urls) >= max_items else "configured_search_set"
+    metrics.update(runtime_telemetry(provider_health="DEGRADED" if status == "DEGRADED" else "HEALTHY", coverage_complete=False, coverage_stop_reason=_coverage_stop, found=total_found, valid=metrics["parsed"], processed=len(detail_results), rejected=max(0,total_found-metrics["parsed"]), rejection_reasons={"detail_parse": max(0,total_found-metrics["parsed"])}))
     metrics["eight_gates"] = eight_gates_run_evidence(source="talentcom", adapter_version=ADAPTER_VERSION, metrics=metrics, details=detail_results, summary=summary.to_dict() if summary else None)
     if summary:
         print("CVITAE_INGESTION_SUMMARY=" + json.dumps(summary.to_dict(), ensure_ascii=False))

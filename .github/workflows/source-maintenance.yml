@@ -1,0 +1,63 @@
+name: CVitae Source Maintenance
+
+on:
+  schedule:
+    # Incremental TTL checkpoints make this inexpensive between source changes.
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'unjobs | himalayas | talentcom | wwr | all'
+        required: false
+        default: 'all'
+      mode:
+        description: 'apply | dry-run | diagnose'
+        required: false
+        default: 'dry-run'
+
+permissions:
+  contents: read
+
+concurrency:
+  # A run with source=all includes UNJobs, so a global lock is safer than an
+  # input-only group that could overlap it with a manual UNJobs run.
+  group: cvitae-source-maintenance
+  cancel-in-progress: false
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      HF_HOME: ~/.cache/huggingface
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: |
+            scrapers/requirements.txt
+            scripts/requirements-opportunity-factory.txt
+      - name: Install adapter and embedding dependencies
+        run: |
+          pip install -r scrapers/requirements.txt
+          pip install -r scripts/requirements-opportunity-factory.txt
+      - name: Run scheduled auto-enabled source maintenance
+        if: github.event_name == 'schedule'
+        run: python -X utf8 scripts/run_source_maintenance.py --source all --apply
+      - name: Run manually requested mode
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          SOURCE='${{ inputs.source }}'
+          MODE='${{ inputs.mode }}'
+          case "$MODE" in
+            apply) python -X utf8 scripts/run_source_maintenance.py --source "$SOURCE" --apply ;;
+            diagnose) python -X utf8 scripts/run_source_maintenance.py --source "$SOURCE" --diagnose ;;
+            dry-run) python -X utf8 scripts/run_source_maintenance.py --source "$SOURCE" --dry-run ;;
+            *) echo "invalid mode"; exit 2 ;;
+          esac

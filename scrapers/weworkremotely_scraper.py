@@ -128,10 +128,15 @@ def parse_wwr_detail(url: str, rss: dict | None = None, session: requests.Sessio
 
 
 def main() -> None:
+    max_items = int(os.getenv("CVITAE_MAX_ITEMS", "250"))
     seen: set[str] = set(); details: list[AdapterResult] = []; new_jobs: list[dict] = []; enrichment = {"attempted": 0, "changed": 0, "noop": 0, "stale": 0, "failed": 0}
     enricher = AtomicEnricher(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_KEY else None
     for slug, rubro in CATEGORIES:
+        if len(seen) >= max_items:
+            break
         for item in parse_feed(BASE_RSS.format(slug)):
+            if len(seen) >= max_items:
+                break
             rss = rss_job(item, rubro)
             if not rss or rss["url"] in seen: continue
             seen.add(rss["url"]); detail = parse_wwr_detail(rss["url"], rss); details.append(detail)
@@ -146,7 +151,10 @@ def main() -> None:
     metrics_lineage = RunLineageWriter(SUPABASE_URL, SUPABASE_KEY).record(details) if SUPABASE_KEY else build_scan_lineage(details, run_id=os.getenv("CVITAE_SCRAPER_RUN_ID"), scan_request_id=os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID"))
     metrics = {"found": len(seen), "detail_pages_attempted": len(details), "detail_pages_success": sum(item.source_status == 200 for item in details), "parsed": sum(bool(item.title) for item in details), "coverage": coverage(details), "enrichment": enrichment, "scan_lineage": metrics_lineage, "classification": {key: sum(item.recommendation == key for item in details) for key in ("AUTO_PUBLISH", "AUTO_BLOCK", "HUMAN_REVIEW")}}
     baseline = enricher.recent_healthy_baseline("weworkremotely_scraper") if enricher else None; status, reasons = health(metrics, baseline); metrics["health"] = {"status": status, "reasons": reasons}
-    metrics.update(runtime_telemetry(provider_health="DEGRADED" if status == "DEGRADED" else "HEALTHY", coverage_complete=None, coverage_stop_reason="rss_category_walk", found=len(seen), valid=metrics["parsed"], processed=len(details), rejected=max(0, len(seen)-metrics["parsed"]), rejection_reasons={"detail_or_generic_mismatch": sum(item.evidence.get("detail_match") is False for item in details)}))
+    _budget_hit = len(seen) >= max_items
+    _coverage_stop = "record_budget_reached" if _budget_hit else "rss_category_walk"
+    _coverage_flag = False if _budget_hit else None
+    metrics.update(runtime_telemetry(provider_health="DEGRADED" if status == "DEGRADED" else "HEALTHY", coverage_complete=_coverage_flag, coverage_stop_reason=_coverage_stop, found=len(seen), valid=metrics["parsed"], processed=len(details), rejected=max(0, len(seen)-metrics["parsed"]), rejection_reasons={"detail_or_generic_mismatch": sum(item.evidence.get("detail_match") is False for item in details)}))
     metrics["eight_gates"] = eight_gates_run_evidence(source="weworkremotely", adapter_version=ADAPTER_VERSION, metrics=metrics, details=details, summary=summary.to_dict() if summary else None)
     if summary: print("CVITAE_INGESTION_SUMMARY=" + json.dumps(summary.to_dict(), ensure_ascii=False))
     print("CVITAE_ADAPTER_METRICS=" + json.dumps({"adapter_version": ADAPTER_VERSION, "extraction_metrics": metrics}, ensure_ascii=False))

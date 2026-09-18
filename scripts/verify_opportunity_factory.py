@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from scrapers.opportunity_sink import OpportunitySink, normalize_opportunity
-from scripts.opportunity_factory import MODEL_ID, embedding_text, seal
+from scripts.opportunity_factory import MODEL_ID, FactoryClient, embedding_text, seal, should_generate_embedding
 
 
 BASE: dict[str, Any] = {
@@ -54,6 +54,13 @@ ready_status, ready_stamps, _ = seal(first, now)
 assert ready_status == "ready" and set(ready_stamps.values()) == {"pass"}
 assert MODEL_ID == "Supabase/gte-small"
 assert "Backend Engineer" in embedding_text(first)
+assert not should_generate_embedding({**first, "match_eligible": False}, "ready", dry_run=False)
+assert not should_generate_embedding({**first, "match_eligible": True}, "ready", dry_run=True)
+assert should_generate_embedding({**first, "match_eligible": True}, "ready", dry_run=False)
+
+# Exact sealing is intentionally independent from matching; it must not create
+# a vector merely because a structurally-ready hidden row is sealed.
+assert not should_generate_embedding({**first, "match_eligible": False}, "ready", dry_run=False)
 
 review_status, _, _ = seal({**first, "country_code": None, "location": None, "eligible_countries": [], "eligible_regions": [], "remote": False}, now)
 assert review_status == "review"

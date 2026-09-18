@@ -64,6 +64,7 @@ EIGHT_GATE_STATUSES = {"PASS", "WARNING", "FAIL", "NOT_APPLICABLE", "NOT_EVALUAT
 def eight_gates_run_evidence(
     *, source: str, adapter_version: str, metrics: dict[str, Any], details: list[Any],
     summary: dict[str, Any] | None, semantic_version: str = "source-contract:v2.0",
+    quality_metrics: RunQualityMetrics | None = None,
 ) -> dict[str, Any]:
     """Emit durable, aggregate run evidence without guessing absent fields.
 
@@ -94,10 +95,11 @@ def eight_gates_run_evidence(
         else:
             state = "UNKNOWN"
         field_states[name] = {"state": state, "extracted": extracted, "total": total}
+    coverage_complete = metrics.get("coverage_state", {}).get("complete") if isinstance(metrics.get("coverage_state"), dict) else metrics.get("coverage_complete")
     discovery_status = (
         "PROVIDER_UNREACHABLE" if found and not success and total else
         "NO_RESULTS" if found == 0 else
-        "PARTIAL_COVERAGE" if metrics.get("coverage_complete") is False else "PASS"
+        "PARTIAL_COVERAGE" if coverage_complete is False else "PASS"
     )
     detail_status = "FAIL" if total and success == 0 else "WARNING" if total and parsed < total else "PASS" if total else "NOT_EVALUATED"
     rejected = int((summary or {}).get("rejected", 0) or 0)
@@ -107,10 +109,85 @@ def eight_gates_run_evidence(
         "gate_2": {"status": detail_status, "reason_code": "DETAIL_TRANSLATED" if detail_status == "PASS" else "DETAIL_PARTIAL" if detail_status == "WARNING" else "DETAIL_UNAVAILABLE", "metrics": {"parsed": parsed, "attempted": total, "fields": field_states}},
         "gate_3": {"status": "WARNING" if rejected else "PASS", "reason_code": "FILTERED_ROWS" if rejected else "FILTERS_COMPLETED", "metrics": {"rejected": rejected, "valid": (summary or {}).get("valid")}},
     }
+    if quality_metrics is not None:
+        qm = quality_metrics
+        quality_failures: list[str] = []
+        if qm.total and qm.title_ok < qm.total * 0.9:
+            quality_failures.append("TITLE_INCOMPLETE")
+        if qm.total and qm.description_ok < qm.total * 0.5:
+            quality_failures.append("DESCRIPTION_INCOMPLETE")
+        if qm.total and qm.organization_ok == 0:
+            quality_failures.append("ORGANIZATION_MISSING")
+        if qm.total and qm.country_ok == 0:
+            quality_failures.append("COUNTRY_MISSING")
+        g4_status = "NOT_EVALUATED" if not qm.total else ("FAIL" if quality_failures else "PASS")
+        gates["gate_4"] = {
+            "status": g4_status,
+            "reason_code": quality_failures[0] if quality_failures else "QUALITY_PASS",
+            "metrics": {**qm.as_dict(), "_rows_source": "run_specific"},
+            "evidence": {"reasons": quality_failures},
+            "observed_at": None,
+        }
+        g2_desc_extracted = int((gates.get("gate_2", {}).get("metrics", {}).get("fields", {}).get("description", {}).get("extracted") or 0))
+        proven_lost = g2_desc_extracted > 0 and qm.description_ok < max(1, qm.total * 0.25)
+        field_losses: list[str] = []
+        if proven_lost:
+            field_losses.append("DESCRIPTION_LOST_BEFORE_PERSISTENCE")
+        if g2_desc_extracted > 0 and qm.source_url_ok == 0:
+            field_losses.append("SOURCE_URL_LOST")
+        if g2_desc_extracted > 0 and qm.application_url_ok == 0:
+            field_losses.append("APPLICATION_URL_LOST")
+        g5_status = "FAIL" if proven_lost else ("WARNING" if not qm.source_url_ok or not qm.description_ok else "PASS")
+        g5_reason = (field_losses[0] if field_losses else (
+            "PERSISTENCE_UNPROVEN_SOURCE_URL_MISSING" if not qm.source_url_ok else
+            "PERSISTENCE_UNPROVEN_DESCRIPTION_MISSING" if not qm.description_ok else "PERSISTED_OK"
+        ))
+        gates["gate_5"] = {
+            "status": g5_status,
+            "reason_code": g5_reason,
+            "metrics": {"total": qm.total, "description_ok": qm.description_ok, "source_url_ok": qm.source_url_ok, "application_url_ok": qm.application_url_ok, "_rows_source": "run_specific"},
+            "evidence": {"field_losses": field_losses, "extracted_description": g2_desc_extracted},
+            "observed_at": None,
+        }
+        g1_s = gates["gate_1"]["status"]
+        g3_s = gates["gate_3"]["status"]
+        g4_s = gates["gate_4"]["status"]
+        g5_s = gates["gate_5"]["status"]
+        if g1_s == "FAIL" or g3_s == "FAIL":
+            g6_overall, g6_status, g6_reason = "RUNTIME_FAIL", "FAIL", "RUNTIME_HEALTH_FAIL"
+        elif g4_s == "FAIL":
+            g6_overall, g6_status, g6_reason = "DATA_QUALITY_FAIL", "FAIL", "DATA_QUALITY_FAIL"
+        elif g5_s == "FAIL":
+            g6_overall, g6_status, g6_reason = "PERSISTENCE_FAIL", "FAIL", "PERSISTENCE_FAIL"
+        elif any(gates.get(f"gate_{i}", {}).get("status") == "WARNING" for i in range(1, 6)):
+            g6_overall, g6_status, g6_reason = "PARTIAL", "WARNING", "PARTIAL_HEALTH"
+        else:
+            g6_overall, g6_status, g6_reason = "HEALTHY", "PASS", "HEALTHY"
+        gates["gate_6"] = {
+            "status": g6_status,
+            "reason_code": g6_reason,
+            "metrics": {
+                "overall": g6_overall,
+                "scope": "run_specific",
+                "runtime_health": g1_s,
+                "filter_health": g3_s,
+                "quality_health": g4_s,
+                "persistence_health": g5_s,
+            },
+            "evidence": {},
+            "observed_at": None,
+        }
+
+    gate_entries: dict[str, Any] = {}
+    for name, value in gates.items():
+        if name in {"gate_4", "gate_5", "gate_6"}:
+            gate_entries[name] = {**value, **context}
+        else:
+            gate_entries[name] = {**value, "evidence": {}, "observed_at": None, **context}
     return {
         "contract": "source-intelligence:eight-gates:v1",
         **context,
-        **{name: {**value, "evidence": {}, "observed_at": None, **context} for name, value in gates.items()},
+        **gate_entries,
     }
 
 
@@ -144,6 +221,70 @@ def classify_run_evidence(run: dict[str, Any]) -> dict[str, Any]:
     if legacy_health == "HEALTHY" or run_status == "healthy":
         return {"status": UNKNOWN, "reason_codes": ["HEALTH_EVIDENCE_UNSTRUCTURED"], "provenance": "legacy_unstructured"}
     return {"status": UNKNOWN, "reason_codes": ["NO_HEALTH_EVIDENCE"], "provenance": "legacy_unstructured"}
+
+
+@dataclass
+class RunQualityMetrics:
+    """Field-level quality measured during a bounded scraper run (before DB persistence)."""
+    total: int
+    title_ok: int
+    description_ok: int
+    description_thin: int
+    organization_ok: int
+    location_ok: int
+    country_ok: int
+    application_url_ok: int
+    source_url_ok: int
+    eligibility_present: int
+    tags_present: int
+    coverage_complete: bool | None = None
+    stop_reason: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "total": self.total,
+            "title_ok": self.title_ok,
+            "description_ok": self.description_ok,
+            "description_thin": self.description_thin,
+            "organization_ok": self.organization_ok,
+            "location_ok": self.location_ok,
+            "country_ok": self.country_ok,
+            "application_url_ok": self.application_url_ok,
+            "source_url_ok": self.source_url_ok,
+            "eligibility_present": self.eligibility_present,
+            "tags_present": self.tags_present,
+            "coverage_complete": self.coverage_complete,
+            "stop_reason": self.stop_reason,
+        }
+
+
+def run_quality_metrics(
+    details: list[Any],
+    *,
+    coverage_complete: bool | None = None,
+    stop_reason: str | None = None,
+) -> RunQualityMetrics:
+    """Compute RunQualityMetrics from a list of scraped items (arbitrary attr access)."""
+    def _has(item: Any, attr: str, min_len: int = 1) -> bool:
+        v = getattr(item, attr, None)
+        return (len(v.strip()) >= min_len) if isinstance(v, str) else bool(v)
+
+    total = len(details)
+    return RunQualityMetrics(
+        total=total,
+        title_ok=sum(_has(r, "title") for r in details),
+        description_ok=sum(_has(r, "description", 80) for r in details),
+        description_thin=sum(1 for r in details if _has(r, "description", 1) and not _has(r, "description", 80)),
+        organization_ok=sum(_has(r, "organization") for r in details),
+        location_ok=sum(_has(r, "location") for r in details),
+        country_ok=sum(_has(r, "country_code") for r in details),
+        application_url_ok=sum(_has(r, "apply_url") for r in details),
+        source_url_ok=sum(_has(r, "source_url") for r in details),
+        eligibility_present=sum(_has(r, "eligible_countries") for r in details),
+        tags_present=sum(_has(r, "tags") for r in details),
+        coverage_complete=coverage_complete,
+        stop_reason=stop_reason,
+    )
 
 
 @dataclass(frozen=True)

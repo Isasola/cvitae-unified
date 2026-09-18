@@ -7,6 +7,7 @@ import { ArrowLeft, Briefcase, Building2, CalendarDays, ExternalLink, MapPin, Sh
 import { SiteShell } from '@/components/cv/SiteShell'
 import { supabase } from '@/lib/supabase'
 import { analytics } from '@/lib/analytics'
+import sourceRegistry from '@/generated/source-intelligence-registry.json'
 
 interface Job {
   id: string
@@ -24,6 +25,7 @@ interface Job {
   description: string | null
   application_url: string
   source: string | null
+  source_url: string | null
   created_at: string
   updated_at: string
 }
@@ -39,7 +41,7 @@ export default function JobDetail() {
     if (!slug) return
     supabase
       .from('opportunities')
-      .select('id,slug,title,organization,location,city,department,country_code,type,opportunity_type,deadline,rubro,description,application_url,source,created_at,updated_at')
+      .select('id,slug,title,organization,location,city,department,country_code,type,opportunity_type,deadline,rubro,description,application_url,source,source_url,created_at,updated_at')
       .eq('slug', slug)
       .eq('is_active', true)
       .eq('verification_status', 'verified')
@@ -66,7 +68,8 @@ export default function JobDetail() {
   // Only emit JobPosting when required fields are present — never emit with synthetic fallbacks
   const realDescription = clean(job.description)
   const realOrg = clean(job.organization)
-  const canEmitJobPosting = realDescription.length >= 100 && realOrg.length > 0
+  const distribution = sourceRegistry.sources.find(item => item.canonical_source === job?.source)?.distribution_policy
+  const canEmitJobPosting = realDescription.length >= 100 && realOrg.length > 0 && distribution?.google_jobs_distribution_allowed !== false
 
   const resolvedEmpType = toGoogleEmploymentType(job.type) ?? (job.opportunity_type === 'internship' ? 'INTERN' : undefined)
   const addrLocality = clean(job.city || job.location) || undefined
@@ -136,7 +139,7 @@ export default function JobDetail() {
               <div className="mt-5 space-y-3 border-t border-white/8 pt-4 text-xs leading-relaxed text-white/35">
                 <p className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />CVitae organiza la vacante; verificá condiciones y datos con la fuente original.</p>
                 <p className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Revisada {new Date(job.updated_at).toLocaleDateString('es-PY')}</p>
-                <p>Fuente: {clean(job.source) || 'No informada'}</p>
+                {distribution?.source_attribution_required && job.source_url ? <p>Fuente: <a href={safeExternalUrl(job.source_url)} target="_blank" rel="noopener noreferrer" className="text-[#c9a84c] hover:underline">Himalayas</a></p> : <p>Fuente: {clean(job.source) || 'No informada'}</p>}
               </div>
             </aside>
           </article>

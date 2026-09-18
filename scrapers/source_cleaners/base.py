@@ -37,6 +37,9 @@ class SourceProfile:
     known_assumptions: tuple[str, ...] = field(default_factory=tuple)
     emitted_aliases: tuple[str, ...] = field(default_factory=tuple)
     emitted_patterns: tuple[str, ...] = field(default_factory=tuple)
+    # Runner IDs as stored in scraper_runs.scraper_id (e.g. "unjobs_scraper").
+    # When empty, admin-data.ts derives them by appending _scraper/_scrapper.
+    operational_runner_ids: tuple[str, ...] = field(default_factory=tuple)
     certification: tuple[str, ...] = field(default_factory=tuple)
     # Evidence belongs to the same source-contract record as the declared
     # certification requirement. It is metadata only: it never grants a

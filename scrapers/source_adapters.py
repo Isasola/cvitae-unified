@@ -290,7 +290,7 @@ def _lineage_identity(result: AdapterResult) -> str | None:
 
 def build_scan_lineage(
     details: list[AdapterResult], *, run_id: str | None, scan_request_id: str | None,
-    persisted: dict[str, str] | None = None,
+    persisted: dict[str, str] | None = None, lineage_errors: list[str] | None = None,
 ) -> dict[str, Any]:
     """Build the compact, durable manifest for one monitored scraper run.
 
@@ -299,7 +299,7 @@ def build_scan_lineage(
     """
     persisted = persisted or {}
     items: list[dict[str, Any]] = []
-    issue_groups: Counter[str] = Counter()
+    issue_groups: Counter[str] = Counter(lineage_errors or [])
     for result in details:
         identity = _lineage_identity(result)
         opportunity_id = persisted.get(identity or "")
@@ -336,6 +336,7 @@ def build_scan_lineage(
         "items": items,
         "counts": dict(Counter(item["persistence"] for item in items)),
         "issue_groups": dict(issue_groups),
+        "lineage_evidence": {"status": "WARNING" if lineage_errors else "PASS", "reason_codes": list(dict.fromkeys(lineage_errors or []))},
     }
 
 
@@ -363,6 +364,7 @@ class RunLineageWriter:
         scan_request_id = os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID") or None
         persisted: dict[str, str] = {}
         events: list[dict[str, Any]] = []
+        lineage_errors: list[str] = []
         for result in details:
             identity = _lineage_identity(result)
             if not identity:
@@ -370,6 +372,7 @@ class RunLineageWriter:
             try:
                 opportunity_id = self._lookup(result)
             except requests.RequestException:
+                lineage_errors.append("LINEAGE_LOOKUP_FAILED")
                 continue
             if not opportunity_id:
                 continue
@@ -381,6 +384,26 @@ class RunLineageWriter:
         # Existing append-only evidence table makes reverse lookup durable even
         # when a detail produced no enrichment patch.
         if events:
-            response = self.session.post(f"{self.base_url}/opportunity_enrichment_events", headers={**self.headers, "Prefer": "return=minimal"}, json=events, timeout=30)
-            response.raise_for_status()
-        return build_scan_lineage(details, run_id=run_id, scan_request_id=scan_request_id, persisted=persisted)
+            try:
+                response = self.session.post(f"{self.base_url}/opportunity_enrichment_events", headers={**self.headers, "Prefer": "return=minimal"}, json=events, timeout=30)
+                response.raise_for_status()
+            except requests.RequestException:
+                # Ingestion already completed. Preserve the run manifest with a
+                # durable diagnostic rather than silently losing reverse lineage.
+                lineage_errors.append("LINEAGE_EVENT_WRITE_FAILED")
+        return build_scan_lineage(details, run_id=run_id, scan_request_id=scan_request_id, persisted=persisted, lineage_errors=lineage_errors)
+
+    @staticmethod
+    def lineage_summary(manifest: dict[str, Any]) -> dict[str, Any]:
+        """Compact summary extracted from a completed lineage manifest for logging."""
+        counts = manifest.get("counts", {})
+        items = manifest.get("items", [])
+        return {
+            "persisted": counts.get("PERSISTED", 0),
+            "not_persisted": counts.get("NOT_PERSISTED", 0),
+            "total": len(items),
+            "issues": dict(manifest.get("issue_groups", {})),
+            "lineage_status": manifest.get("lineage_evidence", {}).get("status", "UNKNOWN"),
+            "scan_request_id": manifest.get("scan_request_id"),
+            "run_id": manifest.get("run_id"),
+        }

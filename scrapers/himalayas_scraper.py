@@ -278,6 +278,7 @@ def fetch_api_inventory(*, page_size: int = 100, max_pages: int = 200, max_recor
 
 
 def main() -> None:
+    max_items = int(os.getenv("CVITAE_MAX_ITEMS", "250"))
     seen: set[str] = set(); details: list[AdapterResult] = []; new_jobs: list[dict] = []
     enrichment = {"attempted": 0, "changed": 0, "noop": 0, "stale": 0, "failed": 0}
     enricher = AtomicEnricher(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_KEY else None
@@ -285,6 +286,8 @@ def main() -> None:
     if inventory.error:
         print(f"Himalayas API error: {inventory.error}")
     for raw in inventory.jobs:
+            if len(seen) >= max_items:
+                break
             status = 200
             detail = adapt_himalayas_job(raw, status)
             if not detail.source_url or detail.source_url in seen:
@@ -307,7 +310,9 @@ def main() -> None:
     # incident. Only genuine provider failures affect operational health.
     if inventory.error and inventory.error not in {"page_budget_reached", "record_budget_reached", "runtime_budget_reached"}:
         provider_health = "DEGRADED" if inventory.error.startswith(("http_429", "http_5", "Connection", "Timeout")) else "UNHEALTHY"
-    coverage_stop = "complete" if inventory.complete else (inventory.error or "incomplete")
+    _budget_hit = len(seen) >= max_items
+    _coverage_complete = False if _budget_hit else inventory.complete
+    coverage_stop = "record_budget_reached" if _budget_hit else ("complete" if inventory.complete else (inventory.error or "incomplete"))
     metrics = {"found": len(seen), "valid": valid, "processed": len(details), "rejected": rejected,
       "detail_pages_attempted": len(details), "detail_pages_success": sum(item.source_status == 200 for item in details), "parsed": valid,
       "coverage": coverage(details), "enrichment": enrichment, "scan_lineage": metrics_lineage,
@@ -316,7 +321,7 @@ def main() -> None:
     # and minor row rejections.  The monitor persists this shape in
     # ``scraper_runs.extraction_metrics`` for the source runtime.
     metrics.update(runtime_telemetry(
-        provider_health=provider_health, coverage_complete=inventory.complete,
+        provider_health=provider_health, coverage_complete=_coverage_complete,
         coverage_stop_reason=coverage_stop, found=len(seen), valid=valid,
         processed=len(details), rejected=rejected,
         rejection_reasons={"missing_or_generic_title": rejected} if rejected else {},

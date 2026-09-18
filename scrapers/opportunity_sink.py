@@ -22,6 +22,7 @@ ALLOWED_FIELDS = {
     "verification_status", "verification_score", "verification_reasons",
     "country_code", "department", "city", "opportunity_kind", "opportunity_type",
     "eligible_countries", "eligible_regions", "remote", "onsite_country",
+    "remote_scope",
     "funding_type", "funding_amount", "currency", "fully_funded", "deadline",
     "published_at", "age_min", "age_max", "education_level", "experience_required",
     "citizenship_requirement", "residency_requirement", "sector", "tags",
@@ -32,7 +33,7 @@ ALLOWED_FIELDS = {
 CONTENT_FINGERPRINT_FIELDS = (
     "title", "organization", "description", "application_url", "source", "deadline",
     "published_at", "country_code", "department", "city", "location", "remote",
-    "onsite_country", "eligible_countries", "eligible_regions", "opportunity_kind",
+    "onsite_country", "remote_scope", "eligible_countries", "eligible_regions", "opportunity_kind",
     "opportunity_type", "type", "rubro", "tags", "source_authority",
     "original_source_url", "original_source_verified", "age_min", "age_max",
     "education_level", "experience_required", "citizenship_requirement",
@@ -41,7 +42,7 @@ CONTENT_FINGERPRINT_FIELDS = (
 
 SEMANTIC_FINGERPRINT_FIELDS = (
     "title", "organization", "rubro", "type", "opportunity_type",
-    "opportunity_kind", "tags", "location", "country_code", "eligible_countries",
+    "opportunity_kind", "tags", "location", "country_code", "remote", "remote_scope", "eligible_countries", "eligible_regions",
     "description",
 )
 
@@ -183,7 +184,7 @@ def normalize_opportunity(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, s
         "type": 100,
         "rubro": 160,
         "value": 160,
-        "description": 4000,
+        "description": 12000,
         "source": 120,
     }.items():
         if key in item:
@@ -255,6 +256,32 @@ class OpportunitySink:
             response.raise_for_status()
             existing.update({row["application_url"]: row for row in response.json()})
         return existing
+
+    def insert_new_fail_closed(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Insert precisely one new opportunity without any conflict resolution.
+
+        This is intentionally not a variant of ``upsert``: a collision is a
+        hard error and must never turn into an update of an historical row.
+        The direct request avoids this sink's retry-enabled POST session, so a
+        failed canary insert is never retried as an implicit duplicate write.
+        """
+        if self.audit_mode:
+            raise RuntimeError("insert_fail_closed_unavailable_in_audit_mode")
+        response = requests.post(
+            self.table_url,
+            headers={**self.headers, "Prefer": "return=representation"},
+            json=payload,
+            timeout=45,
+        )
+        if response.status_code not in {200, 201}:
+            raise RuntimeError(f"insert_fail_closed_http_{response.status_code}")
+        try:
+            rows = response.json()
+        except ValueError as exc:
+            raise RuntimeError("insert_fail_closed_bad_response") from exc
+        if not isinstance(rows, list) or len(rows) != 1:
+            raise RuntimeError("insert_fail_closed_bad_response")
+        return rows[0]
 
     def upsert(self, raw_items: Iterable[dict[str, Any]], batch_size: int = 100) -> IngestionSummary:
         raw_list = list(raw_items)

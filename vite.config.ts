@@ -32,7 +32,7 @@ export default defineConfig({
             id.includes('/scheduler/') || id.includes('/use-sync-external-store/')
           ) return 'vendor-react'
           // heic-to: lazy-loaded only on HEIC conversion failure — keep out of initial bundle
-          if (id.includes("heic-to")) return undefined
+          if (id.includes('heic-to')) return undefined
           // Everything else — shared vendor chunk
           return 'vendor'
         },
@@ -42,7 +42,7 @@ export default defineConfig({
   server: {
     port: 3000,
     watch: {
-      ignored: ['**/artifacts/**'],
+      ignored: ['**/artifacts/**', '**/.netlify/**'],
     },
     proxy: {
       '/.netlify/functions': {

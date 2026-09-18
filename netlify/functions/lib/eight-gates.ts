@@ -5,7 +5,7 @@ const gate = (status: GateStatus, reason_code: string, metrics: Record<string, u
 const usable = (value: unknown) => typeof value === 'string' && value.trim().length > 0
 
 /** Read-only source-level projection.  It never promotes, filters or mutates. */
-export function evaluateEightGates(profile: any, rows: any[], latestRun: any, observations: any[], enrichmentEvents: any[]) {
+export function evaluateEightGates(profile: any, rows: any[], latestRun: any, observations: any[], enrichmentEvents: any[], rowsScope: 'full_inventory_sample' | 'run_specific' = 'full_inventory_sample') {
   const total = rows.length
   const count = (field: string, minimum = 1) => rows.filter(row => typeof row[field] === 'string' ? row[field].trim().length >= minimum : Boolean(row[field])).length
   const descriptionOk = count('description', 80), organizationOk = count('organization'), locationOk = count('location')
@@ -25,12 +25,14 @@ export function evaluateEightGates(profile: any, rows: any[], latestRun: any, ob
   if (total && !organizationOk) qualityFailures.push('ORGANIZATION_MISSING')
   if (total && !countryOk && !rows.every(row => row.remote_scope && row.remote_scope !== 'UNKNOWN')) qualityFailures.push('COUNTRY_MISSING')
   if (total && rows.some(row => row.remote_scope === 'UNKNOWN')) qualityFailures.push('ARRANGEMENT_UNKNOWN')
-  const quality = gate(!total ? 'NOT_EVALUATED' : qualityFailures.length ? 'FAIL' : 'PASS', qualityFailures[0] || 'NORMALIZED', { total, description_ok: descriptionOk, organization_ok: organizationOk, location_ok: locationOk, country_ok: countryOk, application_url_ok: appUrlOk, source_url_ok: sourceUrlOk }, { reasons: qualityFailures }, null)
+  const quality = gate(!total ? 'NOT_EVALUATED' : qualityFailures.length ? 'FAIL' : 'PASS', qualityFailures[0] || 'NORMALIZED', { total, description_ok: descriptionOk, organization_ok: organizationOk, location_ok: locationOk, country_ok: countryOk, application_url_ok: appUrlOk, source_url_ok: sourceUrlOk, _rows_source: rowsScope }, { reasons: qualityFailures }, null)
   const fieldEvidence = extracted?.description?.extracted || 0
   const provenLost = fieldEvidence > 0 && descriptionOk < Math.max(1, Math.floor(total * .25))
   const persistence = gate(!total ? 'NOT_EVALUATED' : provenLost ? 'FAIL' : (!sourceUrlOk || !descriptionOk) ? 'WARNING' : 'PASS', provenLost ? 'DESCRIPTION_LOST_BEFORE_PERSISTENCE' : (!sourceUrlOk ? 'PERSISTENCE_UNPROVEN_SOURCE_URL_MISSING' : !descriptionOk ? 'PERSISTENCE_UNPROVEN_DESCRIPTION_MISSING' : 'PERSISTED_OK'), { total, description_ok: descriptionOk, source_url_ok: sourceUrlOk, application_url_ok: appUrlOk, enrichment_events: enrichmentEvents.length }, { extracted_description: fieldEvidence || null }, enrichmentEvents[0]?.created_at || runAt)
   const dataHealth = quality.status === 'FAIL' ? 'FAIL' : persistence.status === 'FAIL' ? 'FAIL' : quality.status === 'WARNING' || persistence.status === 'WARNING' ? 'WARNING' : 'PASS'
-  const health = gate(runtimeStatus === 'FAIL' ? 'FAIL' : dataHealth === 'FAIL' ? 'FAIL' : runtimeStatus === 'NOT_EVALUATED' ? 'NOT_EVALUATED' : dataHealth, runtimeStatus === 'PASS' && dataHealth === 'FAIL' ? 'RUNTIME_PASS_DATA_HEALTH_FAIL' : runtimeStatus === 'FAIL' ? 'RUNTIME_HEALTH_FAIL' : dataHealth === 'PASS' ? 'HEALTHY' : 'DATA_HEALTH_WARNING', { runtime_health: runtimeStatus, data_health: dataHealth, observations: observations.length }, {}, runAt)
+  const healthOverall = runtimeStatus === 'FAIL' ? 'RUNTIME_FAIL' : quality.status === 'FAIL' ? 'DATA_QUALITY_FAIL' : persistence.status === 'FAIL' ? 'PERSISTENCE_FAIL' : runtimeStatus === 'NOT_EVALUATED' ? 'UNKNOWN' : (quality.status === 'WARNING' || persistence.status === 'WARNING') ? 'PARTIAL' : 'HEALTHY'
+  const healthScope = !latestRun ? 'no_run_evidence' : rowsScope
+  const health = gate(runtimeStatus === 'FAIL' ? 'FAIL' : dataHealth === 'FAIL' ? 'FAIL' : runtimeStatus === 'NOT_EVALUATED' ? 'NOT_EVALUATED' : dataHealth, runtimeStatus === 'PASS' && dataHealth === 'FAIL' ? 'RUNTIME_PASS_DATA_HEALTH_FAIL' : runtimeStatus === 'FAIL' ? 'RUNTIME_HEALTH_FAIL' : dataHealth === 'PASS' ? 'HEALTHY' : 'DATA_HEALTH_WARNING', { runtime_health: runtimeStatus, data_health: dataHealth, observations: observations.length, overall: healthOverall, scope: healthScope }, {}, runAt)
   const preceding = [discovery, detail, filters, quality, persistence, health]
   const priorFailureIndex = preceding.findIndex(value => value.status === 'FAIL')
   const priorFailure = priorFailureIndex >= 0 ? preceding[priorFailureIndex] : null

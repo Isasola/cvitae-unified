@@ -36,20 +36,32 @@ function sourceIntelligenceRegistry() {
   return JSON.parse(readFileSync(resolve(process.cwd(), "src/generated/source-intelligence-registry.json"), "utf8"))
 }
 
+// P0.3: Derive runner IDs from canonical source (e.g. "unjobs" → "unjobs_scraper").
+// operational_runner_ids from profile takes precedence when populated.
+function runnerIdsFor(profile: any): Set<string> {
+  const base = (profile.canonical_source || '').toLowerCase()
+  const ids = new Set<string>([base, `${base}_scraper`, `${base}_scrapper`])
+  for (const alias of (profile.emitted_aliases || [])) ids.add(String(alias).toLowerCase())
+  for (const runnerId of (profile.operational_runner_ids || [])) ids.add(String(runnerId).toLowerCase())
+  return ids
+}
+
 async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, controls: any[] = []) {
   // Generated from the Python V2 core. This function joins read-only DB facts;
   // aliases, certification and semantics remain owned by that core.
   const registry = sourceIntelligenceRegistry()
   const stats: Record<string, any> = dashboard?.sources || {}
-  const [observationsRes, policyRes, runsRes, fingerprintsRes, enrichmentRes, sourceCapRes] = await Promise.all([
+  const [observationsRes, policyRes, runsRes, fingerprintsRes, enrichmentRes, sourceCapRes, qualityAggRes] = await Promise.all([
     supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at").order("observed_at", { ascending: false }).limit(10000),
     supabase.from("opportunity_source_policy_events").select("opportunity_id,source,action,created_at").order("created_at", { ascending: false }).limit(10000),
-    supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,duration_seconds,error_count,found_count,valid_count,inserted_count,updated_count,error_summary,adapter_version,extraction_metrics").order("started_at", { ascending: false }).limit(1000),
+    supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,duration_seconds,error_count,found_count,valid_count,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,error_summary,adapter_version,extraction_metrics").order("started_at", { ascending: false }).limit(1000),
     // Do not read embedding vectors: source-level pending counts are only
     // exposed when their lightweight inputs are available.
     supabase.from("opportunities").select("id,title,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope").is("deleted_at", null).is("archived_at", null).limit(10000),
     supabase.from("opportunity_enrichment_events").select("opportunity_id,source,changed_fields,created_at").order("created_at", { ascending: false }).limit(10000),
     supabase.from("opportunity_sources").select("source,catalog_enabled,matching_enabled,alerts_enabled,seo_enabled").limit(500),
+    // P0.1: Full-DB fingerprint pending counts via server-side aggregate.
+    supabase.rpc("admin_source_quality_aggregate"),
   ])
   const observationRows = observationsRes.error ? [] : (observationsRes.data || [])
   const policyRows = policyRes.error ? [] : (policyRes.data || [])
@@ -57,6 +69,8 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
   const fingerprintRows = fingerprintsRes.error ? [] : (fingerprintsRes.data || [])
   const enrichmentRows = enrichmentRes.error ? [] : (enrichmentRes.data || [])
   const sourceCapRows: any[] = sourceCapRes.error ? [] : (sourceCapRes.data || [])
+  // P0.1: Server-side fingerprint pending counts (full DB, no limit).
+  const qualityAgg: Record<string, any> = qualityAggRes.error ? {} : (qualityAggRes.data || {})
   const knownAliases = new Set<string>((registry.sources || []).flatMap((profile: any) => profile.emitted_aliases || []).map((value: string) => value.toLowerCase()))
   const unresolvedEmittedSources = Object.keys(stats).filter(source => !knownAliases.has(source.toLowerCase()))
   const now = Date.now()
@@ -92,8 +106,10 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       if (!latestPolicyByOpportunity.has(String(item.opportunity_id))) latestPolicyByOpportunity.set(String(item.opportunity_id), item)
     })
     const policyLatest = [...latestPolicyByOpportunity.values()]
-    const latestRun = runRows.find((item: any) => aliasSet.has(String(item.scraper_id || '').toLowerCase()) || item.scraper_id === profile.canonical_source) || null
-    const control = controls.find((item: any) => aliasSet.has(String(item.scraper_id || '').toLowerCase()) || item.scraper_id === profile.canonical_source)
+    // P0.3: runnerIds includes canonical_source + _scraper/_scrapper variants.
+    const runnerIds = runnerIdsFor(profile)
+    const latestRun = runRows.find((item: any) => runnerIds.has(String(item.scraper_id || '').toLowerCase())) || null
+    const control = controls.find((item: any) => runnerIds.has(String(item.scraper_id || '').toLowerCase()))
     const extractionHealth = latestRun?.extraction_metrics?.health?.status
     const runFailed = latestRun?.status === "failed" || Boolean(latestRun?.error_summary) || extractionHealth === "DEGRADED"
     const operationalHealth = control && control.collection_enabled === false ? "PAUSED"
@@ -101,7 +117,11 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       : runFailed ? "DEGRADED"
       : !latestRun && observations.length === 0 ? "UNKNOWN"
       : "HEALTHY"
-    const fingerprintPending = fingerprintRows.filter((item: any) => aliasSet.has(item.source) && item.match_eligible && !item.semantic_fingerprint).length
+    // P0.1: Use full-DB RPC result instead of client-side limited rows.
+    const fingerprintPending = aliases.reduce((sum: number, alias: string) => {
+      const key = Object.keys(qualityAgg).find(k => k.toLowerCase() === alias.toLowerCase())
+      return sum + (key ? Number((qualityAgg[key] as any)?.fingerprint_pending || 0) : 0)
+    }, 0)
     const latestObservation = observations[0] || null
     const latestPolicyEvent = policyLatest[0] || null
     const latestImpact = latestRun?.extraction_metrics?.reconciliation_impact || latestRun?.extraction_metrics?.impact || null
@@ -115,7 +135,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       : "GREEN"
     const sourceRows = fingerprintRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase()))
     const eightGates = evaluateEightGates({ ...profile, ...capabilityFlags }, sourceRows, latestRun, observations, enrichmentRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase())))
-    const history = runRows.filter((item: any) => aliasSet.has(String(item.scraper_id || '').toLowerCase()) || item.scraper_id === profile.canonical_source).slice(0, 12)
+    const history = runRows.filter((item: any) => runnerIds.has(String(item.scraper_id || '').toLowerCase())).slice(0, 12)
     const previousRun = history[1]
     const latestMetrics = latestRun?.extraction_metrics || {}
     const previousMetrics = previousRun?.extraction_metrics || {}
@@ -145,7 +165,8 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
         restore_capability: "UNAVAILABLE_PENDING_MIGRATION",
       },
       quality: { thin_description: pools.thin_description, missing_country: pools.missing_country },
-      semantic: { fingerprint_pending: fingerprintsRes.error ? null : fingerprintPending, embedding_pending: null },
+      // P0.1: fingerprint_pending now comes from full-DB RPC (not client-side sample).
+      semantic: { fingerprint_pending: qualityAggRes.error ? null : fingerprintPending, embedding_pending: null },
       execution: { last_run: latestRun?.started_at || null, last_success: ["success", "healthy"].includes(String(latestRun?.status || "")) ? latestRun.finished_at || latestRun.started_at : null, last_failure: runFailed ? latestRun?.started_at || null : null, adapter_version: latestRun?.adapter_version || profile.adapter_version, circuit_breaker: latestRun?.extraction_metrics?.circuit_breaker || null },
       history,
       drift: previousRun ? { status: driftSignals.length ? "POSSIBLE_SOURCE_DRIFT" : "NO_SIGNIFICANT_DRIFT", compared_run_id: previousRun.run_id, signals: driftSignals } : null,
@@ -153,6 +174,8 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       exceptions: exceptionReasons,
       latest_impact: latestImpact,
       maintenance_action: "DRY_RUN_ONLY", apply_enabled: false,
+      // P0.6: Explicit scope markers so consumers know where each data section comes from.
+      _inventory_scope: { pools: "full_db_rpc", fingerprint_pending: qualityAggRes.error ? "unavailable" : "full_db_rpc", recent_rows: "client_sample", eight_gates_quality: "client_sample" },
       eight_gates: eightGates,
     }
   })
@@ -161,7 +184,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
     const group = exceptionGroups[reason] || { count: 0, sources: [] }
     group.count += 1; group.sources.push(source.canonical_source); exceptionGroups[reason] = group
   }
-  return { registry: { profiles: registry.profiles, emitted_aliases: registry.emitted_aliases, alias_collisions: registry.alias_collisions, ambiguous_patterns: registry.ambiguous_patterns, alias_pattern_conflicts: registry.alias_pattern_conflicts || [], registry_hash: registry.registry_hash, schema_version: registry.schema_version, unresolved_emitted_sources: unresolvedEmittedSources, exception_groups: exceptionGroups, dynamic_metrics_unavailable: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null } }, sources }
+  return { registry: { profiles: registry.profiles, emitted_aliases: registry.emitted_aliases, alias_collisions: registry.alias_collisions, ambiguous_patterns: registry.ambiguous_patterns, alias_pattern_conflicts: registry.alias_pattern_conflicts || [], registry_hash: registry.registry_hash, schema_version: registry.schema_version, unresolved_emitted_sources: unresolvedEmittedSources, exception_groups: exceptionGroups, dynamic_metrics_unavailable: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null, quality_agg: qualityAggRes.error ? "unavailable" : null } }, sources }
 }
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
@@ -414,7 +437,8 @@ const handler: Handler = async (event) => {
       const scraper = SOURCE_SCAN_SCRAPERS[source]
       const requestId = String(payload?.request_id || "")
       if (!scraper || !requestId) return { statusCode: 400, body: JSON.stringify({ error: "Solicitud de escaneo inválida" }) }
-      const { data, error } = await supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,duration_seconds,found_count,valid_count,inserted_count,updated_count,error_count,error_summary,extraction_metrics,github_run_url").eq("scraper_id", scraper).eq("trigger_type", `scan:${requestId}`).order("started_at", { ascending: false }).limit(1)
+      // P0.2: Query by scan_request_id column (trigger_type:"scan:uuid" is gone).
+      const { data, error } = await supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,duration_seconds,found_count,valid_count,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,error_count,error_summary,extraction_metrics,github_run_url").eq("scan_request_id", requestId).order("started_at", { ascending: false }).limit(1)
       if (error) throw error
       const run = data?.[0]
       if (!run) return { statusCode: 200, body: JSON.stringify({ status: "QUEUED" }) }
@@ -461,7 +485,7 @@ const handler: Handler = async (event) => {
         // Private execution telemetry, newest first. Service-role only.
         supabase
           .from("scraper_runs")
-          .select("id,run_id,scraper_id,scraper_name,script_path,trigger_type,status,exit_code,found_count,valid_count,unique_count,inserted_count,updated_count,duplicate_count,rejected_count,warning_count,error_count,error_summary,github_run_url,started_at,finished_at,duration_seconds")
+          .select("id,run_id,scraper_id,scraper_name,script_path,trigger_type,status,exit_code,found_count,valid_count,unique_count,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,warning_count,error_count,error_summary,github_run_url,started_at,finished_at,duration_seconds")
           .gte("started_at", since7d)
           .order("started_at", { ascending: false })
           .limit(1000),
@@ -1692,9 +1716,11 @@ const handler: Handler = async (event) => {
       const aliases: string[] = (profile.emitted_aliases || [profile.canonical_source]).map((v: string) => v.toLowerCase())
       const aliasSet = new Set<string>(aliases)
 
+      // P0.3: Use shared runnerIdsFor to include _scraper/_scrapper variants.
+      const diagRunnerIds = [...runnerIdsFor(profile)]
       const [runsRes, sourceRowsRes, observationsRes, enrichmentRes, capRes] = await Promise.all([
-        supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,error_count,found_count,valid_count,inserted_count,updated_count,error_summary,adapter_version,extraction_metrics")
-          .in("scraper_id", [...aliases.map(a => `${a}_scraper`), targetSource + "_scraper"])
+        supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,error_count,found_count,valid_count,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,error_summary,adapter_version,extraction_metrics")
+          .in("scraper_id", diagRunnerIds)
           .order("started_at", { ascending: false }).limit(5),
         supabase.from("opportunities").select("id,source,semantic_fingerprint,match_eligible,description,location,country_code")
           .in("source", aliases).is("deleted_at", null).is("archived_at", null).limit(2000),
@@ -1726,6 +1752,30 @@ const handler: Handler = async (event) => {
       const warnings = eightGates.gates.filter((g: any) => g.status === "WARNING")
       const overallHealth = failing.length > 0 ? "CRITICAL" : warnings.length > 0 ? "DEGRADED" : "HEALTHY"
 
+      const runSummary = latestRun ? {
+        run_id: latestRun.run_id,
+        status: latestRun.status,
+        started_at: latestRun.started_at,
+        finished_at: latestRun.finished_at,
+        discovered: latestRun.found_count ?? null,
+        normalized: latestRun.valid_count ?? null,
+        persisted: (latestRun.inserted_count ?? 0) + (latestRun.updated_count ?? 0),
+        inserted: latestRun.inserted_count ?? null,
+        updated: latestRun.updated_count ?? null,
+      } : null
+
+      const totalActive = sourceRows.length
+      const runPersisted = runSummary ? runSummary.persisted : null
+      const runCoveragePct = (runPersisted !== null && totalActive > 0)
+        ? Math.round((runPersisted / totalActive) * 10000) / 100
+        : null
+      const reconciliation = {
+        run_coverage_pct: runCoveragePct,
+        full_inventory_total_active: totalActive,
+        run_persisted: runPersisted,
+        note: totalActive >= 2000 ? "inventory_sample_capped_2000" : null,
+      }
+
       return {
         statusCode: 200,
         body: JSON.stringify({
@@ -1735,6 +1785,8 @@ const handler: Handler = async (event) => {
           failing_gates: failing.length,
           warning_gates: warnings.length,
           eight_gates: eightGates,
+          run_summary: runSummary,
+          reconciliation,
           latest_run: latestRun ? { run_id: latestRun.run_id, status: latestRun.status, started_at: latestRun.started_at } : null,
           inventory: sourceRows.length,
           observations: observations.length,

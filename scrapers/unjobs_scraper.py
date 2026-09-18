@@ -203,11 +203,16 @@ def scrape_page(url: str) -> list[dict]:
 
 
 def main() -> None:
+    max_items = int(os.getenv("CVITAE_MAX_ITEMS", "250"))
     seen: set[str] = set(); details: list[AdapterResult] = []; new_jobs: list[dict] = []
     enrichment = {"attempted": 0, "changed": 0, "noop": 0, "stale": 0, "failed": 0}
     enricher = AtomicEnricher(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_KEY else None
     for page_url in PAGES:
+        if len(seen) >= max_items:
+            break
         for job in scrape_page(page_url):
+            if len(seen) >= max_items:
+                break
             discovery_url = job["application_url"]
             if discovery_url in seen:
                 continue
@@ -231,7 +236,8 @@ def main() -> None:
     metrics = {"found": len(seen), "detail_pages_attempted": len(details), "detail_pages_success": sum(item.source_status == 200 for item in details), "parsed": sum(bool(item.title) for item in details), "coverage": coverage(details), "enrichment": enrichment, "scan_lineage": metrics_lineage, "classification": {key: sum(item.recommendation == key for item in details) for key in ("AUTO_PUBLISH", "AUTO_BLOCK", "HUMAN_REVIEW")}}
     baseline = enricher.recent_healthy_baseline("unjobs_scraper") if enricher else None
     status, reasons = health(metrics, baseline); metrics["health"] = {"status": status, "reasons": reasons}
-    metrics.update(runtime_telemetry(provider_health="DEGRADED" if status == "DEGRADED" else "HEALTHY", coverage_complete=False, coverage_stop_reason="configured_listing_pages", found=len(seen), valid=metrics["parsed"], processed=len(details), rejected=max(0,len(seen)-metrics["parsed"]), rejection_reasons={"detail_parse": max(0,len(seen)-metrics["parsed"])}))
+    _coverage_stop = "record_budget_reached" if len(seen) >= max_items else "configured_listing_pages"
+    metrics.update(runtime_telemetry(provider_health="DEGRADED" if status == "DEGRADED" else "HEALTHY", coverage_complete=False, coverage_stop_reason=_coverage_stop, found=len(seen), valid=metrics["parsed"], processed=len(details), rejected=max(0,len(seen)-metrics["parsed"]), rejection_reasons={"detail_parse": max(0,len(seen)-metrics["parsed"])}))
     metrics["eight_gates"] = eight_gates_run_evidence(source="unjobs", adapter_version=ADAPTER_VERSION, metrics=metrics, details=details, summary=summary.to_dict() if summary else None)
     if summary:
         print("CVITAE_INGESTION_SUMMARY=" + json.dumps(summary.to_dict(), ensure_ascii=False))

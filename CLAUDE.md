@@ -178,3 +178,7 @@ Jobs prerendered under BOTH `/empleos/:slug` (canonical for jobs-only facet) AND
 Non-job opps and content_hub opps under `/oportunidades/:slug` only.
 `netlify.toml`: unknown /oportunidades/:slug → real 404. Unknown /empleos/:slug → real 404. No `/* → /index.html` catch-all for deep routes.
 jobLocation emitted in JSON-LD only when `job.city` is present — no fabricated country for remote/intl jobs.
+
+## Scraper Source Contract
+
+Before any task that adds, changes, diagnoses or repairs a scraper, opportunity source, source policy, geo/eligibility normalization, telemetry or maintenance cron, read `skills/cvitae-scrapers/SKILL.md` and `skills/cvitae-scrapers/references/operational-maintenance.md`. This is the shared Codex/Claude contract for adapters, cleaners, observations, identity, embeddings, matching, SEO/AEO/GEO, cron, tests and rollout.
