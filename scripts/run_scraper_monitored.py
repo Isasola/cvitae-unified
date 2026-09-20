@@ -266,9 +266,12 @@ def main() -> int:
         # schedule (production cron): high fallback so full inventory is processed
         # manual/local: operator-configured cap
         if trigger_type == "scan":
-            child_env["CVITAE_MAX_ITEMS"] = str(control.get("max_items_per_run") or 50)
+            # scan is a bounded diagnostic — never inherit max_items_per_run (full-collection cap)
+            child_env["CVITAE_MAX_ITEMS"] = str(control.get("scan_max_items") or 50)
         elif trigger_type == "schedule":
-            child_env["CVITAE_MAX_ITEMS"] = str(control.get("max_items_per_run") or 10000)
+            # max_items_per_run is the legacy/manual cap (historically 250).
+            # Schedule must use only its own future field or the coverage cap.
+            child_env["CVITAE_MAX_ITEMS"] = str(control.get("schedule_max_items") or 10000)
         else:
             child_env["CVITAE_MAX_ITEMS"] = str(control.get("max_items_per_run") or 250)
         child_env["CVITAE_ALLOWED_COUNTRIES"] = ",".join(control.get("allowed_country_codes") or [])

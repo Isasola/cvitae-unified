@@ -58,7 +58,8 @@ def _flush() -> None:
     except Exception as exc:
         summary = {
             "found": len(rows), "valid": 0, "unique": 0, "inserted": 0,
-            "updated": 0, "duplicates_in_run": 0, "rejected": len(rows),
+            "updated": 0, "duplicates_in_run": 0, "rejected": 0, "failed": len(rows),
+            "processed_attempted": len(rows), "unprocessed_due_to_budget": 0,
             "errors": [f"Error al vaciar lote: {type(exc).__name__}: {str(exc)[:300]}"],
         }
         print("CVITAE_INGESTION_SUMMARY=" + json.dumps(summary, ensure_ascii=False))

@@ -14,7 +14,7 @@ from source_adapters import (
     native_id, recommend,
 )
 from opportunity_sink import OpportunitySink
-from source_evidence import runtime_telemetry, eight_gates_run_evidence
+from source_evidence import runtime_telemetry, eight_gates_run_evidence, run_quality_metrics
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -102,6 +102,7 @@ def fetch_page(keywords, location, page=1):
 
 
 ADAPTER_VERSION = "talent:v2.0.0"
+MAX_PAGES_PER_SEARCH = 200
 
 
 def _talent_eligibility(value: str | None) -> tuple[list[str], list[str], str | None]:
@@ -247,6 +248,28 @@ def parse_jobs(html, default_rubro, location):
     return jobs
 
 
+def discover_search(keywords, location, rubro, seen_urls: set[str]) -> tuple[list[dict], str]:
+    """Walk a search until the provider is exhausted or stops advancing."""
+    discovered: list[dict] = []
+    for page in range(1, MAX_PAGES_PER_SEARCH + 1):
+        html = fetch_page(keywords, location, page)
+        if not html:
+            return discovered, "provider_error" if page == 1 else "empty_page"
+        jobs = parse_jobs(html, rubro, location)
+        if not jobs:
+            return discovered, "empty_page"
+        added = 0
+        for job in jobs:
+            if job["application_url"] not in seen_urls:
+                seen_urls.add(job["application_url"])
+                discovered.append(job)
+                added += 1
+        if not added:
+            return discovered, "pagination_stalled"
+        time.sleep(1.5)
+    return discovered, "pagination_safety_limit"
+
+
 def insert_job(job):
     try:
         r = requests.post(
@@ -262,29 +285,24 @@ def insert_job(job):
 
 def main():
     max_items = int(os.getenv("CVITAE_MAX_ITEMS", "250"))
-    total_found = 0
     seen_urls = set()
+    discovered_jobs = []
+    discovery_stops = []
     detail_results = []
     new_jobs = []
     enrichment = {"attempted": 0, "changed": 0, "noop": 0, "stale": 0, "failed": 0}
     enricher = AtomicEnricher(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_KEY else None
 
     for keywords, location, rubro in SEARCHES:
-        if len(seen_urls) >= max_items:
-            break
         label = f"'{keywords}'" if keywords else "general"
         print(f"\nFetching Talent.com: {label} en {location}")
+        jobs, stop = discover_search(keywords, location, rubro, seen_urls)
+        discovered_jobs.extend(jobs)
+        discovery_stops.append(stop)
 
-        html = fetch_page(keywords, location)
-        jobs = parse_jobs(html, rubro, location)
-
-        for job in jobs:
-            if len(seen_urls) >= max_items:
-                break
-            if job["application_url"] in seen_urls:
-                continue
-            seen_urls.add(job["application_url"])
-            total_found += 1
+    # Detail processing is separately bounded; discovery remains a source
+    # coverage observation across all configured searches.
+    for job in discovered_jobs[:max_items]:
             detail = parse_talent_detail(job["application_url"])
             detail_results.append(detail)
             for key, value in {"title": detail.title, "organization": detail.organization, "description": detail.description,
@@ -305,14 +323,12 @@ def main():
             else:
                 new_jobs.append(job)
 
-        time.sleep(1.5)
-
     summary = OpportunitySink().upsert(new_jobs) if new_jobs else None
     metrics_lineage = RunLineageWriter(SUPABASE_URL, SUPABASE_KEY).record(detail_results) if SUPABASE_KEY else build_scan_lineage(detail_results, run_id=os.getenv("CVITAE_SCRAPER_RUN_ID"), scan_request_id=os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID"))
     inserted = (summary.inserted + summary.updated) if summary else 0
     metrics = {
-        "found": total_found,
-        "detail_pages_attempted": total_found,
+        "found": len(discovered_jobs),
+        "detail_pages_attempted": len(detail_results),
         "detail_pages_success": sum(item.source_status == 200 for item in detail_results),
         "parsed": sum(bool(item.title) for item in detail_results),
         "coverage": coverage(detail_results),
@@ -322,13 +338,26 @@ def main():
     baseline = enricher.recent_healthy_baseline("talentcom_scraper") if enricher else None
     status, reasons = health(metrics, baseline)
     metrics["health"] = {"status": status, "reasons": reasons}
-    _coverage_stop = "record_budget_reached" if len(seen_urls) >= max_items else "configured_search_set"
-    metrics.update(runtime_telemetry(provider_health="DEGRADED" if status == "DEGRADED" else "HEALTHY", coverage_complete=False, coverage_stop_reason=_coverage_stop, found=total_found, valid=metrics["parsed"], processed=len(detail_results), rejected=max(0,total_found-metrics["parsed"]), rejection_reasons={"detail_parse": max(0,total_found-metrics["parsed"])}))
-    metrics["eight_gates"] = eight_gates_run_evidence(source="talentcom", adapter_version=ADAPTER_VERSION, metrics=metrics, details=detail_results, summary=summary.to_dict() if summary else None)
+    budget_hit = len(discovered_jobs) > max_items
+    source_complete = all(stop == "empty_page" for stop in discovery_stops)
+    source_stop = "natural_exhaustion" if source_complete else next((stop for stop in discovery_stops if stop != "empty_page"), "configured_search_set")
+    _coverage_stop = source_stop
+    metrics["discovery"] = {"total": len(discovered_jobs), "coverage_complete": source_complete, "stop_reason": source_stop}
+    metrics["processing"] = {"attempted": len(detail_results), "budget": max_items, "coverage_complete": not budget_hit, "stop_reason": "record_budget_reached" if budget_hit else "discovered_pool_processed", "unprocessed_due_to_budget": max(0, len(discovered_jobs) - len(detail_results))}
+    metrics.update(runtime_telemetry(provider_health="DEGRADED" if status == "DEGRADED" else "HEALTHY", coverage_complete=source_complete and not budget_hit, coverage_stop_reason=_coverage_stop, found=len(discovered_jobs), valid=metrics["parsed"], processed=len(detail_results), rejected=max(0,len(detail_results)-metrics["parsed"]), rejection_reasons={"detail_parse": max(0,len(detail_results)-metrics["parsed"])}))
+    qm = run_quality_metrics(detail_results, coverage_complete=source_complete and not budget_hit, stop_reason=_coverage_stop)
+    metrics["eight_gates"] = eight_gates_run_evidence(source="talentcom", adapter_version=ADAPTER_VERSION, metrics=metrics, details=detail_results, summary=summary.to_dict() if summary else None, quality_metrics=qm)
+    existing_unchanged = enrichment.get("noop", 0) + enrichment.get("stale", 0)
+    existing_updated = enrichment.get("changed", 0)
     if summary:
-        print("CVITAE_INGESTION_SUMMARY=" + json.dumps(summary.to_dict(), ensure_ascii=False))
+        out = summary.to_dict()
+        out["unchanged"] = (out.get("unchanged") or 0) + existing_unchanged
+        out["updated"] = (out.get("updated") or 0) + existing_updated
+        print("CVITAE_INGESTION_SUMMARY=" + json.dumps(out, ensure_ascii=False))
+    elif existing_unchanged or existing_updated:
+        print("CVITAE_INGESTION_SUMMARY=" + json.dumps({"inserted": 0, "unchanged": existing_unchanged, "updated": existing_updated, "found": len(discovered_jobs)}, ensure_ascii=False))
     print("CVITAE_ADAPTER_METRICS=" + json.dumps({"adapter_version": ADAPTER_VERSION, "extraction_metrics": metrics}, ensure_ascii=False))
-    print(f"\n=== Talent.com V2: {inserted} nuevas/actualizadas, {enrichment['changed']} enriquecidas de {total_found} detail pages ===")
+    print(f"\n=== Talent.com V2: {inserted} nuevas/actualizadas, {enrichment['changed']} enriquecidas de {len(detail_results)} detail pages ===")
 
 
 if __name__ == "__main__":

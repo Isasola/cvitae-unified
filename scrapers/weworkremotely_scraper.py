@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 
 from opportunity_sink import OpportunitySink
 from source_adapters import AdapterResult, AtomicEnricher, COUNTRY_TERMS, RunLineageWriter, build_scan_lineage, clean, country_from_text, geo_from_detail, health, recommend
-from source_evidence import runtime_telemetry, eight_gates_run_evidence
+from source_evidence import runtime_telemetry, eight_gates_run_evidence, run_quality_metrics
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -129,34 +129,45 @@ def parse_wwr_detail(url: str, rss: dict | None = None, session: requests.Sessio
 
 def main() -> None:
     max_items = int(os.getenv("CVITAE_MAX_ITEMS", "250"))
-    seen: set[str] = set(); details: list[AdapterResult] = []; new_jobs: list[dict] = []; enrichment = {"attempted": 0, "changed": 0, "noop": 0, "stale": 0, "failed": 0}
+    seen: set[str] = set(); discovered: list[dict] = []; details: list[AdapterResult] = []; new_jobs: list[dict] = []; enrichment = {"attempted": 0, "changed": 0, "noop": 0, "stale": 0, "failed": 0}
     enricher = AtomicEnricher(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_KEY else None
     for slug, rubro in CATEGORIES:
-        if len(seen) >= max_items:
-            break
         for item in parse_feed(BASE_RSS.format(slug)):
-            if len(seen) >= max_items:
-                break
             rss = rss_job(item, rubro)
             if not rss or rss["url"] in seen: continue
-            seen.add(rss["url"]); detail = parse_wwr_detail(rss["url"], rss); details.append(detail)
+            seen.add(rss["url"]); discovered.append(rss)
+        time.sleep(1)
+    # RSS discovery is intentionally complete across configured categories;
+    # the operator budget bounds only detail processing.
+    for rss in discovered[:max_items]:
+            detail = parse_wwr_detail(rss["url"], rss); details.append(detail)
             job = {"title": detail.title, "organization": detail.organization, "description": detail.description, "location": detail.location, "country_code": detail.country_code, "onsite_country": detail.onsite_country, "remote": detail.remote, "remote_scope": detail.remote_scope, "value": detail.salary_text, "currency": detail.currency, "published_at": detail.date_posted, "deadline": detail.deadline, "source_url": detail.source_url, "application_url": detail.apply_url, "source": "weworkremotely", "is_active": True, "rubro": rss["rubro"], "tags": [rss["rubro"].lower().replace(" ", "-")], "source_authority": "aggregator", "original_source_verified": False}
             existing = (enricher.lookup(rss["url"]) or enricher.lookup(detail.source_url, "source_url")) if enricher else None
             if existing:
                 enrichment["attempted"] += 1; outcome = enricher.enrich_existing(detail, existing)
                 if outcome.status in enrichment: enrichment[outcome.status] += 1
             else: new_jobs.append(job)
-        time.sleep(1)
     summary = OpportunitySink().upsert(new_jobs) if new_jobs else None
     metrics_lineage = RunLineageWriter(SUPABASE_URL, SUPABASE_KEY).record(details) if SUPABASE_KEY else build_scan_lineage(details, run_id=os.getenv("CVITAE_SCRAPER_RUN_ID"), scan_request_id=os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID"))
     metrics = {"found": len(seen), "detail_pages_attempted": len(details), "detail_pages_success": sum(item.source_status == 200 for item in details), "parsed": sum(bool(item.title) for item in details), "coverage": coverage(details), "enrichment": enrichment, "scan_lineage": metrics_lineage, "classification": {key: sum(item.recommendation == key for item in details) for key in ("AUTO_PUBLISH", "AUTO_BLOCK", "HUMAN_REVIEW")}}
     baseline = enricher.recent_healthy_baseline("weworkremotely_scraper") if enricher else None; status, reasons = health(metrics, baseline); metrics["health"] = {"status": status, "reasons": reasons}
-    _budget_hit = len(seen) >= max_items
-    _coverage_stop = "record_budget_reached" if _budget_hit else "rss_category_walk"
-    _coverage_flag = False if _budget_hit else None
+    _budget_hit = len(discovered) > max_items
+    _coverage_stop = "configured_rss_categories"
+    _coverage_flag = None
+    metrics["discovery"] = {"total": len(discovered), "coverage_complete": None, "stop_reason": "configured_rss_categories"}
+    metrics["processing"] = {"attempted": len(details), "budget": max_items, "coverage_complete": not _budget_hit, "stop_reason": "record_budget_reached" if _budget_hit else "discovered_pool_processed"}
     metrics.update(runtime_telemetry(provider_health="DEGRADED" if status == "DEGRADED" else "HEALTHY", coverage_complete=_coverage_flag, coverage_stop_reason=_coverage_stop, found=len(seen), valid=metrics["parsed"], processed=len(details), rejected=max(0, len(seen)-metrics["parsed"]), rejection_reasons={"detail_or_generic_mismatch": sum(item.evidence.get("detail_match") is False for item in details)}))
-    metrics["eight_gates"] = eight_gates_run_evidence(source="weworkremotely", adapter_version=ADAPTER_VERSION, metrics=metrics, details=details, summary=summary.to_dict() if summary else None)
-    if summary: print("CVITAE_INGESTION_SUMMARY=" + json.dumps(summary.to_dict(), ensure_ascii=False))
+    qm = run_quality_metrics(details, coverage_complete=_coverage_flag, stop_reason=_coverage_stop)
+    metrics["eight_gates"] = eight_gates_run_evidence(source="weworkremotely", adapter_version=ADAPTER_VERSION, metrics=metrics, details=details, summary=summary.to_dict() if summary else None, quality_metrics=qm)
+    existing_unchanged = enrichment.get("noop", 0) + enrichment.get("stale", 0)
+    existing_updated = enrichment.get("changed", 0)
+    if summary:
+        out = summary.to_dict()
+        out["unchanged"] = (out.get("unchanged") or 0) + existing_unchanged
+        out["updated"] = (out.get("updated") or 0) + existing_updated
+        print("CVITAE_INGESTION_SUMMARY=" + json.dumps(out, ensure_ascii=False))
+    elif existing_unchanged or existing_updated:
+        print("CVITAE_INGESTION_SUMMARY=" + json.dumps({"inserted": 0, "unchanged": existing_unchanged, "updated": existing_updated, "found": len(seen)}, ensure_ascii=False))
     print("CVITAE_ADAPTER_METRICS=" + json.dumps({"adapter_version": ADAPTER_VERSION, "extraction_metrics": metrics}, ensure_ascii=False))
 
 

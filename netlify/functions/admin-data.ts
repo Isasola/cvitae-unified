@@ -1722,7 +1722,7 @@ const handler: Handler = async (event) => {
         supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,error_count,found_count,valid_count,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,error_summary,adapter_version,extraction_metrics")
           .in("scraper_id", diagRunnerIds)
           .order("started_at", { ascending: false }).limit(5),
-        supabase.from("opportunities").select("id,source,semantic_fingerprint,match_eligible,description,location,country_code")
+        supabase.from("opportunities").select("id,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope")
           .in("source", aliases).is("deleted_at", null).is("archived_at", null).limit(2000),
         supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at")
           .in("source", aliases).order("observed_at", { ascending: false }).limit(2000),

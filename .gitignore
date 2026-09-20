@@ -40,3 +40,6 @@ artifacts/visual/
 playwright-report/
 test-results/
 .aider*
+..cvitae-release-hotfix/
+*.zip
+*-dryrun.txt

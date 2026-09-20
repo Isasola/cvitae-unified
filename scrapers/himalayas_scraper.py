@@ -12,7 +12,7 @@ import requests
 
 from opportunity_sink import OpportunitySink
 from source_adapters import AdapterResult, AtomicEnricher, RunLineageWriter, build_scan_lineage, clean, coverage, health, recommend
-from source_evidence import runtime_telemetry, eight_gates_run_evidence
+from source_evidence import runtime_telemetry, eight_gates_run_evidence, run_quality_metrics
 
 API_URL = "https://himalayas.app/jobs/api"
 SEARCH_API_URL = "https://himalayas.app/jobs/api/search"
@@ -282,7 +282,9 @@ def main() -> None:
     seen: set[str] = set(); details: list[AdapterResult] = []; new_jobs: list[dict] = []
     enrichment = {"attempted": 0, "changed": 0, "noop": 0, "stale": 0, "failed": 0}
     enricher = AtomicEnricher(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_KEY else None
-    inventory = fetch_api_inventory(page_size=100, max_pages=200)
+    # Fetch only what this run can process.  The returned cursor/total makes a
+    # bounded walk explicit instead of downloading an unused full inventory.
+    inventory = fetch_api_inventory(page_size=100, max_pages=200, max_records=max_items)
     if inventory.error:
         print(f"Himalayas API error: {inventory.error}")
     for raw in inventory.jobs:
@@ -310,13 +312,15 @@ def main() -> None:
     # incident. Only genuine provider failures affect operational health.
     if inventory.error and inventory.error not in {"page_budget_reached", "record_budget_reached", "runtime_budget_reached"}:
         provider_health = "DEGRADED" if inventory.error.startswith(("http_429", "http_5", "Connection", "Timeout")) else "UNHEALTHY"
-    _budget_hit = len(seen) >= max_items
+    _budget_hit = inventory.error == "record_budget_reached" or (inventory.reported_total_count or 0) > max_items
     _coverage_complete = False if _budget_hit else inventory.complete
     coverage_stop = "record_budget_reached" if _budget_hit else ("complete" if inventory.complete else (inventory.error or "incomplete"))
     metrics = {"found": len(seen), "valid": valid, "processed": len(details), "rejected": rejected,
       "detail_pages_attempted": len(details), "detail_pages_success": sum(item.source_status == 200 for item in details), "parsed": valid,
       "coverage": coverage(details), "enrichment": enrichment, "scan_lineage": metrics_lineage,
       "classification": {key: sum(item.recommendation == key for item in details) for key in ("AUTO_PUBLISH", "AUTO_BLOCK", "HUMAN_REVIEW")}}
+    metrics["discovery"] = {"provider_reported_total": inventory.reported_total_count, "records_fetched": inventory.records_fetched, "coverage_complete": inventory.complete, "stop_reason": inventory.error or "complete", "next_cursor": inventory.next_cursor}
+    metrics["processing"] = {"attempted": len(details), "budget": max_items, "coverage_complete": not _budget_hit, "stop_reason": "record_budget_reached" if _budget_hit else "inventory_processed", "unprocessed_due_to_budget": max(0, (inventory.reported_total_count or inventory.records_fetched) - len(details))}
     # Provider health is deliberately independent from a bounded inventory walk
     # and minor row rejections.  The monitor persists this shape in
     # ``scraper_runs.extraction_metrics`` for the source runtime.
@@ -330,8 +334,17 @@ def main() -> None:
         provider_error=inventory.error,
     ))
     metrics["health"] = {"status": provider_health, "reasons": [] if provider_health == "HEALTHY" else [inventory.error or "provider_error"]}
-    metrics["eight_gates"] = eight_gates_run_evidence(source="himalayas", adapter_version=ADAPTER_VERSION, metrics=metrics, details=details, summary=summary.to_dict() if summary else None)
-    if summary: print("CVITAE_INGESTION_SUMMARY=" + json.dumps(summary.to_dict(), ensure_ascii=False))
+    qm = run_quality_metrics(details, coverage_complete=_coverage_complete, stop_reason=coverage_stop)
+    metrics["eight_gates"] = eight_gates_run_evidence(source="himalayas", adapter_version=ADAPTER_VERSION, metrics=metrics, details=details, summary=summary.to_dict() if summary else None, quality_metrics=qm)
+    existing_unchanged = enrichment.get("noop", 0) + enrichment.get("stale", 0)
+    existing_updated = enrichment.get("changed", 0)
+    if summary:
+        out = summary.to_dict()
+        out["unchanged"] = (out.get("unchanged") or 0) + existing_unchanged
+        out["updated"] = (out.get("updated") or 0) + existing_updated
+        print("CVITAE_INGESTION_SUMMARY=" + json.dumps(out, ensure_ascii=False))
+    elif existing_unchanged or existing_updated:
+        print("CVITAE_INGESTION_SUMMARY=" + json.dumps({"inserted": 0, "unchanged": existing_unchanged, "updated": existing_updated, "found": len(seen)}, ensure_ascii=False))
     print("CVITAE_ADAPTER_METRICS=" + json.dumps({"adapter_version": ADAPTER_VERSION, "extraction_metrics": metrics}, ensure_ascii=False))
 
 

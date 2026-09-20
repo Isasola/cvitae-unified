@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 
 from opportunity_sink import OpportunitySink
 from source_adapters import AdapterResult, AtomicEnricher, RunLineageWriter, build_scan_lineage, clean, coverage, geo_from_detail, health, recommend
-from source_evidence import runtime_telemetry, eight_gates_run_evidence
+from source_evidence import runtime_telemetry, eight_gates_run_evidence, run_quality_metrics
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -27,6 +27,11 @@ PAGES = [
     "https://unjobs.org/duty_stations/chile", "https://unjobs.org/duty_stations/mexico",
     "https://unjobs.org/themes/youth", "https://unjobs.org/themes/gender", "https://unjobs.org/themes/innovation",
 ]
+# UNJobs uses Cloudflare; challenge pages are tiny (< 2 KB).
+_CF_BLOCK_LEN = 2000
+_CF_MARKERS = ("just a moment", "cloudflare", "cf-chl", "challenge-platform", "attention required")
+_MAX_LISTING_PAGES = 200
+
 FIELD_BREAK = re.compile(r"\s+(?:Organization|Country|City|Field location|Office|Job Category|Duty Station(?:\(s\)|s)?|Posting (?:Start|End) Date|Contract Type|Seniority Level|Work schedule|Salary|Job description|Duties|Responsibilities|Qualifications|Details|Description)\s*:", re.I)
 ELIGIBILITY_CUE = re.compile(
     r"(?:candidates?\s+must\s+be\s+currently\s+based\s+and\s+authorized\s+to\s+work\s+in\s+one\s+of\s+the\s+following\s+countries\s+to\s+be\s+eligible\s+for\s+(?:this|the)\s+position\s*:\s*|one\s+of\s+the\s+following\s+countries[^.:]{0,180}(?:eligible|eligibility)[^:]{0,120}:\s*|eligible\s+countries\s*:\s*|open\s+to\s+(?:candidates|applicants|nationals)\s+from\s*:)(?P<list>[^.]{1,1200})",
@@ -192,55 +197,183 @@ def fetch(url: str) -> str:
         return ""
 
 
-def scrape_page(url: str) -> list[dict]:
-    soup = BeautifulSoup(fetch(url), "html.parser")
+def _scrape_listing_page(url: str) -> tuple[list[dict], bool]:
+    """Return (jobs, cf_blocked) for a single listing page."""
+    html = fetch(url)
+    soup = BeautifulSoup(html, "html.parser")
+    # A short response alone is ambiguous: a valid small listing must not be
+    # labelled a provider block when it still has the expected job structure.
+    lowered = html.casefold()
+    has_listing = bool(soup.select("div.job a.jtitle"))
+    if not has_listing and (any(marker in lowered for marker in _CF_MARKERS) or len(html) < _CF_BLOCK_LEN):
+        return [], True
     jobs = []
     for card in soup.select("div.job"):
         title_el = card.select_one("a.jtitle")
         if title_el and title_el.get("href"):
-            jobs.append({"title": clean(title_el.get_text(" "), 240), "application_url": urljoin(url, title_el["href"]), "source": "unjobs", "is_active": True, "rubro": "Organismos Internacionales", "tags": ["onu", "internacional", "organismo-internacional"]})
+            jobs.append({
+                "title": clean(title_el.get_text(" "), 240),
+                "application_url": urljoin(url, title_el["href"]),
+                "source": "unjobs", "is_active": True,
+                "rubro": "Organismos Internacionales",
+                "tags": ["onu", "internacional", "organismo-internacional"],
+            })
+    return jobs, False
+
+
+def scrape_page(url: str) -> list[dict]:
+    """Compat shim — single listing page without pagination."""
+    jobs, _ = _scrape_listing_page(url)
     return jobs
+
+
+def _discover_listing(base_url: str, seen: set[str]) -> tuple[list[dict], str]:
+    """
+    Follow numbered pagination for base_url until natural exhaustion or CF block.
+    Returns (new_jobs, stop_reason) where stop_reason is 'exhausted' or
+    'provider_rate_limit'.  New jobs are deduplicated against seen.
+    """
+    new_jobs: list[dict] = []
+    page_num = 1
+    while page_num <= _MAX_LISTING_PAGES:
+        url = base_url if page_num == 1 else f"{base_url}/{page_num}"
+        jobs, cf_blocked = _scrape_listing_page(url)
+        if cf_blocked:
+            return new_jobs, "provider_rate_limit"
+        if not jobs:
+            return new_jobs, "exhausted"
+        added = 0
+        for job in jobs:
+            if job["application_url"] not in seen:
+                seen.add(job["application_url"])
+                new_jobs.append(job)
+                added += 1
+        if not added:
+            return new_jobs, "pagination_stalled"
+        page_num += 1
+        time.sleep(1.0)
+    return new_jobs, "pagination_safety_limit"
 
 
 def main() -> None:
     max_items = int(os.getenv("CVITAE_MAX_ITEMS", "250"))
-    seen: set[str] = set(); details: list[AdapterResult] = []; new_jobs: list[dict] = []
+    seen: set[str] = set()
+    discovered_jobs: list[dict] = []
+    details: list[AdapterResult] = []
+    new_jobs: list[dict] = []
     enrichment = {"attempted": 0, "changed": 0, "noop": 0, "stale": 0, "failed": 0}
     enricher = AtomicEnricher(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_KEY else None
+
+    # Phase 1: Discovery — follow pagination for every configured listing URL.
+    # Tracks all accessible unique vacancies before detail budget applies.
+    discovery_stops: list[str] = []
     for page_url in PAGES:
-        if len(seen) >= max_items:
-            break
-        for job in scrape_page(page_url):
-            if len(seen) >= max_items:
-                break
-            discovery_url = job["application_url"]
-            if discovery_url in seen:
-                continue
-            seen.add(discovery_url)
-            detail = parse_unjobs_detail(discovery_url); details.append(detail)
-            for key, value in {"title": detail.title, "organization": detail.organization, "description": detail.description, "location": detail.location, "country_code": detail.country_code, "onsite_country": detail.onsite_country, "remote": detail.remote, "remote_scope": detail.remote_scope, "value": detail.salary_text, "currency": detail.currency, "published_at": detail.date_posted, "deadline": detail.deadline, "source_url": detail.source_url, "application_url": detail.apply_url}.items():
-                if value is not None:
-                    job[key] = value
-            job["source_authority"] = "aggregator"; job["original_source_verified"] = False
-            existing = (enricher.lookup(discovery_url) or enricher.lookup(detail.source_url, "source_url")) if enricher else None
-            if existing:
-                enrichment["attempted"] += 1
-                outcome = enricher.enrich_existing(detail, existing)
-                if outcome.status in enrichment:
-                    enrichment[outcome.status] += 1
-            else:
-                new_jobs.append(job)
+        new, stop = _discover_listing(page_url, seen)
+        discovered_jobs.extend(new)
+        discovery_stops.append(stop)
         time.sleep(1.5)
+
+    discovered_total = len(discovered_jobs)
+    any_cf = any(s == "provider_rate_limit" for s in discovery_stops)
+    all_exhausted = all(s == "exhausted" for s in discovery_stops)
+
+    # Phase 2: Detail — process up to max_items from the discovered pool.
+    for job in discovered_jobs:
+        if len(details) >= max_items:
+            break
+        discovery_url = job["application_url"]
+        detail = parse_unjobs_detail(discovery_url)
+        details.append(detail)
+        for key, value in {
+            "title": detail.title, "organization": detail.organization,
+            "description": detail.description, "location": detail.location,
+            "country_code": detail.country_code, "onsite_country": detail.onsite_country,
+            "remote": detail.remote, "remote_scope": detail.remote_scope,
+            "value": detail.salary_text, "currency": detail.currency,
+            "published_at": detail.date_posted, "deadline": detail.deadline,
+            "source_url": detail.source_url, "application_url": detail.apply_url,
+        }.items():
+            if value is not None:
+                job[key] = value
+        job["source_authority"] = "aggregator"
+        job["original_source_verified"] = False
+        existing = (enricher.lookup(discovery_url) or enricher.lookup(detail.source_url, "source_url")) if enricher else None
+        if existing:
+            enrichment["attempted"] += 1
+            outcome = enricher.enrich_existing(detail, existing)
+            if outcome.status in enrichment:
+                enrichment[outcome.status] += 1
+        else:
+            new_jobs.append(job)
+
     summary = OpportunitySink().upsert(new_jobs) if new_jobs else None
-    metrics_lineage = RunLineageWriter(SUPABASE_URL, SUPABASE_KEY).record(details) if SUPABASE_KEY else build_scan_lineage(details, run_id=os.getenv("CVITAE_SCRAPER_RUN_ID"), scan_request_id=os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID"))
-    metrics = {"found": len(seen), "detail_pages_attempted": len(details), "detail_pages_success": sum(item.source_status == 200 for item in details), "parsed": sum(bool(item.title) for item in details), "coverage": coverage(details), "enrichment": enrichment, "scan_lineage": metrics_lineage, "classification": {key: sum(item.recommendation == key for item in details) for key in ("AUTO_PUBLISH", "AUTO_BLOCK", "HUMAN_REVIEW")}}
+    metrics_lineage = (
+        RunLineageWriter(SUPABASE_URL, SUPABASE_KEY).record(details)
+        if SUPABASE_KEY
+        else build_scan_lineage(details, run_id=os.getenv("CVITAE_SCRAPER_RUN_ID"), scan_request_id=os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID"))
+    )
+
+    budget_hit = len(details) >= max_items and discovered_total > max_items
+    source_coverage_complete = all_exhausted
+    source_stop = "natural_exhaustion" if all_exhausted else "provider_rate_limit" if any_cf else next((item for item in discovery_stops if item != "exhausted"), "configured_listing_pages")
+    if any_cf:
+        _coverage_complete = False
+        _coverage_stop = "provider_rate_limit"
+    elif not source_coverage_complete:
+        _coverage_complete = False
+        _coverage_stop = source_stop
+    elif budget_hit:
+        _coverage_complete = False
+        _coverage_stop = "record_budget_reached"
+    else:
+        _coverage_complete = True
+        _coverage_stop = "natural_exhaustion"
+
+    metrics = {
+        "found": discovered_total,
+        "discovered_total": discovered_total,
+        "detail_pages_attempted": len(details),
+        "detail_pages_success": sum(item.source_status == 200 for item in details),
+        "parsed": sum(bool(item.title) for item in details),
+        "coverage": coverage(details),
+        "enrichment": enrichment,
+        "scan_lineage": metrics_lineage,
+        "classification": {
+            key: sum(item.recommendation == key for item in details)
+            for key in ("AUTO_PUBLISH", "AUTO_BLOCK", "HUMAN_REVIEW")
+        },
+    }
+    metrics["discovery"] = {"total": discovered_total, "coverage_complete": source_coverage_complete, "stop_reason": source_stop}
+    metrics["processing"] = {"attempted": len(details), "budget": max_items, "coverage_complete": not budget_hit, "stop_reason": "record_budget_reached" if budget_hit else "discovered_pool_processed", "unprocessed_due_to_budget": max(0, discovered_total - len(details))}
     baseline = enricher.recent_healthy_baseline("unjobs_scraper") if enricher else None
-    status, reasons = health(metrics, baseline); metrics["health"] = {"status": status, "reasons": reasons}
-    _coverage_stop = "record_budget_reached" if len(seen) >= max_items else "configured_listing_pages"
-    metrics.update(runtime_telemetry(provider_health="DEGRADED" if status == "DEGRADED" else "HEALTHY", coverage_complete=False, coverage_stop_reason=_coverage_stop, found=len(seen), valid=metrics["parsed"], processed=len(details), rejected=max(0,len(seen)-metrics["parsed"]), rejection_reasons={"detail_parse": max(0,len(seen)-metrics["parsed"])}))
-    metrics["eight_gates"] = eight_gates_run_evidence(source="unjobs", adapter_version=ADAPTER_VERSION, metrics=metrics, details=details, summary=summary.to_dict() if summary else None)
+    status, reasons = health(metrics, baseline)
+    metrics["health"] = {"status": status, "reasons": reasons}
+    metrics.update(runtime_telemetry(
+        provider_health="DEGRADED" if status == "DEGRADED" else "HEALTHY",
+        coverage_complete=_coverage_complete,
+        coverage_stop_reason=_coverage_stop,
+        found=discovered_total,
+        valid=metrics["parsed"],
+        processed=len(details),
+        rejected=max(0, len(details) - metrics["parsed"]),
+        rejection_reasons={"detail_parse": max(0, len(details) - metrics["parsed"])},
+    ))
+    qm = run_quality_metrics(details, coverage_complete=_coverage_complete, stop_reason=_coverage_stop)
+    metrics["eight_gates"] = eight_gates_run_evidence(
+        source="unjobs", adapter_version=ADAPTER_VERSION,
+        metrics=metrics, details=details,
+        summary=summary.to_dict() if summary else None,
+        quality_metrics=qm,
+    )
+    existing_unchanged = enrichment.get("noop", 0) + enrichment.get("stale", 0)
+    existing_updated = enrichment.get("changed", 0)
     if summary:
-        print("CVITAE_INGESTION_SUMMARY=" + json.dumps(summary.to_dict(), ensure_ascii=False))
+        out = summary.to_dict()
+        out["unchanged"] = (out.get("unchanged") or 0) + existing_unchanged
+        out["updated"] = (out.get("updated") or 0) + existing_updated
+        print("CVITAE_INGESTION_SUMMARY=" + json.dumps(out, ensure_ascii=False))
+    elif existing_unchanged or existing_updated:
+        print("CVITAE_INGESTION_SUMMARY=" + json.dumps({"inserted": 0, "unchanged": existing_unchanged, "updated": existing_updated, "found": discovered_total}, ensure_ascii=False))
     print("CVITAE_ADAPTER_METRICS=" + json.dumps({"adapter_version": ADAPTER_VERSION, "extraction_metrics": metrics}, ensure_ascii=False))
 
 

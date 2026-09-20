@@ -20,19 +20,25 @@ export function evaluateEightGates(profile: any, rows: any[], latestRun: any, ob
   const detail = runGates.gate_2 || gate(observations.length ? 'PASS' : 'NOT_EVALUATED', observations.length ? 'DETAIL_OBSERVED' : 'DETAIL_UNPROVEN', { observations: observations.length, extracted_fields: extracted }, {}, observations[0]?.observed_at || null)
   const rejected = Number(latestRun?.rejected_count ?? 0)
   const filters = runGates.gate_3 || gate(latestRun ? (rejected ? 'WARNING' : 'PASS') : 'NOT_EVALUATED', rejected ? 'FILTERED_ROWS' : latestRun ? 'FILTERS_COMPLETED' : 'NO_RUN_EVIDENCE', { rejected, valid: latestRun?.valid_count ?? null }, {}, runAt)
+  // G4–G6: use run-specific evidence when Python scraper computed it (quality_metrics present).
+  // Fall back to full-inventory row computation only when run-specific gates are absent.
+  const hasRunSpecificG46 = Boolean((runGates.gate_4 as any)?.metrics?._rows_source === 'run_specific')
   const qualityFailures: string[] = []
   if (total && descriptionOk < total) qualityFailures.push('CONTENT_INSUFFICIENT')
   if (total && !organizationOk) qualityFailures.push('ORGANIZATION_MISSING')
   if (total && !countryOk && !rows.every(row => row.remote_scope && row.remote_scope !== 'UNKNOWN')) qualityFailures.push('COUNTRY_MISSING')
   if (total && rows.some(row => row.remote_scope === 'UNKNOWN')) qualityFailures.push('ARRANGEMENT_UNKNOWN')
-  const quality = gate(!total ? 'NOT_EVALUATED' : qualityFailures.length ? 'FAIL' : 'PASS', qualityFailures[0] || 'NORMALIZED', { total, description_ok: descriptionOk, organization_ok: organizationOk, location_ok: locationOk, country_ok: countryOk, application_url_ok: appUrlOk, source_url_ok: sourceUrlOk, _rows_source: rowsScope }, { reasons: qualityFailures }, null)
+  const inventoryQuality = gate(!total ? 'NOT_EVALUATED' : qualityFailures.length ? 'FAIL' : 'PASS', qualityFailures[0] || 'NORMALIZED', { total, description_ok: descriptionOk, organization_ok: organizationOk, location_ok: locationOk, country_ok: countryOk, application_url_ok: appUrlOk, source_url_ok: sourceUrlOk, _rows_source: rowsScope }, { reasons: qualityFailures }, null)
+  const quality = hasRunSpecificG46 ? runGates.gate_4 as any as Gate : inventoryQuality
   const fieldEvidence = extracted?.description?.extracted || 0
   const provenLost = fieldEvidence > 0 && descriptionOk < Math.max(1, Math.floor(total * .25))
-  const persistence = gate(!total ? 'NOT_EVALUATED' : provenLost ? 'FAIL' : (!sourceUrlOk || !descriptionOk) ? 'WARNING' : 'PASS', provenLost ? 'DESCRIPTION_LOST_BEFORE_PERSISTENCE' : (!sourceUrlOk ? 'PERSISTENCE_UNPROVEN_SOURCE_URL_MISSING' : !descriptionOk ? 'PERSISTENCE_UNPROVEN_DESCRIPTION_MISSING' : 'PERSISTED_OK'), { total, description_ok: descriptionOk, source_url_ok: sourceUrlOk, application_url_ok: appUrlOk, enrichment_events: enrichmentEvents.length }, { extracted_description: fieldEvidence || null }, enrichmentEvents[0]?.created_at || runAt)
+  const inventoryPersistence = gate(!total ? 'NOT_EVALUATED' : provenLost ? 'FAIL' : (!sourceUrlOk || !descriptionOk) ? 'WARNING' : 'PASS', provenLost ? 'DESCRIPTION_LOST_BEFORE_PERSISTENCE' : (!sourceUrlOk ? 'PERSISTENCE_UNPROVEN_SOURCE_URL_MISSING' : !descriptionOk ? 'PERSISTENCE_UNPROVEN_DESCRIPTION_MISSING' : 'PERSISTED_OK'), { total, description_ok: descriptionOk, source_url_ok: sourceUrlOk, application_url_ok: appUrlOk, enrichment_events: enrichmentEvents.length }, { extracted_description: fieldEvidence || null }, enrichmentEvents[0]?.created_at || runAt)
+  const persistence = hasRunSpecificG46 && runGates.gate_5 ? runGates.gate_5 as any as Gate : inventoryPersistence
   const dataHealth = quality.status === 'FAIL' ? 'FAIL' : persistence.status === 'FAIL' ? 'FAIL' : quality.status === 'WARNING' || persistence.status === 'WARNING' ? 'WARNING' : 'PASS'
   const healthOverall = runtimeStatus === 'FAIL' ? 'RUNTIME_FAIL' : quality.status === 'FAIL' ? 'DATA_QUALITY_FAIL' : persistence.status === 'FAIL' ? 'PERSISTENCE_FAIL' : runtimeStatus === 'NOT_EVALUATED' ? 'UNKNOWN' : (quality.status === 'WARNING' || persistence.status === 'WARNING') ? 'PARTIAL' : 'HEALTHY'
-  const healthScope = !latestRun ? 'no_run_evidence' : rowsScope
-  const health = gate(runtimeStatus === 'FAIL' ? 'FAIL' : dataHealth === 'FAIL' ? 'FAIL' : runtimeStatus === 'NOT_EVALUATED' ? 'NOT_EVALUATED' : dataHealth, runtimeStatus === 'PASS' && dataHealth === 'FAIL' ? 'RUNTIME_PASS_DATA_HEALTH_FAIL' : runtimeStatus === 'FAIL' ? 'RUNTIME_HEALTH_FAIL' : dataHealth === 'PASS' ? 'HEALTHY' : 'DATA_HEALTH_WARNING', { runtime_health: runtimeStatus, data_health: dataHealth, observations: observations.length, overall: healthOverall, scope: healthScope }, {}, runAt)
+  const healthScope = !latestRun ? 'no_run_evidence' : hasRunSpecificG46 ? 'run_specific' : rowsScope
+  const inventoryHealth = gate(runtimeStatus === 'FAIL' ? 'FAIL' : dataHealth === 'FAIL' ? 'FAIL' : runtimeStatus === 'NOT_EVALUATED' ? 'NOT_EVALUATED' : dataHealth, runtimeStatus === 'PASS' && dataHealth === 'FAIL' ? 'RUNTIME_PASS_DATA_HEALTH_FAIL' : runtimeStatus === 'FAIL' ? 'RUNTIME_HEALTH_FAIL' : dataHealth === 'PASS' ? 'HEALTHY' : 'DATA_HEALTH_WARNING', { runtime_health: runtimeStatus, data_health: dataHealth, observations: observations.length, overall: healthOverall, scope: healthScope }, {}, runAt)
+  const health = hasRunSpecificG46 && runGates.gate_6 ? runGates.gate_6 as any as Gate : inventoryHealth
   const preceding = [discovery, detail, filters, quality, persistence, health]
   const priorFailureIndex = preceding.findIndex(value => value.status === 'FAIL')
   const priorFailure = priorFailureIndex >= 0 ? preceding[priorFailureIndex] : null

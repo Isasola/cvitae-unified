@@ -136,6 +136,9 @@ def _generic_entry(key, url, org):
 
 
 def insert_job(payload):
+    if str(payload.get("title", "")).casefold().startswith(("vacantes abiertas en", "empleos en", "empleo en")):
+        print("  NO_CONCRETE_VACANCY")
+        return "skipped"
     try:
         r = requests.post(
             TABLE_URL + "?on_conflict=application_url",

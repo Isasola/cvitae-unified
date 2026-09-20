@@ -102,44 +102,46 @@ def main():
 
     for keywords, location, rubro in SEARCHES:
         print(f"\nBuscando: '{keywords}' en '{location}'")
-        jobs = fetch_jobs(keywords, location)
+        page = 1
+        while True:
+            jobs = fetch_jobs(keywords, location, page)
+            if not jobs:
+                break
+            page_urls = set()
+            for raw in jobs:
+                url = raw.get("link", "")
+                if not url or url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                page_urls.add(url)
+                total_found += 1
 
-        for raw in jobs:
-            url = raw.get("link", "")
-            if not url or url in seen_urls:
-                continue
-            seen_urls.add(url)
-            total_found += 1
+                title = raw.get("title", "").strip()
+                company = raw.get("company", "").strip()
+                loc = raw.get("location", location).strip()
+                snippet = strip_html(raw.get("snippet", ""))
+                salary = raw.get("salary", "")
 
-            title = raw.get("title", "").strip()
-            company = raw.get("company", "").strip()
-            loc = raw.get("location", location).strip()
-            snippet = strip_html(raw.get("snippet", ""))
-            salary = raw.get("salary", "")
+                description = snippet
+                if salary:
+                    description = f"Salario: {salary}\n\n{snippet}"
 
-            description = snippet
-            if salary:
-                description = f"Salario: {salary}\n\n{snippet}"
-
-            job = {
-                "title": title,
-                "organization": company or "No especificada",
-                "location": loc,
-                "rubro": rubro,
-                "type": guess_type(snippet),
-                "description": description[:800],
-                "application_url": url,
-                "source": "jooble",
-                "is_active": True,
-                "tags": [keywords] if keywords else [],
-            }
-
-            status = insert_job(job)
-            if status in (200, 201, 409):
-                total_inserted += 1
-            print(f"  [{company}] {title[:50]} -> {status}")
-
-        time.sleep(1)
+                job = {
+                    "title": title, "organization": company or "No especificada",
+                    "location": loc, "rubro": rubro, "type": guess_type(snippet),
+                    "description": description[:800], "application_url": url,
+                    "source": "jooble", "is_active": True,
+                    "tags": [keywords] if keywords else [],
+                }
+                status = insert_job(job)
+                if status in (200, 201, 409):
+                    total_inserted += 1
+                print(f"  [{company}] {title[:50]} -> {status}")
+            # A non-empty repeated page is a provider pagination stall.
+            if not page_urls:
+                break
+            page += 1
+            time.sleep(1)
 
     print(f"\n=== Jooble: {total_inserted}/{total_found} insertadas/actualizadas ===")
 

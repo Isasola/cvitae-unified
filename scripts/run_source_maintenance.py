@@ -161,11 +161,13 @@ def reconcile_embeddings(ids: list[str], apply: bool) -> dict[str, int]:
 
 def persist_maintenance_run(summary: dict[str, Any]) -> None:
     """Use the established scraper_runs telemetry contract; no new log table."""
+    event = os.getenv("GITHUB_EVENT_NAME", "").strip()
+    trigger_type = "schedule" if event == "schedule" else "manual" if event == "workflow_dispatch" else "local"
     payload = {
         "run_id": f"source-maintenance-{summary['source']}-{int(datetime.now(timezone.utc).timestamp())}",
         "scraper_id": f"maintenance_{summary['source']}",
         "scraper_name": f"Source maintenance {summary['source']}",
-        "script_path": "scripts/run_source_maintenance.py", "trigger_type": "maintenance",
+        "script_path": "scripts/run_source_maintenance.py", "trigger_type": trigger_type,
         "status": "healthy" if summary.get("health", {}).get("status") == "HEALTHY" else "warning",
         "started_at": summary["started_at"], "finished_at": summary["finished_at"],
         "duration_seconds": summary["duration_seconds"], "found_count": summary["processed"],
@@ -173,6 +175,11 @@ def persist_maintenance_run(summary: dict[str, Any]) -> None:
         "extraction_metrics": summary,
     }
     response = requests.post(f"{api_base()}/scraper_runs", headers={**api_headers(), "Prefer": "return=minimal"}, json=payload, timeout=30)
+    if not response.ok:
+        # Supabase's diagnostic body is useful, but never print request headers
+        # (which contain the service role key) and keep notification logs bounded.
+        body = " ".join(response.text.split())[:800]
+        print(f"maintenance telemetry POST failed: HTTP {response.status_code}; body={body}", file=sys.stderr)
     response.raise_for_status()
 
 

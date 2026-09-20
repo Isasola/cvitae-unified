@@ -32,7 +32,7 @@ EXPLICIT_EMITTED_ALIASES = {
     "logistica_transporte_py": "logistica_transporte", "medios_py": "medios_comunicacion",
     "oyaop": "oya", "clasipar": "scrapper", "cc_atento": "callcenters",
     "ong_bid_py": "ongs", "ong_giz_py": "ongs", "ong_oas_py": "ongs",
-    "abc_color": "abc", "aptitus_pe": "aptitus", "bumeran_pe": "bumeran",
+    "abc_color": "abc", "abc_scrapper": "abc", "aptitus_pe": "aptitus", "bumeran_pe": "bumeran",
     "computrabajo_pe": "computrabajo", "energia_utilities_py": "energia_utilities",
     "googlejobs": "googlejobs_v2", "grupo_cartes": "grupocarteshs", "grupo_vierci": "grupovierci",
     "indeed_pe": "indeed", "jooble_pe": "jooble", "laborum_pe": "laborum",

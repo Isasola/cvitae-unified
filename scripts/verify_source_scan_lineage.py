@@ -36,7 +36,7 @@ assert 'child_env["CVITAE_SOURCE_SCAN_REQUEST_ID"] = scan_request_id' in runner
 assert 'CVITAE_SOURCE_SCAN_REQUEST_ID: ${{ inputs.scan_request_id }}' in workflow
 assert 'unjobs: "unjobs_scraper"' in endpoint and 'himalayas: "himalayas_scraper"' in endpoint
 assert 'talentcom: "talentcom_scraper"' in endpoint and 'weworkremotely: "weworkremotely_scraper"' in endpoint
-assert 'GITHUB_ACTIONS_TOKEN' in endpoint and 'scan:${requestId}' in endpoint
+assert 'GITHUB_ACTIONS_TOKEN' in endpoint and 'scan_request_id: requestId' in endpoint
 assert 'POSSIBLE_SOURCE_DRIFT' in endpoint
 assert 'status === "FAILED"' in endpoint and 'status, run, error' in endpoint
 

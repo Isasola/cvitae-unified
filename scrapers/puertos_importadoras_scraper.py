@@ -136,6 +136,9 @@ def fallback(key, url, org, rubro):
 
 
 def insert_job(job):
+    if str(job.get("title", "")).casefold().startswith(("vacantes abiertas en", "empleos en", "empleo en")):
+        print("  NO_CONCRETE_VACANCY")
+        return "skipped"
     try:
         r = requests.post(
             TABLE_URL + "?on_conflict=application_url",

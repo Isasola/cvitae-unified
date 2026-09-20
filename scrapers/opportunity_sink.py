@@ -110,10 +110,18 @@ class IngestionSummary:
     unchanged: int = 0
     duplicates_in_run: int = 0
     rejected: int = 0
+    budget_skipped: int = 0
+    failed: int = 0
     errors: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        # ``processed`` remains for existing consumers; the explicit name
+        # clarifies that persistence failures are attempted, never invisible.
+        payload["processed_attempted"] = self.inserted + self.updated + self.unchanged + self.rejected + self.failed
+        payload["processed"] = payload["processed_attempted"]
+        payload["unprocessed_due_to_budget"] = self.budget_skipped
+        return payload
 
 
 def _text(value: Any, limit: int) -> str:
@@ -310,10 +318,9 @@ class OpportunitySink:
         summary.duplicates_in_run = summary.valid - summary.unique
         items = list(unique.values())
         if len(items) > max_items:
-            summary.rejected += len(items) - max_items
+            summary.budget_skipped += len(items) - max_items
             summary.errors.append(f"Límite operativo aplicado: {max_items} de {len(items)} oportunidades únicas")
             items = items[:max_items]
-            summary.unique = len(items)
         if not items:
             self._write_audit(summary, items)
             return summary
@@ -326,7 +333,7 @@ class OpportunitySink:
             existing = self._existing_urls(list(unique))
         except requests.RequestException as exc:
             summary.errors.append(f"No se pudo consultar deduplicación previa: {type(exc).__name__}")
-            summary.rejected += len(items)
+            summary.failed += len(items)
             return summary
 
         # Preserve the first public slug when a source later corrects its title.
@@ -371,14 +378,14 @@ class OpportunitySink:
                     timeout=60,
                 )
                 if response.status_code not in (200, 201, 204):
-                    summary.rejected += len(batch)
+                    summary.failed += len(batch)
                     summary.errors.append(f"Supabase {response.status_code}: {_text(response.text, 800)}")
                     continue
                 updated = sum(item["application_url"] in existing for item in batch)
                 summary.updated += updated
                 summary.inserted += len(batch) - updated
             except requests.RequestException as exc:
-                summary.rejected += len(batch)
+                summary.failed += len(batch)
                 summary.errors.append(f"Error de red al insertar lote: {type(exc).__name__}")
         return summary
 

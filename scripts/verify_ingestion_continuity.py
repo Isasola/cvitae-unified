@@ -292,7 +292,7 @@ def test_i_aggregator_source() -> None:
 
 # ─── Fixture J: CVITAE_MAX_ITEMS cap --partial batch, rejected_count grows ───
 def test_j_max_items_cap() -> None:
-    print("\nFixture J: CVITAE_MAX_ITEMS=2 --3rd item rejected, rejected_count += 1")
+    print("\nFixture J: CVITAE_MAX_ITEMS=2 --3rd item is budget_skipped, not rejected")
     items = [
         _item(application_url=f"https://example.com/jobs/{i}", title=f"Job {i}")
         for i in range(3)
@@ -300,9 +300,22 @@ def test_j_max_items_cap() -> None:
     sink = _sink_with_existing({})
     with patch.dict(os.environ, {"CVITAE_MAX_ITEMS": "2"}):
         summary = sink.upsert(items)
-    assert_eq(summary.unique, 2, "J: only 2 unique items processed after cap")
-    assert_true(summary.rejected >= 1, "J: at least 1 rejected due to cap")
+    assert_eq(summary.unique, 3, "J: unique remains the validated unique total")
+    assert_eq(summary.budget_skipped, 1, "J: one valid item skipped due to budget")
+    assert_eq(summary.rejected, 0, "J: budget must not be a rejection")
     assert_true(any("Límite operativo" in e for e in summary.errors), "J: cap error logged")
+
+
+# ─── Fixture J2: persistence errors are attempted failures, not rejections ───
+def test_j2_persistence_failure_reconciliation() -> None:
+    print("\nFixture J2: persistence failure remains visible as failed")
+    sink = _sink_with_existing({})
+    sink.session.post.return_value.status_code = 503
+    sink.session.post.return_value.text = "unavailable"
+    summary = sink.upsert([_item(application_url=f"https://example.com/fail/{index}") for index in range(2)])
+    assert_eq(summary.failed, 2, "J2: failed counts the known failed batch rows")
+    assert_eq(summary.rejected, 0, "J2: persistence failure is not a validation rejection")
+    assert_eq(summary.to_dict()["processed_attempted"], summary.inserted + summary.updated + summary.unchanged + summary.rejected + summary.failed, "J2: reconciliation identity holds")
 
 
 # ─── Lineage summary method ───────────────────────────────────────────────────
@@ -336,18 +349,18 @@ def test_trigger_type_max_items() -> None:
     """Verify the documented trigger_type→CVITAE_MAX_ITEMS mapping in run_scraper_monitored."""
     print("\nTrigger-type max_items invariant: scan < manual <= schedule")
     # We test the logic inline since it's just arithmetic
-    def compute_cap(trigger: str, control_max: int | None) -> int:
+    def compute_cap(trigger: str, control_max: int | None, schedule_max: int | None = None) -> int:
         if trigger == "scan":
             return control_max or 50
         elif trigger == "schedule":
-            return control_max or 10000
+            return schedule_max or 10000
         else:
             return control_max or 250
 
     assert_eq(compute_cap("scan", None), 50, "scan with no control --50")
     assert_eq(compute_cap("scan", 100), 100, "scan with control=100 --100")
     assert_eq(compute_cap("schedule", None), 10000, "schedule with no control --10000")
-    assert_eq(compute_cap("schedule", 500), 500, "schedule with control=500 --500")
+    assert_eq(compute_cap("schedule", 500), 10000, "schedule ignores manual control=500 --10000")
     assert_eq(compute_cap("manual", None), 250, "manual with no control --250")
     assert_eq(compute_cap("local", None), 250, "local with no control --250")
     assert_true(compute_cap("scan", None) < compute_cap("manual", None), "scan < manual")
@@ -462,6 +475,7 @@ if __name__ == "__main__":
         test_h_verified_content_change,
         test_i_aggregator_source,
         test_j_max_items_cap,
+        test_j2_persistence_failure_reconciliation,
         test_lineage_summary,
         test_trigger_type_max_items,
         test_k_source_alias_stable,

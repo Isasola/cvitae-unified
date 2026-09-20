@@ -126,28 +126,29 @@ console.log('\nP0.5 — CVITAE_MAX_ITEMS early binding:')
 assert('P0.5-A: unjobs reads CVITAE_MAX_ITEMS at start of main()',
   unjobs.includes("max_items = int(os.getenv(\"CVITAE_MAX_ITEMS\", \"250\"))"))
 
-assert('P0.5-B: unjobs breaks outer loop when len(seen) >= max_items',
-  unjobs.includes('if len(seen) >= max_items:') &&
-  unjobs.indexOf('if len(seen) >= max_items:') < unjobs.indexOf('for job in scrape_page'))
+assert('P0.5-B: UNJobs completes listing discovery before bounded detail processing',
+  unjobs.includes('for page_url in PAGES:') &&
+  unjobs.includes('for job in discovered_jobs:') &&
+  unjobs.includes('if len(details) >= max_items:') &&
+  unjobs.indexOf('for page_url in PAGES:') < unjobs.indexOf('for job in discovered_jobs:'))
 
 assert('P0.5-C: himalayas reads CVITAE_MAX_ITEMS at start of main()',
   himalayas.includes("max_items = int(os.getenv(\"CVITAE_MAX_ITEMS\", \"250\"))"))
 
-assert('P0.5-D: himalayas breaks inventory loop when limit reached',
-  himalayas.includes('if len(seen) >= max_items:') &&
-  himalayas.includes('for raw in inventory.jobs:'))
+assert('P0.5-D: Himalayas bounds API inventory with max_records',
+  himalayas.includes('max_records=max_items') && himalayas.includes('for raw in inventory.jobs:'))
 
 assert('P0.5-E: weworkremotely reads CVITAE_MAX_ITEMS at start of main()',
   wwr.includes("max_items = int(os.getenv(\"CVITAE_MAX_ITEMS\", \"250\"))"))
 
-assert('P0.5-F: weworkremotely breaks both category and item loops',
-  (wwr.match(/if len\(seen\) >= max_items:/g) || []).length >= 2)
+assert('P0.5-F: WWR discovers configured feeds before bounding details',
+  wwr.includes('for slug, rubro in CATEGORIES:') && wwr.includes('for rss in discovered[:max_items]:'))
 
 assert('P0.5-G: talentcom reads CVITAE_MAX_ITEMS at start of main()',
   talentcom.includes("max_items = int(os.getenv(\"CVITAE_MAX_ITEMS\", \"250\"))"))
 
-assert('P0.5-H: talentcom breaks both SEARCHES and job loops',
-  (talentcom.match(/if len\(seen_urls\) >= max_items:/g) || []).length >= 2)
+assert('P0.5-H: Talent.com paginates searches before bounding details',
+  talentcom.includes('discover_search(') && talentcom.includes('for job in discovered_jobs[:max_items]:'))
 
 // ── P0.6: Scope markers in snapshot ──────────────────────────────────────────
 console.log('\nP0.6 — Scope markers in snapshot:')

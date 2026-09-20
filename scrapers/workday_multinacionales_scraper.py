@@ -40,43 +40,39 @@ def fetch_workday_jobs(company_id: str, company_name: str, rubro: str, search_te
         "locations": [],
     }
     try:
-        r = requests.post(
-            url,
-            json=payload,
-            headers={"Content-Type": "application/json"},
-            timeout=20,
-        )
-        if r.status_code != 200:
-            return []
-        data = r.json()
-        jobs = data.get("jobPostings", [])
         result = []
-        for job in jobs:
-            title = job.get("title", "")
-            if not title:
-                continue
-            job_path = job.get("externalPath", "")
-            app_url = f"https://{company_id}.wd1.myworkdayjobs.com/External{job_path}" if job_path else ""
-            if not app_url:
-                continue
-            location_info = job.get("locationsText", "Paraguay")
-            description = ""
-            jd = job.get("jobDescription", {})
-            if isinstance(jd, dict):
-                description = jd.get("descriptor", "")[:500]
-            result.append({
-                "title": title,
-                "organization": company_name,
-                "location": location_info if location_info else "Paraguay",
-                "rubro": rubro,
-                "type": "Tiempo completo",
-                "description": description,
-                "application_url": app_url,
-                "source": SOURCE,
-                "is_active": True,
-                "tags": ["multinacional", rubro.lower()],
-            })
-        return result
+        while True:
+            r = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=20)
+            if r.status_code != 200:
+                return result
+            jobs = r.json().get("jobPostings", [])
+            if not jobs:
+                return result
+            page_added = 0
+            for job in jobs:
+                title = job.get("title", "")
+                if not title:
+                    continue
+                job_path = job.get("externalPath", "")
+                app_url = f"https://{company_id}.wd1.myworkdayjobs.com/External{job_path}" if job_path else ""
+                if not app_url:
+                    continue
+                page_added += 1
+                location_info = job.get("locationsText", "Paraguay")
+                description = ""
+                jd = job.get("jobDescription", {})
+                if isinstance(jd, dict):
+                    description = jd.get("descriptor", "")[:500]
+                result.append({
+                    "title": title, "organization": company_name,
+                    "location": location_info if location_info else "Paraguay",
+                    "rubro": rubro, "type": "Tiempo completo", "description": description,
+                    "application_url": app_url, "source": SOURCE, "is_active": True,
+                    "tags": ["multinacional", rubro.lower()],
+                })
+            if not page_added or len(jobs) < payload["limit"]:
+                return result
+            payload["offset"] += len(jobs)
     except Exception as e:
         print(f"  Workday error {company_id}: {e}")
         return []
