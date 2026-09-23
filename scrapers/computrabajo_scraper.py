@@ -85,6 +85,38 @@ def _strip_html(text):
     return re.sub(r" {2,}", " ", text).strip()
 
 
+def parse_detail_html(raw_html):
+    """Extract only source-provided JobPosting fields; absence stays unknown."""
+    if not raw_html:
+        return {"description": "", "organization": "", "employment_type": "", "deadline": None, "salary": None, "currency": None, "skills": []}
+    soup = BeautifulSoup(raw_html, "html.parser")
+    detail = {"description": "", "organization": "", "employment_type": "", "deadline": None, "salary": None, "currency": None, "skills": []}
+    for script in soup.find_all("script", type="application/ld+json"):
+        try: data = json.loads(script.string or "")
+        except (json.JSONDecodeError, TypeError): continue
+        items = data.get("@graph", [data]) if isinstance(data, dict) else []
+        for item in items:
+            if item.get("@type") != "JobPosting": continue
+            raw_desc = item.get("description", "")
+            if raw_desc:
+                candidate = _strip_html(raw_desc)[:3000]
+                if len(candidate) > 50: detail["description"] = candidate
+            org_data = item.get("hiringOrganization", {})
+            detail["organization"] = (org_data.get("name", "") if isinstance(org_data, dict) else org_data or "").strip()
+            detail["employment_type"] = str(item.get("employmentType") or "").strip()[:100]
+            detail["deadline"] = str(item.get("validThrough") or "").strip()[:32] or None
+            salary = item.get("baseSalary")
+            if isinstance(salary, dict):
+                value = salary.get("value") or {}
+                amount = value.get("value") if isinstance(value, dict) else value
+                if amount is not None: detail["salary"] = str(amount)[:80]
+                detail["currency"] = str(salary.get("currency") or "").strip()[:12] or None
+            skills = item.get("skills") or item.get("qualifications") or []
+            detail["skills"] = [str(skill).strip() for skill in (skills if isinstance(skills, list) else [skills]) if str(skill).strip()][:20]
+            if detail["description"]: break
+    return detail
+
+
 def fetch_detail(url):
     """Fetch a job detail page to get description and company name.
     Computrabajo renders its pages as SPAs — the visible HTML lacks the job body.
@@ -92,12 +124,11 @@ def fetch_detail(url):
     CSS selectors are kept as fallbacks for edge cases.
     Never invents data — returns empty strings when not found."""
     raw_html = fetch(url)
-    if not raw_html:
-        return {"description": "", "organization": ""}
-
+    detail = parse_detail_html(raw_html)
+    if not raw_html: return detail
     soup = BeautifulSoup(raw_html, "html.parser")
-    description = ""
-    organization = ""
+    description = detail["description"]
+    organization = detail["organization"]
 
     # Primary: extract from JSON-LD JobPosting (works on JS-rendered pages where HTML body is empty)
     for script in soup.find_all("script", type="application/ld+json"):
@@ -155,7 +186,8 @@ def fetch_detail(url):
                         organization = text
                         break
 
-    return {"description": description, "organization": organization}
+    detail.update({"description": description, "organization": organization})
+    return detail
 
 
 def enrich_with_details(jobs):
@@ -177,6 +209,11 @@ def enrich_with_details(jobs):
                     jobs[idx]["description"] = detail["description"]
                 if detail["organization"] and not jobs[idx].get("organization"):
                     jobs[idx]["organization"] = detail["organization"]
+                if detail.get("employment_type"): jobs[idx]["type"] = detail["employment_type"]
+                if detail.get("deadline"): jobs[idx]["deadline"] = detail["deadline"]
+                if detail.get("salary"): jobs[idx]["value"] = detail["salary"]
+                if detail.get("currency"): jobs[idx]["currency"] = detail["currency"]
+                if detail.get("skills"): jobs[idx]["tags"] = list(dict.fromkeys(jobs[idx].get("tags", []) + detail["skills"]))[:20]
             except Exception as e:
                 print(f"  detail enrich error for job at index {idx}: {e}")
 

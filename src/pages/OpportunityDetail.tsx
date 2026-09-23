@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Link, useParams } from 'wouter'
-import { toGoogleEmploymentType } from '@/lib/seo/employment-type'
+import { Link, useLocation, useParams } from 'wouter'
+import { canonicalOpportunityPathForRow, canonicalOpportunityUrlForRow, deadlineLifecycle, publicOpportunitySchemaType } from '@/lib/opportunity-truth'
+import { aggregatedJobPosting } from '@/lib/factual-job-posting'
 import { safeExternalUrl } from '@/lib/safe-url'
 import { ArrowLeft, Building2, CalendarDays, ExternalLink, MapPin, ShieldCheck, Sparkles } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
-import { supabase } from '@/lib/supabase'
+import { loadPublicOpportunities } from '@/lib/public-source-policy'
 import { analytics } from '@/lib/analytics'
 
 interface Opportunity {
@@ -20,8 +21,10 @@ interface Opportunity {
   type: string | null
   description: string | null
   opportunity_type: string | null
+  opportunity_kind?: string | null
   application_url: string
   source: string | null
+  source_url?: string | null
   deadline: string | null
   funding_type: string | null
   funding_amount: number | null
@@ -31,6 +34,7 @@ interface Opportunity {
   eligible_regions: string[] | null
   education_level: string | null
   updated_at: string
+  distribution?: { seo?: { allowed: boolean }; jobPosting?: { allowed: boolean }; googleJobs?: { allowed: boolean }; sourceAttributionRequired?: boolean }
 }
 
 const LABELS: Record<string, string> = {
@@ -43,81 +47,47 @@ const clean = (value: unknown) => String(value || '').replace(/<[^>]*>/g, ' ').r
 
 export default function OpportunityDetail() {
   const { slug } = useParams<{ slug: string }>()
+  const [, setLocation] = useLocation()
   const [item, setItem] = useState<Opportunity | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!slug) return
-    supabase
-      .from('opportunities')
-      .select('id,slug,title,organization,location,city,department,country_code,type,description,opportunity_type,application_url,source,deadline,funding_type,funding_amount,currency,fully_funded,eligible_countries,eligible_regions,education_level,updated_at')
-      .eq('slug', slug)
-      .eq('is_active', true)
-      .eq('verification_status', 'verified')
-      .eq('catalog_eligible', true)
-      .is('deleted_at', null)
-      .is('archived_at', null)
-      .or(`deadline.is.null,deadline.gte.${new Date().toISOString()}`)
-      .maybeSingle()
-      .then(({ data }) => {
-        const loaded = data as Opportunity | null
-        setItem(loaded)
-        if (loaded) analytics.opportunityViewed(loaded.id, loaded.source || 'unknown')
-        setLoading(false)
-      })
+    void loadPublicOpportunities<Opportunity>('all', slug).then(data => {
+      const loaded = data as Opportunity | null
+      if (loaded && canonicalOpportunityPathForRow(loaded) !== `/oportunidades/${loaded.slug}`) { setLocation(canonicalOpportunityPathForRow(loaded), { replace: true }); return }
+      setItem(loaded); if (loaded) analytics.opportunityViewed(loaded.id, loaded.source || 'unknown')
+    }).finally(() => setLoading(false))
   }, [slug])
 
   if (loading) return <SiteShell><main className="mx-auto min-h-[60vh] max-w-5xl px-6 py-20 text-sm text-white/40">Cargando oportunidad…</main></SiteShell>
-  if (!item) return <SiteShell><main className="mx-auto min-h-[60vh] max-w-5xl px-6 py-20"><p className="text-cream">Esta oportunidad ya no está activa o no existe.</p><Link href="/oportunidades" className="mt-4 inline-block text-sm text-[#c9a84c]">Volver a oportunidades</Link></main></SiteShell>
+  if (!item) return <><Helmet><meta name="robots" content="noindex,follow" /></Helmet><SiteShell><main className="mx-auto min-h-[60vh] max-w-5xl px-6 py-20"><p className="text-cream">Esta oportunidad ya no está activa o no existe.</p><Link href="/oportunidades" className="mt-4 inline-block text-sm text-[#c9a84c]">Volver a oportunidades</Link></main></SiteShell></>
 
   const type = LABELS[item.opportunity_type || ''] || clean(item.opportunity_type).replaceAll('_', ' ') || 'Oportunidad'
   const eligibility = [...(item.eligible_countries || []), ...(item.eligible_regions || [])].join(', ')
   const title = `${clean(item.title)} | CVitae`
-  const description = `${type} de ${clean(item.organization) || 'una organización verificada'}. Revisá elegibilidad, fecha y postulación en CVitae.`
+  const description = clean(item.description) || clean(item.title)
   const funding = item.funding_amount ? `${item.currency || ''} ${Number(item.funding_amount).toLocaleString('es-PY')}`.trim() : clean(item.funding_type)
-  const SCHOLARSHIP_TYPES = ['scholarship', 'fellowship', 'grant', 'research_funding']
-  const JOB_TYPES = ['job', 'internship', 'consultancy', 'empleo']
-  const isJobPosting = !SCHOLARSHIP_TYPES.includes(item.opportunity_type || '')
-  // For JobPosting use canonical /empleos/ if it's a job type, otherwise /oportunidades/
-  const isJobType = JOB_TYPES.includes(item.opportunity_type || '')
-  const canonicalUrl = isJobType
-    ? `https://cvitae.lat/empleos/${item.slug}`
-    : `https://cvitae.lat/oportunidades/${item.slug}`
+  const canonicalUrl = canonicalOpportunityUrlForRow(item)
   const realDescription = clean(item.description)
   const realOrg = clean(item.organization)
-  // JobPosting requires real description + real org — never emit with synthetic fallbacks
-  const canEmitJobPosting = isJobPosting && realDescription.length >= 100 && realOrg.length > 0
+  const deadlineState = deadlineLifecycle(item.deadline)
+  const factual = aggregatedJobPosting(item, canonicalUrl)
+  const canEmitJobPosting = factual.state === 'READY'
+  const schemaType = publicOpportunitySchemaType(item, canEmitJobPosting)
 
   let structuredData: Record<string, unknown>
-  if (canEmitJobPosting) {
-    const googleEmploymentType = toGoogleEmploymentType(item.type) ?? (item.opportunity_type === 'internship' ? 'INTERN' : undefined)
-    const oppAddrLocality = clean(item.city || item.location) || undefined
-    const oppAddrRegion = clean(item.department) || undefined
-    const oppAddrCountry = item.country_code?.trim().toUpperCase().match(/^[A-Z]{2}$/) ? item.country_code.trim().toUpperCase() : 'PY'
-    const oppHasLocation = oppAddrLocality || oppAddrRegion
-    const oppJobAddr = { '@type': 'PostalAddress', addressCountry: oppAddrCountry, ...(oppAddrLocality ? { addressLocality: oppAddrLocality } : {}), ...(oppAddrRegion ? { addressRegion: oppAddrRegion } : {}) }
-    structuredData = {
-      '@context': 'https://schema.org',
-      '@type': 'JobPosting',
-      title: clean(item.title),
-      description: realDescription,
-      url: canonicalUrl,
-      datePosted: item.updated_at,
-      ...(item.deadline ? { validThrough: item.deadline } : {}),
-      hiringOrganization: { '@type': 'Organization', name: realOrg },
-      ...(oppHasLocation ? { jobLocation: { '@type': 'Place', address: oppJobAddr } } : {}),
-      directApply: false,
-      ...(googleEmploymentType ? { employmentType: googleEmploymentType } : {}),
-    }
-  } else if (!isJobPosting) {
+  if (schemaType === 'JobPosting' && factual.structuredData) {
+    structuredData = factual.structuredData
+  } else if (schemaType === 'Scholarship') {
     structuredData = {
       '@context': 'https://schema.org',
       '@type': 'Scholarship',
       name: clean(item.title),
       description: realDescription || description,
       url: canonicalUrl,
-      validThrough: item.deadline || undefined,
-      provider: { '@type': 'Organization', name: realOrg || 'Organización verificada' },
+      ...(deadlineState === 'OPEN' ? { validThrough: item.deadline } : {}),
+      ...(realOrg ? { provider: { '@type': 'Organization', name: realOrg } } : {}),
     }
   } else {
     // Job type but missing required fields — fall back to WebPage
@@ -138,6 +108,7 @@ export default function OpportunityDetail() {
   return (
     <>
       <Helmet>
+        {item.distribution?.seo?.allowed !== true && <meta name="robots" content="noindex,follow" />}
         <title>{title}</title>
         <meta name="description" content={description} />
         <link rel="canonical" href={canonicalUrl} />
@@ -157,8 +128,8 @@ export default function OpportunityDetail() {
               <h1 className="mt-3 max-w-3xl font-display text-4xl leading-tight text-cream sm:text-5xl">{clean(item.title)}</h1>
               <div className="mt-6 flex flex-wrap gap-x-5 gap-y-3 text-sm text-white/45">
                 <span className="flex items-center gap-2"><Building2 className="h-4 w-4" />{clean(item.organization) || 'Organización no informada'}</span>
-                <span className="flex items-center gap-2"><MapPin className="h-4 w-4" />{clean(item.location) || eligibility || 'Consultar elegibilidad'}</span>
-                {item.deadline && <span className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Cierra {new Date(item.deadline).toLocaleDateString('es-PY')}</span>}
+                <span className="flex items-center gap-2"><MapPin className="h-4 w-4" />{clean(item.location) || 'Ubicaci\u00f3n no informada'}</span>
+                {deadlineState === 'OPEN' && <span className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Cierra {new Date(item.deadline).toLocaleDateString('es-PY')}</span>}
               </div>
 
               {(funding || eligibility || item.education_level) && (
@@ -182,7 +153,7 @@ export default function OpportunityDetail() {
               <div className="mt-5 space-y-3 border-t border-white/8 pt-4 text-xs leading-relaxed text-white/35">
                 <p className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />Esta ficha pasó por revisión, pero las bases de la organización son siempre la referencia final.</p>
                 <p>Revisada {new Date(item.updated_at).toLocaleDateString('es-PY')}</p>
-                <p>Fuente: {clean(item.source) || 'No informada'}</p>
+                {item.distribution?.sourceAttributionRequired && item.source_url ? <p>Fuente original: <a href={safeExternalUrl(item.source_url)} target="_blank" rel="noopener noreferrer" className="text-[#c9a84c] hover:underline">Ver fuente</a></p> : <p>Fuente: {clean(item.source) || 'No informada'}</p>}
               </div>
             </aside>
           </article>

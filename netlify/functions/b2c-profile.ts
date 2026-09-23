@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { makeSupabaseAdmin } from './_supabase'
+import { confirmedCandidateTruth } from './lib/candidate-truth'
 import {
   authenticatedUser,
   consumeRateLimit,
@@ -276,6 +277,7 @@ export const handler = async (event: any) => {
         education: Array.isArray(incoming.education) ? incoming.education.slice(0, 30) : (Array.isArray(currentDraft.education) ? currentDraft.education.slice(0, 30) : []),
         experience: Array.isArray(incoming.experience) ? incoming.experience.slice(0, 40) : (Array.isArray(currentDraft.experience) ? currentDraft.experience.slice(0, 40) : []),
         languages: Array.isArray(incoming.languages) ? incoming.languages.slice(0, 20) : (Array.isArray(currentDraft.languages) ? currentDraft.languages.slice(0, 20) : []),
+        candidate_truth: confirmedCandidateTruth(incoming, currentDraft),
         cv_import_draft: null,
         onboarding_status: 'completed',
         onboarding_completed_at: new Date().toISOString(),

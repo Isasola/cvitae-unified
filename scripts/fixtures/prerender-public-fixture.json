@@ -1,0 +1,12 @@
+{
+  "blogs": [
+    {"id":"blog-1","slug":"career-guide","titulo":"Career Guide","cuerpo":"A practical guide for career planning and professional growth.","created_at":"2026-09-01T00:00:00Z","updated_at":"2026-09-02T00:00:00Z","categoria":"Career"},
+    {"id":"blog-2","slug":"interview-notes","titulo":"Interview Notes","cuerpo":"Useful interview preparation notes for candidates.","created_at":"2026-09-03T00:00:00Z","updated_at":"2026-09-04T00:00:00Z","categoria":"Interview"},
+    {"id":"blog-inactive","slug":"retired-blog","titulo":"Retired Blog","cuerpo":"This inactive article must not be prerendered.","is_active":false}
+  ],
+  "vacancies": [
+    {"id":"vacancy-1","slug":"programme-assistant","title":"Programme Assistant","company":"Example Foundation","location":"Asunción","modality":"FULL_TIME","description":"Coordinate programme activities and support stakeholder communications.","created_at":"2026-09-01T00:00:00Z","updated_at":"2026-09-02T00:00:00Z"},
+    {"id":"vacancy-2","slug":"data-analyst","title":"Data Analyst","company":"Example Labs","location":"Asunción","modality":"FULL_TIME","description":"Analyse programme data and create clear operational reports.","created_at":"2026-09-03T00:00:00Z","updated_at":"2026-09-04T00:00:00Z"},
+    {"id":"vacancy-inactive","slug":"retired-vacancy","title":"Retired Vacancy","company":"Example Labs","description":"This inactive vacancy must not be prerendered.","is_active":false}
+  ]
+}

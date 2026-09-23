@@ -4,10 +4,10 @@
   "ambiguous_patterns": [],
   "auto_enabled": 1,
   "certified": 2,
-  "emitted_aliases": 147,
+  "emitted_aliases": 148,
   "pending_certification": 103,
   "profiles": 105,
-  "registry_hash": "7767489bef67eaa3fe13f9ca8a7f2a867896d8721ce5091ebd3af2507af460a4",
+  "registry_hash": "e6618540310d4e3a7107c3b6dd04b2f38fcbc79e1f23d93167d05c3ee761d181",
   "schema_version": "source-intelligence-registry:v2",
   "sources": [
     {
@@ -21,6 +21,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": false,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -69,6 +70,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": false,
         "source_attribution_required": true,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": true
@@ -94,6 +96,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": false,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -121,6 +124,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": false,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -149,6 +153,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -176,6 +181,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -202,6 +208,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -228,6 +235,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -254,6 +262,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -280,6 +289,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -306,6 +316,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -332,6 +343,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -358,6 +370,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -384,6 +397,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -410,6 +424,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -436,6 +451,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -462,6 +478,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -488,6 +505,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -514,6 +532,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -540,6 +559,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -566,6 +586,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -592,6 +613,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -618,6 +640,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -644,6 +667,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -670,6 +694,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -696,6 +721,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -722,6 +748,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -748,6 +775,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -774,6 +802,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -800,6 +829,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -826,6 +856,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -852,6 +883,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -878,6 +910,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -904,6 +937,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -930,6 +964,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -956,6 +991,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -982,6 +1018,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1008,6 +1045,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1034,6 +1072,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1060,6 +1099,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1086,6 +1126,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1112,6 +1153,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1138,6 +1180,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1164,6 +1207,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1190,6 +1234,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1217,6 +1262,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1243,6 +1289,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1270,13 +1317,15 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
       },
       "emitted_aliases": [
         "abc",
-        "abc_color"
+        "abc_color",
+        "abc_scrapper"
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
@@ -1297,6 +1346,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1324,6 +1374,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1350,6 +1401,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1377,6 +1429,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1403,6 +1456,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1429,6 +1483,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1455,6 +1510,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1481,6 +1537,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1507,6 +1564,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1533,6 +1591,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1559,6 +1618,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1566,7 +1626,9 @@
       "emitted_aliases": [
         "bancos"
       ],
-      "emitted_patterns": [],
+      "emitted_patterns": [
+        "^banco_[a-z0-9_]+$"
+      ],
       "freshness_ttl_hours": 168,
       "semantic_version": "source-contract:v2.0",
       "source_family": "job_board"
@@ -1585,6 +1647,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1592,7 +1655,9 @@
       "emitted_aliases": [
         "cooperativas"
       ],
-      "emitted_patterns": [],
+      "emitted_patterns": [
+        "^coop_[a-z0-9_]+$"
+      ],
       "freshness_ttl_hours": 168,
       "semantic_version": "source-contract:v2.0",
       "source_family": "job_board"
@@ -1611,6 +1676,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1619,7 +1685,9 @@
         "seguros",
         "seguros_unimedica"
       ],
-      "emitted_patterns": [],
+      "emitted_patterns": [
+        "^seguros_[a-z0-9_]+$"
+      ],
       "freshness_ttl_hours": 168,
       "semantic_version": "source-contract:v2.0",
       "source_family": "job_board"
@@ -1638,6 +1706,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1667,6 +1736,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1674,7 +1744,9 @@
       "emitted_aliases": [
         "universidades"
       ],
-      "emitted_patterns": [],
+      "emitted_patterns": [
+        "^univ_[a-z0-9_]+$"
+      ],
       "freshness_ttl_hours": 168,
       "semantic_version": "source-contract:v2.0",
       "source_family": "institutional_or_local_board"
@@ -1693,6 +1765,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1700,7 +1773,9 @@
       "emitted_aliases": [
         "constructoras"
       ],
-      "emitted_patterns": [],
+      "emitted_patterns": [
+        "^const_[a-z0-9_]+$"
+      ],
       "freshness_ttl_hours": 168,
       "semantic_version": "source-contract:v2.0",
       "source_family": "job_board"
@@ -1719,6 +1794,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1746,6 +1822,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1773,6 +1850,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1780,7 +1858,9 @@
       "emitted_aliases": [
         "hospitales"
       ],
-      "emitted_patterns": [],
+      "emitted_patterns": [
+        "^hosp_[a-z0-9_]+$"
+      ],
       "freshness_ttl_hours": 168,
       "semantic_version": "source-contract:v2.0",
       "source_family": "job_board"
@@ -1799,6 +1879,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1806,7 +1887,9 @@
       "emitted_aliases": [
         "supermercados"
       ],
-      "emitted_patterns": [],
+      "emitted_patterns": [
+        "^retail_(?!malls(?:_py)?$)[a-z0-9_]+$"
+      ],
       "freshness_ttl_hours": 168,
       "semantic_version": "source-contract:v2.0",
       "source_family": "job_board"
@@ -1825,6 +1908,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1836,7 +1920,7 @@
         "ongs"
       ],
       "emitted_patterns": [
-        "^ong_(?:bid|giz|oas)_[a-z0-9_]+$"
+        "^ong_[a-z0-9_]+$"
       ],
       "freshness_ttl_hours": 168,
       "semantic_version": "source-contract:v2.0",
@@ -1856,6 +1940,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1863,7 +1948,9 @@
       "emitted_aliases": [
         "tech_local"
       ],
-      "emitted_patterns": [],
+      "emitted_patterns": [
+        "^tech_[a-z0-9_]+$"
+      ],
       "freshness_ttl_hours": 168,
       "semantic_version": "source-contract:v2.0",
       "source_family": "job_board"
@@ -1882,6 +1969,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1910,6 +1998,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1937,6 +2026,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1964,6 +2054,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -1990,6 +2081,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2017,6 +2109,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2044,6 +2137,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2071,6 +2165,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2098,6 +2193,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2125,6 +2221,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2152,6 +2249,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2179,6 +2277,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2206,6 +2305,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2233,6 +2333,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2260,6 +2361,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2287,6 +2389,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2314,6 +2417,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2341,6 +2445,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2367,6 +2472,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2394,6 +2500,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2421,6 +2528,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2448,6 +2556,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2475,6 +2584,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2502,6 +2612,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2530,6 +2641,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2556,6 +2668,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2582,6 +2695,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2608,6 +2722,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2634,6 +2749,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2660,6 +2776,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2686,6 +2803,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2712,6 +2830,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2738,6 +2857,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2764,6 +2884,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false
@@ -2790,6 +2911,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": null,
         "source_attribution_required": false,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": false

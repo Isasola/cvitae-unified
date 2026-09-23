@@ -104,6 +104,11 @@ type GrowthResponse = {
       queries?: Array<{ query: string; clicks: number; impressions: number; ctr: number; position: number }>
       quick_wins?: Array<{ query: string; clicks: number; impressions: number; ctr: number; position: number }>
       top_pages_by_impressions?: Array<{ page: string; clicks: number; impressions: number; ctr: number; position: number }>
+      demand_actions?: Array<{
+        cluster: string; clicks: number; impressions: number; position: number; ctr: number; inventory: number
+        recommendation: 'CREATE' | 'IMPROVE' | 'MONITOR' | 'IGNORE'
+        proposal: { kind: 'SEO_LANDING' | 'SEO_IMPROVEMENT'; targetCanonical: string | null; proposedPath: string | null } | null
+      }> | null
     } | null
     anomalies: Array<{ type: string; message: string; severity: 'high' | 'medium' | 'low'; data?: unknown }>
     launch_events: unknown[]
@@ -1215,6 +1220,36 @@ function AdminGrowthCenter({ adminPassword }: Props) {
               </div>
             )}
           </div>
+
+          {gsc?.demand_actions?.some(action => action.proposal) && (
+            <div>
+              <SectionLabel text="search demand" />
+              <div className="flex items-center gap-2 mb-3">
+                <Search size={16} style={{ color: '#93c5fd' }} />
+                <div style={{ fontSize: 15, fontWeight: 600, color: '#e8e8e0' }}>Propuestas de demanda</div>
+              </div>
+              <div className="space-y-2">
+                {gsc.demand_actions.filter(action => action.proposal).map(action => (
+                  <div key={action.cluster} className="rounded border border-white/[0.07] bg-white/[0.04] p-3">
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                      <div>
+                        <div style={{ fontFamily: MONO, fontSize: 13, color: '#e8e8e0', fontWeight: 600 }}>{action.cluster}</div>
+                        <div style={{ fontFamily: MONO, fontSize: 11, color: 'rgba(232,232,224,0.45)', marginTop: 4 }}>
+                          {action.recommendation === 'CREATE' ? 'Proponer landing' : 'Proponer mejora'} · {action.inventory} oportunidades factuales
+                        </div>
+                      </div>
+                      <div style={{ fontFamily: MONO, fontSize: 11, color: 'rgba(232,232,224,0.55)' }}>
+                        {action.impressions} imp. · pos. {action.position.toFixed(1)}
+                      </div>
+                    </div>
+                    <div style={{ fontFamily: MONO, fontSize: 11, color: '#93c5fd', marginTop: 8 }}>
+                      {action.proposal?.targetCanonical || action.proposal?.proposedPath || 'Sin URL propuesta'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 11. Traffic Sources */}
           {ga4?.traffic_sources && ga4.traffic_sources.length > 0 && (

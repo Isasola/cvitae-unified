@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { randomUUID } from "node:crypto"
 import { evaluateEightGates } from "./lib/eight-gates"
+import { reconcileInventoryRows, reconciliationSummary, mergeReconciliationSummaries } from "../../src/lib/inventory-reconciliation"
 
 const SOURCE_SCAN_SCRAPERS: Record<string, string> = {
   unjobs: "unjobs_scraper", himalayas: "himalayas_scraper", talentcom: "talentcom_scraper", weworkremotely: "weworkremotely_scraper",
@@ -36,6 +37,42 @@ function sourceIntelligenceRegistry() {
   return JSON.parse(readFileSync(resolve(process.cwd(), "src/generated/source-intelligence-registry.json"), "utf8"))
 }
 
+function scraperFieldSurvival() {
+  // Generated offline from Registry V2 + the active emitter contracts.  An
+  // unavailable diagnostic never changes a source decision; it is reported as
+  // UNKNOWN rather than manufactured as a successful field-survival result.
+  try {
+    return JSON.parse(readFileSync(resolve(process.cwd(), "generated/scraper-field-survival.json"), "utf8"))
+  } catch {
+    return { schema_version: "unavailable", sources: [], field_totals: {} }
+  }
+}
+
+// Production does not expose requirements/professional_family on every
+// schema version. Core truth treats them as optional, so reconciliation must
+// not make their absence a read failure.
+const RECONCILIATION_FIELDS = "id,source,slug,title,organization,description,tags,opportunity_type,opportunity_kind,is_active,verification_status,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,seo_status,deleted_at,archived_at,embedding,embedding_error"
+const RECONCILIATION_POLICY_FIELDS = "source,is_enabled,catalog_enabled,matching_enabled,alerts_enabled,seo_enabled,web_catalog_allowed,search_engine_indexing_allowed,google_jobs_distribution_allowed,third_party_job_distribution_allowed,source_attribution_required"
+const RECONCILIATION_PAGE_SIZE = 250
+
+function reconciliationAliases(scope: string): string[] | null {
+  if (!scope || scope === "all") return null
+  const profile = (sourceIntelligenceRegistry().sources || []).find((item: any) => item.canonical_source === scope)
+  return profile ? (profile.emitted_aliases || [profile.canonical_source]) : null
+}
+
+function reconciliationReasonCounts(summary: any) {
+  return Object.fromEntries((summary?.top_reason_codes || []).map((item: any) => [item.reason, item.count]))
+}
+
+function reconciliationPatch(decision: any) {
+  // Only row-intrinsic, deterministic flags are repaired here. `seo_status`
+  // retains its distinct review workflow and is deliberately absent.
+  return Object.fromEntries(Object.entries(decision.proposed).filter(([key]) =>
+    ["catalog_eligible", "match_eligible", "alerts_eligible", "seo_eligible"].includes(key)
+  ))
+}
+
 // P0.3: Derive runner IDs from canonical source (e.g. "unjobs" → "unjobs_scraper").
 // operational_runner_ids from profile takes precedence when populated.
 function runnerIdsFor(profile: any): Set<string> {
@@ -50,8 +87,10 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
   // Generated from the Python V2 core. This function joins read-only DB facts;
   // aliases, certification and semantics remain owned by that core.
   const registry = sourceIntelligenceRegistry()
+  const survival = scraperFieldSurvival()
+  const survivalBySource = new Map((survival.sources || []).map((item: any) => [item.canonical_source, item]))
   const stats: Record<string, any> = dashboard?.sources || {}
-  const [observationsRes, policyRes, runsRes, fingerprintsRes, enrichmentRes, sourceCapRes, qualityAggRes] = await Promise.all([
+  const [observationsRes, policyRes, runsRes, fingerprintsRes, enrichmentRes, sourceCapRes, qualityAggRes, telemetryAuditRes] = await Promise.all([
     supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at").order("observed_at", { ascending: false }).limit(10000),
     supabase.from("opportunity_source_policy_events").select("opportunity_id,source,action,created_at").order("created_at", { ascending: false }).limit(10000),
     supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,duration_seconds,error_count,found_count,valid_count,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,error_summary,adapter_version,extraction_metrics").order("started_at", { ascending: false }).limit(1000),
@@ -59,9 +98,10 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
     // exposed when their lightweight inputs are available.
     supabase.from("opportunities").select("id,title,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope").is("deleted_at", null).is("archived_at", null).limit(10000),
     supabase.from("opportunity_enrichment_events").select("opportunity_id,source,changed_fields,created_at").order("created_at", { ascending: false }).limit(10000),
-    supabase.from("opportunity_sources").select("source,catalog_enabled,matching_enabled,alerts_enabled,seo_enabled").limit(500),
+    supabase.rpc("get_source_distribution_policy"),
     // P0.1: Full-DB fingerprint pending counts via server-side aggregate.
     supabase.rpc("admin_source_quality_aggregate"),
+    supabase.from("source_control_audit_log").select("source,action,result_status,created_at").in("action", ["maintenance_telemetry", "maintenance_telemetry_retry"]).order("created_at", { ascending: false }).limit(1000),
   ])
   const observationRows = observationsRes.error ? [] : (observationsRes.data || [])
   const policyRows = policyRes.error ? [] : (policyRes.data || [])
@@ -69,6 +109,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
   const fingerprintRows = fingerprintsRes.error ? [] : (fingerprintsRes.data || [])
   const enrichmentRows = enrichmentRes.error ? [] : (enrichmentRes.data || [])
   const sourceCapRows: any[] = sourceCapRes.error ? [] : (sourceCapRes.data || [])
+  const telemetryAuditRows: any[] = telemetryAuditRes.error ? [] : (telemetryAuditRes.data || [])
   // P0.1: Server-side fingerprint pending counts (full DB, no limit).
   const qualityAgg: Record<string, any> = qualityAggRes.error ? {} : (qualityAggRes.data || {})
   const knownAliases = new Set<string>((registry.sources || []).flatMap((profile: any) => profile.emitted_aliases || []).map((value: string) => value.toLowerCase()))
@@ -79,12 +120,16 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
     const aliasSet = new Set<string>(aliases.map((value: string) => value.toLowerCase()))
     // Merge durable DB capability flags into profile for Gate 8 independent surface display
     const srcCap = sourceCapRows.find((item: any) => aliasSet.has(String(item.source || '').toLowerCase()))
-    const capabilityFlags = srcCap ? {
-      catalog_enabled: Boolean(srcCap.catalog_enabled),
-      matching_enabled: Boolean(srcCap.matching_enabled),
-      alerts_enabled: Boolean(srcCap.alerts_enabled),
-      seo_enabled: Boolean(srcCap.seo_enabled),
-    } : {}
+      const capabilityFlags = srcCap ? {
+        is_enabled: Boolean(srcCap.is_enabled),
+        catalog_enabled: Boolean(srcCap.catalog_enabled),
+        matching_enabled: Boolean(srcCap.matching_enabled),
+        alerts_enabled: Boolean(srcCap.alerts_enabled),
+        seo_enabled: Boolean(srcCap.seo_enabled),
+        web_catalog_allowed: srcCap.web_catalog_allowed ?? null,
+        search_engine_indexing_allowed: srcCap.search_engine_indexing_allowed ?? null,
+        google_jobs_distribution_allowed: srcCap.google_jobs_distribution_allowed ?? null,
+      } : {}
     const pools = aliases.reduce((acc: any, emitted: string) => {
       const statKey = Object.keys(stats).find(key => key.toLowerCase() === emitted.toLowerCase())
       const value = stats[emitted] || (statKey ? stats[statKey] : {}) || {}
@@ -109,6 +154,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
     // P0.3: runnerIds includes canonical_source + _scraper/_scrapper variants.
     const runnerIds = runnerIdsFor(profile)
     const latestRun = runRows.find((item: any) => runnerIds.has(String(item.scraper_id || '').toLowerCase())) || null
+    const latestTelemetry = telemetryAuditRows.find((item: any) => aliasSet.has(String(item.source || '').toLowerCase())) || null
     const control = controls.find((item: any) => runnerIds.has(String(item.scraper_id || '').toLowerCase()))
     const extractionHealth = latestRun?.extraction_metrics?.health?.status
     const runFailed = latestRun?.status === "failed" || Boolean(latestRun?.error_summary) || extractionHealth === "DEGRADED"
@@ -148,6 +194,17 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
     }
     return {
       ...profile, ...capabilityFlags, pools,
+      field_survival: survivalBySource.get(profile.canonical_source) || {
+        canonical_source: profile.canonical_source, classification: "UNKNOWN_SOURCE", fields: {}, persistence_transforms: {},
+      },
+      effective_inventory: {
+        catalog_flagged: pools.catalog,
+        matching_flagged: pools.matching,
+        seo_flagged: pools.seo,
+        catalog_effective: Boolean(srcCap?.is_enabled && srcCap?.catalog_enabled && srcCap?.web_catalog_allowed) ? pools.catalog : 0,
+        matching_effective: Boolean(srcCap?.is_enabled && srcCap?.matching_enabled) ? pools.matching : 0,
+        seo_effective: Boolean(srcCap?.is_enabled && srcCap?.catalog_enabled && srcCap?.seo_enabled && srcCap?.web_catalog_allowed && srcCap?.search_engine_indexing_allowed === true) ? pools.seo : 0,
+      },
       operational_health: operationalHealth,
       source_status: sourceStatus,
       observation: {
@@ -167,7 +224,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       quality: { thin_description: pools.thin_description, missing_country: pools.missing_country },
       // P0.1: fingerprint_pending now comes from full-DB RPC (not client-side sample).
       semantic: { fingerprint_pending: qualityAggRes.error ? null : fingerprintPending, embedding_pending: null },
-      execution: { last_run: latestRun?.started_at || null, last_success: ["success", "healthy"].includes(String(latestRun?.status || "")) ? latestRun.finished_at || latestRun.started_at : null, last_failure: runFailed ? latestRun?.started_at || null : null, adapter_version: latestRun?.adapter_version || profile.adapter_version, circuit_breaker: latestRun?.extraction_metrics?.circuit_breaker || null },
+      execution: { last_run: latestRun?.started_at || null, last_success: ["success", "healthy"].includes(String(latestRun?.status || "")) ? latestRun.finished_at || latestRun.started_at : null, last_failure: runFailed ? latestRun?.started_at || null : null, adapter_version: latestRun?.adapter_version || profile.adapter_version, circuit_breaker: latestRun?.extraction_metrics?.circuit_breaker || null, telemetry_status: latestTelemetry?.action === "maintenance_telemetry" && latestTelemetry?.result_status === "error" ? "FAILED" : null },
       history,
       drift: previousRun ? { status: driftSignals.length ? "POSSIBLE_SOURCE_DRIFT" : "NO_SIGNIFICANT_DRIFT", compared_run_id: previousRun.run_id, signals: driftSignals } : null,
       recent_rows: sourceRows.slice(0, 20),
@@ -890,6 +947,24 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
+    if (action === "transition_content_approval") {
+      const allowed = ["EDIT", "APPROVE", "REJECT", "PUBLISH"]
+      if (!payload?.id || !allowed.includes(payload.transition)) return { statusCode: 400, body: JSON.stringify({ error: "Transición inválida" }) }
+      const { data: current, error: currentError } = await supabase.from("content_hub").select("id,metadata,is_active").eq("id", payload.id).single()
+      if (currentError || !current) throw currentError || new Error("content_not_found")
+      const metadata = (current.metadata && typeof current.metadata === "object") ? current.metadata : {}
+      const approval = (metadata as any).approval || { status: "PENDING_REVIEW", audit: [] }
+      const next: Record<string, string> = { EDIT: "PENDING_REVIEW", APPROVE: "APPROVED", REJECT: "REJECTED", PUBLISH: "PUBLISHED" }
+      const valid = (payload.transition === "EDIT" && approval.status === "PENDING_REVIEW") || (payload.transition === "APPROVE" && approval.status === "PENDING_REVIEW") || (payload.transition === "REJECT" && approval.status === "PENDING_REVIEW") || (payload.transition === "PUBLISH" && approval.status === "APPROVED")
+      if (!valid) return { statusCode: 409, body: JSON.stringify({ error: "invalid_approval_transition" }) }
+      const at = new Date().toISOString(); const actor = "admin"
+      const nextApproval = { ...approval, status: next[payload.transition], audit: [...(Array.isArray(approval.audit) ? approval.audit : []), { action: payload.transition, at, actor }] }
+      const editable = payload.transition === "EDIT" && payload.data && typeof payload.data === "object" ? payload.data : {}
+      const { error } = await supabase.from("content_hub").update({ ...editable, metadata: { ...metadata, approval: nextApproval }, ...(payload.transition === "PUBLISH" ? { is_active: true } : {}) }).eq("id", payload.id)
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify({ ok: true, approval: nextApproval }) }
+    }
+
     if (action === "delete_content") {
       if (!payload?.id) return { statusCode: 400, body: JSON.stringify({ error: "id requerido" }) }
       // Content can already be indexed. Admin deletion is therefore a reversible
@@ -935,8 +1010,8 @@ const handler: Handler = async (event) => {
         p_actor: "admin",
       })
       if (error) {
-        if (String(error.message).includes("stale_opportunity")) return { statusCode: 409, body: JSON.stringify({ error: "La oportunidad cambiÃ³ mientras la revisabas. RecargÃ¡ antes de decidir." }) }
-        if (String(error.message).includes("original_source_required")) return { statusCode: 409, body: JSON.stringify({ error: "VerificÃ¡ la convocatoria en su fuente original antes de aprobarla" }) }
+        if (String(error.message).includes("stale_opportunity")) return { statusCode: 409, body: JSON.stringify({ error: "La oportunidad cambió mientras la revisabas. Recargá antes de decidir." }) }
+        if (String(error.message).includes("original_source_required")) return { statusCode: 409, body: JSON.stringify({ error: "Verificá la convocatoria en su fuente original antes de aprobarla" }) }
         throw error
       }
       // Fire SEO pipeline after approval — failures never block the approve response
@@ -1471,10 +1546,7 @@ const handler: Handler = async (event) => {
       // Lightweight catalog of all 105 canonical sources: profile metadata + live DB
       // capability flags. No Eight Gates computation — cheaper than source_intelligence_snapshot.
       const registry = sourceIntelligenceRegistry()
-      const { data: capRows, error: capErr } = await supabase
-        .from("opportunity_sources")
-        .select("source,catalog_enabled,matching_enabled,alerts_enabled,seo_enabled,search_engine_indexing_allowed,web_catalog_allowed")
-        .limit(500)
+      const { data: capRows, error: capErr } = await supabase.rpc("get_source_distribution_policy")
       const caps: Record<string, any> = {}
       if (!capErr && capRows) {
         for (const row of capRows) caps[String(row.source || "").toLowerCase()] = row
@@ -1586,9 +1658,7 @@ const handler: Handler = async (event) => {
       // Per-canonical-source inventory stats: aliases summed, no Eight Gates computation.
       const [dashRes, capRes] = await Promise.all([
         supabase.rpc("admin_opportunity_pipeline_dashboard"),
-        supabase.from("opportunity_sources")
-          .select("source,catalog_enabled,matching_enabled,seo_enabled,search_engine_indexing_allowed,web_catalog_allowed")
-          .limit(500),
+        supabase.rpc("get_source_distribution_policy"),
       ])
       const statsMap: Record<string, any> = dashRes.data?.sources || {}
       const caps: Record<string, any> = {}
@@ -1626,6 +1696,129 @@ const handler: Handler = async (event) => {
         }
       })
       return { statusCode: 200, body: JSON.stringify({ stats: result, total: result.length, generated_at: new Date().toISOString() }) }
+    }
+
+    if (action === "preview_inventory_reconciliation") {
+      // This is dry-run against every row in the selected scraper scope. The
+      // job record is durable so an explicit, later APPLY can use its identity;
+      // no opportunity row is written by this action.
+      const targetSource = String(payload?.source || "").trim().toLowerCase()
+      const aliases = reconciliationAliases(targetSource)
+      if (targetSource && !aliases) return { statusCode: 404, body: JSON.stringify({ error: "Fuente canónica no registrada" }) }
+      const policiesRes = await supabase.rpc("get_source_distribution_policy")
+      if (policiesRes.error) throw policiesRes.error
+      const summaries: any[] = []; const perSource: Record<string, any> = {}; const sample: any[] = []; const pageSize = 500
+      for (let offset = 0; ; offset += pageSize) {
+        let query = supabase.from("opportunities").select(RECONCILIATION_FIELDS).not("source", "is", null).order("id", { ascending: true }).range(offset, offset + pageSize - 1)
+        if (aliases) query = query.in("source", aliases)
+        const { data, error } = await query
+        if (error) throw error
+        const pageDecisions = reconcileInventoryRows(data || [], policiesRes.data || [])
+        summaries.push(reconciliationSummary(pageDecisions))
+        for (const decision of pageDecisions) {
+          // Accumulate counters only; no full source inventory remains in memory.
+          perSource[decision.canonical_source] = mergeReconciliationSummaries([
+            ...(perSource[decision.canonical_source] ? [perSource[decision.canonical_source]] : []),
+            reconciliationSummary([decision]),
+          ])
+        }
+        if (sample.length < 100) sample.push(...pageDecisions.slice(0, 100 - sample.length))
+        if (!data?.length || data.length < pageSize) break
+      }
+      const summary = mergeReconciliationSummaries(summaries)
+      const source_totals = perSource
+      const accounted_total = Object.values(source_totals).reduce((total: number, item: any) => total + Number(item.total_examined || 0), 0)
+      const explained_rows = summary.total_examined
+      const unexplained_rows = summary.total_examined - explained_rows
+      const knownCanonical = new Set((sourceIntelligenceRegistry().sources || []).map((item: any) => item.canonical_source))
+      const unknown_sources = Object.keys(source_totals).filter(source => !knownCanonical.has(source))
+      const reconciliation_id = randomUUID(); const generated_at = new Date().toISOString()
+      const { error: jobError } = await supabase.from("inventory_reconciliation_jobs").insert({
+        reconciliation_id, source_scope: targetSource || "all", mode: "DRY_RUN", status: "SUCCESS", cursor_offset: 0,
+        // Execution counters deliberately remain empty for a preview.  APPLY
+        // owns these fields and starts at zero, while the complete dry-run is
+        // preserved under metadata.preview for approval and auditability.
+        page_size: RECONCILIATION_PAGE_SIZE, started_at: generated_at, finished_at: generated_at, examined: 0,
+        would_change: 0, changed: 0, unchanged: 0, failed: 0, reason_counts: {},
+        actor: "admin", metadata: { preview: summary, source_totals, accounted_total, explained_rows, unexplained_rows, unknown_sources, sample },
+      })
+      if (jobError) throw jobError
+      return { statusCode: 200, body: JSON.stringify({ mode: "DRY_RUN", reconciliation_id, source: targetSource || "all", cursor: 0, resumable: false, blocked: summary.total_examined - summary.catalog_allowed, ...summary, source_totals, accounted_total, explained_rows, unexplained_rows, unknown_sources, decisions: sample, generated_at }) }
+    }
+
+    if (action === "apply_inventory_reconciliation" || action === "resume_inventory_reconciliation") {
+      const reconciliationId = String(payload?.reconciliation_id || "").trim()
+      if (!reconciliationId) return { statusCode: 400, body: JSON.stringify({ error: "reconciliation_id requerido" }) }
+      if (action === "apply_inventory_reconciliation" && payload?.confirm !== true) return { statusCode: 409, body: JSON.stringify({ error: "confirm=true requerido; el preview no aplica cambios automáticamente" }) }
+      const { data: job, error: jobError } = await supabase.from("inventory_reconciliation_jobs").select("*").eq("reconciliation_id", reconciliationId).maybeSingle()
+      if (jobError) throw jobError
+      if (!job) return { statusCode: 404, body: JSON.stringify({ error: "Reconciliación no encontrada" }) }
+      // A RUNNING job with a durable checkpoint is recoverable after a client
+      // interruption. It is not labelled PARTIAL during ordinary chunks.
+      if (action === "resume_inventory_reconciliation" && !["PARTIAL", "FAILED", "RUNNING"].includes(job.status)) return { statusCode: 409, body: JSON.stringify({ error: "Sólo se puede reanudar una reconciliación interrumpida" }) }
+      if (action === "apply_inventory_reconciliation" && !["SUCCESS", "PARTIAL", "FAILED"].includes(job.status)) return { statusCode: 409, body: JSON.stringify({ error: "Estado de reconciliación no aplicable" }) }
+      const aliases = reconciliationAliases(String(job.source_scope || "all"))
+      if (job.source_scope !== "all" && !aliases) return { statusCode: 409, body: JSON.stringify({ error: "Fuente canónica de reconciliación no registrada" }) }
+      const { data: policies, error: policyError } = await supabase.rpc("get_source_distribution_policy")
+      if (policyError) throw policyError
+      const startingApply = job.mode === "DRY_RUN"
+      const cursor = startingApply ? 0 : Number(job.cursor_offset || 0)
+      let query = supabase.from("opportunities").select(RECONCILIATION_FIELDS).not("source", "is", null).order("id", { ascending: true }).range(cursor, cursor + Number(job.page_size || RECONCILIATION_PAGE_SIZE) - 1)
+      if (aliases) query = query.in("source", aliases)
+      const { data: rows, error: rowsError } = await query
+      if (rowsError) throw rowsError
+      const decisions = reconcileInventoryRows(rows || [], policies || [])
+      let changedThisChunk = 0; let failedThisChunk = 0
+      for (const decision of decisions) {
+        if (!decision.changed_fields.length) continue
+        const { error } = await supabase.from("opportunities").update(reconciliationPatch(decision)).eq("id", decision.id)
+        if (error) { failedThisChunk += 1; continue }
+        changedThisChunk += 1
+      }
+      const chunkSummary = reconciliationSummary(decisions)
+      const nextCursor = cursor + (rows || []).length
+      const complete = (rows || []).length < Number(job.page_size || RECONCILIATION_PAGE_SIZE)
+      const status = failedThisChunk ? "PARTIAL" : complete ? "SUCCESS" : "RUNNING"
+      const now = new Date().toISOString()
+      const priorReasons = startingApply ? {} : (job.reason_counts || {}); const chunkReasons = reconciliationReasonCounts(chunkSummary)
+      const reason_counts = { ...priorReasons }
+      for (const [reason, count] of Object.entries(chunkReasons)) reason_counts[reason] = Number(reason_counts[reason] || 0) + Number(count)
+      const patch = {
+        mode: "APPLY", status, cursor_offset: nextCursor, updated_at: now, finished_at: complete ? now : null,
+        started_at: startingApply ? now : (job.started_at || now), examined: (startingApply ? 0 : Number(job.examined || 0)) + decisions.length,
+        would_change: (startingApply ? 0 : Number(job.would_change || 0)) + chunkSummary.would_change,
+        changed: (startingApply ? 0 : Number(job.changed || 0)) + changedThisChunk, unchanged: (startingApply ? 0 : Number(job.unchanged || 0)) + chunkSummary.unchanged,
+        failed: (startingApply ? 0 : Number(job.failed || 0)) + failedThisChunk, reason_counts,
+        last_error: failedThisChunk ? `No se actualizaron ${failedThisChunk} fila(s) del chunk` : null,
+        metadata: { ...(job.metadata || {}), apply_started_at: startingApply ? now : job.metadata?.apply_started_at },
+      }
+      const { error: updateJobError } = await supabase.from("inventory_reconciliation_jobs").update(patch).eq("reconciliation_id", reconciliationId)
+      if (updateJobError) throw updateJobError
+      return { statusCode: 200, body: JSON.stringify({ reconciliation_id: reconciliationId, source: job.source_scope, mode: "APPLY", status, resumable: status === "PARTIAL" || status === "FAILED", cursor: nextCursor, chunk: { examined: decisions.length, changed: changedThisChunk, failed: failedThisChunk }, ...patch }) }
+    }
+
+    if (action === "retry_maintenance_telemetry") {
+      const source = String(payload?.source || "").trim().toLowerCase()
+      if (!source) return { statusCode: 400, body: JSON.stringify({ error: "source requerido" }) }
+      const { data: failedEvent, error: eventError } = await supabase.from("source_control_audit_log")
+        .select("id,before_state,created_at").eq("source", source).eq("action", "maintenance_telemetry").eq("result_status", "error")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle()
+      if (eventError) throw eventError
+      if (!failedEvent?.before_state) return { statusCode: 404, body: JSON.stringify({ error: "No hay telemetría fallida reintentable para esta fuente" }) }
+      const telemetry = failedEvent.before_state as Record<string, any>
+      // This boundary only persists the preserved telemetry payload. It does
+      // not invoke a scraper, maintenance process, embedding, or mutation.
+      const { data: existingTelemetry, error: existingError } = await supabase.from("scraper_runs").select("id").eq("run_id", telemetry.run_id).limit(1)
+      if (existingError) throw existingError
+      if (existingTelemetry?.length) return { statusCode: 200, body: JSON.stringify({ status: "SUCCESS", source, telemetry_run_id: telemetry.run_id, retry_of: failedEvent.id, maintenance_rerun: false, already_persisted: true }) }
+      const { error: insertError } = await supabase.from("scraper_runs").insert(telemetry)
+      if (insertError) throw insertError
+      const { error: auditError } = await supabase.from("source_control_audit_log").insert({
+        action: "maintenance_telemetry_retry", source, actor: "admin", result_status: "ok", blockers: [],
+        before_state: { retry_of: failedEvent.id }, after_state: { telemetry_run_id: telemetry.run_id }, result_detail: "Telemetry persisted without re-running maintenance",
+      })
+      if (auditError) throw auditError
+      return { statusCode: 200, body: JSON.stringify({ status: "SUCCESS", source, telemetry_run_id: telemetry.run_id, retry_of: failedEvent.id, maintenance_rerun: false }) }
     }
 
     if (action === "approve_search_indexing_policy") {

@@ -383,12 +383,15 @@ export function extractSkills(opp, dictionary) {
   ].slice(0, 16);
 }
 export function calculateSkillScore(profileSkills, vacancySkills, dictionary) {
-  if (!vacancySkills.length) return profileSkills.length ? 45 : 30;
-  if (!profileSkills.length) return 15;
-  const matchedVacancy = vacancySkills.filter((s)=>profileSkills.some((own)=>sameSkill(own, s, dictionary)));
-  const matchedProfile = profileSkills.filter((s)=>vacancySkills.some((req)=>sameSkill(s, req, dictionary)));
-  const vacancyCoverage = matchedVacancy.length / vacancySkills.length;
-  const profileEvidence = matchedProfile.length / Math.min(Math.max(profileSkills.length, 1), 10);
+  const unique = (skills)=>skills.reduce((items, skill)=>items.some((item)=>sameSkill(item, skill, dictionary)) ? items : [...items, skill], []);
+  const uniqueProfile = unique(profileSkills);
+  const uniqueVacancy = unique(vacancySkills);
+  if (!uniqueVacancy.length) return uniqueProfile.length ? 45 : 30;
+  if (!uniqueProfile.length) return 15;
+  const matchedVacancy = uniqueVacancy.filter((s)=>uniqueProfile.some((own)=>sameSkill(own, s, dictionary)));
+  const matchedProfile = uniqueProfile.filter((s)=>uniqueVacancy.some((req)=>sameSkill(s, req, dictionary)));
+  const vacancyCoverage = matchedVacancy.length / uniqueVacancy.length;
+  const profileEvidence = matchedProfile.length / Math.min(Math.max(uniqueProfile.length, 1), 10);
   return Math.round(Math.min(1, vacancyCoverage * 0.75 + profileEvidence * 0.25) * 100);
 }
 export function tokenSet(value) {

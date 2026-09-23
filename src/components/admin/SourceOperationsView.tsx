@@ -57,6 +57,9 @@ export default function SourceOperationsView({ sources, selectedSource, onSelect
   const [sourceSearch, setSourceSearch] = useState('')
   const [diagResult, setDiagResult] = useState<any>(null)
   const [diagLoading, setDiagLoading] = useState(false)
+  const [reconciliationPreview, setReconciliationPreview] = useState<any>(null)
+  const [reconciliationResult, setReconciliationResult] = useState<any>(null)
+  const [reconciliationState, setReconciliationState] = useState<'IDLE'|'QUEUED'|'RUNNING'|'SUCCESS'|'WARNING'|'ERROR'>('IDLE')
   const [policyModal, setPolicyModal] = useState(false)
   const [policyNote, setPolicyNote] = useState('')
   const [policyLoading, setPolicyLoading] = useState(false)
@@ -98,6 +101,44 @@ export default function SourceOperationsView({ sources, selectedSource, onSelect
     }
   }
 
+  async function handleReconciliationPreview(scope = source.canonical_source) {
+    if (!onAction) return
+    setDiagLoading(true); setReconciliationState('QUEUED'); setReconciliationResult(null)
+    try { setReconciliationState('RUNNING'); setReconciliationPreview(await onAction('preview_inventory_reconciliation', { source: scope })); setReconciliationState('SUCCESS') }
+    catch { setReconciliationState('ERROR') }
+    finally { setDiagLoading(false) }
+  }
+
+  async function handleReconciliationApply(resume = false) {
+    if (!onAction || !reconciliationPreview?.reconciliation_id) return
+    setDiagLoading(true); setReconciliationState('QUEUED')
+    try {
+      setReconciliationState('RUNNING')
+      let result = await onAction(resume ? 'resume_inventory_reconciliation' : 'apply_inventory_reconciliation', resume
+        ? { reconciliation_id: reconciliationPreview.reconciliation_id }
+        : { reconciliation_id: reconciliationPreview.reconciliation_id, confirm: true })
+      // Each server request checkpoints one bounded chunk. Continue normal
+      // RUNNING chunks automatically; only a real failure exposes REANUDAR.
+      let guard = 0
+      while (result.status === 'RUNNING' && guard++ < 10000) {
+        setReconciliationResult(result)
+        result = await onAction('resume_inventory_reconciliation', { reconciliation_id: reconciliationPreview.reconciliation_id })
+      }
+      setReconciliationResult(result)
+      setReconciliationState(result.status === 'WARNING' ? 'WARNING' : result.status === 'SUCCESS' ? 'SUCCESS' : 'RUNNING')
+      if (onRefresh) onRefresh()
+    } catch { setReconciliationState('ERROR') }
+    finally { setDiagLoading(false) }
+  }
+
+  async function handleTelemetryRetry() {
+    if (!onAction) return
+    setDiagLoading(true); setReconciliationState('QUEUED')
+    try { setReconciliationState('RUNNING'); setReconciliationResult(await onAction('retry_maintenance_telemetry', { source: source.canonical_source })); setReconciliationState('SUCCESS') }
+    catch { setReconciliationState('ERROR') }
+    finally { setDiagLoading(false) }
+  }
+
   async function handleApprovePolicy() {
     if (!onAction || !policyNote.trim()) return
     setPolicyLoading(true)
@@ -128,6 +169,11 @@ export default function SourceOperationsView({ sources, selectedSource, onSelect
         <div><p className="text-[10px] tracking-[.16em] text-[#c9a84c]" style={{ fontFamily: 'monospace' }}>SOURCE INTELLIGENCE OPERATIVO</p><h2 className="mt-2 text-2xl text-white">{source.display_name || source.canonical_source}</h2><p className="mt-1 text-xs text-white/45">{source.canonical_source} · {source.source_family || 'familia sin clasificar'} · certificado: {source.certified ? 'sí' : 'no'} · {source.implementation_state || 'NOT_IMPLEMENTED'} · último scan: {source.execution?.last_run ? new Date(source.execution.last_run).toLocaleString('es-PY') : 'sin evidencia'}</p></div>
         <div className="flex flex-wrap gap-2">
           {onAction && <button onClick={handleDiagnose} disabled={diagLoading} className="border border-white/25 px-4 py-3 text-xs text-white/65 disabled:opacity-45" style={{ fontFamily: 'monospace' }} title="Ejecuta diagnóstico de Eight Gates en tiempo real contra la DB">{diagLoading ? 'ANALIZANDO…' : 'ANALIZAR ESTADO'}</button>}
+          {onAction && <button onClick={handleReconciliationPreview} disabled={diagLoading} className="border border-white/25 px-4 py-3 text-xs text-white/65 disabled:opacity-45" style={{ fontFamily: 'monospace' }}>PREVIEW INVENTARIO</button>}
+          {onAction && <button onClick={() => handleReconciliationPreview('')} disabled={diagLoading} className="border border-white/15 px-4 py-3 text-xs text-white/45 disabled:opacity-45" style={{ fontFamily: 'monospace' }}>FUNNEL GLOBAL</button>}
+          {reconciliationPreview && onAction && <button onClick={() => handleReconciliationApply(false)} disabled={diagLoading || reconciliationState === 'RUNNING'} className="border border-[#c9a84c]/60 px-4 py-3 text-xs text-[#c9a84c] disabled:opacity-45" style={{ fontFamily: 'monospace' }}>APLICAR RECONCILIACIÓN</button>}
+          {(reconciliationResult?.resumable || (reconciliationPreview && reconciliationState === 'ERROR')) && onAction && <button onClick={() => handleReconciliationApply(true)} disabled={diagLoading} className="border border-amber-400/50 px-4 py-3 text-xs text-amber-300 disabled:opacity-45" style={{ fontFamily: 'monospace' }}>REANUDAR</button>}
+          {source.execution?.telemetry_status === 'FAILED' && onAction && <button onClick={handleTelemetryRetry} disabled={diagLoading} className="border border-amber-400/50 px-4 py-3 text-xs text-amber-300 disabled:opacity-45" style={{ fontFamily: 'monospace' }}>REINTENTAR TELEMETRÍA</button>}
           {onRefresh && <button onClick={onRefresh} disabled={loading} className="border border-white/25 px-4 py-3 text-xs text-white/65 disabled:opacity-45" style={{ fontFamily: 'monospace' }} title={refreshedAt ? `Datos actualizados: ${new Date(refreshedAt).toLocaleString('es-PY')}` : 'Actualizar métricas sin ejecutar scraper'}>{loading ? 'ACTUALIZANDO…' : 'ACTUALIZAR DATOS'}</button>}
           {canScan
             ? <button onClick={() => onScan(source.canonical_source)} disabled={loading || scanStatus === 'QUEUED' || scanStatus === 'RUNNING'} className="border border-[#c9a84c] bg-[#c9a84c] px-5 py-3 text-xs font-bold text-black disabled:opacity-45" style={{ fontFamily: 'monospace' }}>{loading || scanStatus === 'QUEUED' || scanStatus === 'RUNNING' ? `ESCANEO ${scanStatus || 'INICIANDO'}…` : 'EJECUTAR ESCANEO'}</button>
@@ -139,8 +185,14 @@ export default function SourceOperationsView({ sources, selectedSource, onSelect
         {filteredSources.slice(0, 30).map(item => <button key={item.canonical_source} onClick={() => { onSelect(item.canonical_source); setSourceSearch('') }} className={`border px-2 py-1 text-[10px] ${item.canonical_source === source.canonical_source ? 'border-[#c9a84c] text-[#c9a84c]' : 'border-white/10 text-white/35'}`}>{item.display_name || item.canonical_source}</button>)}
         {filteredSources.length > 30 && <span className="text-[10px] text-white/25">+{filteredSources.length - 30} más</span>}
       </div>
-      {isThisScan && <div className="mt-4 border border-white/10 px-3 py-2 text-xs text-white/60">Ejecución: <b>{scanStatus}</b>{scan?.requestId ? ` · solicitud ${scan.requestId}` : ''}{run?.started_at ? ` · inició ${new Date(run.started_at).toLocaleString('es-PY')}` : ''}{scan?.error ? ` · ${scan.error}` : ''}</div>}
+      <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
+        <div className="border border-white/10 px-3 py-2 text-white/60"><b className="block text-[9px] text-white/35">RUN ACTUAL</b>{isThisScan ? <span><b>{scanStatus}</b>{scan?.requestId ? ` · solicitud ${scan.requestId}` : ''}{run?.started_at ? ` · inició ${new Date(run.started_at).toLocaleString('es-PY')}` : ''}{scan?.error ? ` · ${scan.error}` : ''}{['QUEUED','RUNNING'].includes(String(scanStatus)) ? ' · esperando resultados de esta solicitud' : ''}</span> : <span>Sin solicitud activa.</span>}</div>
+        <div className="border border-white/10 px-3 py-2 text-white/60"><b className="block text-[9px] text-white/35">ÚLTIMO RUN COMPLETADO</b>{history[0] ? `${history[0].started_at ? new Date(history[0].started_at).toLocaleString('es-PY') : '—'} · ${history[0].status} · encontradas ${number(history[0].found_count)} · procesadas ${number((history[0].inserted_count || 0) + (history[0].updated_count || 0) + (history[0].unchanged_count || 0))}` : 'Sin historial durable.'}</div>
+      </div>
       {diagResult && <div className={`mt-3 border px-3 py-2 text-xs ${diagResult.overall_health === 'HEALTHY' ? 'border-green-900/40 text-green-400' : diagResult.overall_health === 'CRITICAL' ? 'border-red-900/40 text-red-400' : 'border-yellow-900/40 text-yellow-400'}`}>Diagnóstico: {diagResult.overall_health} · {diagResult.failing_gates} fallando · {diagResult.warning_gates} advertencias · {diagResult.inventory} oportunidades</div>}
+      {reconciliationPreview && <div className="mt-3 border border-white/10 px-3 py-2 text-xs text-white/60">Preview inventario {reconciliationState}: {number(reconciliationPreview.total_examined)} examinadas · catálogo ready/efectivo {number(reconciliationPreview.catalog_ready)}/{number(reconciliationPreview.catalog_allowed)} · matching ready/efectivo {number(reconciliationPreview.matching_ready)}/{number(reconciliationPreview.matching_allowed)} · SEO ready/efectivo {number(reconciliationPreview.seo_ready)}/{number(reconciliationPreview.seo_allowed)} · embeddings {number(reconciliationPreview.embedding_ready)} listas, {number(reconciliationPreview.embedding_pending)} pendientes, {number(reconciliationPreview.embedding_failed)} fallidas, {number(reconciliationPreview.embedding_not_required)} no requeridas · solicitud {reconciliationPreview.reconciliation_id} · sin escrituras.</div>}
+      {reconciliationResult && <div className="mt-3 border border-[#c9a84c]/30 px-3 py-2 text-xs text-white/65">Reconciliación {reconciliationResult.status}: {number(reconciliationResult.chunk?.examined)} examinadas · {number(reconciliationResult.chunk?.changed)} cambiadas · {number(reconciliationResult.chunk?.failed)} fallidas · cursor {number(reconciliationResult.cursor)} · {reconciliationResult.resumable ? 'podés reanudar.' : 'finalizada.'}</div>}
+      {source.field_survival && <div className="mt-3 border border-white/10 px-3 py-2 text-xs text-white/55">Contrato de campos {source.field_survival.classification}: persistidos {number(Object.values(source.field_survival.fields || {}).filter((state: any) => state === 'PERSISTED').length)} · pérdidas {number(Object.values(source.field_survival.fields || {}).filter((state: any) => state === 'LOST_BEFORE_PERSISTENCE').length)} · desconocidos {number(Object.values(source.field_survival.fields || {}).filter((state: any) => state === 'UNKNOWN').length)}. Ver detalle técnico en Source Intelligence.</div>}
       {policyResult && <div className="mt-3 border border-white/10 px-3 py-2 text-xs text-white/60">Política: {policyResult.status === 'ok' ? '✓ Aprobada' : policyResult.status === 'blocked' ? `✕ Bloqueada: ${policyResult.reason}` : policyResult.reason}</div>}
     </div>
 

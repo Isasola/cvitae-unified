@@ -1,58 +1,130 @@
 ---
 name: cvitae-scrapers
-description: Auditar, reparar, probar, incorporar y operar scrapers de empleos, becas, concursos, pasantías y otras oportunidades de CVitae. Usar al cambiar recolectores, fuentes, filtros geográficos, normalización, deduplicación, moderación, telemetría o controles del admin de cvitae.lat.
+description: Auditar, reparar, probar y operar scrapers, identidad de fuente, ingesta, telemetría, reconciliación y routing de oportunidades de CVitae. No usar para expandir una tarea ajena en una auditoría de scrapers.
 ---
 
 # CVitae Scrapers
 
-## Product outcome
+## Purpose and authority
 
-Scraping is not measured by rows ingested. Its purpose is trustworthy, current
-opportunity data that improves normalized semantics, embeddings, candidate fit,
-catalog usefulness and SEO/AEO/GEO context. Keep **job location**, **candidate
-eligibility** and **work arrangement** separate. Source quality is data
-confidence, never a substitute for candidate-to-opportunity fit.
+This skill supplements the current master item; it never creates a replacement
+roadmap or broadens authorization. Resolve conflicts in this order:
 
-Trabajar localmente y mantener toda fuente nueva en revisión obligatoria hasta demostrar calidad. No desplegar, activar cron ni publicar registros sin autorización explícita.
+1. The user's current explicit instruction.
+2. `docs/GRAND_CHECKPOINT.md` — position and scope ledger, when present.
+3. `WORKING_PRINCIPLES.md` — reasoning constitution, when present.
+4. `AGENTS.md` and repository safety rules.
+5. This skill and its references.
+6. Examples and fixtures.
 
-## Flujo obligatorio
+The Grand Checkpoint wins over this skill unless the user explicitly changes
+scope. Read the exact current master-checklist item before substantial work.
 
-1. Leer `references/contract.md`, `references/operational-maintenance.md` y los archivos actuales `scrapers/opportunity_sink.py`, `scripts/run_scraper_monitored.py` y `scrapers/runtime_policy/sitecustomize.py`.
-2. Clasificar el origen como Tier A (publicador oficial), Tier B (agregador) o Tier C (señal editorial/red social), y auditar autorización de acceso, mercado objetivo, vigencia, URL final, campos disponibles y estabilidad técnica.
-3. Crear fuentes nuevas con `python scripts/scaffold_scraper.py ... --tier A|B|C` y validar `scrapers/source_registry.json` con `python scripts/validate_scraper_registry.py`. Toda fuente nace desactivada.
-4. Ejecutar `python scripts/audit_scraper_contracts.py`. Corregir sintaxis y contrato antes de acceder a la fuente.
-5. Separar extracción de persistencia. Enviar resultados por `OpportunitySink`; si es legado, comprobar que el adaptador universal capture sus POST.
-6. En Tier B/C seguir `application_url`, encontrar el publicador original y volver a extraer desde ese origen. Tier C nunca se publica directamente.
-7. Probar con límite bajo, `require_review=true`, sin catálogo, matching, alertas ni SEO.
-8. Validar una muestra manual contra el origen. Medir encontrados, válidos, duplicados, descartados, insertados y causas.
-9. Mantener pausado si falla país/elegibilidad, vigencia, URL, título, organización, fuente original, duplicación o tasa mínima de resultados útiles.
-10. Habilitar gradualmente: recolección; luego catálogo; después matching/alertas; SEO al final. Registrar evidencia y criterio.
-11. Ejecutar compilación, pruebas críticas y `git diff --check`. Informar qué se verificó realmente y qué continúa pendiente.
+## When to use
 
-## Maintenance V2
+Use this skill for work materially involving scrapers, Source Registry V2,
+source identity, adapters, OpportunitySink, source telemetry, maintenance,
+inventory reconciliation, source-policy boundaries, or routing of
+scraper-derived opportunities. If another subsystem is primary, use this skill
+only for its exact shared source boundary; do not turn an incidental source
+reference into a scraper audit.
 
-Use the source registry and `scripts/run_source_maintenance.py`; do not create
-a second pipeline or mutate matching/catalog/SEO from a scraper. The complete
-shared Codex/Claude playbook is `references/operational-maintenance.md`.
+## Scope discipline
 
-## Durable runtime projection
+- Work only the current item or an explicitly requested adjacent dependency.
+- Do not re-audit closed items without concrete regression evidence.
+- A checklist or historical procedure in a reference is not permission to run
+  every maintenance step. Prefer the smallest targeted verification that
+  resolves the current gate and reuse existing evidence.
+- Named sources and fixtures are test cases, never the definition of the
+  applicable universe.
+- For substantial reports state `CHECKPOINT`, `CURRENT ITEM`, `CLOSED THIS
+  PASS`, `NEXT`, and `EVIDENCE LEVEL`. Do not renumber or replace the master
+  checklist. A truthful local state may be `OFFLINE_READY / PROD_VALIDATION_PENDING`.
 
-The repository Source Registry V2 remains the source of truth. Mutation-capable
-database workers must verify a durable, versioned projection in
-`opportunity_sources`; they must not trust caller assertions about
-certification, AUTO, semantic version or distribution policy. A missing,
-stale, or hash-mismatched projection fails closed. The projection mirrors only
-mutation-time policy and never replaces source semantics held in the registry.
+## Systems reasoning
 
-## Reglas de seguridad
+Trace the relevant path end to end:
 
-- Nunca eliminar físicamente oportunidades. Solicitar eliminación, revisar, corregir o confirmar borrado lógico.
-- Nunca usar cantidad encontrada como señal única de calidad.
-- No autoaprobar una fuente nueva o reparada.
-- No evadir autenticación, CAPTCHA, límites ni términos de LinkedIn; preferir APIs, feeds y páginas públicas autorizadas.
-- Preservar cambios ajenos y minimizar deploys.
-- No afirmar que un scraper funciona solo porque compila o devuelve HTTP 200.
+`UPSTREAM → TRANSFORMATION → PERSISTENCE → POLICY → CONSUMERS → OUTPUT QUALITY → OBSERVABILITY → FAILURE → RECOVERY`
 
-## Resultado esperado
+Before calling work done, identify what enters before the changed boundary and
+what consumes it afterward. A passing component test is not downstream
+completion. Progress in order: `CONNECTIVITY → COVERAGE → CORRECTNESS → QUALITY`.
 
-Entregar estado por fuente, evidencia, métricas, descartes, riesgos, controles del admin y siguiente activación segura. Si faltan pruebas reales, decirlo explícitamente.
+For bulk/inventory work, establish the real applicable universe, process to
+end of data when required, and account for duplicates and unexplained rows.
+Never promote a first page, `500`, `1000`, or fixture size into a universe.
+Keep discovery coverage separate from processing budget. Consider both
+historical persisted rows and future automatic ingestion: a backfill does not
+prove future automation, and a future-path fix does not repair history.
+
+## Permanent separations
+
+- Source permission ≠ row readiness ≠ effective consumer permission.
+- Source enabled ≠ consumer enabled ≠ row routable.
+- Catalog ≠ matching ≠ alerts ≠ SEO ≠ JobPosting ≠ Google Jobs.
+- SEO readiness ≠ SEO operational state ≠ search-engine permission.
+- Job location ≠ candidate eligibility ≠ work arrangement; remote ≠ worldwide.
+- UNKNOWN ≠ TRUE ≠ FALSE ≠ SUCCESS; queued ≠ running ≠ success.
+- Discovered ≠ attempted ≠ submitted ≠ inserted.
+- Tested locally ≠ deployed ≠ verified in production.
+
+Do not let one consumer's denial disable unrelated consumers unless the actual
+contract says so. Registry V2 is canonical identity authority: resolve aliases
+and source families deterministically; unknown identity fails closed. Never
+add source-specific downstream bias merely to make a source pass.
+
+When routing is in scope, evaluate separately: source capability/permission,
+row intrinsic readiness, stored operational gate, effective decision, and
+downstream reachability. A stored false is configuration evidence, not proof
+of contractual prohibition. Keep explicit restriction, configuration disabled,
+and UNKNOWN distinct.
+
+## Evidence and accounting
+
+Label evidence precisely: `STATIC`, `CONTRACT`, `FIXTURE`,
+`INTEGRATION_LOCAL`, `BROWSER_E2E`, `READ_ONLY_REAL_DATA`, or `PRODUCTION`.
+Use lifecycle states where relevant: `DESIGNED`, `IMPLEMENTED`,
+`TESTED_LOCAL`, `PUSHED`, `DEPLOYED`, `EXECUTED_PROD`, `VERIFIED_PROD`.
+Never describe static, contract, or fixture evidence as E2E or production
+verification.
+
+Metrics must reconcile where applicable: for example,
+`GLOBAL_TOTAL = SUM(PER_SOURCE_TOTAL)`. Keep discovery, detail attempts,
+parsing, submission, and persistence outcomes distinct. Persistence accounting
+must preserve inserted, updated, unchanged, rejected, failed, and
+budget-skipped. Do not rename a narrower metric into a broader one to make
+numbers align.
+
+For field survival distinguish `NOT_PROVIDED`, `EXTRACTION_FAILURE`,
+`LOST_BEFORE_PERSISTENCE`, `DOWNSTREAM_DERIVED`, `UNKNOWN`, and `PERSISTED`.
+A static analyzer's UNKNOWN is not proof of a loss.
+
+## Safety and deployment economy
+
+No production write, migration, deploy, push/merge that triggers production,
+production scraper run, policy mutation, publication, or destructive action
+without explicit user authorization. Read-only production work is allowed only
+when explicitly scoped read-only and technically guarded; read-only scripts
+must fail closed against mutation methods.
+
+When deployment opportunities are constrained, exhaust reasonable local,
+contract, and read-only evidence first, then batch compatible well-tested
+changes into a release candidate. Do not encode temporary deployment quotas in
+this reusable skill.
+
+## Detailed references
+
+- Read [references/checkpoint-methodology.md](references/checkpoint-methodology.md)
+  for scope gates, universe/accounting, routing, and reporting details.
+- Read [references/contract.md](references/contract.md) for opportunity
+  fields, lifecycle, and ingestion constraints.
+- Read [references/operational-maintenance.md](references/operational-maintenance.md)
+  only for source maintenance, observations, adapters, or operational recovery.
+
+For actual scraper changes, inspect the current `scrapers/opportunity_sink.py`,
+`scripts/run_scraper_monitored.py`, and
+`scrapers/runtime_policy/sitecustomize.py` before acting. New sources remain
+in review until evidence supports gradual activation; a scraper never directly
+publishes, verifies, ranks, or grants catalog/matching/SEO permission.

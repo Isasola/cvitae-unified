@@ -29,7 +29,7 @@ function Hero() {
         </h1>
         <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
           Subí tu CV y recibí en segundos un score ATS real, fortalezas y mejoras
-          concretas. Sin crear cuenta. Gratis durante nuestra beta pública.
+          concretas. Sin crear cuenta. El análisis inicial es gratis.
         </p>
         <div className="relative mt-10 max-w-3xl border-y border-white/[0.12] py-5">
           {/* Línea conectora horizontal en desktop */}
@@ -195,7 +195,7 @@ function Analizador() {
               : <><Sparkles className="h-4 w-4" /> Analizar ahora</>}
           </button>
           <p className="text-center text-[11px] text-muted-foreground">
-            Sin cuenta. Sin guardar tu archivo. Uso generoso durante la beta.
+            Sin cuenta. Sin guardar tu archivo. El análisis inicial es gratis.
           </p>
         </div>
 
@@ -525,7 +525,7 @@ function StatsBar() {
 function Pricing() {
   const tiers = [
     {
-      name: 'Beta Fundadores', price: 'Gs. 0', per: 'durante 3 meses',
+      name: 'Founding Beta · 50 cupos', price: 'Gs. 0', per: '12 meses tras aprobación',
       features: [
         'Analizador de CV con uso generoso',
         'Matching diario de oportunidades',
@@ -533,7 +533,7 @@ function Pricing() {
         'Alertas y recomendaciones personalizadas',
         'Acceso anticipado a nuevas funciones',
       ],
-      cta: 'Sumarme a la beta', featured: true,
+      cta: 'Solicitar acceso Founding Beta', featured: true,
     },
     {
       name: 'Después de la beta', price: 'A definir', per: 'según uso y capacidad',
@@ -551,10 +551,10 @@ function Pricing() {
     <section className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
       <Eyebrow>Para candidatos</Eyebrow>
       <h2 className="font-display mt-2 text-3xl text-cream sm:text-4xl">
-        Probá CVitae <em>gratis</em> durante nuestra beta.
+        Empezá con un análisis de CV <em>gratuito</em>.
       </h2>
       <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-        Queremos mejorar CVitae con usuarios reales antes de activar los planes pagos. El acceso es generoso y no requiere tarjeta. Si la demanda afecta la disponibilidad o el costo del servicio, podremos ajustar temporalmente algunos límites y lo comunicaremos con anticipación.
+        El análisis inicial no requiere cuenta ni tarjeta. Founding Beta es un beneficio limitado para 50 personas: se solicita desde Mi Carrera y se activa sólo después de aprobación. Si la demanda afecta la disponibilidad o el costo del servicio, podremos ajustar temporalmente algunos límites y lo comunicaremos con anticipación.
       </p>
       <div className="mt-10 grid max-w-3xl gap-4 md:grid-cols-2">
         {tiers.map((t, i) => (

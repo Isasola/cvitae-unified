@@ -159,28 +159,67 @@ def reconcile_embeddings(ids: list[str], apply: bool) -> dict[str, int]:
     return {"invalidated": len(ids), "regenerated": int(parsed.get("embedded", 0)), "failed": int(parsed.get("failed", 0))}
 
 
-def persist_maintenance_run(summary: dict[str, Any]) -> None:
-    """Use the established scraper_runs telemetry contract; no new log table."""
+def scraper_run_duration_seconds(value: Any) -> int:
+    """The durable scraper_runs schema is integer; never serialize a decimal."""
+    try:
+        return max(0, int(round(float(value))))
+    except (TypeError, ValueError):
+        return 0
+
+
+def maintenance_telemetry_payload(summary: dict[str, Any]) -> dict[str, Any]:
+    """Build a retryable telemetry-only payload without re-running maintenance."""
     event = os.getenv("GITHUB_EVENT_NAME", "").strip()
     trigger_type = "schedule" if event == "schedule" else "manual" if event == "workflow_dispatch" else "local"
-    payload = {
-        "run_id": f"source-maintenance-{summary['source']}-{int(datetime.now(timezone.utc).timestamp())}",
+    return {
+        "run_id": summary.setdefault("telemetry_run_id", f"source-maintenance-{summary['source']}-{int(datetime.now(timezone.utc).timestamp())}"),
         "scraper_id": f"maintenance_{summary['source']}",
         "scraper_name": f"Source maintenance {summary['source']}",
         "script_path": "scripts/run_source_maintenance.py", "trigger_type": trigger_type,
         "status": "healthy" if summary.get("health", {}).get("status") == "HEALTHY" else "warning",
         "started_at": summary["started_at"], "finished_at": summary["finished_at"],
-        "duration_seconds": summary["duration_seconds"], "found_count": summary["processed"],
+        # scraper_runs.duration_seconds is integer. Keep detailed elapsed time
+        # in extraction_metrics, but satisfy the telemetry boundary exactly.
+        "duration_seconds": scraper_run_duration_seconds(summary.get("duration_seconds")), "found_count": summary["processed"],
         "valid_count": summary["live"], "adapter_version": summary["adapter_version"],
         "extraction_metrics": summary,
     }
-    response = requests.post(f"{api_base()}/scraper_runs", headers={**api_headers(), "Prefer": "return=minimal"}, json=payload, timeout=30)
-    if not response.ok:
-        # Supabase's diagnostic body is useful, but never print request headers
-        # (which contain the service role key) and keep notification logs bounded.
-        body = " ".join(response.text.split())[:800]
-        print(f"maintenance telemetry POST failed: HTTP {response.status_code}; body={body}", file=sys.stderr)
-    response.raise_for_status()
+
+
+def persist_maintenance_run(summary: dict[str, Any]) -> dict[str, Any]:
+    """Persist telemetry independently; a failed POST never rewinds applied work."""
+    payload = maintenance_telemetry_payload(summary)
+    try:
+        response = requests.post(f"{api_base()}/scraper_runs", headers={**api_headers(), "Prefer": "return=minimal"}, json=payload, timeout=30)
+        if not response.ok:
+            body = " ".join(response.text.split())[:800]
+            error = f"HTTP {response.status_code}: {body}"
+            _persist_telemetry_retry_evidence(summary, payload, error)
+            return {"telemetry_status": "FAILED", "telemetry_error": error, "telemetry_payload": payload}
+        return {"telemetry_status": "PERSISTED", "telemetry_error": None, "telemetry_payload": payload}
+    except requests.RequestException as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        _persist_telemetry_retry_evidence(summary, payload, error)
+        return {"telemetry_status": "FAILED", "telemetry_error": error, "telemetry_payload": payload}
+
+
+def _persist_telemetry_retry_evidence(summary: dict[str, Any], payload: dict[str, Any], error: str) -> None:
+    """Best-effort audit only; it never retries or re-executes maintenance."""
+    try:
+        requests.post(
+            f"{api_base()}/source_control_audit_log",
+            headers={**api_headers(), "Prefer": "return=minimal"},
+            json={"action": "maintenance_telemetry", "source": summary["source"], "actor": "maintenance",
+                  "result_status": "error", "blockers": ["TELEMETRY_PERSIST_FAILED"],
+                  "before_state": payload, "result_detail": error}, timeout=10,
+        )
+    except requests.RequestException:
+        pass
+
+
+def retry_maintenance_telemetry(summary: dict[str, Any]) -> dict[str, Any]:
+    """Safe retry boundary: POSTs the preserved telemetry payload only."""
+    return persist_maintenance_run(summary)
 
 
 def assert_apply_authorized(profile: Any) -> dict[str, Any]:
@@ -355,8 +394,13 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
     summary["started_at"] = started.isoformat()
     summary["finished_at"] = datetime.now(timezone.utc).isoformat()
     summary["duration_seconds"] = round((datetime.now(timezone.utc) - started).total_seconds(), 2)
+    summary["changes_applied"] = bool(apply and (summary["rescued"] or summary["hard_dead_suppressed"] or summary["semantic_rows_changed"]))
+    summary["execution_status"] = "SUCCESS" if summary["failed"] == 0 else "WARNING"
+    summary["telemetry_status"] = "NOT_REQUESTED"
+    summary["telemetry_error"] = None
     if apply:
-        persist_maintenance_run(summary)
+        telemetry = persist_maintenance_run(summary)
+        summary.update({key: telemetry[key] for key in ("telemetry_status", "telemetry_error")})
     return summary
 
 

@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import time
 import os
 import re
+from opportunity_sink import OpportunitySink
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -129,11 +130,12 @@ def main():
         jobs = scrape_category(path, opp_type, max_pages=3)
         total_found += len(jobs)
 
-        for job in jobs:
-            status = insert_job(job)
-            if status in (200, 201, 409):
-                total_inserted += 1
-            print(f"  {job['title'][:60]} -> {status}")
+        # Keep legacy discovery, but send every row through the common
+        # normalizer/persistence boundary.  A listing title is not promoted to
+        # a fabricated rich description; detail enrichment remains explicit.
+        summary = OpportunitySink().upsert(jobs)
+        total_inserted += summary.inserted + summary.updated + summary.unchanged
+        print(f"  normalized: valid={summary.valid} rejected={summary.rejected}")
 
         time.sleep(2)
 

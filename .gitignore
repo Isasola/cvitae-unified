@@ -43,3 +43,5 @@ test-results/
 ..cvitae-release-hotfix/
 *.zip
 *-dryrun.txt
+/item49-checkpoint/
+/netlify/functions/manifest.json

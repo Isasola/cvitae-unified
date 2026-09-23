@@ -177,7 +177,7 @@ function simulateAccept(userId: string): {
     accepted_at: now,
     dismissed_count: existing?.dismissed_count || 0,
     benefit_start: now.split("T")[0],
-    benefit_end: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+    benefit_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
   })
 
   const email = `${userId}@test.lat`

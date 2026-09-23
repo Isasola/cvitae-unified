@@ -7,6 +7,8 @@ import {
   GEMINI_ANALYTICS_TIMEOUT_MS,
 } from './lib/admin-analytics-policy'
 import { createSign } from 'crypto'
+import publicSeoInventory from '../../generated/public-seo-inventory.json'
+import { publicOpportunityDemandInventory, recommendDemand } from '../../src/lib/search-demand'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -714,6 +716,17 @@ export default async function handler(req: Request) {
               ctr:         Number(p.ctr ?? 0),
               position:    Number(Number(p.position ?? 0).toFixed(1)),
             })),
+            demand_actions: Array.isArray((publicSeoInventory as any).rows)
+              ? recommendDemand(
+                  (gscRaw.queries ?? []).map((q: any) => ({
+                    query: String(q.keys?.[0] ?? ''),
+                    clicks: Number(q.clicks ?? 0),
+                    impressions: Number(q.impressions ?? 0),
+                    position: Number(q.position ?? 0),
+                  })),
+                  publicOpportunityDemandInventory((publicSeoInventory as any).rows),
+                )
+              : null,
           }
         : null
 

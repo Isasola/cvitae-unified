@@ -14,7 +14,7 @@ from source_adapters import (
     native_id, recommend,
 )
 from opportunity_sink import OpportunitySink
-from source_evidence import runtime_telemetry, eight_gates_run_evidence, run_quality_metrics
+from source_evidence import ingestion_accounting_telemetry, runtime_telemetry, eight_gates_run_evidence, run_quality_metrics
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -345,17 +345,19 @@ def main():
     metrics["discovery"] = {"total": len(discovered_jobs), "coverage_complete": source_complete, "stop_reason": source_stop}
     metrics["processing"] = {"attempted": len(detail_results), "budget": max_items, "coverage_complete": not budget_hit, "stop_reason": "record_budget_reached" if budget_hit else "discovered_pool_processed", "unprocessed_due_to_budget": max(0, len(discovered_jobs) - len(detail_results))}
     metrics.update(runtime_telemetry(provider_health="DEGRADED" if status == "DEGRADED" else "HEALTHY", coverage_complete=source_complete and not budget_hit, coverage_stop_reason=_coverage_stop, found=len(discovered_jobs), valid=metrics["parsed"], processed=len(detail_results), rejected=max(0,len(detail_results)-metrics["parsed"]), rejection_reasons={"detail_parse": max(0,len(detail_results)-metrics["parsed"])}))
+    ingestion_summary = ingestion_accounting_telemetry(
+        discovered=len(discovered_jobs),
+        detail_attempted=len(detail_results),
+        parsed=metrics["parsed"],
+        existing_enrichment=enrichment,
+        new_rows_submitted_to_sink=len(new_jobs),
+        sink_summary=summary.to_dict() if summary else None,
+        budget_skipped=max(0, len(discovered_jobs) - len(detail_results)),
+    )
+    metrics["ingestion_accounting"] = ingestion_summary["ingestion_accounting"]
     qm = run_quality_metrics(detail_results, coverage_complete=source_complete and not budget_hit, stop_reason=_coverage_stop)
-    metrics["eight_gates"] = eight_gates_run_evidence(source="talentcom", adapter_version=ADAPTER_VERSION, metrics=metrics, details=detail_results, summary=summary.to_dict() if summary else None, quality_metrics=qm)
-    existing_unchanged = enrichment.get("noop", 0) + enrichment.get("stale", 0)
-    existing_updated = enrichment.get("changed", 0)
-    if summary:
-        out = summary.to_dict()
-        out["unchanged"] = (out.get("unchanged") or 0) + existing_unchanged
-        out["updated"] = (out.get("updated") or 0) + existing_updated
-        print("CVITAE_INGESTION_SUMMARY=" + json.dumps(out, ensure_ascii=False))
-    elif existing_unchanged or existing_updated:
-        print("CVITAE_INGESTION_SUMMARY=" + json.dumps({"inserted": 0, "unchanged": existing_unchanged, "updated": existing_updated, "found": len(discovered_jobs)}, ensure_ascii=False))
+    metrics["eight_gates"] = eight_gates_run_evidence(source="talentcom", adapter_version=ADAPTER_VERSION, metrics=metrics, details=detail_results, summary=ingestion_summary, quality_metrics=qm)
+    print("CVITAE_INGESTION_SUMMARY=" + json.dumps(ingestion_summary, ensure_ascii=False))
     print("CVITAE_ADAPTER_METRICS=" + json.dumps({"adapter_version": ADAPTER_VERSION, "extraction_metrics": metrics}, ensure_ascii=False))
     print(f"\n=== Talent.com V2: {inserted} nuevas/actualizadas, {enrichment['changed']} enriquecidas de {len(detail_results)} detail pages ===")
 

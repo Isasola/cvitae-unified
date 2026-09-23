@@ -4,8 +4,9 @@ import { Link } from 'wouter'
 import { Briefcase, MapPin, Search, SlidersHorizontal } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { Eyebrow } from '@/components/cv/visuals'
-import { supabase } from '@/lib/supabase'
+import { loadPublicOpportunities } from '@/lib/public-source-policy'
 import { AdSlot } from '@/components/cv/AdSlot'
+import { canonicalOpportunityPathForRow } from '@/lib/opportunity-truth'
 
 interface Job {
   id: string
@@ -16,6 +17,7 @@ interface Job {
   type: string | null
   rubro: string | null
   source: string | null
+  opportunity_kind?: string | null
   created_at: string
 }
 
@@ -33,22 +35,10 @@ export default function Jobs() {
   const [area, setArea] = useState('Todas')
 
   useEffect(() => {
-    supabase
-      .from('opportunities')
-      .select('id,slug,title,organization,location,type,rubro,source,created_at')
-      .eq('is_active', true)
-      .eq('verification_status', 'verified')
-      .eq('catalog_eligible', true)
-      .in('opportunity_type', ['job', 'internship', 'consultancy'])
-      .is('deleted_at', null)
-      .is('archived_at', null)
-      .order('updated_at', { ascending: false })
-      .limit(200)
-      .then(({ data, error: loadError }) => {
-        if (loadError) setError('No pudimos cargar los empleos. Intentá nuevamente en unos minutos.')
-        else setJobs((data || []) as Job[])
-        setLoading(false)
-      })
+    void loadPublicOpportunities<Job[]>('jobs')
+      .then(data => setJobs((data || []) as Job[]))
+      .catch(() => setError('Public source policy unavailable.'))
+      .finally(() => setLoading(false))
   }, [])
 
   const areas = useMemo(() => ['Todas', ...Array.from(new Set(jobs.map(job => clean(job.rubro)).filter(Boolean))).sort()], [jobs])
@@ -123,7 +113,7 @@ export default function Jobs() {
           ) : (
             <section className="mt-6 grid gap-px overflow-hidden border border-white/8 bg-white/8 md:grid-cols-2" aria-label="Listado de empleos">
               {filtered.map(job => (
-                <Link key={job.id} href={`/empleos/${job.slug || job.id}`} className="group bg-[#0a0a0a] p-5 transition hover:bg-[#0e0e0e] focus:outline-none focus-visible:ring-1 focus-visible:ring-[#c9a84c]">
+                <Link key={job.id} href={canonicalOpportunityPathForRow({ ...job, slug: job.slug || job.id })} className="group bg-[#0a0a0a] p-5 transition hover:bg-[#0e0e0e] focus:outline-none focus-visible:ring-1 focus-visible:ring-[#c9a84c]">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <p className="text-[10px] uppercase tracking-[0.16em] text-[#c9a84c]">{clean(job.rubro) || 'General'}</p>
@@ -133,7 +123,7 @@ export default function Jobs() {
                     <span className="shrink-0 border border-white/10 px-2 py-1 text-[9px] uppercase tracking-wider text-white/35">{clean(job.type) || 'Empleo'}</span>
                   </div>
                   <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/6 pt-3 text-xs text-white/50">
-                    <span className="flex min-w-0 items-center gap-1.5 truncate"><MapPin className="h-3 w-3 shrink-0" />{cleanLocation(job.location) || 'Paraguay'}</span>
+                    <span className="flex min-w-0 items-center gap-1.5 truncate"><MapPin className="h-3 w-3 shrink-0" />{cleanLocation(job.location) || 'Ubicación no informada'}</span>
                     <span className="shrink-0">Ver detalle →</span>
                   </div>
                 </Link>

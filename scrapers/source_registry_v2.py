@@ -48,7 +48,20 @@ EXPLICIT_EMITTED_ALIASES = {
 }
 EXPLICIT_EMITTED_PATTERNS = {
     r"^cc_[a-z0-9_]+$": "callcenters",
-    r"^ong_(?:bid|giz|oas)_[a-z0-9_]+$": "ongs",
+    # These families are emitted dynamically by workflow-backed legacy
+    # scrapers.  Registry V2 owns the family mapping; consumers never infer
+    # it from a display label or a one-off emitted ID.
+    r"^banco_[a-z0-9_]+$": "bancos",
+    r"^const_[a-z0-9_]+$": "constructoras",
+    r"^coop_[a-z0-9_]+$": "cooperativas",
+    r"^hosp_[a-z0-9_]+$": "hospitales",
+    r"^ong_[a-z0-9_]+$": "ongs",
+    # Keep the existing retail_malls and retail_malls_py aliases owned by
+    # retail_malls rather than allowing the generic family to capture them.
+    r"^retail_(?!malls(?:_py)?$)[a-z0-9_]+$": "supermercados",
+    r"^seguros_[a-z0-9_]+$": "seguros",
+    r"^tech_[a-z0-9_]+$": "tech_local",
+    r"^univ_[a-z0-9_]+$": "universidades",
 }
 
 
@@ -190,7 +203,7 @@ def registry_snapshot() -> dict:
         # Snapshot consumers receive the same evidence as core certification,
         # under an explicit public name rather than a second copy.
         item["certification_evidence"] = item.pop("evidence")
-        item["distribution_policy"] = {"web_catalog_allowed": profile.web_catalog_allowed, "source_attribution_required": profile.source_attribution_required, "third_party_job_distribution_allowed": profile.third_party_job_distribution_allowed, "google_jobs_distribution_allowed": profile.google_jobs_distribution_allowed}
+        item["distribution_policy"] = {"web_catalog_allowed": profile.web_catalog_allowed, "search_engine_indexing_allowed": profile.search_engine_indexing_allowed, "source_attribution_required": profile.source_attribution_required, "third_party_job_distribution_allowed": profile.third_party_job_distribution_allowed, "google_jobs_distribution_allowed": profile.google_jobs_distribution_allowed}
         item["blocking_requirements"] = item.pop("missing")
     snapshot = {"schema_version": "source-intelligence-registry:v2", "profiles": len(PROFILES), "emitted_aliases": len(validation["aliases"]), "alias_collisions": validation["alias_collisions"], "ambiguous_patterns": validation["ambiguous_patterns"], "alias_pattern_conflicts": validation["alias_pattern_conflicts"], "certified": sum(item["certified"] for item in certificates), "auto_enabled": sum(item["auto_enabled"] for item in certificates), "pending_certification": sum(not item["certified"] for item in certificates), "sources": certificates}
     # The hash is a deterministic freshness marker for generated consumers.

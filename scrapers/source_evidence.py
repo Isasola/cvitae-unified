@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 
 HEALTHY = "HEALTHY"
@@ -51,6 +51,79 @@ def runtime_telemetry(
             "processed": max(0, int(processed if processed is not None else valid)),
             "rejected": max(0, int(rejected)),
             "rejection_reasons": dict(rejection_reasons or {}),
+        },
+    }
+
+
+def ingestion_accounting_telemetry(
+    *,
+    discovered: int,
+    detail_attempted: int,
+    parsed: int,
+    existing_enrichment: Mapping[str, Any] | None,
+    new_rows_submitted_to_sink: int,
+    sink_summary: Mapping[str, Any] | None,
+    budget_skipped: int = 0,
+) -> dict[str, Any]:
+    """Keep discovery, enrichment and sink outcomes explicitly separate.
+
+    ``OpportunitySink`` can only report the subset submitted as new rows.  It
+    must never redefine ``found`` for a discovery/enrichment scraper.  The
+    legacy top-level fields remain available to ``run_scraper_monitored``;
+    their full provenance is preserved below ``ingestion_accounting``.
+    """
+    sink = dict(sink_summary or {})
+    enrichment = dict(existing_enrichment or {})
+
+    def number(mapping: Mapping[str, Any], key: str) -> int:
+        try:
+            return max(0, int(mapping.get(key, 0) or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    discovered_total = max(0, int(discovered or 0))
+    attempted = max(0, int(detail_attempted or 0))
+    extracted = max(0, int(parsed or 0))
+    enrichment_attempted = number(enrichment, "attempted")
+    existing_updated = number(enrichment, "changed")
+    existing_unchanged = number(enrichment, "noop") + number(enrichment, "stale")
+    existing_failed = number(enrichment, "failed")
+    sink_rejected = number(sink, "rejected")
+    sink_failed = number(sink, "failed")
+    inserted = number(sink, "inserted")
+    updated = number(sink, "updated") + existing_updated
+    unchanged = number(sink, "unchanged") + existing_unchanged
+    failed = sink_failed + existing_failed + max(0, attempted - extracted)
+    skipped = max(0, int(budget_skipped or 0))
+    terminal = inserted + updated + unchanged + sink_rejected + failed
+    unaccounted = max(0, discovered_total - terminal - skipped)
+
+    return {
+        # Backward-compatible monitored-run fields.  ``found`` is discovery,
+        # never the new-row subset handed to OpportunitySink.
+        "found": discovered_total,
+        "valid": number(sink, "valid"),
+        "unique": number(sink, "unique"),
+        "inserted": inserted,
+        "updated": updated,
+        "unchanged": unchanged,
+        "rejected": sink_rejected,
+        "failed": failed,
+        "ingestion_accounting": {
+            "discovered": discovered_total,
+            "detail_attempted": attempted,
+            "parsed": extracted,
+            "existing_enrichment_attempted": enrichment_attempted,
+            "new_rows_submitted_to_sink": max(0, int(new_rows_submitted_to_sink or 0)),
+            "sink_valid": number(sink, "valid"),
+            "sink_rejected": sink_rejected,
+            "inserted": inserted,
+            "updated": updated,
+            "unchanged": unchanged,
+            "failed": failed,
+            "budget_skipped": skipped,
+            "terminal_outcomes": terminal,
+            "unaccounted": unaccounted,
         },
     }
 

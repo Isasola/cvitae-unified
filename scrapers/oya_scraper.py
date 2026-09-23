@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import os
+from opportunity_sink import OpportunitySink
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -98,13 +99,10 @@ def scrape_oya():
 
 def main():
     jobs = scrape_oya()
-    total = 0
-    for job in jobs:
-        status = insert_job(job)
-        if status in (200, 201, 409):
-            total += 1
-        print(f"[OYA] {job['title'][:60]} -> {status}")
-    print(f"\nTotal OYA insertadas/actualizadas: {total}/{len(jobs)}")
+    # OYA discovery currently exposes only card metadata.  Preserve that fact
+    # through the common sink rather than bypassing its quality/audit boundary.
+    summary = OpportunitySink().upsert(jobs)
+    print(f"\nTotal OYA procesadas: {summary.to_dict()['processed_attempted']}/{len(jobs)}")
 
 
 if __name__ == "__main__":

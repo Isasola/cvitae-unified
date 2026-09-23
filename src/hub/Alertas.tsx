@@ -7,6 +7,7 @@ import { Bell, BellOff, MapPin, Briefcase, ExternalLink, Loader2, CheckCircle2, 
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { auth, supabase } from '@/lib/supabase'
+import type { MatchDecision } from '@/lib/match-decision'
 
 const ease = [0.22, 1, 0.36, 1] as const
 
@@ -21,6 +22,7 @@ interface Opportunity {
   application_url: string
   matchScore: number
   matchReasons: string[]
+  matchDecision?: MatchDecision
 }
 
 function cleanText(text: string): string {
@@ -117,7 +119,7 @@ export default function Alertas() {
       })
       if (matchError) throw matchError
 
-      setMatches((result?.matches || []).map((match: any) => ({
+      setMatches((result?.matches || []).filter((match: any) => match.matchDecision?.outcome === 'MATCH').map((match: any) => ({
         id: match.id,
         title: match.titulo,
         organization: match.organization,
@@ -128,6 +130,7 @@ export default function Alertas() {
         application_url: match.application_url,
         matchScore: match.finalScore,
         matchReasons: match.matchedSkills || [],
+        matchDecision: match.matchDecision,
       })))
       setLoading(false)
     }).catch(() => setLoading(false))

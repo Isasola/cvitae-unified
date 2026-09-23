@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "build": "vite build",
+    "build": "tsx scripts/generate-seo-inventory.ts && vite build && node scripts/generate-sitemap.mjs && node scripts/prerender.mjs && node scripts/generate-opportunity-redirects.mjs",
     "preview": "vite preview --host",
     "staging:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-local-staging.ps1",
     "staging:status": "npx supabase status",
@@ -26,7 +26,8 @@
     "test:visual:report": "playwright show-report artifacts/visual/report",
     "test:b2c-polish": "tsx scripts/verify-b2c-cv-polish.ts",
     "test:b2c-universal": "tsx scripts/verify-b2c-cv-universal.ts",
-    "test:bedrock-multimodal": "node scripts/test-bedrock-multimodal.mjs"
+    "test:bedrock-multimodal": "node scripts/test-bedrock-multimodal.mjs",
+    "verify:release-candidate": "node scripts/verify-release-candidate.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1072.0",

@@ -51,8 +51,8 @@ export function buildFoundingEmailHtml(template: string, data: Record<string, an
     </p>
     <p style="color:#a0a0a0;line-height:1.85;margin:0 0 18px;font-size:15px">
       Por eso quiero darte acceso al <strong style="color:#c9a84c">Founding 50</strong>: los primeros 50 usuarios
-      que van a tener 6 meses de Pro sin costo, sin tarjeta y sin auto-renovación. No es un descuento automático,
-      es una invitación directa mía.
+      aprobados que van a tener 12 meses de Pro sin costo, sin tarjeta y sin auto-renovación. La solicitud se revisa
+      antes de activarse; no es un descuento automático, es una invitación directa mía.
     </p>
     <p style="color:#a0a0a0;line-height:1.85;margin:0 0 32px;font-size:15px">
       Usá la plataforma, contame qué funciona y qué no. Si tenés alguna sugerencia o algo que no anduvo bien,
@@ -76,7 +76,7 @@ export function buildFoundingEmailHtml(template: string, data: Record<string, an
       ¡Ya sos parte del Founding 50 de CVitae!
     </p>
     <p style="color:#a0a0a0;line-height:1.85;margin:0 0 18px;font-size:15px">
-      Tus <strong style="color:#c9a84c">6 meses de Pro están activados desde hoy</strong>.
+      Tus <strong style="color:#c9a84c">12 meses de Pro están activados desde hoy</strong>.
       Sin tarjeta, sin renovación automática, sin letra chica.
     </p>
     <p style="color:#a0a0a0;line-height:1.85;margin:0 0 18px;font-size:15px">
@@ -280,7 +280,7 @@ function buildFounderMilestoneEmail(
       ? new Date(d.accepted_at).toLocaleString("es-PY", { timeZone: "America/Asuncion" })
       : ts
     return {
-      subject: `[CVitae] ${name} aceptó Founding — 6 meses Pro activos`,
+      subject: `[CVitae] ${name} aceptó Founding — 12 meses Pro activos`,
       html: `
 <div style="font-family:monospace;background:#0a0a0a;color:#f5f0e8;padding:20px;border-radius:8px;max-width:520px">
   <div style="color:#c9a84c;font-weight:bold;margin-bottom:12px">FOUNDING ACCEPTED — CVitae</div>
@@ -291,7 +291,7 @@ function buildFounderMilestoneEmail(
     <div><strong style="color:#f5f0e8">Aceptado:</strong> ${acceptedTs}</div>
     <div><strong style="color:#f5f0e8">Beneficio inicio:</strong> ${d.benefit_start || "—"}</div>
     <div><strong style="color:#f5f0e8">Beneficio fin:</strong> ${d.benefit_end || "—"}</div>
-    <div><strong style="color:#f5f0e8">Plan actual:</strong> PRO (6 meses)</div>
+    <div><strong style="color:#f5f0e8">Plan actual:</strong> PRO (12 meses)</div>
   </div>
   <div style="margin-top:16px">
     <a href="${adminLink}" style="color:#c9a84c;text-decoration:none;font-size:12px">Admin / Customer 360 →</a>

@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 
 from opportunity_sink import OpportunitySink
 from source_adapters import AdapterResult, AtomicEnricher, RunLineageWriter, build_scan_lineage, clean, coverage, geo_from_detail, health, recommend
-from source_evidence import runtime_telemetry, eight_gates_run_evidence, run_quality_metrics
+from source_evidence import ingestion_accounting_telemetry, runtime_telemetry, eight_gates_run_evidence, run_quality_metrics
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -289,6 +289,8 @@ def main() -> None:
             "description": detail.description, "location": detail.location,
             "country_code": detail.country_code, "onsite_country": detail.onsite_country,
             "remote": detail.remote, "remote_scope": detail.remote_scope,
+            "eligible_countries": detail.eligible_countries, "eligible_regions": detail.eligible_regions,
+            "type": detail.employment_type,
             "value": detail.salary_text, "currency": detail.currency,
             "published_at": detail.date_posted, "deadline": detail.deadline,
             "source_url": detail.source_url, "application_url": detail.apply_url,
@@ -358,22 +360,24 @@ def main() -> None:
         rejected=max(0, len(details) - metrics["parsed"]),
         rejection_reasons={"detail_parse": max(0, len(details) - metrics["parsed"])},
     ))
+    ingestion_summary = ingestion_accounting_telemetry(
+        discovered=discovered_total,
+        detail_attempted=len(details),
+        parsed=metrics["parsed"],
+        existing_enrichment=enrichment,
+        new_rows_submitted_to_sink=len(new_jobs),
+        sink_summary=summary.to_dict() if summary else None,
+        budget_skipped=max(0, discovered_total - len(details)),
+    )
+    metrics["ingestion_accounting"] = ingestion_summary["ingestion_accounting"]
     qm = run_quality_metrics(details, coverage_complete=_coverage_complete, stop_reason=_coverage_stop)
     metrics["eight_gates"] = eight_gates_run_evidence(
         source="unjobs", adapter_version=ADAPTER_VERSION,
         metrics=metrics, details=details,
-        summary=summary.to_dict() if summary else None,
+        summary=ingestion_summary,
         quality_metrics=qm,
     )
-    existing_unchanged = enrichment.get("noop", 0) + enrichment.get("stale", 0)
-    existing_updated = enrichment.get("changed", 0)
-    if summary:
-        out = summary.to_dict()
-        out["unchanged"] = (out.get("unchanged") or 0) + existing_unchanged
-        out["updated"] = (out.get("updated") or 0) + existing_updated
-        print("CVITAE_INGESTION_SUMMARY=" + json.dumps(out, ensure_ascii=False))
-    elif existing_unchanged or existing_updated:
-        print("CVITAE_INGESTION_SUMMARY=" + json.dumps({"inserted": 0, "unchanged": existing_unchanged, "updated": existing_updated, "found": discovered_total}, ensure_ascii=False))
+    print("CVITAE_INGESTION_SUMMARY=" + json.dumps(ingestion_summary, ensure_ascii=False))
     print("CVITAE_ADAPTER_METRICS=" + json.dumps({"adapter_version": ADAPTER_VERSION, "extraction_metrics": metrics}, ensure_ascii=False))
 
 

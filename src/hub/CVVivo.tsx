@@ -134,7 +134,9 @@ export default function CVVivo() {
       const workspaceData = await workspaceRes.json()
       if (!matchesRes.ok) throw new Error(matchesData.error || 'No pudimos cargar las vacantes')
       if (!workspaceRes.ok) throw new Error(workspaceData.error || 'No pudimos cargar tu espacio de CV')
-      setVacancies(matchesData.matches || [])
+      // The custom pasted-vacancy flow is separate. CVitae suggestions must
+      // originate only from a visible MatchDecision.
+      setVacancies((matchesData.matches || []).filter((match: any) => match.matchDecision?.outcome === 'MATCH'))
       const nextEvidence = workspaceData.evidence || []
       const nextVersions = workspaceData.versions || []
       setEvidence(nextEvidence)

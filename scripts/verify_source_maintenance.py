@@ -149,15 +149,42 @@ def test_maintenance_trigger_contract() -> None:
         status_code = 201
         text = ""
         def raise_for_status(self): pass
-    summary = {"source": "unjobs", "health": {"status": "HEALTHY"}, "started_at": "2026-01-01T00:00:00+00:00", "finished_at": "2026-01-01T00:00:01+00:00", "duration_seconds": 1, "processed": 1, "live": 1, "adapter_version": "v2"}
+    summary = {"source": "unjobs", "health": {"status": "HEALTHY"}, "started_at": "2026-01-01T00:00:00+00:00", "finished_at": "2026-01-01T00:00:01+00:00", "duration_seconds": 11.69, "processed": 1, "live": 1, "adapter_version": "v2"}
     for event, expected in (("schedule", "schedule"), ("workflow_dispatch", "manual"), ("push", "local")):
         with patch.dict(os.environ, {"GITHUB_EVENT_NAME": event, "SUPABASE_URL": "http://127.0.0.1:54321", "SUPABASE_SERVICE_ROLE_KEY": "test"}), patch.object(maintenance.requests, "post", return_value=Response()) as post:
             maintenance.persist_maintenance_run(summary)
         assert post.call_args.kwargs["json"]["trigger_type"] == expected
+        assert post.call_args.kwargs["json"]["duration_seconds"] == 12
+
+
+def test_telemetry_failure_is_not_execution_failure() -> None:
+    class FailedResponse:
+        ok = False
+        status_code = 400
+        text = 'invalid input syntax for type integer: "14.05"'
+    summary = {"source": "unjobs", "health": {"status": "HEALTHY"}, "started_at": "2026-01-01T00:00:00+00:00", "finished_at": "2026-01-01T00:00:14+00:00", "duration_seconds": 14.05, "processed": 1, "live": 1, "adapter_version": "v2", "execution_status": "SUCCESS", "changes_applied": True}
+    with patch.dict(os.environ, {"SUPABASE_URL": "http://127.0.0.1:54321", "SUPABASE_SERVICE_ROLE_KEY": "test"}), patch.object(maintenance.requests, "post", return_value=FailedResponse()) as post:
+        result = maintenance.persist_maintenance_run(summary)
+    assert result["telemetry_status"] == "FAILED"
+    assert summary["execution_status"] == "SUCCESS" and summary["changes_applied"] is True
+    assert post.call_args_list[0].kwargs["json"]["duration_seconds"] == 14
+    assert post.call_args_list[1].kwargs["json"]["action"] == "maintenance_telemetry"
+
+
+def test_retry_telemetry_does_not_reprocess() -> None:
+    class Response:
+        ok = True
+        status_code = 201
+        text = ""
+    summary = {"source": "unjobs", "health": {"status": "HEALTHY"}, "started_at": "2026-01-01T00:00:00+00:00", "finished_at": "2026-01-01T00:00:14+00:00", "duration_seconds": 14.05, "processed": 1, "live": 1, "adapter_version": "v2", "telemetry_run_id": "retryable-run"}
+    with patch.dict(os.environ, {"SUPABASE_URL": "http://127.0.0.1:54321", "SUPABASE_SERVICE_ROLE_KEY": "test"}), patch.object(maintenance.requests, "post", return_value=Response()) as post:
+        result = maintenance.retry_maintenance_telemetry(summary)
+    assert result["telemetry_status"] == "PERSISTED"
+    assert post.call_args.kwargs["json"]["run_id"] == "retryable-run"
 
 
 def main() -> int:
-    test_loop_and_breakers(); test_profiles_and_embedding_plan(); test_recent_hard_dead_still_reaches_policy_lane(); test_concurrent_path_preserves_reference_decisions(); test_kind_quality_and_scout_contract(); test_diff_before_apply(); test_maintenance_trigger_contract()
+    test_loop_and_breakers(); test_profiles_and_embedding_plan(); test_recent_hard_dead_still_reaches_policy_lane(); test_concurrent_path_preserves_reference_decisions(); test_diff_before_apply(); test_maintenance_trigger_contract(); test_telemetry_failure_is_not_execution_failure(); test_retry_telemetry_does_not_reprocess()
     print("verify_source_maintenance: PASS")
     return 0
 

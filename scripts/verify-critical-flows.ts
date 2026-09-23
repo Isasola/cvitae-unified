@@ -331,7 +331,8 @@ const embeddingWorkflow = readFileSync(new URL('../.github/workflows/refresh_emb
 assert(embeddingWorkflow.includes('workflow_run:'), 'El refresco de embeddings debe ejecutarse despues de los scrapers')
 assert(embeddingWorkflow.includes("workflows: ['CVitae Scrapers']"), 'El refresco debe estar conectado al workflow real de scrapers')
 const highMatchAlerts = readFileSync(new URL('../netlify/functions/send-high-match-alerts.ts', import.meta.url), 'utf8')
-assert(highMatchAlerts.includes('rankOpportunities(profile, opportunities || [], dictionary)'), 'Las alertas deben usar el mismo ranking explicable que el dashboard')
+assert(highMatchAlerts.includes('rankOpportunitiesV2'), 'Las alertas deben usar la decisión V2.1 del dashboard')
+assert(highMatchAlerts.includes('isHighMatchAlertDecision'), 'Las alertas pueden endurecer la entrega, pero no usar otro motor de fit')
 assert(highMatchAlerts.includes('is_test.is.null,is_test.eq.false'), 'Las alertas no deben enviar correos a cuentas de prueba')
 for (const relativePath of ['../netlify/functions/founding-beta-action.ts', '../netlify/functions/log-user-event.ts']) {
   const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')

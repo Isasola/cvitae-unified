@@ -55,7 +55,7 @@ export interface GoldOpportunity {
 export interface GoldExpectation {
   candidateKey: string
   opportunityId: string
-  expected: 'MUST_MATCH' | 'BORDERLINE' | 'MUST_REJECT'
+  expected: 'MUST_MATCH' | 'SHOULD_MATCH' | 'MAYBE' | 'BORDERLINE' | 'MUST_REJECT'
   reason: string
   critical: boolean
 }

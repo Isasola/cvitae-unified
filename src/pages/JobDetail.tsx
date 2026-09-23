@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Link, useParams } from 'wouter'
-import { toGoogleEmploymentType } from '@/lib/seo/employment-type'
+import { Link, useLocation, useParams } from 'wouter'
+import { canonicalOpportunityPathForRow, canonicalOpportunityUrlForRow } from '@/lib/opportunity-truth'
+import { aggregatedJobPosting } from '@/lib/factual-job-posting'
 import { safeExternalUrl } from '@/lib/safe-url'
 import { ArrowLeft, Briefcase, Building2, CalendarDays, ExternalLink, MapPin, ShieldCheck, Sparkles } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
-import { supabase } from '@/lib/supabase'
+import { loadPublicOpportunities } from '@/lib/public-source-policy'
 import { analytics } from '@/lib/analytics'
-import sourceRegistry from '@/generated/source-intelligence-registry.json'
 
 interface Job {
   id: string
@@ -20,6 +20,7 @@ interface Job {
   country_code: string | null
   type: string | null
   opportunity_type: string | null
+  opportunity_kind?: string | null
   deadline: string | null
   rubro: string | null
   description: string | null
@@ -28,68 +29,35 @@ interface Job {
   source_url: string | null
   created_at: string
   updated_at: string
+  distribution?: { seo?: { allowed: boolean }; jobPosting?: { allowed: boolean }; googleJobs?: { allowed: boolean }; sourceAttributionRequired?: boolean }
 }
 
 const clean = (value: string | null | undefined) => String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 
 export default function JobDetail() {
   const { slug } = useParams<{ slug: string }>()
+  const [, setLocation] = useLocation()
   const [job, setJob] = useState<Job | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!slug) return
-    supabase
-      .from('opportunities')
-      .select('id,slug,title,organization,location,city,department,country_code,type,opportunity_type,deadline,rubro,description,application_url,source,source_url,created_at,updated_at')
-      .eq('slug', slug)
-      .eq('is_active', true)
-      .eq('verification_status', 'verified')
-      .eq('catalog_eligible', true)
-      .in('opportunity_type', ['job', 'internship', 'consultancy'])
-      .is('deleted_at', null)
-      .is('archived_at', null)
-      .maybeSingle()
-      .then(({ data }) => {
-        const loaded = data as Job | null
-        setJob(loaded)
-        if (loaded) analytics.opportunityViewed(loaded.id, loaded.source || 'unknown')
-        setLoading(false)
-      })
+    void loadPublicOpportunities<Job>('all', slug).then(data => {
+      const loaded = data as Job | null
+      if (loaded && canonicalOpportunityPathForRow(loaded) !== `/empleos/${loaded.slug}`) { setLocation(canonicalOpportunityPathForRow(loaded), { replace: true }); return }
+      setJob(loaded); if (loaded) analytics.opportunityViewed(loaded.id, loaded.source || 'unknown')
+    }).finally(() => setLoading(false))
   }, [slug])
 
   if (loading) return <SiteShell><main className="mx-auto min-h-[60vh] max-w-4xl px-6 py-20 text-sm text-white/40">Cargando empleo…</main></SiteShell>
-  if (!job) return <SiteShell><main className="mx-auto min-h-[60vh] max-w-4xl px-6 py-20"><p className="text-cream">Este empleo ya no está activo o no existe.</p><Link href="/empleos" className="mt-4 inline-block text-sm text-[#c9a84c]">Volver a empleos</Link></main></SiteShell>
+  if (!job) return <><Helmet><meta name="robots" content="noindex,follow" /></Helmet><SiteShell><main className="mx-auto min-h-[60vh] max-w-4xl px-6 py-20"><p className="text-cream">Este empleo ya no está activo o no existe.</p><Link href="/empleos" className="mt-4 inline-block text-sm text-[#c9a84c]">Volver a empleos</Link></main></SiteShell></>
 
   const title = `${clean(job.title)} | CVitae`
-  const description = `${clean(job.title)} en ${clean(job.organization) || 'Paraguay'}. Consultá los detalles y postulá desde la fuente original.`
-  const canonical = `https://cvitae.lat/empleos/${job.slug}`
+  const description = clean(job.description) || clean(job.title)
+  const canonical = canonicalOpportunityUrlForRow(job)
 
-  // Only emit JobPosting when required fields are present — never emit with synthetic fallbacks
-  const realDescription = clean(job.description)
-  const realOrg = clean(job.organization)
-  const distribution = sourceRegistry.sources.find(item => item.canonical_source === job?.source)?.distribution_policy
-  const canEmitJobPosting = realDescription.length >= 100 && realOrg.length > 0 && distribution?.google_jobs_distribution_allowed !== false
-
-  const resolvedEmpType = toGoogleEmploymentType(job.type) ?? (job.opportunity_type === 'internship' ? 'INTERN' : undefined)
-  const addrLocality = clean(job.city || job.location) || undefined
-  const addrRegion = clean(job.department) || undefined
-  const addrCountry = job.country_code?.trim().toUpperCase().match(/^[A-Z]{2}$/) ? job.country_code.trim().toUpperCase() : 'PY'
-  const hasLocation = addrLocality || addrRegion
-  const jobAddr = { '@type': 'PostalAddress' as const, addressCountry: addrCountry, ...(addrLocality ? { addressLocality: addrLocality } : {}), ...(addrRegion ? { addressRegion: addrRegion } : {}) }
-  const structuredData = canEmitJobPosting ? {
-    '@context': 'https://schema.org',
-    '@type': 'JobPosting',
-    title: clean(job.title),
-    description: realDescription,
-    datePosted: job.created_at,
-    ...(job.deadline ? { validThrough: job.deadline } : {}),
-    ...(resolvedEmpType ? { employmentType: resolvedEmpType } : {}),
-    hiringOrganization: { '@type': 'Organization', name: realOrg },
-    ...(hasLocation ? { jobLocation: { '@type': 'Place', address: jobAddr } } : {}),
-    directApply: false,
-    url: canonical,
-  } : {
+  const factual = aggregatedJobPosting(job, canonical)
+  const structuredData = factual.structuredData ?? {
     '@context': 'https://schema.org',
     '@type': 'WebPage',
     name: clean(job.title),
@@ -105,6 +73,7 @@ export default function JobDetail() {
   return (
     <>
       <Helmet>
+        {job.distribution?.seo?.allowed !== true && <meta name="robots" content="noindex,follow" />}
         <title>{title}</title>
         <meta name="description" content={description} />
         <link rel="canonical" href={canonical} />
@@ -124,7 +93,7 @@ export default function JobDetail() {
               <h1 className="mt-3 max-w-3xl font-display text-4xl leading-tight text-cream sm:text-5xl">{clean(job.title)}</h1>
               <div className="mt-6 flex flex-wrap gap-x-5 gap-y-3 text-sm text-white/45">
                 <span className="flex items-center gap-2"><Building2 className="h-4 w-4" />{clean(job.organization) || 'Empresa no informada'}</span>
-                <span className="flex items-center gap-2"><MapPin className="h-4 w-4" />{clean(job.location) || 'Paraguay'}</span>
+                <span className="flex items-center gap-2"><MapPin className="h-4 w-4" />{clean(job.location) || 'Ubicaci\u00f3n no informada'}</span>
                 <span className="flex items-center gap-2"><Briefcase className="h-4 w-4" />{clean(job.type) || 'Empleo'}</span>
               </div>
               <section className="mt-9 border-t border-white/8 pt-7">
@@ -138,8 +107,9 @@ export default function JobDetail() {
               <p className="mt-3 text-[11px] leading-relaxed text-white/35">Adaptá tu CV con evidencias confirmadas y prepará el mensaje antes de abrir el formulario externo.</p>
               <div className="mt-5 space-y-3 border-t border-white/8 pt-4 text-xs leading-relaxed text-white/35">
                 <p className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />CVitae organiza la vacante; verificá condiciones y datos con la fuente original.</p>
+                {job.deadline && <p className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Cierra {new Date(job.deadline).toLocaleDateString('es-PY')}</p>}
                 <p className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Revisada {new Date(job.updated_at).toLocaleDateString('es-PY')}</p>
-                {distribution?.source_attribution_required && job.source_url ? <p>Fuente: <a href={safeExternalUrl(job.source_url)} target="_blank" rel="noopener noreferrer" className="text-[#c9a84c] hover:underline">Himalayas</a></p> : <p>Fuente: {clean(job.source) || 'No informada'}</p>}
+                {job.distribution?.sourceAttributionRequired && job.source_url ? <p>Fuente original: <a href={safeExternalUrl(job.source_url)} target="_blank" rel="noopener noreferrer" className="text-[#c9a84c] hover:underline">Ver fuente</a></p> : <p>Fuente: {clean(job.source) || 'No informada'}</p>}
               </div>
             </aside>
           </article>

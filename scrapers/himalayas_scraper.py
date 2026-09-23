@@ -296,7 +296,10 @@ def main() -> None:
                 continue
             seen.add(detail.source_url); details.append(detail)
             categories = raw.get("categories") or raw.get("parentCategories") or []
-            job = {"title": detail.title, "organization": detail.organization, "description": detail.description, "location": detail.location, "country_code": detail.country_code, "onsite_country": detail.onsite_country, "remote": detail.remote, "remote_scope": detail.remote_scope, "value": detail.salary_text, "currency": detail.currency, "published_at": detail.date_posted, "deadline": detail.deadline, "source_url": detail.source_url, "application_url": detail.apply_url, "source": "himalayas", "is_active": True, "rubro": get_rubro(detail.title or "", categories), "tags": [str(item).lower().replace(" ", "-") for item in categories[:8]], "source_authority": "aggregator", "original_source_verified": False}
+            # Keep adapter truth intact at the sink boundary.  In particular,
+            # Remote is an arrangement and its restrictions are eligibility;
+            # neither may be collapsed into a guessed country.
+            job = {"title": detail.title, "organization": detail.organization, "description": detail.description, "location": detail.location, "country_code": detail.country_code, "onsite_country": detail.onsite_country, "remote": detail.remote, "remote_scope": detail.remote_scope, "eligible_countries": detail.eligible_countries, "eligible_regions": detail.eligible_regions, "type": detail.employment_type, "value": detail.salary_text, "currency": detail.currency, "published_at": detail.date_posted, "deadline": detail.deadline, "source_url": detail.source_url, "application_url": detail.apply_url, "source": "himalayas", "is_active": True, "rubro": get_rubro(detail.title or "", categories), "tags": [str(item).lower().replace(" ", "-") for item in categories[:8]], "source_authority": "aggregator", "original_source_verified": False}
             existing = (enricher.lookup(detail.apply_url) or enricher.lookup(detail.source_url, "source_url")) if enricher else None
             if existing:
                 enrichment["attempted"] += 1; outcome = enricher.enrich_existing(detail, existing)

@@ -4,8 +4,9 @@ import { Link, useParams } from 'wouter'
 import { ArrowRight, CalendarDays, Filter, MapPin, Search, ShieldCheck } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { Eyebrow } from '@/components/cv/visuals'
-import { supabase } from '@/lib/supabase'
+import { loadPublicOpportunities } from '@/lib/public-source-policy'
 import { AdSlot } from '@/components/cv/AdSlot'
+import { canonicalOpportunityPathForRow } from '@/lib/opportunity-truth'
 
 type MarketKey = 'paraguay' | 'peru' | 'remoto-latam' | 'latam'
 
@@ -68,44 +69,6 @@ const MARKET_META: Record<MarketKey, {
   },
 }
 
-const PY_SOURCES = new Set([
-  'computrabajo','clasipar','mitic_opportunities','snj_paraguay',
-  'mic_portal_emprendedor','ucom_job_board','cird_competitions_tenders',
-])
-
-const LATAM_SCHOLARSHIP_SOURCES = new Set([
-  'oas_scholarships','coimbra_group','erasmus_mundus','santander_open_academy',
-  'one_young_world_scholarships','fundacion_carolina',
-])
-
-function buildFilter(market: MarketKey) {
-  const base = supabase
-    .from('opportunities')
-    .select('id,slug,title,organization,location,opportunity_type,opportunity_kind,deadline,funding_type,fully_funded,source,remote_scope,country_code,onsite_country')
-    .eq('is_active', true)
-    .eq('verification_status', 'verified')
-    .eq('catalog_eligible', true)
-    .is('deleted_at', null)
-    .is('archived_at', null)
-    .or(`deadline.is.null,deadline.gte.${new Date().toISOString()}`)
-
-  if (market === 'paraguay') {
-    // PY-specific sources + country_code=PY + onsite_country=PY + eligible_countries contains PY
-    return base.or('source.in.(computrabajo,clasipar,mitic_opportunities,snj_paraguay,mic_portal_emprendedor,ucom_job_board,cird_competitions_tenders),country_code.eq.PY,onsite_country.eq.PY')
-  }
-  if (market === 'peru') {
-    return base.or('country_code.eq.PE,onsite_country.eq.PE')
-  }
-  if (market === 'remoto-latam') {
-    return base.eq('remote', true).in('remote_scope', ['WORLDWIDE', 'LATAM'])
-  }
-  if (market === 'latam') {
-    // Use a proper OR: records with remote_scope=LATAM OR from known LATAM scholarship sources
-    return base.or('remote_scope.eq.LATAM,source.in.(oas_scholarships,coimbra_group,erasmus_mundus,santander_open_academy,one_young_world_scholarships,fundacion_carolina)')
-  }
-  return base
-}
-
 const TYPE_LABELS: Record<string, string> = {
   scholarship: 'Beca', fellowship: 'Fellowship', grant: 'Grant',
   seed_capital: 'Capital semilla', accelerator: 'Aceleradora', incubator: 'Incubadora',
@@ -138,14 +101,10 @@ export default function MarketOpportunities() {
 
   useEffect(() => {
     if (!isValid) { setLoading(false); return }
-    buildFilter(market)
-      .order('deadline', { ascending: true, nullsFirst: false })
-      .limit(300)
-      .then(({ data, error: loadError }) => {
-        if (loadError) setError('No pudimos cargar las oportunidades. Intentá nuevamente en unos minutos.')
-        else setItems((data || []) as Opportunity[])
-        setLoading(false)
-      })
+    void loadPublicOpportunities<Opportunity[]>('all')
+      .then(data => setItems((data || []) as Opportunity[]))
+      .catch(() => setError('Public source policy unavailable.'))
+      .finally(() => setLoading(false))
   }, [market, isValid])
 
   const filtered = useMemo(() => {
@@ -218,7 +177,7 @@ export default function MarketOpportunities() {
               {filtered.map(item => {
                 const type = item.opportunity_type || kindToType(item.opportunity_kind)
                 const typeLabel = TYPE_LABELS[type] || ''
-                const href = item.slug ? `/oportunidades/${item.slug}` : `/oportunidades/${item.id}`
+                const href = canonicalOpportunityPathForRow({ ...item, slug: item.slug || item.id })
                 return (
                   <Link key={item.id} href={href} className="group flex flex-col justify-between bg-[#0b0b0b] p-6 transition-colors hover:bg-[#111111]">
                     <div>

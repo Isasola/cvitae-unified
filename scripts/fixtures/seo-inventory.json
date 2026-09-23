@@ -1,0 +1,16 @@
+{
+  "policies": [
+    {"source":"computrabajo","is_enabled":true,"catalog_enabled":true,"seo_enabled":true,"web_catalog_allowed":true,"search_engine_indexing_allowed":true},
+    {"source":"unjobs","is_enabled":true,"catalog_enabled":true,"seo_enabled":true,"web_catalog_allowed":true,"search_engine_indexing_allowed":true},
+    {"source":"oya","is_enabled":true,"catalog_enabled":true,"seo_enabled":true,"web_catalog_allowed":true,"search_engine_indexing_allowed":true},
+    {"source":"himalayas","is_enabled":true,"catalog_enabled":true,"seo_enabled":true,"web_catalog_allowed":true,"search_engine_indexing_allowed":false}
+  ],
+  "opportunities": [
+    {"id":"job","slug":"programme-officer","title":"Programme Officer","organization":"UN","description":"Programme delivery, requirements and monitoring responsibilities. Programme delivery, requirements and monitoring responsibilities.","source":"computrabajo","opportunity_type":"job","is_active":true,"verification_status":"verified","catalog_eligible":true,"seo_eligible":true,"seo_status":"eligible","updated_at":"2026-09-20T00:00:00Z"},
+    {"id":"non-job","slug":"regional-fellowship","title":"Regional Fellowship","organization":"UNESCO","description":"A factual fellowship description with eligibility, requirements, deadline and application instructions for candidates.","source":"unjobs","opportunity_type":"fellowship","is_active":true,"verification_status":"verified","catalog_eligible":true,"seo_eligible":true,"seo_status":"eligible","updated_at":"2026-09-20T00:00:00Z"},
+    {"id":"thin","slug":"thin-card","title":"Thin Card","organization":"Org","description":"","source":"oyaop","opportunity_type":"job","is_active":true,"verification_status":"verified","catalog_eligible":true,"seo_eligible":true,"seo_status":"eligible"},
+    {"id":"restricted","slug":"restricted","title":"Restricted","organization":"H","description":"Rich description for a restricted source. Rich description for a restricted source.","source":"himalayas","opportunity_type":"job","is_active":true,"verification_status":"verified","catalog_eligible":true,"seo_eligible":true,"seo_status":"eligible"},
+    {"id":"archived","slug":"archived","title":"Archived","organization":"Org","description":"Rich archived description. Rich archived description. Rich archived description.","source":"computrabajo","opportunity_type":"job","is_active":true,"verification_status":"verified","catalog_eligible":true,"seo_eligible":true,"seo_status":"eligible","archived_at":"2026-09-01T00:00:00Z"},
+    {"id":"duplicate","slug":"programme-officer","title":"Programme Officer duplicate","organization":"UN","description":"Duplicate canonical description. Duplicate canonical description. Duplicate canonical description.","source":"computrabajo","opportunity_type":"job","is_active":true,"verification_status":"verified","catalog_eligible":true,"seo_eligible":true,"seo_status":"eligible"}
+  ]
+}

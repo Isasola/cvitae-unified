@@ -26,9 +26,21 @@ HEADERS = {
 }
 
 
-def sb_get(table, params=""):
-    r = requests.get(f"{SUPABASE_URL}/rest/v1/{table}{params}", headers=HEADERS, timeout=15)
-    r.raise_for_status()
+def _safe_http_error(response):
+    """Keep REST diagnostics useful without exposing headers or huge bodies."""
+    body = " ".join((response.text or "").split())[:800]
+    return f"HTTP {response.status_code} {body}".strip()
+
+
+def sb_get(table, params=None):
+    r = requests.get(
+        f"{SUPABASE_URL}/rest/v1/{table}",
+        headers=HEADERS,
+        params=params or {},
+        timeout=15,
+    )
+    if not r.ok:
+        raise requests.HTTPError(_safe_http_error(r), response=r)
     return r.json()
 
 
@@ -41,7 +53,7 @@ def get_ss_opportunities():
     """Return verified opportunities from SS-tier sources in the last 7 days."""
     since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
 
-    sources_raw = sb_get("opportunity_sources", "?select=source&source_tier=eq.SS")
+    sources_raw = sb_get("opportunity_sources", {"select": "source", "source_tier": "eq.SS"})
     ss_sources = [s["source"] for s in sources_raw]
 
     if not ss_sources:
@@ -50,17 +62,15 @@ def get_ss_opportunities():
 
     source_in = "(" + ",".join(ss_sources) + ")"
 
-    opps = sb_get(
-        "opportunities",
-        f"?select=id,title,organization,description,opportunity_type,opportunity_kind,"
-        f"deadline,source,location,eligible_countries"
-        f"&verification_status=eq.verified"
-        f"&is_active=eq.true"
-        f"&source=in.{source_in}"
-        f"&created_at=gte.{since}"
-        f"&order=created_at.desc"
-        f"&limit=20",
-    )
+    opps = sb_get("opportunities", {
+        "select": "id,title,organization,description,opportunity_type,opportunity_kind,deadline,source,location,eligible_countries",
+        "verification_status": "eq.verified",
+        "is_active": "eq.true",
+        "source": f"in.{source_in}",
+        "created_at": f"gte.{since}",
+        "order": "created_at.desc",
+        "limit": "20",
+    })
     return opps
 
 
@@ -89,10 +99,13 @@ def group_by_theme(opps):
 def already_ran_this_week():
     """Skip if we already generated a draft this week."""
     since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-    existing = sb_get(
-        "content_hub",
-        f"?select=id&tipo=eq.blog&is_active=eq.false&created_at=gte.{since}&limit=1",
-    )
+    existing = sb_get("content_hub", {
+        "select": "id",
+        "tipo": "eq.blog",
+        "is_active": "eq.false",
+        "created_at": f"gte.{since}",
+        "limit": "1",
+    })
     return len(existing) > 0
 
 
@@ -159,6 +172,10 @@ def save_draft(article, trigger_source):
         "metadata": {
             "auto_generated": True,
             "needs_review": True,
+            # content_hub already powers the Admin draft queue.  Persist the
+            # review contract with the draft so it cannot masquerade as
+            # publishable content before an explicit Admin approval.
+            "approval": {"kind": "BLOG", "status": "PENDING_REVIEW", "audit": [{"action": "CREATE", "actor": "blog_generator", "at": datetime.now(timezone.utc).isoformat()}]},
             "trigger_source": trigger_source,
             "tier": "SS",
             "generated_at": datetime.now(timezone.utc).isoformat(),

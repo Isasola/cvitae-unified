@@ -2,38 +2,56 @@ import { createClient } from '@supabase/supabase-js'
 import WebSocket from 'ws'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { join } from 'path'
+import { fetchAllPages } from '../src/lib/paged-fetch.js'
+import { canonicalSitemapRows } from '../src/lib/sitemap-universe.js'
+import { aggregatedJobPosting, factualJobPosting } from '../src/lib/factual-job-posting.shared.js'
+import { toGoogleEmploymentType } from '../src/lib/seo/employment-type.shared.js'
+import { deadlineLifecycle, isScholarshipLike } from '../src/lib/opportunity-truth.ts'
+import { safeExternalUrl } from '../src/lib/safe-url.ts'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
 const SITE_URL = 'https://cvitae.lat'
 const distDir = join(process.cwd(), 'dist')
+const seoInventoryPath = join(process.cwd(), 'generated', 'public-seo-inventory.json')
+const publicFixturePath = process.env.PRERENDER_PUBLIC_FIXTURE
+if (!existsSync(seoInventoryPath)) throw new Error('seo_inventory_missing')
+const seoInventory = JSON.parse(readFileSync(seoInventoryPath, 'utf8'))
+if (!seoInventory.generated_at || !Array.isArray(seoInventory.rows)) throw new Error('seo_inventory_invalid')
+if (Date.now() - Date.parse(seoInventory.generated_at) > 24 * 60 * 60 * 1000) throw new Error('seo_inventory_stale')
+if (seoInventory.rows.length === 0 && process.env.SEO_INVENTORY_ALLOW_EMPTY !== 'true') throw new Error('seo_inventory_empty')
 
 const escapeHtml = value => String(value || '').replace(/[&<>"']/g, c => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[c]))
 
 const isSafeRouteSegment = value => /^[a-z0-9][a-z0-9._-]*$/i.test(String(value || ''))
-
-const EMPLOYMENT_TYPE_MAPPING = {
-  'tiempo completo': 'FULL_TIME', 'full time': 'FULL_TIME', 'full-time': 'FULL_TIME',
-  'medio tiempo': 'PART_TIME', 'part time': 'PART_TIME', 'part-time': 'PART_TIME',
-  'jornada parcial': 'PART_TIME',
-  'freelance': 'CONTRACTOR', 'contratista': 'CONTRACTOR', 'contractor': 'CONTRACTOR',
-  'temporal': 'TEMPORARY', 'temporary': 'TEMPORARY',
-  'pasantia': 'INTERN', 'pasantía': 'INTERN', 'internship': 'INTERN', 'intern': 'INTERN',
-  'practicante': 'INTERN', 'trainee': 'INTERN',
-  'voluntario': 'VOLUNTEER', 'voluntariado': 'VOLUNTEER', 'volunteer': 'VOLUNTEER',
-  'otro': 'OTHER', 'other': 'OTHER',
-}
-const GOOGLE_ET_VALID = new Set(['FULL_TIME','PART_TIME','CONTRACTOR','TEMPORARY','INTERN','VOLUNTEER','PER_DIEM','OTHER'])
-const toGoogleEmploymentType = raw => {
-  if (!raw) return undefined
-  const n = String(raw).trim().toLowerCase()
-  if (GOOGLE_ET_VALID.has(n.toUpperCase())) return n.toUpperCase()
-  return EMPLOYMENT_TYPE_MAPPING[n] ?? undefined
+const routeParts = canonicalPath => {
+  const parts = String(canonicalPath || '').split('/').filter(Boolean)
+  if (parts.length !== 2 || !isSafeRouteSegment(parts[0]) || !isSafeRouteSegment(parts[1])) throw new Error(`unsafe_canonical_path:${canonicalPath}`)
+  return parts
 }
 
-// ── Markdown → snapshot HTML ───────────────────────────────────────────────
+function canonicalPublicRows(prefix, rows) {
+  const rowsByPath = new Map()
+  for (const row of rows) {
+    const canonicalPath = `${prefix}/${String(row.slug || '').trim()}`
+    if (!rowsByPath.has(canonicalPath)) rowsByPath.set(canonicalPath, row)
+  }
+  return canonicalSitemapRows(prefix, rows).map(({ canonical_path }) => ({ ...rowsByPath.get(canonical_path), canonical_path }))
+}
+
+async function fetchCanonicalPublicRows(supabase, table, prefix, columns) {
+  const rows = await fetchAllPages(1000, async (offset, size) => {
+    let query = supabase.from(table).select(columns).not('slug', 'is', null).order('updated_at', { ascending: false }).order('id', { ascending: true }).range(offset, offset + size - 1)
+    query = table === 'content_hub' ? query.eq('tipo', 'blog').eq('is_active', true) : query.eq('is_active', true)
+    const { data, error } = await query
+    if (error) throw error
+    return data || []
+  })
+  return canonicalPublicRows(prefix, rows)
+}
+
 function stripInlineMarkdown(text) {
   return text
     .replace(/!\[.*?\]\(.*?\)/g, '')
@@ -162,6 +180,11 @@ function jobSnapshotContent(job) {
   const location = [job.city, job.location].filter(Boolean).join(', ') || null
   const empType = toGoogleEmploymentType(job.type)
   const empLabel = empType ? `<span style="font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(232,232,224,.5);border:1px solid rgba(255,255,255,.1);padding:.2rem .6rem;font-family:system-ui,sans-serif">${empType.replace('_', ' ')}</span>` : ''
+  const deadlineStr = deadlineLifecycle(job.deadline) === 'OPEN'
+    ? new Date(job.deadline).toLocaleDateString('es-PY', { year: 'numeric', month: 'long', day: 'numeric' })
+    : null
+  const sourceUrl = job.distribution?.sourceAttributionRequired ? safeExternalUrl(job.source_url) : '#'
+  const sourceAttribution = sourceUrl !== '#' ? `<p style="margin:1rem 0 0;font-size:.8125rem;font-family:system-ui,sans-serif"><a href="${escapeHtml(sourceUrl)}" rel="noopener noreferrer">Fuente original</a></p>` : ''
   return `<div style="min-height:100vh;background:#111111">
 ${snapshotNav('/empleos', '← Empleos')}
 <main style="max-width:800px;margin:0 auto;padding:3rem 1.5rem">
@@ -170,9 +193,11 @@ ${snapshotNav('/empleos', '← Empleos')}
   <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin-bottom:1.5rem">
     ${location ? `<span style="font-size:.875rem;color:rgba(232,232,224,.6);font-family:system-ui,sans-serif">📍 ${escapeHtml(location)}</span>` : ''}
     ${empLabel}
+    ${deadlineStr ? `<span style="font-size:.875rem;color:rgba(232,232,224,.6);font-family:system-ui,sans-serif">Hasta ${escapeHtml(deadlineStr)}</span>` : ""}
   </div>
   <div style="height:1px;background:rgba(255,255,255,.08);margin:1.5rem 0"></div>
   ${job.description ? `<section><h2 style="${H2_STYLE}">Descripción</h2>${markdownToSnapshotHtml(job.description, 2000)}</section>` : ''}
+  ${sourceAttribution}
   <div style="margin-top:2.5rem">
     <a href="/empleos" style="color:#c9a84c;text-decoration:none;font-size:.875rem;font-family:system-ui,sans-serif">← Ver más empleos</a>
   </div>
@@ -182,9 +207,11 @@ ${snapshotNav('/empleos', '← Empleos')}
 
 function opportunitySnapshotContent(opp) {
   const location = [opp.city, opp.location].filter(Boolean).join(', ') || null
-  const deadlineStr = opp.deadline
+  const deadlineStr = deadlineLifecycle(opp.deadline) === 'OPEN'
     ? new Date(opp.deadline).toLocaleDateString('es-PY', { year: 'numeric', month: 'long', day: 'numeric' })
     : null
+  const sourceUrl = opp.distribution?.sourceAttributionRequired ? safeExternalUrl(opp.source_url) : '#'
+  const sourceAttribution = sourceUrl !== '#' ? `<p style="margin:1rem 0 0;font-size:.8125rem;font-family:system-ui,sans-serif"><a href="${escapeHtml(sourceUrl)}" rel="noopener noreferrer">Fuente original</a></p>` : ''
   return `<div style="min-height:100vh;background:#111111">
 ${snapshotNav('/oportunidades', '← Oportunidades')}
 <main style="max-width:800px;margin:0 auto;padding:3rem 1.5rem">
@@ -196,9 +223,23 @@ ${snapshotNav('/oportunidades', '← Oportunidades')}
   </div>
   <div style="height:1px;background:rgba(255,255,255,.08);margin:1.5rem 0"></div>
   ${opp.description ? `<section><h2 style="${H2_STYLE}">Descripción</h2>${markdownToSnapshotHtml(opp.description, 2000)}</section>` : ''}
+  ${sourceAttribution}
   <div style="margin-top:2.5rem">
     <a href="/oportunidades" style="color:#c9a84c;text-decoration:none;font-size:.875rem;font-family:system-ui,sans-serif">← Ver más oportunidades</a>
   </div>
+</main>
+</div>`
+}
+
+function vacancySnapshotContent(vacancy) {
+  return `<div style="min-height:100vh;background:#111111">
+${snapshotNav('/empleos', '← Empleos')}
+<main style="max-width:800px;margin:0 auto;padding:3rem 1.5rem">
+  ${vacancy.company ? `<p style="color:#c9a84c;font-size:.875rem;font-weight:600;margin:0 0 .5rem;font-family:system-ui,sans-serif">${escapeHtml(vacancy.company)}</p>` : ''}
+  <h1 style="font-size:2rem;line-height:1.2;color:#fff;font-weight:700;margin:0 0 1rem;font-family:system-ui,sans-serif">${escapeHtml(vacancy.title)}</h1>
+  ${vacancy.location ? `<p style="font-size:.875rem;color:rgba(232,232,224,.6);font-family:system-ui,sans-serif">📍 ${escapeHtml(vacancy.location)}</p>` : ''}
+  <div style="height:1px;background:rgba(255,255,255,.08);margin:1.5rem 0"></div>
+  ${vacancy.description ? `<section><h2 style="${H2_STYLE}">Descripción</h2>${markdownToSnapshotHtml(vacancy.description, 2000)}</section>` : ''}
 </main>
 </div>`
 }
@@ -440,47 +481,27 @@ async function prerender() {
   }
 
   // ── 4. Dynamic routes — need Supabase ────────────────────────────────────
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    console.warn('Supabase vars not set — static shells generated; dynamic routes skipped.')
-    console.log('Prerender completado (sin Supabase)')
-    return
-  }
+  const supabase = SUPABASE_URL && SUPABASE_ANON_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { realtime: { transport: WebSocket } })
+    : null
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { realtime: { transport: WebSocket } })
-
-  let posts = [], jobs = [], nonJobOpps = [], contentHubOpps = []
-  try {
-    ;[{ data: posts }, { data: jobs }, { data: nonJobOpps }, { data: contentHubOpps }] = await Promise.all([
-      supabase.from('content_hub')
-        .select('slug,titulo,cuerpo,created_at,updated_at,imagen_url,categoria,metadata')
-        .eq('tipo', 'blog').eq('is_active', true),
-      supabase.from('opportunities')
-        .select('slug,title,organization,location,city,description,created_at,updated_at,type,opportunity_type,deadline,department,country_code')
-        .eq('is_active', true).eq('verification_status', 'verified').eq('catalog_eligible', true)
-        .in('opportunity_type', ['job', 'internship', 'consultancy'])
-        .is('deleted_at', null).is('archived_at', null).not('slug', 'is', null)
-        .order('updated_at', { ascending: false }).limit(1000),
-      supabase.from('opportunities')
-        .select('slug,title,organization,location,city,description,opportunity_type,deadline,updated_at')
-        .eq('is_active', true).eq('verification_status', 'verified').eq('catalog_eligible', true)
-        .not('opportunity_type', 'in', '(job,internship,consultancy)')
-        .is('deleted_at', null).is('archived_at', null).not('slug', 'is', null)
-        .limit(200),
-      supabase.from('content_hub')
-        .select('slug,titulo,cuerpo,categoria,ubicacion,fecha_vencimiento')
-        .in('tipo', ['oportunidad', 'empleo', 'beca'])
-        .eq('is_active', true)
-        .or(`fecha_vencimiento.is.null,fecha_vencimiento.gte.${new Date().toISOString().split('T')[0]}`)
-        .order('created_at', { ascending: false }).limit(100),
+  let posts = [], vacancies = []
+  let jobs = (seoInventory.rows || []).filter(row => row.canonical_path?.startsWith('/empleos/'))
+  let nonJobOpps = (seoInventory.rows || []).filter(row => row.canonical_path?.startsWith('/oportunidades/'))
+  if (publicFixturePath) {
+    const fixture = JSON.parse(readFileSync(publicFixturePath, 'utf8'))
+    if (!Array.isArray(fixture.blogs) || !Array.isArray(fixture.vacancies)) throw new Error('prerender_public_fixture_invalid')
+    posts = canonicalPublicRows('/blog', fixture.blogs.filter(row => row.is_active !== false))
+    vacancies = canonicalPublicRows('/vacante', fixture.vacancies.filter(row => row.is_active !== false))
+  } else if (supabase) {
+    ;[posts, vacancies] = await Promise.all([
+      fetchCanonicalPublicRows(supabase, 'content_hub', '/blog', 'id,slug,titulo,cuerpo,created_at,updated_at,imagen_url,categoria,metadata'),
+      fetchCanonicalPublicRows(supabase, 'recruiter_vacancies', '/vacante', 'id,slug,title,company,location,modality,description,requirements,salary_range,created_at,updated_at'),
     ])
-  } catch (err) {
-    console.error('[prerender] Supabase fetch error:', err?.message)
   }
 
-  posts = posts || []
   jobs = jobs || []
   nonJobOpps = nonJobOpps || []
-  contentHubOpps = contentHubOpps || []
 
   // ── Blog index (overwrite shell with real list) ──────────────────────────
   {
@@ -503,13 +524,14 @@ async function prerender() {
   const blogDir = join(distDir, 'blog')
   mkdirSync(blogDir, { recursive: true })
   for (const post of posts) {
-    if (!post.slug || !isSafeRouteSegment(post.slug)) { console.warn('Skip blog slug:', post.slug); continue }
+    const [family, slug] = routeParts(post.canonical_path)
+    if (family !== 'blog') throw new Error(`unexpected_blog_canonical_path:${post.canonical_path}`)
     const title = post.titulo || 'Blog'
     const excerpt = (post.cuerpo || '').replace(/[#*`>_~\[\]!]/g, '').replace(/\(https?:[^)]+\)/g, '').substring(0, 160)
     const datePublished = post.created_at || ''
     const dateModified = post.updated_at || post.created_at || ''
     const imageUrl = post.imagen_url || `${SITE_URL}/og-image.jpg`
-    const canonical = `${SITE_URL}/blog/${post.slug}`
+    const canonical = `${SITE_URL}${post.canonical_path}`
     const ld = {
       '@context': 'https://schema.org',
       '@graph': [
@@ -544,7 +566,7 @@ async function prerender() {
 <meta name="twitter:card" content="summary_large_image">
 <link rel="canonical" href="${canonical}">
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`
-    const postDir = join(blogDir, post.slug)
+    const postDir = join(distDir, family, slug)
     mkdirSync(postDir, { recursive: true })
     writeFileSync(join(postDir, 'index.html'), injectPage(templateHtml, metaTags, blogPostSnapshotContent(post)))
     blogCount++
@@ -568,33 +590,22 @@ async function prerender() {
 
   // ── Individual jobs ───────────────────────────────────────────────────────
   let jobCount = 0
-  const jobsDir = join(distDir, 'empleos')
   for (const job of jobs) {
-    if (!job.slug || !isSafeRouteSegment(job.slug)) { console.warn('Skip job slug:', job.slug); continue }
+    const [family, slug] = routeParts(job.canonical_path)
+    if (family !== 'empleos') throw new Error(`unexpected_job_canonical_path:${job.canonical_path}`)
     const title = (job.title || '').trim()
-    if (!title) continue
+    if (!title) throw new Error(`inventory_job_missing_title:${job.canonical_path}`)
     const description = (job.description || '').trim()
-    const descExcerpt = description.replace(/[#*`>]/g, '').substring(0, 160) || `${title} en ${job.location || 'Paraguay'}.`
-    const canonical = `${SITE_URL}/empleos/${job.slug}`
+    const descExcerpt = description.replace(/[#*`>]/g, '').substring(0, 160) || title
+    const canonical = `${SITE_URL}${job.canonical_path}`
     const realOrg = (job.organization || '').trim()
-    const canEmitJobPosting = description.length >= 100 && realOrg.length > 0
-    const resolvedEmpType = toGoogleEmploymentType(job.type) ?? (job.opportunity_type === 'internship' ? 'INTERN' : undefined)
-    const addrLocality = job.city || job.location || undefined
-    const addrRegion = job.department || undefined
-    const addrCountry = job.country_code || 'PY'
-    const hasLocation = addrLocality || addrRegion
-    const jobAddr = { '@type': 'PostalAddress', addressCountry: addrCountry, ...(addrLocality ? { addressLocality: addrLocality } : {}), ...(addrRegion ? { addressRegion: addrRegion } : {}) }
-    const ld = canEmitJobPosting ? {
-      '@context': 'https://schema.org', '@type': 'JobPosting', title,
-      description, datePosted: job.created_at,
-      ...(job.deadline ? { validThrough: job.deadline } : {}),
-      hiringOrganization: { '@type': 'Organization', name: realOrg },
-      ...(hasLocation ? { jobLocation: { '@type': 'Place', address: jobAddr } } : {}),
-      ...(resolvedEmpType ? { employmentType: resolvedEmpType } : {}),
-      directApply: false, url: canonical,
-    } : {
-      '@context': 'https://schema.org', '@type': 'WebPage',
-      name: title, url: canonical, description: descExcerpt,
+    const factual = aggregatedJobPosting(job, canonical)
+    const ld = factual.structuredData ?? {
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: title,
+      url: canonical,
+      description: descExcerpt,
     }
     const metaTags = `<title>${escapeHtml(title)} | CVitae</title>
 <meta name="description" content="${escapeHtml(descExcerpt)}">
@@ -605,7 +616,7 @@ async function prerender() {
 <meta property="og:image" content="${SITE_URL}/og-image.jpg">
 <link rel="canonical" href="${canonical}">
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`
-    const jobDir = join(jobsDir, job.slug)
+    const jobDir = join(distDir, family, slug)
     mkdirSync(jobDir, { recursive: true })
     writeFileSync(join(jobDir, 'index.html'), injectPage(templateHtml, metaTags, jobSnapshotContent(job)))
     jobCount++
@@ -629,21 +640,18 @@ async function prerender() {
 
   // ── Non-job opportunities ─────────────────────────────────────────────────
   let oppCount = 0
-  const oppsDir = join(distDir, 'oportunidades')
-  const writtenOppSlugs = new Set()
-  const SCHOLARSHIP_TYPES = new Set(['scholarship', 'fellowship', 'grant', 'research_funding'])
-
   for (const opp of nonJobOpps) {
-    if (!opp.slug || !isSafeRouteSegment(opp.slug)) { console.warn('Skip opp slug:', opp.slug); continue }
+    const [family, slug] = routeParts(opp.canonical_path)
+    if (family !== 'oportunidades') throw new Error(`unexpected_opportunity_canonical_path:${opp.canonical_path}`)
     const title = (opp.title || '').trim()
-    if (!title) continue
-    const desc = (opp.description || `${title} en ${opp.location || 'Paraguay'}.`).replace(/[#*`>]/g, '').substring(0, 160)
-    const canonical = `${SITE_URL}/oportunidades/${opp.slug}`
-    const ldType = SCHOLARSHIP_TYPES.has(opp.opportunity_type) ? 'Scholarship' : 'LearningResource'
+    if (!title) throw new Error(`inventory_opportunity_missing_title:${opp.canonical_path}`)
+    const desc = (opp.description || title).replace(/[#*`>]/g, '').substring(0, 160)
+    const canonical = `${SITE_URL}${opp.canonical_path}`
+    const ldType = isScholarshipLike(opp) ? 'Scholarship' : 'WebPage'
     const ld = {
       '@context': 'https://schema.org', '@type': ldType,
       name: title, description: desc, url: canonical,
-      ...(opp.deadline ? { validThrough: opp.deadline } : {}),
+      ...(deadlineLifecycle(opp.deadline) === 'OPEN' ? { validThrough: opp.deadline } : {}),
       ...(opp.organization ? { provider: { '@type': 'Organization', name: opp.organization } } : {}),
     }
     const metaTags = `<title>${escapeHtml(title)} | CVitae</title>
@@ -655,85 +663,50 @@ async function prerender() {
 <meta property="og:image" content="${SITE_URL}/og-image.jpg">
 <link rel="canonical" href="${canonical}">
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`
-    const oppDir = join(oppsDir, opp.slug)
+    const oppDir = join(distDir, family, slug)
     mkdirSync(oppDir, { recursive: true })
     writeFileSync(join(oppDir, 'index.html'), injectPage(templateHtml, metaTags, opportunitySnapshotContent(opp)))
-    writtenOppSlugs.add(opp.slug)
     oppCount++
   }
 
-  // ── content_hub oportunidades (legacy, dedup) ─────────────────────────────
-  for (const opp of contentHubOpps) {
-    if (!opp.slug || !isSafeRouteSegment(opp.slug) || writtenOppSlugs.has(opp.slug)) continue
-    const title = (opp.titulo || '').trim()
-    if (!title) { console.warn('Skip content_hub opp without title:', opp.slug); continue }
-    if (!opp.cuerpo || opp.cuerpo.length < 100) continue
-    const excerpt = (opp.cuerpo || '').replace(/[#*`>]/g, '').substring(0, 160)
-    const canonical = `${SITE_URL}/oportunidades/${opp.slug}`
-    const metaTags = `<title>${escapeHtml(title)} | CVitae</title>
-<meta name="description" content="${escapeHtml(excerpt || `${title} en ${opp.ubicacion || 'Paraguay'}.`)}">
-<meta property="og:title" content="${escapeHtml(title)} | CVitae">
-<meta property="og:url" content="${canonical}">
-<link rel="canonical" href="${canonical}">`
-    const snapshotOpp = { title, organization: null, location: opp.ubicacion, city: null, description: opp.cuerpo, deadline: null }
-    const oppDir = join(oppsDir, opp.slug)
-    mkdirSync(oppDir, { recursive: true })
-    writeFileSync(join(oppDir, 'index.html'), injectPage(templateHtml, metaTags, opportunitySnapshotContent(snapshotOpp)))
-    oppCount++
-  }
-
-  // ── Jobs also served under /oportunidades/:slug ──────────────────────────
-  // The /oportunidades catalog links ALL opportunity types (including jobs) to
-  // /oportunidades/:slug. Netlify serves static files first, so these pages must
-  // exist at build time or the redirect rule returns a real 404.
-  // Canonical points to /empleos/:slug (matches OpportunityDetail.tsx runtime behavior)
-  // so static and JS-rendered versions agree and Google consolidates under /empleos/.
-  for (const job of jobs) {
-    if (!job.slug || !isSafeRouteSegment(job.slug)) continue
-    if (writtenOppSlugs.has(job.slug)) continue
-    const title = (job.title || '').trim()
-    if (!title) continue
-    const description = (job.description || '').trim()
-    const descExcerpt = description.replace(/[#*`>]/g, '').substring(0, 160) || `${title} en ${job.location || 'Paraguay'}.`
-    const selfUrl = `${SITE_URL}/oportunidades/${job.slug}`
-    const canonicalUrl = `${SITE_URL}/empleos/${job.slug}`
-    const realOrg = (job.organization || '').trim()
-    const canEmitJobPosting = description.length >= 100 && realOrg.length > 0
-    const resolvedEmpTypeO = toGoogleEmploymentType(job.type) ?? (job.opportunity_type === 'internship' ? 'INTERN' : undefined)
-    const oAddrLocality = job.city || job.location || undefined
-    const oAddrRegion = job.department || undefined
-    const oAddrCountry = job.country_code || 'PY'
-    const oHasLocation = oAddrLocality || oAddrRegion
-    const oJobAddr = { '@type': 'PostalAddress', addressCountry: oAddrCountry, ...(oAddrLocality ? { addressLocality: oAddrLocality } : {}), ...(oAddrRegion ? { addressRegion: oAddrRegion } : {}) }
-    const ld = canEmitJobPosting ? {
-      '@context': 'https://schema.org', '@type': 'JobPosting', title,
-      description, datePosted: job.created_at,
-      ...(job.deadline ? { validThrough: job.deadline } : {}),
-      hiringOrganization: { '@type': 'Organization', name: realOrg },
-      ...(oHasLocation ? { jobLocation: { '@type': 'Place', address: oJobAddr } } : {}),
-      ...(resolvedEmpTypeO ? { employmentType: resolvedEmpTypeO } : {}),
-      directApply: false, url: canonicalUrl,
-    } : {
-      '@context': 'https://schema.org', '@type': 'WebPage',
-      name: title, url: canonicalUrl, description: descExcerpt,
+  let vacancyCount = 0
+  for (const vacancy of vacancies) {
+    const [family, slug] = routeParts(vacancy.canonical_path)
+    if (family !== 'vacante') throw new Error(`unexpected_vacancy_canonical_path:${vacancy.canonical_path}`)
+    const title = (vacancy.title || '').trim()
+    if (!title) throw new Error(`vacancy_missing_title:${vacancy.canonical_path}`)
+    const canonical = `${SITE_URL}${vacancy.canonical_path}`
+    const description = (vacancy.description || title).replace(/[#*`>]/g, '').substring(0, 160)
+    const factual = factualJobPosting(
+      {
+        ...vacancy,
+        opportunity_type: 'job',
+        first_party_direct_apply: true,
+      },
+      canonical,
+    )
+    const ld = factual.structuredData ?? {
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: title,
+      description,
+      url: canonical,
     }
-    const metaTags = `<title>${escapeHtml(title)} | CVitae</title>
-<meta name="description" content="${escapeHtml(descExcerpt)}">
-<meta property="og:title" content="${escapeHtml(title)} | CVitae">
-<meta property="og:description" content="${escapeHtml(descExcerpt)}">
-<meta property="og:url" content="${selfUrl}">
+    const metaTags = `<title>${escapeHtml(title)} · CVitae</title>
+<meta name="description" content="${escapeHtml(description)}">
+<meta property="og:title" content="${escapeHtml(title)} · CVitae">
+<meta property="og:description" content="${escapeHtml(description)}">
+<meta property="og:url" content="${canonical}">
 <meta property="og:type" content="article">
-<meta property="og:image" content="${SITE_URL}/og-image.jpg">
-<link rel="canonical" href="${canonicalUrl}">
+<link rel="canonical" href="${canonical}">
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`
-    const oppDir = join(oppsDir, job.slug)
-    mkdirSync(oppDir, { recursive: true })
-    writeFileSync(join(oppDir, 'index.html'), injectPage(templateHtml, metaTags, jobSnapshotContent(job)))
-    writtenOppSlugs.add(job.slug)
-    oppCount++
+    const vacancyDir = join(distDir, family, slug)
+    mkdirSync(vacancyDir, { recursive: true })
+    writeFileSync(join(vacancyDir, 'index.html'), injectPage(templateHtml, metaTags, vacancySnapshotContent(vacancy)))
+    vacancyCount++
   }
 
-  console.log(`Prerender completado — blog: ${blogCount}, empleos: ${jobCount}, oportunidades: ${oppCount}`)
+  console.log(`Prerender completed — blog: ${blogCount}, jobs: ${jobCount}, opportunities: ${oppCount}, vacancies: ${vacancyCount}`)
 }
 
 prerender().catch(err => { console.error('[prerender] Fatal error:', err); process.exit(1) })

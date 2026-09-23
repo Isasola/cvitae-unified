@@ -165,7 +165,8 @@ export default function LearningPlan() {
       const matchData = await matchResponse.json()
       if (!matchResponse.ok) throw new Error(matchData.error || 'No pudimos recalcular tus brechas')
       const likedIds = new Set(savedIntent.liked_opportunity_ids)
-      const likedMatches = (matchData.matches || []).filter((item: any) => likedIds.has(String(item.id)))
+      const visibleMatches = (matchData.matches || []).filter((item: any) => item.matchDecision?.outcome === 'MATCH')
+      const likedMatches = visibleMatches.filter((item: any) => likedIds.has(String(item.id)))
       const missingSkills = [...new Set([
         ...likedMatches.flatMap((item: any) => item.missingSkills || []),
         ...(matchData.missingSkills || []),

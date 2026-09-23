@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from scrapers.opportunity_sink import OpportunitySink, normalize_opportunity
-from scripts.opportunity_factory import MODEL_ID, FactoryClient, embedding_text, seal, should_generate_embedding
+from scripts.opportunity_factory import MODEL_ID, FactoryClient, embedding_text, lane_quotas, seal, should_generate_embedding, should_generate_embedding_in_run, structural_lane_minimums
 
 
 BASE: dict[str, Any] = {
@@ -57,6 +57,10 @@ assert "Backend Engineer" in embedding_text(first)
 assert not should_generate_embedding({**first, "match_eligible": False}, "ready", dry_run=False)
 assert not should_generate_embedding({**first, "match_eligible": True}, "ready", dry_run=True)
 assert should_generate_embedding({**first, "match_eligible": True}, "ready", dry_run=False)
+assert not should_generate_embedding_in_run({**first, "id": "structural", "match_eligible": True}, "ready", dry_run=False, embedding_lane_ids=set())
+assert should_generate_embedding_in_run({**first, "id": "embed", "match_eligible": True}, "ready", dry_run=False, embedding_lane_ids={"embed"})
+assert structural_lane_minimums(100) == {"fresh": 25, "backlog": 25, "embedding": 0}
+assert lane_quotas(50) == {"fresh": 20, "backlog": 20, "embedding": 10}
 
 # Exact sealing is intentionally independent from matching; it must not create
 # a vector merely because a structurally-ready hidden row is sealed.
@@ -124,11 +128,15 @@ assert bootstrap_row["is_active"] is True and bootstrap_row["alerts_eligible"] i
 
 workflow = (ROOT / ".github/workflows/refresh_embeddings.yml").read_text(encoding="utf-8")
 migration = (ROOT / "supabase/migrations/202609100001_admin_atomic_factory_foundation.sql").read_text(encoding="utf-8")
+queue_preflight = (ROOT / "scripts/check_opportunity_factory_queue.py").read_text(encoding="utf-8")
 assert "scripts/opportunity_factory.py" in workflow and "actions/cache@v4" in workflow
 assert "check_opportunity_factory_queue.py" in workflow and "steps.queue.outputs.pending == 'true'" in workflow
 assert "functions/v1/embed-opportunities" not in workflow and "curl" not in workflow
 assert "workflow_run.conclusion == 'success'" in workflow
 assert "opportunity_factory_commit_atomic" in migration and "for update" in migration.casefold()
 assert "revoke all on table public.opportunity_factory_snapshots from anon, authenticated" in migration.casefold()
+assert "structural_fresh_pending" in queue_preflight and "embedding_pending" in queue_preflight
+assert "count=exact" in queue_preflight and "unknown" in queue_preflight
+assert "FACTORY_STRUCTURAL_LIMIT" in workflow and "FACTORY_EMBEDDING_LIMIT" in workflow
 
 print("PASS verify_opportunity_factory: stable fingerprints, delta invalidation, seals, safe scraper updates, local cached workflow, atomic private commit")

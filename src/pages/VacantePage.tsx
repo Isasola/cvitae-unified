@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, type DragEvent, type ChangeEvent, type FormEvent } from 'react'
 import { Helmet } from 'react-helmet-async'
+import { factualJobPosting } from '@/lib/factual-job-posting'
 import { Link, useParams } from 'wouter'
 import { motion } from 'framer-motion'
 import {
@@ -249,16 +250,8 @@ export default function VacantePage() {
   const metaDescription = vacancy
     ? `${vacancy.title} en ${vacancy.company} — ${vacancy.location}. Postulá directamente desde CVitae.`
     : `Postulá a ${pageTitle}. Tu perfil queda guardado en CVitae para futuras búsquedas.`
-  const structuredData = vacancy ? JSON.stringify({
-    '@context': 'https://schema.org', '@type': 'JobPosting',
-    title: vacancy.title,
-    description: vacancy.description,
-    hiringOrganization: { '@type': 'Organization', name: vacancy.company },
-    jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: vacancy.location, addressCountry: 'PY' } },
-    employmentType: vacancy.modality,
-    directApply: true,
-    url: canonical,
-  }) : null
+  const factual = vacancy ? factualJobPosting({ ...vacancy, opportunity_type:'job', first_party_direct_apply:true }, canonical) : null
+  const structuredData = vacancy ? JSON.stringify(factual?.structuredData ?? { '@context':'https://schema.org', '@type':'WebPage', name:vacancy.title, description:vacancy.description, url:canonical }) : null
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
@@ -307,7 +300,6 @@ export default function VacantePage() {
               <ul className="mt-8 flex flex-wrap gap-2">
                 <Meta icon={<MapPin strokeWidth={1.5} className="h-3.5 w-3.5" />}>{vacancy!.location}</Meta>
                 <Meta icon={<Briefcase strokeWidth={1.5} className="h-3.5 w-3.5" />}>{vacancy!.modality}</Meta>
-                <Meta icon={<Clock strokeWidth={1.5} className="h-3.5 w-3.5" />}>Tiempo completo</Meta>
                 {vacancy!.salary_range && (
                   <Meta icon={<span className="text-[10px]">₲</span>}>{vacancy!.salary_range}</Meta>
                 )}

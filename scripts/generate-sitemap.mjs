@@ -3,109 +3,89 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { createClient } from '@supabase/supabase-js'
 import WebSocket from 'ws'
+import { STATIC_PUBLIC_SITEMAP_ROUTES } from '../src/lib/static-sitemap-routes.js'
+import { fetchAllPages } from '../src/lib/paged-fetch.js'
+import { canonicalSitemapRows } from '../src/lib/sitemap-universe.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const distPath = path.join(__dirname, '..', 'dist')
 const SITE_URL = 'https://cvitae.lat'
+const seoInventoryPath = path.join(__dirname, '..', 'generated', 'public-seo-inventory.json')
+if (!fs.existsSync(seoInventoryPath)) throw new Error('seo_inventory_missing')
+const seoInventory = JSON.parse(fs.readFileSync(seoInventoryPath, 'utf8'))
+if (!seoInventory.generated_at || !Array.isArray(seoInventory.rows)) throw new Error('seo_inventory_invalid')
+if (Date.now() - Date.parse(seoInventory.generated_at) > 24 * 60 * 60 * 1000) throw new Error('seo_inventory_stale')
+if (seoInventory.rows.length === 0 && process.env.SEO_INVENTORY_ALLOW_EMPTY !== 'true') throw new Error('seo_inventory_empty')
+const allowedSeoPaths = new Set((seoInventory.rows || []).map(row => row.canonical_path))
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('⚠️ Variables de Supabase no definidas — sitemap estático omitido')
-  process.exit(0)
-}
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey, { realtime: { transport: WebSocket } })
+const supabase = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey, { realtime: { transport: WebSocket } })
+  : null
 if (!fs.existsSync(distPath)) fs.mkdirSync(distPath, { recursive: true })
+
+const esc = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+async function fetchPublicRows(table, prefix) {
+  if (!supabase) return []
+  const rows = await fetchAllPages(1000, async (offset, size) => {
+    let query = supabase.from(table).select('id,slug,created_at,updated_at').not('slug', 'is', null).order('updated_at', { ascending: false }).order('id', { ascending: true }).range(offset, offset + size - 1)
+    query = table === 'content_hub' ? query.eq('tipo', 'blog').eq('is_active', true) : query.eq('is_active', true)
+    const { data, error } = await query
+    if (error) throw error
+    return data || []
+  })
+  return canonicalSitemapRows(prefix, rows)
+}
 
 async function generate() {
   const today = new Date().toISOString().split('T')[0]
+  const blogPosts = await fetchPublicRows('content_hub', '/blog')
 
-  const { data: blogPosts } = await supabase
-    .from('content_hub').select('slug, created_at, updated_at')
-    .eq('tipo', 'blog').eq('is_active', true)
+  // Opportunity URLs are exclusively the pre-filtered effective SEO inventory.
+  const jobs = seoInventory.rows || []
 
-  const { data: opportunities } = await supabase
-    .from('content_hub').select('slug, created_at')
-    .in('tipo', ['oportunidad', 'empleo', 'beca'])
-    .eq('is_active', true)
-    .order('created_at', { ascending: false })
-    .limit(200)
-
-  const nowIso = new Date().toISOString()
-  const { data: jobs } = await supabase
-    .from('opportunities').select('slug, updated_at, opportunity_type, deadline')
-    .eq('is_active', true)
-    .eq('verification_status', 'verified')
-    .eq('catalog_eligible', true)
-    .is('deleted_at', null)
-    .is('archived_at', null)
-    .not('slug', 'is', null)
-    .order('updated_at', { ascending: false })
-    .limit(2000)
-
-  const { data: vacancies } = await supabase
-    .from('recruiter_vacancies').select('slug, updated_at')
-    .eq('is_active', true)
-    .not('slug', 'is', null)
-    .order('updated_at', { ascending: false })
-    .limit(500)
+  const vacancies = await fetchPublicRows('recruiter_vacancies', '/vacante')
 
   let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n'
   sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
 
-  const staticPages = [
-    { url: '/', priority: '1.0', freq: 'daily' },
-    { url: '/empleos', priority: '0.9', freq: 'daily' },
-    { url: '/oportunidades', priority: '0.9', freq: 'daily' },
-    // Market pages — only the two that are index:true
-    { url: '/oportunidades/paraguay', priority: '0.8', freq: 'daily' },
-    { url: '/oportunidades/latam', priority: '0.8', freq: 'weekly' },
-    { url: '/blog', priority: '0.8', freq: 'weekly' },
-    { url: '/sobre-cvitae', priority: '0.6', freq: 'monthly' },
-    { url: '/privacy', priority: '0.3', freq: 'monthly' },
-    { url: '/terminos', priority: '0.3', freq: 'yearly' },
-    { url: '/cookies', priority: '0.3', freq: 'yearly' },
-  ]
+  const staticPages = STATIC_PUBLIC_SITEMAP_ROUTES
 
   staticPages.forEach(p => {
-    sitemap += `  <url>\n    <loc>${SITE_URL}${p.url}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${p.freq}</changefreq>\n    <priority>${p.priority}</priority>\n  </url>\n`
+    sitemap += `  <url>\n    <loc>${esc(`${SITE_URL}${p.url}`)}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${p.freq}</changefreq>\n    <priority>${p.priority}</priority>\n  </url>\n`
   })
 
-  blogPosts?.forEach(post => {
-    const lastmod = (post.updated_at || post.created_at)?.split('T')[0] || today
-    sitemap += `  <url>\n    <loc>${SITE_URL}/blog/${post.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`
+  blogPosts.forEach(post => {
+    const lastmod = post.updated_at?.split('T')[0] || today
+    sitemap += `  <url>\n    <loc>${esc(`${SITE_URL}${post.canonical_path}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`
   })
 
-  opportunities?.forEach(opp => {
-    const lastmod = opp.created_at?.split('T')[0] || today
-    sitemap += `  <url>\n    <loc>${SITE_URL}/oportunidades/${opp.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.6</priority>\n  </url>\n`
-  })
-
-  const JOB_TYPES = new Set(['job', 'internship', 'consultancy'])
   const seenSlugs = new Set()
   jobs?.forEach(job => {
     if (!job.slug) return
-    if (job.deadline && job.deadline < nowIso) return // expired
-    const isJob = JOB_TYPES.has(job.opportunity_type || '')
-    const prefix = isJob ? '/empleos' : '/oportunidades'
-    const key = `${prefix}/${job.slug}`
+    const key = job.canonical_path
+    if (!allowedSeoPaths.has(key)) return
     if (seenSlugs.has(key)) return
     seenSlugs.add(key)
     const lastmod = job.updated_at?.split('T')[0] || today
-    const priority = isJob ? '0.8' : '0.7'
-    sitemap += `  <url>\n    <loc>${SITE_URL}${key}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${priority}</priority>\n  </url>\n`
+    const priority = key.startsWith('/empleos/') ? '0.8' : '0.7'
+    sitemap += `  <url>\n    <loc>${esc(`${SITE_URL}${key}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${priority}</priority>\n  </url>\n`
   })
 
-  vacancies?.forEach(v => {
+  vacancies.forEach(v => {
     const lastmod = v.updated_at?.split('T')[0] || today
-    sitemap += `  <url>\n    <loc>${SITE_URL}/vacante/${v.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`
+    sitemap += `  <url>\n    <loc>${esc(`${SITE_URL}${v.canonical_path}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`
   })
 
   sitemap += '</urlset>'
   fs.writeFileSync(path.join(distPath, 'sitemap.xml'), sitemap)
-  console.log(`✅ Sitemap generado con ${(blogPosts?.length || 0) + (opportunities?.length || 0) + staticPages.length} URLs en ${SITE_URL}`)
+  console.log(`✅ Sitemap generado con ${(blogPosts?.length || 0) + jobs.length + staticPages.length + (vacancies?.length || 0)} URLs en ${SITE_URL}`)
 }
 
-generate().catch(console.error)
+generate().catch((error) => {
+  console.error(error)
+  process.exit(1)
+})

@@ -501,6 +501,67 @@ section('T19: UNKNOWN Career Family — No Penalty Applied')
   }
 }
 
+section('T20: RRII / Projects — Technical TV Repair Must Reject')
+
+{
+  const profile = {
+    professional_title: 'Gestor Multidisciplinario de Proyectos',
+    summary: 'Licenciado en Relaciones Internacionales. Gestión de proyectos de desarrollo y cooperación internacional.',
+    profile_data: {
+      habilidades: ['Planificación de recursos', 'Atención al cliente', 'Gestión de proyectos de desarrollo', 'Inglés'],
+      seniority: 'Semi-Senior', location: 'Paraguay', career_route: '',
+      education: [{ degree: 'Licenciatura en Relaciones Internacionales' }],
+      experience: [{ position: 'Coordinador de programas de desarrollo', achievements: ['Licitaciones internacionales'] }],
+    },
+  }
+  const tvRepair = {
+    id: 'tv-repair', title: 'Auxiliar Técnico en Reparaciones de Televisores y Equipos',
+    rubro: 'Atención al Cliente', tags: ['Atención al cliente', 'atención al cliente'],
+    description: 'Diagnóstico, reparación y mantenimiento de televisores y equipos electrónicos.',
+    is_active: true, verification_status: 'verified', match_eligible: true,
+    location: 'Asunción, Paraguay', eligible_countries: [], eligible_regions: [],
+    deadline: null, deleted_at: null, archived_at: null,
+  }
+  const { eligible, rankedV2, decisions } = rankOpportunitiesV2(profile, [tvRepair], dictionary, V2_PRESET_FULL)
+  assert(eligible.length === 0, 'professional conflict is denied before semantic ranking')
+  assert(decisions[0].decision.outcome === 'DENY', 'technical conflict has explicit deny outcome')
+  assert(!rankedV2.some(item => item.opp.id === 'tv-repair'), 'RRII/projects → TV repair is not visible')
+
+  const once = calculateSkillScore(['Atención al cliente'], ['Atención al cliente'], dictionary)
+  const duplicated = calculateSkillScore(['Atención al cliente'], ['Atención al cliente', 'atención al cliente'], dictionary)
+  assert(once === duplicated, 'duplicate casing skill does not increase score', `${once} vs ${duplicated}`)
+}
+
+section('T21: Transferable Professional Bridge')
+
+{
+  const operations = detectCareerFamily('Coordinador de Operaciones', ['logística', 'operaciones', 'gestión operativa'])
+  const admin = detectCareerFamily('Asistente Administrativa', ['asistente', 'administrative', 'data entry'])
+  assert(getProfessionalCompatibility(operations, admin) === 'TRANSFERABLE', 'operations → administration is transferable, not conflict')
+}
+
+section('T22: Thin row — Excluded before V2 ranking')
+
+{
+  const profile = makeProfile('INTL_RELATIONS_NGO')
+  const thin = {
+    id: 'oya-thin', title: 'Open Opportunity', description: '', tags: [],
+    is_active: true, verification_status: 'verified', match_eligible: true,
+    location: 'Paraguay', eligible_countries: [], eligible_regions: [],
+    deadline: null, deleted_at: null, archived_at: null,
+  }
+  const rich = {
+    ...thin, id: 'programme-officer', title: 'Programme Officer',
+    description: 'Coordinate development programmes, monitor implementation, prepare donor reports, and manage partnerships with public institutions.',
+    tags: ['programme management', 'monitoring and evaluation'],
+    eligible_countries: ['py'],
+  }
+  const { eligible, rankedV2 } = rankOpportunitiesV2(profile, [thin, rich], dictionary, V2_PRESET_FULL)
+  assert(!eligible.some((opp: any) => opp.id === 'oya-thin'), 'thin OYA-like card is excluded before ranking')
+  assert(eligible.some((opp: any) => opp.id === 'programme-officer'), 'rich programme opportunity remains eligible')
+  assert(!rankedV2.some(item => item.opp.id === 'oya-thin'), 'thin card cannot become a visible match')
+}
+
 // ─── FINAL REPORT ─────────────────────────────────────────────────────────────
 
 console.log('\n\n╔═══════════════════════════════════════════════════════════════╗')

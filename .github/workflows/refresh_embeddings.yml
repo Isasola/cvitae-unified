@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       limit:
-        description: 'Maximo de oportunidades pendientes (1-50)'
+        description: 'Presupuesto estructural máximo por ejecución (1-250)'
         required: false
-        default: '50'
+        default: '100'
 
 permissions:
   contents: read
@@ -29,7 +29,8 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      FACTORY_LIMIT: ${{ github.event.inputs.limit || '50' }}
+      FACTORY_STRUCTURAL_LIMIT: ${{ github.event.inputs.limit || '100' }}
+      FACTORY_EMBEDDING_LIMIT: '20'
       HF_HOME: ~/.cache/huggingface
       PIP_DISABLE_PIP_VERSION_CHECK: '1'
     steps:
@@ -64,14 +65,18 @@ jobs:
         if: steps.queue.outputs.pending == 'true'
         shell: bash
         run: |
-          if ! [[ "$FACTORY_LIMIT" =~ ^[0-9]+$ ]] || (( FACTORY_LIMIT < 1 || FACTORY_LIMIT > 50 )); then
-            echo "::error::limit debe estar entre 1 y 50"
+          if ! [[ "$FACTORY_STRUCTURAL_LIMIT" =~ ^[0-9]+$ ]] || (( FACTORY_STRUCTURAL_LIMIT < 1 || FACTORY_STRUCTURAL_LIMIT > 250 )); then
+            echo "::error::structural limit debe estar entre 1 y 250"
+            exit 1
+          fi
+          if ! [[ "$FACTORY_EMBEDDING_LIMIT" =~ ^[0-9]+$ ]] || (( FACTORY_EMBEDDING_LIMIT < 0 || FACTORY_EMBEDDING_LIMIT > 50 )); then
+            echo "::error::embedding limit debe estar entre 0 y 50"
             exit 1
           fi
 
       - name: Sellar y generar embeddings locales pendientes
         if: steps.queue.outputs.pending == 'true'
-        run: python scripts/opportunity_factory.py --limit "$FACTORY_LIMIT"
+        run: python scripts/opportunity_factory.py --structural-limit "$FACTORY_STRUCTURAL_LIMIT" --embedding-limit "$FACTORY_EMBEDDING_LIMIT"
 
       - name: Cola al dia
         if: steps.queue.outputs.pending != 'true'

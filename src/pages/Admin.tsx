@@ -1761,6 +1761,8 @@ export default function Admin() {
                     onScan={executeSourceScan}
                     scan={sourceScan}
                     loading={sourceScanLoading}
+                    onAction={adminFetch}
+                    onRefresh={loadControlCenter}
                   />
 
                   <details className="border border-white/[0.08] bg-white/[0.01]">

@@ -82,7 +82,7 @@ export function FoundingBetaModal({ slotsRemaining, programFull, onAccept, onDis
                   <h2 className="font-display text-2xl text-cream">El programa está completo</h2>
                   <p className="mt-3 text-sm text-white/60">
                     Los 50 cupos del Founding Beta ya fueron ocupados. Gracias por tu interés —
-                    seguís teniendo acceso gratuito a CVitae.
+                    seguís teniendo acceso gratuito base a CVitae.
                   </p>
                   <button
                     onClick={onDismiss}
@@ -94,13 +94,13 @@ export function FoundingBetaModal({ slotsRemaining, programFull, onAccept, onDis
               ) : (
                 <>
                   <h2 className="font-display text-2xl text-cream">
-                    Sé parte de los primeros 50
+                    Solicitá ser parte de los primeros 50
                   </h2>
                   <p className="mt-3 text-sm leading-relaxed text-white/60">
                     CVitae está en beta y queremos crecer con personas como vos.
-                    Como <strong className="text-white/80">Founding User</strong>, obtenés{' '}
-                    <strong className="text-[#c9a84c]">6 meses de Pro gratis</strong>,
-                    sin tarjeta, sin auto-renovación.
+                    Si tu solicitud es aprobada, como <strong className="text-white/80">Founding User</strong> obtenés{' '}
+                    <strong className="text-[#c9a84c]">12 meses de Pro gratis</strong>,
+                    sin tarjeta ni auto-renovación.
                   </p>
 
                   {slotsRemaining < 20 && (
@@ -117,7 +117,7 @@ export function FoundingBetaModal({ slotsRemaining, programFull, onAccept, onDis
                       disabled={accepting}
                       className="w-full rounded-xl bg-[#c9a84c] py-3.5 text-sm font-semibold text-[#0d0d0d] transition hover:bg-[#d4b45a] disabled:opacity-60"
                     >
-                      {accepting ? 'Procesando…' : 'Quiero ser Founding User'}
+                      {accepting ? 'Procesando…' : 'Solicitar acceso Founding User'}
                     </button>
                     <button
                       onClick={onDismiss}

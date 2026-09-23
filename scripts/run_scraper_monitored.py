@@ -181,6 +181,26 @@ def structured_adapter_metrics(text: str) -> dict | None:
     except json.JSONDecodeError: return None
 
 
+def execution_outcome(returncode: int, output: str, summary: dict | None) -> tuple[list[str], int, int, str]:
+    """Classify technical execution separately from valid business rejection."""
+    error_lines = [line.strip() for line in output.splitlines() if ERROR_RE.search(line)]
+    if summary:
+        error_lines = [str(item) for item in summary.get("errors", []) if item]
+    warning_count = len(WARNING_RE.findall(output))
+    error_count = len(error_lines)
+    if returncode != 0:
+        status = "failed"
+        if not error_lines:
+            useful_lines = [line.strip() for line in output.splitlines() if line.strip()]
+            error_lines = [useful_lines[-1] if useful_lines else f"Proceso finalizó con código {returncode}"]
+            error_count = 1
+    elif error_count or warning_count:
+        status = "partial_success"
+    else:
+        status = "success"
+    return error_lines, warning_count, error_count, status
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("scraper_id")
@@ -292,21 +312,7 @@ def main() -> int:
         output = (result.stdout + "\n" + result.stderr).strip()
         summary = structured_summary(output)
         adapter_metrics = structured_adapter_metrics(output)
-        error_lines = [line.strip() for line in output.splitlines() if ERROR_RE.search(line)]
-        if summary:
-            error_lines = [str(item) for item in summary.get("errors", []) if item]
-        warning_count = len(WARNING_RE.findall(output))
-        error_count = int(summary.get("rejected", 0)) if summary else len(error_lines)
-        if result.returncode != 0:
-            status = "failed"
-            if not error_lines:
-                useful_lines = [line.strip() for line in output.splitlines() if line.strip()]
-                error_lines = [useful_lines[-1] if useful_lines else f"Proceso finalizó con código {result.returncode}"]
-                error_count = 1
-        elif error_count or warning_count:
-            status = "partial_success"
-        else:
-            status = "success"
+        error_lines, warning_count, error_count, status = execution_outcome(result.returncode, output, summary)
         exit_code = result.returncode
     except subprocess.TimeoutExpired as exc:
         output = ((exc.stdout or "") + "\n" + (exc.stderr or "")).strip()

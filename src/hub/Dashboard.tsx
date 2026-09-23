@@ -17,6 +17,7 @@ import { CVLoader } from '@/components/cv/CVLoader'
 import { playComplete } from '@/lib/sounds'
 import { useFoundingBeta } from '@/hooks/useFoundingBeta'
 import { FoundingBetaModal } from '@/components/cvitae/FoundingBetaModal'
+import type { MatchDecision } from '@/lib/match-decision'
 
 const MATCH_BATCH_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1/match-batch'
 const WA_NUMBER = '595992954169'
@@ -29,6 +30,11 @@ interface MatchItem {
   skillsScore: number; seniorityScore: number; locationScore: number
   finalScore: number; vacancySkills: string[]
   missingSkills?: string[]
+  confidence?: 'HIGH' | 'MEDIUM' | 'LOW'
+  professionalCompatibility?: 'COMPATIBLE' | 'ADJACENT' | 'TRANSFERABLE' | 'CONFLICT' | 'UNKNOWN'
+  eligibilitySignal?: 'ELIGIBLE' | 'INELIGIBLE' | 'UNKNOWN'
+  downstreamTrusted?: boolean
+  matchDecision?: MatchDecision
 }
 interface CourseRecommendation {
   id: string; skill: string; course: string; platform: string; url: string; why: string
@@ -38,7 +44,7 @@ interface CourseRecommendation {
 }
 
 interface DashboardCache {
-  version: 4
+  version: 5
   storedAt: number
   profileSignature: string
   matches: MatchItem[]
@@ -50,7 +56,7 @@ interface DashboardCache {
 }
 
 const CACHE_TTL = 30 * 60 * 1000
-const CACHE_VERSION = 4
+const CACHE_VERSION = 5
 
 function cacheKey(userId: string) {
   return `cvitae:dashboard:v${CACHE_VERSION}:${userId}`
@@ -308,6 +314,19 @@ function ScoreHero({ score }: { score: number }) {
 // ─── Opportunity card ─────────────────────────────────────────────────────────
 
 function OpportunityCard({ m, featured, liked, onToggleLike }: { m: MatchItem; featured?: boolean; liked?: boolean; onToggleLike?: (opportunity: MatchItem) => void }) {
+  const baseExplanation = m.matchDecision?.eligibility === 'ELIGIBLE'
+    ? m.matchDecision.applicable === 'COMPATIBLE'
+      ? 'Fuerte afinidad profesional; elegibilidad confirmada.'
+      : m.matchDecision.applicable === 'ADJACENT'
+        ? 'Área profesional relacionada; elegibilidad confirmada.'
+        : 'Afinidad profesional evaluada; elegibilidad confirmada.'
+    : m.matchDecision?.unknown_reasons?.length
+      ? `Afinidad evaluada con información pendiente: ${m.matchDecision.unknown_reasons.join(', ')}.`
+      : ''
+  const pendingEvidence = m.matchDecision?.unknown_reasons?.length
+    ? ` Información pendiente: ${m.matchDecision.unknown_reasons.join(', ')}.`
+    : ''
+  const explanation = `${baseExplanation}${pendingEvidence}`
   return (
     <article
       className={`rounded-2xl border p-5 transition-all hover:border-[#c9a84c]/25 ${
@@ -327,6 +346,7 @@ function OpportunityCard({ m, featured, liked, onToggleLike }: { m: MatchItem; f
             <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {m.ubicacion}</span>
             <span className="rounded-full border border-white/10 px-2 py-0.5">{m.categoria}</span>
           </div>
+          {explanation && <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{explanation}</p>}
         </div>
         <div className={featured ? 'w-full sm:w-56' : 'w-44'}>
           <CompatibilityTrace score={m.finalScore} />
@@ -457,7 +477,9 @@ export default function Dashboard() {
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'No pudimos calcular tus matches')
-      const nextMatches = data.matches || []
+      // match-batch is MATCH-only. Defend against stale/corrupt payloads so
+      // ABSTAIN or DENY can never inflate a B2C card or count.
+      const nextMatches = (data.matches || []).filter((match: MatchItem) => match.matchDecision?.outcome === 'MATCH')
       const nextSkills = data.profileSkills || []
       const nextMissing = data.missingSkills || []
       setMatches(nextMatches)
@@ -524,7 +546,7 @@ export default function Dashboard() {
   const missingSkills = useMemo(() => {
     if (serverMissingSkills.length > 0) return serverMissingSkills.slice(0, 4)
     const allVacancySkills: string[] = []
-    matches.slice(0, 5).forEach(m => {
+    matches.filter(m => m.downstreamTrusted === true).slice(0, 5).forEach(m => {
       m.vacancySkills?.forEach(s => {
         if (!profileSkills.some(ps => ps.toLowerCase() === s.toLowerCase())) allVacancySkills.push(s)
       })
@@ -548,7 +570,7 @@ export default function Dashboard() {
       const response = await fetch('/.netlify/functions/b2c-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ action: 'opportunity_preference', opportunity_id: opportunity.id, missing_skills: opportunity.missingSkills || [], liked: !wasLiked }),
+        body: JSON.stringify({ action: 'opportunity_preference', opportunity_id: opportunity.id, missing_skills: opportunity.downstreamTrusted ? (opportunity.missingSkills || []) : [], liked: !wasLiked }),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || 'No pudimos guardar tu preferencia')

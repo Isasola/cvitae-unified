@@ -4,8 +4,9 @@ import { Link } from 'wouter'
 import { ArrowRight, CalendarDays, Clock, Filter, Globe, MapPin, Search, ShieldCheck, Sparkles, Zap } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { Eyebrow } from '@/components/cv/visuals'
-import { supabase } from '@/lib/supabase'
+import { loadPublicOpportunities } from '@/lib/public-source-policy'
 import { AdSlot } from '@/components/cv/AdSlot'
+import { canonicalOpportunityPathForRow } from '@/lib/opportunity-truth'
 
 type Category = 'Todas' | 'Becas' | 'Financiación' | 'Programas' | 'Experiencias'
 
@@ -90,22 +91,10 @@ export default function Opportunities() {
   const [query, setQuery] = useState('')
 
   useEffect(() => {
-    supabase
-      .from('opportunities')
-      .select('id,slug,title,organization,location,opportunity_type,opportunity_kind,deadline,funding_type,fully_funded,source')
-      .eq('is_active', true)
-      .eq('verification_status', 'verified')
-      .eq('catalog_eligible', true)
-      .is('deleted_at', null)
-      .is('archived_at', null)
-      .or(`deadline.is.null,deadline.gte.${new Date().toISOString()}`)
-      .order('deadline', { ascending: true, nullsFirst: false })
-      .limit(250)
-      .then(({ data, error: loadError }) => {
-        if (loadError) setError('No pudimos cargar las oportunidades. Intentá nuevamente en unos minutos.')
-        else setItems((data || []) as Opportunity[])
-        setLoading(false)
-      })
+    void loadPublicOpportunities<Opportunity[]>('all')
+      .then(data => setItems((data || []) as Opportunity[]))
+      .catch(() => setError('Public source policy unavailable.'))
+      .finally(() => setLoading(false))
   }, [])
 
   const filtered = useMemo(() => {
@@ -250,7 +239,7 @@ export default function Opportunities() {
                 return (
                   <Link
                     key={item.id}
-                    href={`/oportunidades/${item.slug || item.id}`}
+                    href={canonicalOpportunityPathForRow({ ...item, slug: item.slug || item.id })}
                     className={`group relative flex min-h-[11rem] flex-col bg-[#0a0a0a] p-5 transition-all duration-200 hover:-translate-y-px hover:bg-[#0f0f0f] focus:outline-none focus-visible:ring-1 focus-visible:ring-[#c9a84c] ${isFullyFunded ? 'ring-1 ring-inset ring-[#c9a84c]/10' : ''}`}
                   >
                     {/* Accent left border */}

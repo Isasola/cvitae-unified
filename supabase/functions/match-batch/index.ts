@@ -1,7 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { buildDictionary, careerBonus, normalize, rankOpportunities, toStrings } from '../_shared/matching.ts';
+import { buildDictionary, normalize, toStrings } from '../_shared/matching.ts';
+import { isVisibleMatchDecision, rankOpportunitiesV2, V2_PRESET_FULL } from '../_shared/matching-v2.ts';
 import { parsePgVector } from '../_shared/vector.ts';
+import { EDGE_SOURCE_IDENTITIES } from '../_shared/generated-source-registry.ts';
 const DEFAULT_SITE_URL = 'https://cvitae.lat';
+const canonicalSource = (raw: unknown) => {
+  const source = String(raw || '').trim().toLowerCase()
+  const profile = EDGE_SOURCE_IDENTITIES.find((item) => item.canonical_source === source || item.emitted_aliases.includes(source))
+  return profile?.canonical_source || source
+}
 const LOCAL_ORIGINS = new Set([
   'http://127.0.0.1:5173',
   'http://localhost:5173',
@@ -127,7 +134,7 @@ Deno.serve(async (req)=>{
         }
       });
     }
-    const { data: profile, error: profileError } = await supabase.from('user_master_profiles').select('professional_title, profile_data, is_subscribed, match_alerts_enabled, embedding').eq('user_id', user.id).maybeSingle();
+    const { data: profile, error: profileError } = await supabase.from('user_master_profiles').select('professional_title,summary,cv_text,profile_data,is_subscribed,match_alerts_enabled,embedding').eq('user_id', user.id).maybeSingle();
     if (profileError) throw profileError;
     if (!profile) {
       return new Response(JSON.stringify({
@@ -159,11 +166,18 @@ Deno.serve(async (req)=>{
     if (opportunitiesError) throw opportunitiesError;
     const profileInput = {
       professional_title: profileTitle,
+      summary: profile.summary,
+      cv_text: profile.cv_text,
       profile_data: {
         habilidades: profileSkills,
         seniority: profileSeniority,
         location: profileLocation,
-        career_route: careerRoute
+        career_route: careerRoute,
+        modality: profile.profile_data?.modality,
+        education: profile.profile_data?.education,
+        experience: profile.profile_data?.experience,
+        languages: profile.profile_data?.languages,
+        candidate_truth: profile.profile_data?.candidate_truth,
       }
     };
     const profileText = [
@@ -220,7 +234,20 @@ Deno.serve(async (req)=>{
         }
       }
     }
-    const { eligible: eligibleOpportunities, ranked: baseRanked } = rankOpportunities(profileInput, opportunities ?? [], dictionary);
+    // Canonical source `is_enabled` is an operational kill-switch. Legacy
+    // per-consumer switches are configuration evidence; row truth is enforced
+    // by the matching-v2 intrinsic professional-evidence gate below.
+    const sourceIds = [...new Set(opportunities.map((item)=>canonicalSource(item.source)).filter(Boolean))]
+    if (sourceIds.length) {
+      const { data: sourcePolicies, error: sourcePolicyError } = await supabase
+        .from('opportunity_sources').select('source,is_enabled').in('source', sourceIds)
+      if (sourcePolicyError) throw sourcePolicyError
+      const enabledSources = new Set((sourcePolicies || []).filter((row)=>row.is_enabled === true).map((row)=>String(row.source)))
+      opportunities = opportunities
+        .filter((item)=>enabledSources.has(canonicalSource(item.source)))
+        .map((item) => ({ ...item, source_match_state: 'ALLOWED' }))
+    }
+    const { eligible: eligibleOpportunities, rankedV2 } = rankOpportunitiesV2(profileInput, opportunities ?? [], dictionary, V2_PRESET_FULL, similarities);
     if (!eligibleOpportunities.length) {
       return new Response(JSON.stringify({
         matches: [],
@@ -233,22 +260,9 @@ Deno.serve(async (req)=>{
         headers: cors
       });
     }
-    // Re-score with semantic similarity when available
-    const ranked = baseRanked.map((item)=>{
-      const similarity = similarities.get(String(item.id));
-      if (similarity == null) return {
-        ...item,
-        semanticScore: null
-      };
-      const semanticScore = Math.round(similarity * 100);
-      const weighted = semanticScore * 0.30 + item.skillsScore * 0.32 + item.titleScore * 0.18 + item.seniorityScore * 0.10 + item.locationScore * 0.10;
-      const finalScore = Math.max(20, Math.min(99, Math.round(weighted + careerBonus(careerRoute, item))));
-      return {
-        ...item,
-        semanticScore,
-        finalScore
-      };
-    }).sort((a, b)=>b.finalScore - a.finalScore).slice(0, 20).map((item)=>({
+    // Keep the API fail-closed even if the ranker later returns non-visible
+    // decisions for diagnostic purposes.
+    const ranked = rankedV2.filter(({ decision }) => isVisibleMatchDecision(decision)).map(({ opp: item, breakdown, decision })=>({
         id: item.id,
         slug: item.slug ?? item.id,
         titulo: item.title ?? '',
@@ -256,19 +270,24 @@ Deno.serve(async (req)=>{
         ubicacion: item.location ?? '',
         organization: item.organization ?? '',
         application_url: item.application_url ?? '',
-        skillsScore: item.skillsScore,
-        titleScore: item.titleScore,
-        seniorityScore: item.seniorityScore,
-        locationScore: item.locationScore,
-        semanticScore: item.semanticScore ?? null,
-        finalScore: item.finalScore,
-        vacancySkills: item.vacancySkills,
-        matchedSkills: item.matchedSkills,
-        missingSkills: item.missingSkills,
+        skillsScore: breakdown.skillsScore,
+        titleScore: breakdown.titleScore,
+        seniorityScore: breakdown.seniorityScore,
+        locationScore: breakdown.locationScore,
+        semanticScore: breakdown.semanticScore,
+        finalScore: breakdown.finalScore,
+        vacancySkills: breakdown.vacancySkills,
+        matchedSkills: breakdown.matchedSkills,
+        missingSkills: breakdown.missingSkills,
+        confidence: decision.confidence,
+        professionalCompatibility: decision.applicable,
+        eligibilitySignal: decision.eligibility,
+        matchDecision: decision,
+        downstreamTrusted: decision.outcome === 'MATCH' && decision.confidence === 'HIGH' && decision.eligibility === 'ELIGIBLE',
         source: item.source ?? ''
       }));
     const missingFrequency = new Map();
-    ranked.slice(0, 10).forEach((match, index)=>{
+    ranked.filter((match)=>match.downstreamTrusted).slice(0, 10).forEach((match, index)=>{
       match.missingSkills.forEach((skill)=>{
         const key = normalize(skill);
         const current = missingFrequency.get(key) ?? {
