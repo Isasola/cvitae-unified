@@ -12,7 +12,7 @@ const urlset = (rows: Array<{ canonical_path: string; updated_at?: string | null
 
 async function effectiveInventory(supabase: ReturnType<typeof makeSupabaseAdmin>, policies: any[]) {
   const rows = await fetchAllPages(PAGE_SIZE, async (offset, size) => {
-    const { data, error } = await supabase.from('opportunities').select('id,slug,title,organization,description,location,country_code,eligible_countries,eligible_regions,remote_scope,work_arrangement,requirements,tags,deadline,application_url,source_url,source,opportunity_type,opportunity_kind,type,created_at,updated_at,is_active,verification_status,catalog_eligible,seo_eligible,seo_status,deleted_at,archived_at').not('slug', 'is', null).order('updated_at', { ascending: false }).order('id', { ascending: true }).range(offset, offset + size - 1)
+    const { data, error } = await supabase.from('opportunities').select('id,slug,title,organization,description,location,country_code,eligible_countries,eligible_regions,remote_scope,tags,deadline,application_url,source_url,source,opportunity_type,opportunity_kind,type,created_at,updated_at,is_active,verification_status,catalog_eligible,seo_eligible,seo_status,deleted_at,archived_at').not('slug', 'is', null).order('updated_at', { ascending: false }).order('id', { ascending: true }).range(offset, offset + size - 1)
     if (error) throw error
     return data || []
   })
