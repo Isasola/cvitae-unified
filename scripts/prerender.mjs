@@ -41,9 +41,9 @@ function canonicalPublicRows(prefix, rows) {
   return canonicalSitemapRows(prefix, rows).map(({ canonical_path }) => ({ ...rowsByPath.get(canonical_path), canonical_path }))
 }
 
-async function fetchCanonicalPublicRows(supabase, table, prefix, columns) {
+async function fetchCanonicalPublicRows(supabase, table, prefix, columns, orderColumn = 'updated_at') {
   const rows = await fetchAllPages(1000, async (offset, size) => {
-    let query = supabase.from(table).select(columns).not('slug', 'is', null).order('updated_at', { ascending: false }).order('id', { ascending: true }).range(offset, offset + size - 1)
+    let query = supabase.from(table).select(columns).not('slug', 'is', null).order(orderColumn, { ascending: false }).order('id', { ascending: true }).range(offset, offset + size - 1)
     query = table === 'content_hub' ? query.eq('tipo', 'blog').eq('is_active', true) : query.eq('is_active', true)
     const { data, error } = await query
     if (error) throw error
@@ -496,7 +496,7 @@ async function prerender() {
   } else if (supabase) {
     ;[posts, vacancies] = await Promise.all([
       fetchCanonicalPublicRows(supabase, 'content_hub', '/blog', 'id,slug,titulo,cuerpo,created_at,updated_at,imagen_url,categoria,metadata'),
-      fetchCanonicalPublicRows(supabase, 'recruiter_vacancies', '/vacante', 'id,slug,title,company,location,modality,description,requirements,salary_range,created_at,updated_at'),
+      fetchCanonicalPublicRows(supabase, 'recruiter_vacancies', '/vacante', 'id,slug,title,company,location,modality,description,requirements,salary_range,created_at', 'created_at'),
     ])
   }
 

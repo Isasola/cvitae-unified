@@ -32,7 +32,9 @@ export function singletonSitemapPage(path: string, expectedPath: string, rows: A
 }
 async function publicRows(supabase: ReturnType<typeof makeSupabaseAdmin>, table: 'content_hub' | 'recruiter_vacancies', prefix: '/blog' | '/vacante') {
   const rows = await fetchAllPages(PAGE_SIZE, async (offset, size) => {
-    let query: any = supabase.from(table).select('id,slug,created_at,updated_at').not('slug', 'is', null).order('updated_at', { ascending:false }).order('id', { ascending:true }).range(offset, offset + size - 1)
+    const orderColumn = table === 'recruiter_vacancies' ? 'created_at' : 'updated_at'
+    const columns = table === 'recruiter_vacancies' ? 'id,slug,created_at' : 'id,slug,created_at,updated_at'
+    let query: any = supabase.from(table).select(columns).not('slug', 'is', null).order(orderColumn, { ascending:false }).order('id', { ascending:true }).range(offset, offset + size - 1)
     query = table === 'content_hub' ? query.eq('tipo', 'blog').eq('is_active', true) : query.eq('is_active', true)
     const { data, error } = await query; if (error) throw error
     return data || []
