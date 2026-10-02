@@ -94,7 +94,7 @@ def new_job(slug: str, restrictions, expiry="2026-12-31") -> dict:
 
 new_jobs = [
     new_job("other", ["Japan"]),
-    new_job("world", []),
+    new_job("world", ["Worldwide"]),
     new_job("latam", ["Mexico"]),
     new_job("py", ["Paraguay"]),
     new_job("expired", ["United States"], "2020-01-01"),

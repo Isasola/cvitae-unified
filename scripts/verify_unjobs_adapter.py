@@ -25,12 +25,12 @@ assert result.source_native_id == "1786913589727" and result.canonical_url.endsw
 assert result.organization.startswith("UNDP") and result.location == "Asunción, Paraguay" and result.country_code == "PY" and result.onsite_country == "PY"
 assert result.description and len(result.description) > 100 and result.deadline == "2026-09-30"
 assert result.date_posted == "2026-09-01" and result.apply_url == "https://jobs.undp.org/apply/fixture"
-assert result.employment_type == "International Consultant" and result.recommendation == "AUTO_PUBLISH"
+assert result.employment_type == "International Consultant" and result.recommendation == "HUMAN_REVIEW"  # duty station does not prove work arrangement.
 assert result.eligible_countries == ["BO", "BZ", "CL", "EC", "GT", "GY", "HN", "MX", "PE", "PY", "SR"] and result.eligible_regions == []
 assert result.remote is None and result.remote_scope is None
 current = {"id":"fixture", "updated_at":"2026-09-12T00:00:00+00:00", "location":"Paraguay", "country_code":"PY", "onsite_country":"PY", "remote":None, "remote_scope":"ONSITE", "eligible_countries":[]}
 patch_data = build_rpc_patch(result, current)
-assert "type" not in patch_data and "employment_type" not in patch_data and "country_code" not in patch_data and patch_data["eligible_countries"] == result.eligible_countries
+assert "type" not in patch_data and patch_data["employment_type"] == result.employment_type and "country_code" not in patch_data and patch_data["eligible_countries"] == result.eligible_countries
 assert patch_data["location"] == "Asunción, Paraguay" and patch_data["remote_scope"] is None and "remote" not in patch_data
 assert "onsite_country" not in patch_data
 assert "onsite_country" in result.extracted_fields and result.evidence["clear_inherited_work_arrangement"] is True

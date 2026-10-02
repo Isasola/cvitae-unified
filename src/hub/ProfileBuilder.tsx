@@ -11,6 +11,9 @@ import { GrowthLine } from '@/components/cv/visuals'
 import { auth, supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { analytics } from '@/lib/analytics'
+import { consumeApplicationReturnTo } from '@/lib/application-intent'
+import { MatchingCoverageCard } from '@/components/cv/MatchingCoverageCard'
+import { COUNTRY_OPTIONS } from '../../shared/country-options'
 
 const ease = [0.22, 1, 0.36, 1] as const
 
@@ -137,7 +140,7 @@ export default function ProfileBuilder() {
     full_name: '',
     professional_title: '',
     location: '',
-    seniority: 'Junior',
+    seniority: '',
     summary: '',
     modality: '',
     skills: [] as string[],
@@ -148,12 +151,14 @@ export default function ProfileBuilder() {
     education: [] as any[],
     experience: [] as any[],
     languages: [] as any[],
+    candidate_eligibility: { residence_country: '', citizenship_countries: [] as string[], work_authorization_countries: [] as string[] },
   })
   const [newCurso, setNewCurso] = useState('')
   const [newSkill, setNewSkill] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
   const [analyzeStatus, setAnalyzeStatus] = useState<string>('')
+  const [matchingCoverage, setMatchingCoverage] = useState<any>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -179,12 +184,13 @@ export default function ProfileBuilder() {
       if (!response.ok) return
       const { profile: data } = await response.json()
       if (data) {
+          setMatchingCoverage(data.matching_coverage || null)
           const draft = data.profile_data?.cv_import_draft || {}
           setFormData({
             full_name: data.full_name || draft.full_name || '',
             professional_title: data.professional_title || draft.professional_title || '',
             location: data.profile_data?.location || draft.location || '',
-            seniority: data.profile_data?.seniority || draft.seniority || 'Junior',
+            seniority: data.profile_data?.seniority || draft.seniority || '',
             summary: data.summary || '',
             modality: data.profile_data?.modality || '',
             skills: data.profile_data?.habilidades?.length ? data.profile_data.habilidades : (draft.skills || []),
@@ -195,6 +201,7 @@ export default function ProfileBuilder() {
             education: data.profile_data?.education?.length ? data.profile_data.education : (draft.education || []),
             experience: data.profile_data?.experience?.length ? data.profile_data.experience : (draft.experience || []),
             languages: data.profile_data?.languages?.length ? data.profile_data.languages : (draft.languages || []),
+            candidate_eligibility: data.profile_data?.candidate_eligibility || { residence_country: '', citizenship_countries: [], work_authorization_countries: [] },
           })
           setCurrentCV(data.has_cv || data.cv_reupload_required ? {
             file_name: data.cv_file_name || 'CV anterior',
@@ -551,7 +558,8 @@ export default function ProfileBuilder() {
       })
       if (!response.ok) throw new Error('No pudimos guardar el perfil')
       setSaved(true)
-      setTimeout(() => setLocation('/mi-carrera'), 1500)
+      const returnTo = consumeApplicationReturnTo(new URLSearchParams(window.location.search).get('returnTo'))
+      setTimeout(() => setLocation(returnTo || '/mi-carrera'), 1500)
     } catch {
       alert('Error al guardar el perfil. Intentá de nuevo.')
     } finally {
@@ -643,6 +651,7 @@ export default function ProfileBuilder() {
           </div>
 
           <h1 className="mb-6 font-display text-2xl text-white">{STEPS[step]}</h1>
+          <div className="mb-6"><MatchingCoverageCard coverage={matchingCoverage} compact /></div>
 
           {/* CV Upload — solo en paso 0 */}
           {step === 0 && (
@@ -902,6 +911,29 @@ export default function ProfileBuilder() {
                         <input value={formData.location} onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
                           placeholder="Ciudad/País de residencia" className={inputCls} />
                       </div>
+                      <section className="border-t border-white/5 pt-4 space-y-3">
+                        <div>
+                          <h3 className="text-sm font-medium text-white">Elegibilidad y ubicación</h3>
+                          <p className="mt-1 text-xs text-muted-foreground">Confirmar tu país de residencia ayuda a evaluar oportunidades con restricciones geográficas. CVitae no lo deduce de tu ubicación escrita ni de tu CV. Podés guardar el perfil sin confirmarlo; algunas oportunidades pueden aparecer como POTENTIAL / elegibilidad por confirmar.</p>
+                        </div>
+                        {!formData.candidate_eligibility.residence_country && <p className="text-xs text-amber-400">Recomendado para obtener matches confirmados. Ciudadanía y autorizaciones laborales pueden quedar vacías si no querés o no podés confirmarlas.</p>}
+                        <label className="block text-xs text-muted-foreground">País donde residís actualmente
+                          <select value={formData.candidate_eligibility.residence_country} onChange={e => setFormData(prev => ({ ...prev, candidate_eligibility: { ...prev.candidate_eligibility, residence_country: e.target.value } }))} className={inputCls}>
+                            <option value="">No confirmado</option>
+                            {COUNTRY_OPTIONS.map(country => <option key={country.code} value={country.code}>{country.name}</option>)}
+                          </select>
+                        </label>
+                        <label className="block text-xs text-muted-foreground">Nacionalidad o ciudadanías que tenés
+                          <select multiple value={formData.candidate_eligibility.citizenship_countries} onChange={e => setFormData(prev => ({ ...prev, candidate_eligibility: { ...prev.candidate_eligibility, citizenship_countries: Array.from(e.target.selectedOptions, option => option.value) } }))} className={inputCls}>
+                            {COUNTRY_OPTIONS.map(country => <option key={country.code} value={country.code}>{country.name}</option>)}
+                          </select>
+                        </label>
+                        <label className="block text-xs text-muted-foreground">Países donde ya tenés autorización legal para trabajar
+                          <select multiple value={formData.candidate_eligibility.work_authorization_countries} onChange={e => setFormData(prev => ({ ...prev, candidate_eligibility: { ...prev.candidate_eligibility, work_authorization_countries: Array.from(e.target.selectedOptions, option => option.value) } }))} className={inputCls}>
+                            {COUNTRY_OPTIONS.map(country => <option key={country.code} value={country.code}>{country.name}</option>)}
+                          </select>
+                        </label>
+                      </section>
                     </div>
                   </div>
                 )}

@@ -23,6 +23,7 @@ from opportunity_automation import cluster_automation_exceptions, evaluate_oppor
 from opportunity_factory import seal
 from opportunity_sink import CONTENT_FINGERPRINT_FIELDS, SEMANTIC_FINGERPRINT_FIELDS, _fingerprint
 from source_registry_v2 import certification, resolve_emitted_source
+from eligibility_truth import eligibility_resolved
 
 
 def load_local_env() -> None:
@@ -59,12 +60,10 @@ def fetch_exact_rows(ids: list[str]) -> list[dict[str, Any]]:
 
 
 def row_automation_input(row: dict[str, Any]) -> dict[str, Any]:
-    scope = str(row.get("remote_scope") or "").upper()
-    countries = row.get("eligible_countries") or []
     return {
         **row,
         "identity_valid": bool(row.get("title") and str(row.get("application_url") or "").startswith("https://")),
-        "eligibility_resolved": not (scope in {"COUNTRY_SPECIFIC", "REGIONAL"} and not countries) and scope != "UNKNOWN",
+        "eligibility_resolved": eligibility_resolved(row),
         "eligibility_structure_mismatch": False,
         "geo_contradiction": False,
     }

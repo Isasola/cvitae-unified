@@ -26,13 +26,21 @@ FIELDS = [
     "currency", "tags", "requirements", "application_url", "source_url", "source_authority",
     "original_source_url", "education_level", "experience_required",
 ]
-# These are adapter-boundary transformations, not inferred source data.  The
-# source field survives through a supported OpportunitySink field under the
-# same evidence chain (for example AdapterResult.employment_type -> type).
+# These are structural boundary transformations only. They never prove that
+# the destination preserves the source field's meaning.
 PERSISTED_VIA = {
     "employment_type": "type",
     "work_arrangement": "remote_scope",
-    "requirements": "eligible_countries",
+}
+# Static AST discovery sees literal keys in helper/evidence dictionaries too.
+# A declared baseline makes that limitation inspectable and prevents a new loss
+# from being normalized by a permissive count assertion.
+KNOWN_STRUCTURAL_LOSSES = {
+    ("weworkremotely", "requirements"): {
+        "expected_destination": "requirements",
+        "reason": "AST-only false positive: WWR uses requirements as local restriction/evidence text; its new-row payload does not emit opportunities.requirements.",
+        "runtime_relevance": "NONE_NO_ROW_WRITE",
+    },
 }
 WORKFLOW = ROOT / ".github" / "workflows" / "scrapers.yml"
 OUTPUT = ROOT / "generated" / "scraper-field-survival.json"
@@ -198,7 +206,8 @@ def main() -> int:
                 continue
             source_fields[canonical].update(fields); source_files[canonical].add(path.name)
     sources = []
-    totals = {"PERSISTED": 0, "LOST_BEFORE_PERSISTENCE": 0, "UNKNOWN": 0,
+    losses: list[dict[str, str]] = []
+    totals = {"STRUCTURALLY_PERSISTED": 0, "LOST_BEFORE_PERSISTENCE": 0, "UNKNOWN": 0,
               "NOT_PROVIDED_BY_SOURCE": 0, "FAILED_EXTRACTION": 0}
     for canonical in sorted(profiles):
         emitted = source_fields[canonical]
@@ -207,18 +216,29 @@ def main() -> int:
             if field not in emitted:
                 state = "UNKNOWN"
             elif field in ALLOWED_FIELDS or PERSISTED_VIA.get(field) in ALLOWED_FIELDS:
-                state = "PERSISTED"
+                state = "STRUCTURALLY_PERSISTED"
             else:
                 state = "LOST_BEFORE_PERSISTENCE"
+                baseline = KNOWN_STRUCTURAL_LOSSES.get((canonical, field), {})
+                losses.append({
+                    "canonical_source": canonical,
+                    "source_field": field,
+                    "expected_destination": baseline.get("expected_destination", PERSISTED_VIA.get(field, field)),
+                    "reason": baseline.get("reason", "No OpportunitySink destination is statically evidenced."),
+                    "runtime_relevance": baseline.get("runtime_relevance", "UNASSESSED"),
+                })
             matrix[field] = state
-            if state == "PERSISTED": totals["PERSISTED"] += 1
+            if state == "STRUCTURALLY_PERSISTED": totals["STRUCTURALLY_PERSISTED"] += 1
             elif state == "LOST_BEFORE_PERSISTENCE": totals["LOST_BEFORE_PERSISTENCE"] += 1
             else: totals["UNKNOWN"] += 1
         sources.append({"canonical_source": canonical, "classification": classifications[canonical], "emitter_files": sorted(source_files[canonical]), "fields": matrix,
-                        "persistence_transforms": {field: PERSISTED_VIA[field] for field in emitted if field in PERSISTED_VIA}})
+                        "semantic_states": {field: "SEMANTICALLY_UNVERIFIED" if state == "STRUCTURALLY_PERSISTED" else "UNKNOWN" for field, state in matrix.items()},
+                        "provenance_states": {field: "UNKNOWN" for field in matrix},
+                        "persistence_transforms": {field: PERSISTED_VIA[field] for field in emitted if field in PERSISTED_VIA},
+                        "source_status": {"code_present": True, "workflow_wired": canonical in active, "collection_enabled": "UNKNOWN", "source_policy_enabled": "UNKNOWN", "matching_enabled": "UNKNOWN", "rows_present": "UNKNOWN", "source_allowed": "UNKNOWN", "inventory_count": "UNKNOWN"}})
     category_counts = {key: sum(item["classification"] == key for item in sources) for key in ("ACTIVE_EMITTER", "HISTORICAL_ONLY", "REGISTERED_NO_ROWS")}
     category_counts["UNKNOWN_SOURCE"] = len(unknown_emitted)
-    payload = {"schema_version": "scraper-field-survival:v1", "sources": sources, "category_counts": category_counts, "unknown_emitted_sources": sorted(unknown_emitted), "field_totals": totals}
+    payload = {"schema_version": "scraper-field-survival:v2", "sources": sources, "category_counts": category_counts, "unknown_emitted_sources": sorted(unknown_emitted), "field_totals": totals, "structural_losses": losses}
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print("SCRAPER_FIELD_SURVIVAL=" + json.dumps({"categories": category_counts, "fields": totals}, ensure_ascii=False))

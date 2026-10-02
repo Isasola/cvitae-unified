@@ -11,6 +11,7 @@ import json
 from urllib.parse import urljoin
 from source_adapters import (
     AdapterResult, AtomicEnricher, RunLineageWriter, build_scan_lineage, clean, coverage, geo_from_detail, health,
+    parse_applicant_eligibility,
     native_id, recommend,
 )
 from opportunity_sink import OpportunitySink
@@ -107,15 +108,7 @@ MAX_PAGES_PER_SEARCH = 200
 
 def _talent_eligibility(value: str | None) -> tuple[list[str], list[str], str | None]:
     """ApplicantLocationRequirements is eligibility, not a workplace address."""
-    text = clean(value, 500) or ""
-    country, scope, _ = geo_from_detail(None, text, True)
-    if scope == "WORLDWIDE":
-        return [], [], "WORLDWIDE"
-    if country:
-        return [country], [], "COUNTRY_SPECIFIC"
-    if scope in {"LATAM", "REGIONAL"}:
-        return [], [scope], "REGIONAL"
-    return [], [], "UNKNOWN" if text else None
+    return parse_applicant_eligibility(clean(value, 500))
 
 def parse_talent_detail(url, session: requests.Session | None = None):
     """Extract one public Talent detail page; search location is never an input here."""
@@ -248,6 +241,22 @@ def parse_jobs(html, default_rubro, location):
     return jobs
 
 
+def merge_detail_into_new_row(job: dict, detail: AdapterResult) -> dict:
+    """CREATE-path projection; must remain parity-equivalent to enrichment."""
+    merged = dict(job)
+    for key, value in {
+        "title": detail.title, "organization": detail.organization, "description": detail.description,
+        "location": detail.location, "country_code": detail.country_code, "onsite_country": detail.onsite_country,
+        "remote": detail.remote, "remote_scope": detail.remote_scope,
+        "eligible_countries": detail.eligible_countries, "eligible_regions": detail.eligible_regions,
+        "value": detail.salary_text, "currency": detail.currency, "published_at": detail.date_posted,
+        "deadline": detail.deadline, "source_url": detail.source_url, "application_url": detail.apply_url,
+    }.items():
+        if value is not None:
+            merged[key] = value
+    return merged
+
+
 def discover_search(keywords, location, rubro, seen_urls: set[str]) -> tuple[list[dict], str]:
     """Walk a search until the provider is exhausted or stops advancing."""
     discovered: list[dict] = []
@@ -305,12 +314,7 @@ def main():
     for job in discovered_jobs[:max_items]:
             detail = parse_talent_detail(job["application_url"])
             detail_results.append(detail)
-            for key, value in {"title": detail.title, "organization": detail.organization, "description": detail.description,
-                               "location": detail.location, "country_code": detail.country_code, "onsite_country": detail.onsite_country,
-                               "remote": detail.remote, "remote_scope": detail.remote_scope, "value": detail.salary_text,
-                               "currency": detail.currency, "published_at": detail.date_posted, "deadline": detail.deadline,
-                               "source_url": detail.source_url, "application_url": detail.apply_url}.items():
-                if value is not None: job[key] = value
+            job = merge_detail_into_new_row(job, detail)
             job["source_authority"] = "aggregator"
             job["original_source_verified"] = False
             existing = (enricher.lookup(job["application_url"]) or enricher.lookup(detail.source_url, "source_url")) if enricher else None

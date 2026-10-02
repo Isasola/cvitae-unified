@@ -4,7 +4,8 @@ import { reconcileInventoryRows, reconciliationSummary, reconcilePaged } from '.
 const policy = [{ source: 'computrabajo', is_enabled: true, catalog_enabled: true, matching_enabled: true, alerts_enabled: true, seo_enabled: true, web_catalog_allowed: true, search_engine_indexing_allowed: true, google_jobs_distribution_allowed: false }]
 const base = { source: 'computrabajo', is_active: true, verification_status: 'verified', catalog_eligible: true, match_eligible: true, alerts_eligible: true, seo_eligible: true, seo_status: 'eligible', opportunity_type: 'job', title: 'Programme Officer', organization: 'UN', slug: 'programme-officer', description: 'Programme responsibilities and requirements for international development delivery. '.repeat(2) }
 const decisions = reconcileInventoryRows([{ ...base, id: 'rich', embedding: [1] }, { ...base, id: 'thin', slug: 'thin', description: '', embedding: null }, { ...base, id: 'archived', slug: 'archived', archived_at: '2026-01-01T00:00:00Z' }], policy)
-assert.equal(decisions[0].catalog.allowed, true)
+assert.equal(decisions[0].catalog.allowed, false, 'row readiness cannot manufacture catalog permission when the canonical source contract is UNKNOWN')
+assert.ok(decisions[0].catalog.reasons.includes('SOURCE_CAPABILITY_UNKNOWN'))
 assert.equal(decisions[0].embedding, 'READY')
 assert.equal(decisions[1].matching.state, 'NOT_READY')
 assert.ok(decisions[1].matching.reasons.includes('INSUFFICIENT_PROFESSIONAL_EVIDENCE'))
@@ -26,7 +27,7 @@ assert.ok(aliases.every(item => !item.catalog.allowed), 'canonical aliases canno
 assert.equal(decisions[2].catalog.allowed, false)
 const summary = reconciliationSummary(decisions)
 assert.equal(summary.total_examined, 3)
-assert.equal(summary.catalog_allowed, 2)
+assert.equal(summary.catalog_allowed, 0, 'unknown source permission fails closed independently of row readiness')
 
 const mass = Array.from({ length: 7000 }, (_, index) => ({ ...base, id: `row-${index}`, slug: `row-${index}`, description: index % 3 ? base.description : '', match_eligible: false, alerts_eligible: false, seo_eligible: false, seo_status: 'blocked' }))
 const fetchPage = async (cursor: number, size: number) => mass.slice(cursor, cursor + size)

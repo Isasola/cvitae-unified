@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { makeSupabaseAdmin } from './_supabase'
 import { confirmedCandidateTruth } from './lib/candidate-truth'
+import { matchingProfileSignature } from '../../shared/matching-profile-signature'
+import { confirmedCandidateEligibility } from '../../shared/candidate-eligibility'
 import {
   authenticatedUser,
   consumeRateLimit,
@@ -87,6 +89,23 @@ async function resolveProfile(supabase: any, user: any, create = false) {
   return created
 }
 
+export function matchingCoverageFromSnapshot(data: any, profileSignature?: string | null, now = Date.now()) {
+  if (!data) return { status: 'NO_RUN', coverage_state: 'NO_RUN', match: null, potential: null, potential_scoreable: null, background_scan_status: 'NO_SCAN', total_inventory_count: null, inventory_funnel: {} }
+  const stale = (now - new Date(data.run_at).getTime() > 24 * 60 * 60 * 1000) || !data.profile_signature || !profileSignature || data.profile_signature !== profileSignature
+  const background = { background_scan_status: data.background_scan_status ?? 'NO_SCAN', background_examined_count: data.background_examined_count ?? 0, background_target_count: data.background_target_count ?? 0, background_completed_at: data.background_completed_at ?? null, total_inventory_count: data.total_inventory_count ?? null, inventory_funnel: data.inventory_funnel ?? {}, inventory_funnel_at: data.inventory_funnel_at ?? null }
+  if (data.run_status === 'ERROR') return { status: 'ERROR', coverage_state: 'ERROR', match: null, potential: null, potential_scoreable: null, run_at: data.run_at, ...background }
+  if (stale) return { status: 'STALE', coverage_state: 'STALE', match: null, potential: null, potential_scoreable: null, run_at: data.run_at, ...background }
+  return { status: data.match_count > 0 ? 'SUCCESS_WITH_RESULTS' : 'SUCCESS_ZERO', coverage_state: data.coverage_state, match: data.match_count, potential: data.visible_potential_count, potential_scoreable: data.potential_scoreable_count, run_at: data.run_at, ...background }
+}
+
+async function latestMatchingCoverage(supabase: any, userId: string, profileSignature?: string | null) {
+  const { data, error } = await supabase.from('matching_diagnostic_snapshots')
+    .select('run_status,run_at,profile_signature,coverage_state,match_count,potential_scoreable_count,visible_potential_count,background_scan_status,background_examined_count,background_target_count,background_completed_at,total_inventory_count,inventory_funnel,inventory_funnel_at')
+    .eq('user_id', userId).order('run_at', { ascending: false }).limit(1).maybeSingle()
+  if (error) return { status: 'ERROR', coverage_state: 'ERROR', match: null, potential: null, potential_scoreable: null }
+  return matchingCoverageFromSnapshot(data, profileSignature)
+}
+
 async function mutationLimit(event: any, userId: string) {
   const limit = await consumeRateLimit({
     scope: 'b2c-profile-mutations',
@@ -137,7 +156,8 @@ export const handler = async (event: any) => {
 
     if (action === 'status') {
       const profile = await resolveProfile(supabase, user, false)
-      return jsonResponse(event, 200, { profile: publicProfile(profile) })
+      const safeProfile = publicProfile(profile)
+return jsonResponse(event, 200, { profile: safeProfile ? { ...safeProfile, matching_coverage: await latestMatchingCoverage(supabase, user.id, matchingProfileSignature(profile)) } : null })
     }
 
     if (action === 'download_cv') {
@@ -235,7 +255,7 @@ export const handler = async (event: any) => {
         email: cleanText(extracted.email, 320),
         professional_title: cleanText(extracted.professional_title, 180),
         location: cleanText(extracted.location, 160),
-        seniority: cleanText(extracted.seniority, 80) || 'Junior',
+        seniority: cleanText(extracted.seniority, 80),
         skills: cleanStringList(extracted.skills),
         education: Array.isArray(extracted.education) ? extracted.education.slice(0, 30) : [],
         experience: Array.isArray(extracted.experience) ? extracted.experience.slice(0, 40) : [],
@@ -268,7 +288,7 @@ export const handler = async (event: any) => {
         ...(profile.profile_data || {}),
         habilidades: cleanStringList(incoming.skills),
         cursos: cleanStringList(incoming.cursos),
-        seniority: cleanText(incoming.seniority, 80) || 'Junior',
+        seniority: cleanText(incoming.seniority, 80),
         location: cleanText(incoming.location, 160),
         modality: cleanText(incoming.modality, 80),
         career_route: cleanText(incoming.career_route, 80),
@@ -278,6 +298,11 @@ export const handler = async (event: any) => {
         experience: Array.isArray(incoming.experience) ? incoming.experience.slice(0, 40) : (Array.isArray(currentDraft.experience) ? currentDraft.experience.slice(0, 40) : []),
         languages: Array.isArray(incoming.languages) ? incoming.languages.slice(0, 20) : (Array.isArray(currentDraft.languages) ? currentDraft.languages.slice(0, 20) : []),
         candidate_truth: confirmedCandidateTruth(incoming, currentDraft),
+        // Omission preserves a confirmed object for old clients; explicit
+        // submission, including empty fields, is an intentional confirmation.
+        ...(Object.prototype.hasOwnProperty.call(incoming, 'candidate_eligibility')
+          ? { candidate_eligibility: confirmedCandidateEligibility(incoming.candidate_eligibility) }
+          : {}),
         cv_import_draft: null,
         onboarding_status: 'completed',
         onboarding_completed_at: new Date().toISOString(),
@@ -352,7 +377,7 @@ export const handler = async (event: any) => {
     }
 
     if (action === 'save_cv_text') {
-      const cvText = String(body.cv_text || '').replace(/ /g, '').trim().slice(0, 100_000)
+      const cvText = String(body.cv_text || '').trim().slice(0, 100_000)
       if (!cvText) return jsonResponse(event, 400, { error: 'Texto del CV requerido' })
       const VALID_METHODS = ['pdf_text','docx_text','text_file','bedrock_document','bedrock_image','heic_to_jpeg_bedrock']
       const VALID_STATUSES = ['processing','extracted','needs_manual','error']

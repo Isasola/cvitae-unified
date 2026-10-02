@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { buildDefaultDictionary } from '../supabase/functions/_shared/matching.ts'
 import { detectCareerFamily, rankOpportunitiesV2, V2_PRESET_FULL, type MatchDecision } from '../supabase/functions/_shared/matching-v2.ts'
+import { confirmedCandidateEligibility } from '../shared/candidate-eligibility.ts'
 
 type Expected = 'MATCH' | 'NOT_MATCH' | 'DENY' | 'ABSTAIN'
 type Scenario = { id: string; expectation: Expected; retrieval: 'RETRIEVED' | 'NOT_RETRIEVED'; title: string; rubro: string; tags: string[]; extra?: Record<string, unknown> }
@@ -38,7 +39,7 @@ function opportunity(profile: ProfileSpec, scenario: Scenario, index: number) {
     description: richDescription(scenario.title, scenario.tags),
     source_match_state: 'ALLOWED', is_active: true, verification_status: 'verified', match_eligible: true,
     deleted_at: null, archived_at: null, deadline: FUTURE, eligible_countries: ['py'], eligible_regions: [],
-    location: 'Remote', type: 'Remote', work_arrangement: 'remote',
+    remote: true, location: 'Remote', type: 'Remote', work_arrangement: 'remote',
     ...scenario.extra,
   }
 }
@@ -71,6 +72,7 @@ for (const [profileIndex, spec] of profiles.entries()) {
     profile_data: {
       habilidades: spec.skills, seniority: seniorities[profileIndex % seniorities.length], location: 'Paraguay', modality: 'remote',
       languages: ['Spanish', 'English'],
+      candidate_eligibility: confirmedCandidateEligibility({ residence_country: 'PY' }),
       candidate_truth: { evidence: { professional_title: 'USER_CONFIRMED', skills: 'USER_CONFIRMED', location: 'USER_CONFIRMED', languages: 'USER_CONFIRMED' } },
     },
   }

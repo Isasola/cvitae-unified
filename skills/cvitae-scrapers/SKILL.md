@@ -52,6 +52,13 @@ Before calling work done, identify what enters before the changed boundary and
 what consumes it afterward. A passing component test is not downstream
 completion. Progress in order: `CONNECTIVITY → COVERAGE → CORRECTNESS → QUALITY`.
 
+For factual claims, trace `SOURCE FACT → PRODUCER BRANCHES → EVIDENCE CLASS →
+NORMALIZATION → PROVENANCE → CREATE/UPDATE/NO-OP/HISTORICAL → ENTRYPOINT →
+PERSISTENCE → POLICY → CONSUMERS → OBSERVABILITY → FAILURE/RECOVERY`. Field
+survival alone is not semantic proof. Audit positive claims, source-wide
+constants and fallbacks; never let source context, search geography, remote
+work or operational TTL become a row fact without a source contract.
+
 For bulk/inventory work, establish the real applicable universe, process to
 end of data when required, and account for duplicates and unexplained rows.
 Never promote a first page, `500`, `1000`, or fixture size into a universe.
@@ -100,6 +107,11 @@ numbers align.
 For field survival distinguish `NOT_PROVIDED`, `EXTRACTION_FAILURE`,
 `LOST_BEFORE_PERSISTENCE`, `DOWNSTREAM_DERIVED`, `UNKNOWN`, and `PERSISTED`.
 A static analyzer's UNKNOWN is not proof of a loss.
+
+Source fact truth and source permission truth are separate. For a material
+source, record evidence for collection/detail fetch, catalog, matching,
+alerts, indexing/SEO, Google Jobs, third-party distribution, attribution,
+application routing and polling limits. UNKNOWN is never permission.
 
 ## Safety and deployment economy
 

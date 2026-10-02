@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { makeSupabaseAdmin } from './_supabase'
+import { canonicalCandidateProfile } from '../../shared/candidate-profile'
 import { observeAiCall } from './lib/ai-telemetry'
 import {
   authenticatedUser,
@@ -170,6 +171,7 @@ async function overview(supabase: any, userId: string) {
     supabase.from('user_master_profiles').select('profile_data').eq('user_id', userId).maybeSingle(),
   ])
   if (error || profileError) throw error || profileError
+  const candidate = canonicalCandidateProfile(profile)
   const rows = data || []
   const latestSignature = rows[0]?.profile_signature || null
   const current = latestSignature ? rows.filter((row: any) => row.profile_signature === latestSignature) : []
@@ -184,9 +186,9 @@ async function overview(supabase: any, userId: string) {
       completed: current.filter((row: any) => row.status === 'completed').length,
     },
     intent: {
-      career_route: cleanText(profile?.profile_data?.career_route, 80),
-      desired_role_1y: cleanText(profile?.profile_data?.desired_role_1y, 300),
-      career_interests: cleanList(profile?.profile_data?.career_interests, 12, 120),
+      career_route: cleanText(candidate.profile_data.career_route, 80),
+      desired_role_1y: cleanText(candidate.profile_data.desired_role_1y, 300),
+      career_interests: cleanList(candidate.profile_data.career_interests, 12, 120),
       liked_opportunity_ids: cleanList(profile?.profile_data?.liked_opportunity_ids, 50, 120),
     },
   }
@@ -195,19 +197,20 @@ async function overview(supabase: any, userId: string) {
 async function invokeGemini(profile: any, gaps: CorroboratedGap[]) {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return []
-  const careerGoal = ROUTE_LABELS[cleanText(profile.profile_data?.career_route, 50)] || 'mejorar su empleabilidad'
-  const desiredRole = cleanText(profile.profile_data?.desired_role_1y, 300) || 'No especificada'
-  const interests = cleanList(profile.profile_data?.career_interests, 12, 120)
+  const candidate = canonicalCandidateProfile(profile)
+  const careerGoal = ROUTE_LABELS[cleanText(candidate.profile_data.career_route, 50)] || 'mejorar su empleabilidad'
+  const desiredRole = cleanText(candidate.profile_data.desired_role_1y, 300) || 'No especificada'
+  const interests = cleanList(candidate.profile_data.career_interests, 12, 120)
   const preferredSources = gaps.flatMap((gap) => gap.sources.filter((source) => source.preferred).map((source) => source.title)).slice(0, 8)
   const prompt = `Actuá como curador de aprendizaje para una persona de Paraguay y Latinoamérica.
 
 Perfil guardado:
 - Título: ${cleanText(profile.professional_title, 120) || 'Profesional'}
-- Seniority: ${cleanText(profile.profile_data?.seniority, 50) || 'No especificado'}
+- Seniority: ${cleanText(candidate.profile_data.seniority, 50) || 'No especificado'}
 - Objetivo: ${careerGoal}
 - Meta declarada a un año: ${desiredRole}
 - Actividades o temas que disfruta: ${interests.join(', ') || 'No especificados'}
-- Habilidades confirmadas en el perfil: ${cleanList(profile.profile_data?.habilidades, 30).join(', ') || 'No especificadas'}
+- Habilidades confirmadas en el perfil: ${cleanList(candidate.profile_data.habilidades, 30).join(', ') || 'No especificadas'}
 - Oportunidades que marcó como interesantes: ${preferredSources.join(' | ') || 'Ninguna todavía'}
 
 Brechas corroboradas en oportunidades verificadas:

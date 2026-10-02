@@ -39,9 +39,9 @@ export function ProductGuide({ storageKey, label, steps }: ProductGuideProps) {
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-50">
+    <div className="fixed bottom-3 right-3 z-50 sm:bottom-5 sm:right-5">
       {open ? (
-        <section className="w-[min(360px,calc(100vw-2rem))] border border-white/10 bg-[#0b0b0b] p-5 shadow-2xl" aria-label={`Guía de ${label}`}>
+        <section className="w-[min(320px,calc(100vw-1.5rem))] border border-white/10 bg-[#0b0b0b] p-4 shadow-2xl sm:w-[min(360px,calc(100vw-2rem))] sm:p-5" aria-label={`Guía de ${label}`}>
           <div className="flex items-center justify-between gap-4">
             <p className="text-[10px] uppercase tracking-[0.16em] text-[#c9a84c]">Guía · {label}</p>
             <button onClick={closeSnoozed} className="grid h-11 w-11 place-items-center text-white/35 transition hover:text-white" aria-label="Cerrar guía"><X className="h-4 w-4" /></button>
@@ -59,8 +59,8 @@ export function ProductGuide({ storageKey, label, steps }: ProductGuideProps) {
           </div>
         </section>
       ) : (
-        <button onClick={() => setOpen(true)} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-[#0b0b0b] px-4 py-2.5 text-xs text-white/55 shadow-xl transition hover:border-[#c9a84c]/35 hover:text-white">
-          <HelpCircle className="h-4 w-4 text-[#c9a84c]" /> Guía
+        <button onClick={() => setOpen(true)} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-[#0b0b0b] px-3 py-2.5 text-xs text-white/55 shadow-xl transition hover:border-[#c9a84c]/35 hover:text-white sm:px-4">
+          <HelpCircle className="h-4 w-4 text-[#c9a84c]" /><span className="max-[430px]:sr-only">Guía</span>
         </button>
       )}
     </div>

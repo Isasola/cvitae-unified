@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import os
+import json
 from collections import Counter
 from datetime import date
 from dataclasses import dataclass, field
@@ -10,11 +11,14 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import requests
+from eligibility_truth import geo_decision_ready, has_explicit_job_geography, normalize_eligibility_region
 
 RPC_FIELDS = {
     "title", "organization", "description", "location", "country_code", "onsite_country",
     "remote_scope", "remote", "value", "currency", "published_at", "deadline",
     "application_url", "source_url", "eligible_countries", "eligible_regions",
+    "requirements", "responsibilities", "benefits", "duration_text", "start_date",
+    "start_date_text", "employment_type",
 }
 GEO_CLEAR_FIELDS = {"location", "country_code", "onsite_country", "remote_scope", "remote"}
 SCOPES = {"WORLDWIDE", "LATAM", "REGIONAL", "COUNTRY_SPECIFIC", "ONSITE", "HYBRID", "UNKNOWN"}
@@ -41,6 +45,10 @@ class AdapterResult:
     remote_scope: str | None = None; employment_type: str | None = None; salary_text: str | None = None
     currency: str | None = None; date_posted: str | None = None; deadline: str | None = None
     applicant_location_requirements: str | None = None
+    requirements: list[dict[str, str]] = field(default_factory=list)
+    responsibilities: list[dict[str, str]] = field(default_factory=list)
+    benefits: list[dict[str, str]] = field(default_factory=list)
+    duration_text: str | None = None; start_date: str | None = None; start_date_text: str | None = None
     eligible_countries: list[str] = field(default_factory=list)
     eligible_regions: list[str] = field(default_factory=list)
     extracted_fields: list[str] = field(default_factory=list)
@@ -48,10 +56,72 @@ class AdapterResult:
     source_status: int = 0; confidence: float = 0.0; evidence: dict[str, Any] = field(default_factory=dict)
     recommendation: str = "HUMAN_REVIEW"; recommendation_reasons: list[str] = field(default_factory=list)
 
+
+def eligibility_evidence_payload(result: AdapterResult) -> dict[str, Any]:
+    """Return compact, source-neutral eligibility provenance for audit stores.
+
+    Opportunity rows retain only normalized decision fields.  This payload is
+    deliberately evidence, not a new decision input: it records the adapter's
+    declared source field and the normalized result so a later diagnostic can
+    explain ELIGIBLE, INELIGIBLE or UNKNOWN without re-parsing source code.
+    """
+    source_evidence = dict(result.evidence or {})
+    countries = sorted({str(value).strip().upper() for value in result.eligible_countries if str(value).strip()})
+    regions = sorted({str(value).strip().upper() for value in result.eligible_regions if str(value).strip()})
+    requirements = clean(result.applicant_location_requirements, 1200)
+    if countries or regions:
+        evidence_kind = "EXPLICIT_STRUCTURED"
+    elif requirements:
+        evidence_kind = "EXPLICIT_UNSTRUCTURED"
+    else:
+        evidence_kind = "NO_EXPLICIT_ELIGIBILITY_EVIDENCE"
+    source_field = (
+        "locationRestrictions" if "location_restrictions" in source_evidence else
+        "rss.requirements" if "rss_requirements" in source_evidence else
+        "detail_description" if "eligibility" in source_evidence else
+        "applicant_location_requirements" if requirements else None
+    )
+    payload = {
+        **source_evidence,
+        "eligibility_evidence_v1": {
+            "contract": "eligibility-evidence:v1",
+            "evidence_kind": evidence_kind,
+            "source_field": source_field,
+            "source_native_id": clean(result.source_native_id, 240),
+            "extraction_method": clean(result.extraction_method, 120),
+            "applicant_location_requirements": requirements,
+            "eligible_countries": countries,
+            "eligible_regions": regions,
+            "remote_scope": clean(result.remote_scope, 80),
+            "provenance": clean(source_evidence.get("eligibility_provenance"), 120),
+        },
+    }
+    # The atomic RPC accepts at most 16 KiB of evidence. Source adapters are
+    # already compact by contract; fail closed rather than dropping the new
+    # eligibility envelope if a future adapter violates that bound.
+    if len(json.dumps(payload, ensure_ascii=True, separators=(",", ":")).encode("utf-8")) > 16_384:
+        raise ValueError("adapter_evidence_exceeds_enrichment_limit")
+    return payload
+
 def clean(value: Any, limit: int = 4000) -> str | None:
     text = re.sub(r"<[^>]+>", " ", str(value or "")).replace("&nbsp;", " ")
     text = re.sub(r"\s+", " ", text).strip()
     return text[:limit] or None
+
+def structured_items(value: Any, with_category: bool = False) -> list[dict[str, str]]:
+    """Keep only factual, non-empty ordered items for the optional JSONB contract."""
+    if not isinstance(value, list): return []
+    items: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict): continue
+        item_text = clean(item.get("text"), 1000)
+        if not item_text: continue
+        normalized = {"text": item_text}
+        if with_category:
+            category = clean(item.get("category"), 80)
+            if category: normalized["category"] = category
+        items.append(normalized)
+    return items[:100]
 
 def country_from_text(text: str | None) -> str | None:
     value = (text or "").lower()
@@ -64,20 +134,59 @@ def country_from_text(text: str | None) -> str | None:
         if any(term in value for term in terms): return code
     return None
 
-def geo_from_detail(location: str | None, restrictions: str | None, remote: bool | None) -> tuple[str | None, str | None, str | None]:
-    text = " ".join(filter(None, [location, restrictions]))
+def _meaningful_job_location(value: str | None) -> str | None:
+    """Return a concrete workplace location, never an arrangement/scope label."""
+    text = clean(value, 240)
+    if not text or not has_explicit_job_geography({"location": text}):
+        return None
+    return text
+
+
+def parse_job_geography(location: str | None, remote: bool | None) -> tuple[str | None, str | None, str | None]:
+    """Parse workplace geography from an explicit job-location field only.
+
+    The middle value remains the legacy ``remote_scope`` representation for
+    callers that persist it.  It is derived solely from workplace evidence and
+    must never be used as applicant-eligibility evidence.
+    """
+    text = _meaningful_job_location(location) or ""
     countries = {code for terms, code in COUNTRY_TERMS if any(term in text.lower() for term in terms)}
     if len(countries) > 1:
         return None, "REGIONAL" if remote else "ONSITE", None
     country = country_from_text(text)
-    if RESTRICTED.search(text): return country, "REGIONAL", country
-    if re.search(r"\b(worldwide|all countries|global|anywhere in (?:the )?world|work from anywhere)\b", text, re.I): return "WW", "WORLDWIDE", None
-    if re.search(r"\b(latam|latin america|south america)\b", text, re.I): return None, "LATAM", None
     if country:
         # Unknown modality is not evidence of onsite work.  Callers may pass
         # False only when the source explicitly establishes non-remote work.
         return country, "COUNTRY_SPECIFIC" if remote is True else "ONSITE" if remote is False else None, country
     return None, "UNKNOWN" if remote else None, None
+
+
+def parse_applicant_eligibility(restrictions: str | None) -> tuple[list[str], list[str], str | None]:
+    """Normalize an explicit applicant-restriction field without job-geo input."""
+    text = clean(restrictions, 1000)
+    if not text:
+        return [], [], None
+    folded = text.casefold()
+    region = normalize_eligibility_region(text)
+    if region == "GLOBAL":
+        return [], [region], "WORLDWIDE"
+    countries = sorted({code for terms, code in COUNTRY_TERMS if any(term in folded for term in terms)})
+    if countries:
+        return countries, [], "COUNTRY_SPECIFIC" if len(countries) == 1 else "REGIONAL"
+    if region:
+        return [], [region], "REGIONAL"
+    return [], [], "UNKNOWN"
+
+
+def geo_from_detail(location: str | None, restrictions: str | None, remote: bool | None) -> tuple[str | None, str | None, str | None]:
+    """Compatibility wrapper for legacy workplace callers.
+
+    Restrictions deliberately fail loudly: combining them with ``location``
+    was the dimension-swap bug this wrapper replaces.
+    """
+    if clean(restrictions, 1000):
+        raise ValueError("geo_from_detail no longer accepts applicant restrictions; use parse_applicant_eligibility")
+    return parse_job_geography(location, remote)
 
 def build_rpc_patch(result: AdapterResult, current: dict[str, Any]) -> dict[str, Any]:
     # Some sources can return a generic/index page with HTTP 200 for a stale
@@ -89,7 +198,12 @@ def build_rpc_patch(result: AdapterResult, current: dict[str, Any]) -> dict[str,
       "remote_scope": result.remote_scope, "remote": result.remote, "value": result.salary_text,
       "currency": result.currency, "published_at": result.date_posted, "deadline": result.deadline,
       "application_url": result.apply_url, "source_url": result.source_url,
-      "eligible_countries": result.eligible_countries, "eligible_regions": result.eligible_regions}
+      "eligible_countries": result.eligible_countries, "eligible_regions": result.eligible_regions,
+      "requirements": structured_items(result.requirements, with_category=True) or None,
+      "responsibilities": structured_items(result.responsibilities) or None,
+      "benefits": structured_items(result.benefits) or None, "duration_text": clean(result.duration_text, 240),
+      "start_date": result.start_date, "start_date_text": result.start_date_text,
+      "employment_type": result.employment_type}
     patch = {key: value for key, value in mapping.items() if key in RPC_FIELDS and value not in (None, "") and current.get(key) != value}
     # Only clear inherited search/list geo when the adapter explicitly marks it untrusted.
     if result.evidence.get("clear_inherited_geo"):
@@ -109,10 +223,12 @@ def build_rpc_patch(result: AdapterResult, current: dict[str, Any]) -> dict[str,
 
 
 def has_positive_job_geo_evidence(result: AdapterResult) -> bool:
-    """Keep job location, candidate eligibility and work arrangement distinct."""
-    explicit_scope = result.remote_scope in {"WORLDWIDE", "LATAM", "REGIONAL", "COUNTRY_SPECIFIC"}
-    explicit_location = bool(result.country_code or result.onsite_country)
-    return explicit_location or explicit_scope
+    """Require job-place or workplace evidence, never applicant restrictions.
+
+    ``remote_scope`` may be derived from applicant eligibility by a source
+    adapter, so it cannot certify the job-geo dimension by itself.
+    """
+    return has_explicit_job_geography({"location": result.location, "country_code": result.country_code, "onsite_country": result.onsite_country})
 
 def recommend(result: AdapterResult, health: str = "HEALTHY") -> AdapterResult:
     if health == "DEGRADED": result.recommendation, result.recommendation_reasons = "HUMAN_REVIEW", ["source_degraded_deferred"]; return result
@@ -121,8 +237,9 @@ def recommend(result: AdapterResult, health: str = "HEALTHY") -> AdapterResult:
         result.recommendation, result.recommendation_reasons = "AUTO_BLOCK", ["dead_or_invalid_detail"]; return result
     if result.deadline and re.match(r"^\d{4}-\d{2}-\d{2}$", result.deadline) and result.deadline < date.today().isoformat():
         result.recommendation, result.recommendation_reasons = "AUTO_BLOCK", ["expired"]; return result
-    if result.source_status == 200 and len(result.description or "") >= 80 and result.organization and has_positive_job_geo_evidence(result):
-        result.recommendation, result.recommendation_reasons = "AUTO_PUBLISH", ["strong_detail_geo_evidence"]
+    routing = {"location": result.location, "country_code": result.country_code, "onsite_country": result.onsite_country, "remote": result.remote, "eligible_countries": result.eligible_countries, "eligible_regions": result.eligible_regions}
+    if result.source_status == 200 and len(result.description or "") >= 80 and result.organization and geo_decision_ready(routing):
+        result.recommendation, result.recommendation_reasons = "AUTO_PUBLISH", ["strong_detail_routing_evidence"]
     else: result.recommendation, result.recommendation_reasons = "HUMAN_REVIEW", ["ambiguous_detail_evidence"]
     return result
 
@@ -222,7 +339,7 @@ class AtomicEnricher:
             # The database RPC already creates the durable enrichment event.
             # Carry the monitored run identity into that event so an opportunity
             # can be traced back to the exact scan without using timestamps.
-            evidence = dict(result.evidence or {})
+            evidence = eligibility_evidence_payload(result)
             if os.getenv("CVITAE_SCRAPER_RUN_ID"):
                 evidence["run_id"] = os.environ["CVITAE_SCRAPER_RUN_ID"]
             if os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID"):
@@ -380,7 +497,8 @@ class RunLineageWriter:
             events.append({"opportunity_id": opportunity_id, "source": result.source, "adapter_version": result.adapter_version,
                 "source_url": result.source_url, "canonical_url": result.canonical_url, "changed_fields": [],
                 "before_fields": {}, "after_fields": {}, "evidence": {"event": "scan_lineage", "run_id": run_id,
-                "scan_request_id": scan_request_id, "persistence": "PERSISTED"}})
+                "scan_request_id": scan_request_id, "persistence": "PERSISTED",
+                **eligibility_evidence_payload(result)}})
         # Existing append-only evidence table makes reverse lookup durable even
         # when a detail produced no enrichment patch.
         if events:

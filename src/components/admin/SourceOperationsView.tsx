@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
+import { firstNonConfirmedRequiredStage, selectEffectiveDiagnosis } from '@/lib/source-intelligence-contract'
+import { sourcePermissionDimensionTruth } from '@/lib/source-permission-truth'
 
 type Props = {
   sources: any[]
+  opportunityUniverse?: any | null
   selectedSource: string | null
   onSelect: (source: string) => void
   onScan: (source: string) => void
@@ -15,18 +18,19 @@ type Props = {
 const SCAN_CAPABLE = new Set(['unjobs', 'himalayas', 'talentcom', 'weworkremotely'])
 const gateNames = ['Discovery', 'Detail / Translator', 'Filters', 'Normalization / Quality', 'Persistence', 'Health / Observation', 'Automation', 'Distribution / Growth']
 const visual = (status?: string) => status === 'PASS' ? ['✓', 'OK'] : status === 'WARNING' ? ['!', 'REVISAR'] : status === 'FAIL' ? ['✕', 'FALLÓ'] : status === 'NOT_APPLICABLE' ? ['—', 'NO APLICA'] : status === 'NOT_EVALUATED' ? ['?', 'NO EVALUADA'] : ['?', 'SIN DATOS']
-const firstIssue = (gates: any[]) => gates.findIndex(gate => gate.status === 'FAIL' || gate.status === 'WARNING')
+const firstIssue = (gates: any[]) => firstNonConfirmedRequiredStage(gates)
 const number = (value: any) => typeof value === 'number' ? value.toLocaleString('es-PY') : '—'
 
 function diagnosis(source: any) {
   const gates = source?.eight_gates?.gates || []
+  if (!gates.length) return { headline: 'Evidencia no evaluada', detail: 'No hay una muestra diagnóstica suficiente para afirmar que la fuente esté sana o fallando.', recommendation: 'Ejecutar una evaluación con evidencia antes de declarar estado' }
   const index = firstIssue(gates)
-  if (index < 0) return { headline: '✓ Pipeline sin fallas técnicas detectadas', detail: 'La evidencia disponible no muestra un cable roto. Las políticas siguen aplicándose por separado.', recommendation: source?.auto_enabled ? 'No se requiere acción técnica' : 'Revisar la política sólo si se desea automatizar' }
+  if (index < 0) return { headline: '✓ Etapas requeridas confirmadas', detail: 'La evidencia disponible no muestra un cable roto. Las políticas siguen aplicándose por separado.', recommendation: source?.auto_enabled ? 'No se requiere acción técnica' : 'Revisar la política sólo si se desea automatizar' }
   const gate = gates[index]
   const persistenceLoss = gate.reason_code?.includes('LOST_BEFORE_PERSISTENCE')
   const detailMissing = gate.reason_code?.includes('DETAIL') || gate.reason_code?.includes('EXTRACTED')
   return {
-    headline: `${visual(gate.status)[0]} Primera puerta a revisar: G${index + 1} — ${gateNames[index]}`,
+    headline: `${visual(gate.status)[0]} Primer estado no confirmado: G${index + 1} — ${gateNames[index]}`,
     detail: persistenceLoss ? 'La evidencia indica que un campo salió del traductor pero no llegó a la fila persistida.' : detailMissing ? 'La evidencia del detalle/traductor es insuficiente o falló antes de persistir.' : `Razón observada: ${gate.reason_code || 'UNKNOWN'}.`,
     recommendation: `Revisar y corregir ${gateNames[index]} — Gate ${index + 1}`,
   }
@@ -52,10 +56,12 @@ function metric(gate: any) {
   return 'Sin métrica durable'
 }
 
-export default function SourceOperationsView({ sources, selectedSource, onSelect, onScan, onRefresh, refreshedAt, scan, loading, onAction }: Props) {
+export default function SourceOperationsView({ sources, opportunityUniverse, selectedSource, onSelect, onScan, onRefresh, refreshedAt, scan, loading, onAction }: Props) {
   const [tab, setTab] = useState('RESULTADOS')
   const [sourceSearch, setSourceSearch] = useState('')
-  const [diagResult, setDiagResult] = useState<any>(null)
+  const [universeOpportunityId, setUniverseOpportunityId] = useState('')
+  const [universeRowDiagnosis, setUniverseRowDiagnosis] = useState<any | null>(null)
+  const [diagResultState, setDiagResult] = useState<any>(null)
   const [diagLoading, setDiagLoading] = useState(false)
   const [reconciliationPreview, setReconciliationPreview] = useState<any>(null)
   const [reconciliationResult, setReconciliationResult] = useState<any>(null)
@@ -71,22 +77,46 @@ export default function SourceOperationsView({ sources, selectedSource, onSelect
   const source = sources.find(item => item.canonical_source === selectedSource) || sources.find(item => SCAN_CAPABLE.has(item.canonical_source)) || sources[0]
   const canScan = source && SCAN_CAPABLE.has(source.canonical_source)
   if (!source) return <div className="mb-6 border border-white/[0.08] p-5 text-sm text-white/45">Source Intelligence todavía no devolvió fuentes.</div>
-  const gates = source.eight_gates?.gates || []
+  const diagResult = diagResultState && diagResultState.source === source.canonical_source ? diagResultState : null
+  const effectiveSource = selectEffectiveDiagnosis(source, diagResult, source.canonical_source)
+  const gates = effectiveSource.eight_gates?.gates || []
   const report = diagResult ? {
-    headline: diagResult.overall_health === 'HEALTHY' ? '✓ Pipeline sin fallas técnicas detectadas' : `${diagResult.failing_gates} puerta(s) fallando · ${diagResult.warning_gates} con advertencias`,
+    headline: diagResult.overall_health === 'HEALTHY' ? '✓ Etapas requeridas confirmadas' : diagResult.overall_health === 'UNKNOWN' ? `${diagResult.not_evaluated_gates || 0} etapa(s) sin evidencia suficiente` : `${diagResult.failing_gates} puerta(s) fallando · ${diagResult.warning_gates} con advertencias`,
     detail: `Diagnóstico ejecutado ${new Date(diagResult.diagnosed_at).toLocaleString('es-PY')} · ${diagResult.inventory} oportunidades · ${diagResult.observations} observaciones`,
-    recommendation: diagResult.overall_health === 'HEALTHY' ? 'No se requiere acción técnica' : 'Revisar las puertas fallando en los resultados',
+    recommendation: diagResult.overall_health === 'HEALTHY' ? 'No se requiere acción técnica' : diagResult.overall_health === 'UNKNOWN' ? 'Completar primero la evidencia de la etapa indicada' : 'Revisar las puertas fallando en los resultados',
   } : diagnosis(source)
   const history = source.history || []
   const isThisScan = scan?.source === source.canonical_source
   const scanStatus = isThisScan ? scan?.status : undefined
   const run = isThisScan ? scan?.run : null
-  const issues = gates.filter((gate: any) => gate.status === 'FAIL' || gate.status === 'WARNING')
+  const issues = gates.filter((gate: any) => ['FAIL', 'WARNING', 'NOT_EVALUATED'].includes(gate.status))
   const fields = gates[1]?.metrics?.fields || {}
   const lineage = run?.extraction_metrics?.scan_lineage
   const sourceRows = Array.isArray(lineage?.items) ? lineage.items : []
+  const universeNumber = (value: unknown) => Number(value || 0).toLocaleString('es-PY')
+  const universePanel = opportunityUniverse ? <div className="mb-4 border border-cyan-300/15 bg-cyan-300/[0.025] p-4">
+    <div className="flex flex-wrap items-baseline justify-between gap-2"><p className="text-[10px] tracking-[0.16em] text-cyan-100/60">OPPORTUNITY UNIVERSE · INVENTARIO COMPLETO</p><p className="text-[10px] text-white/30">sin reconciliar: {universeNumber(opportunityUniverse.unreconciled)}</p></div>
+    <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] md:grid-cols-5">
+      {[["TOTAL INVENTORY", opportunityUniverse.total_inventory], ["CATALOG", opportunityUniverse.catalog_universe], ["MATCH ROW READY", opportunityUniverse.match_row_ready], ["FINAL MATCHING", opportunityUniverse.final_matching_universe], ["SOURCE MATCH ALLOWED", opportunityUniverse.source_match_allowed], ["SEO EFFECTIVE READY", opportunityUniverse.seo_effective_ready ?? opportunityUniverse.seo_universe], ["SEO ROW READY", opportunityUniverse.seo_row_ready], ["SEO ROW NOT READY", opportunityUniverse.seo_row_not_ready], ["SEO ROW UNKNOWN", opportunityUniverse.seo_row_unknown], ["ALERTS", opportunityUniverse.alert_universe], ["STALE DERIVED", opportunityUniverse.lifecycle?.STALE_DERIVED_STATE], ["LIFECYCLE UNKNOWN", opportunityUniverse.lifecycle?.LIFECYCLE_UNKNOWN], ["PROFESSIONAL THIN", opportunityUniverse.professional_thin]].map(([label, value]) => <div key={String(label)} className="border border-white/[0.06] px-2 py-2"><p className="text-white/35">{label}</p><p className="mt-1 text-sm text-white/80">{universeNumber(value)}</p></div>)}
+    </div>
+    {Array.isArray(opportunityUniverse.per_source) && <details className="mt-3"><summary className="cursor-pointer text-[10px] text-white/45">Desglose por fuente · primer cable</summary><div className="mt-2 max-h-56 overflow-auto text-[10px]">{opportunityUniverse.per_source.map((item: any) => <div key={item.source} className="grid grid-cols-2 gap-2 border-t border-white/[0.05] py-1 text-white/55 md:grid-cols-6"><span>{item.source}</span><span>Total {universeNumber(item.total)}</span><span>Lifecycle {universeNumber(item.active_valid)}</span><span>Fila match {universeNumber(item.match_row_ready)}</span><span>SEO row R/N/U {universeNumber(item.seo_row_ready)}/{universeNumber(item.seo_row_not_ready)}/{universeNumber(item.seo_row_unknown)}</span><span>SEO ready {universeNumber(item.seo_effective_ready ?? item.seo)}</span><span>Unknown {universeNumber(Number(item.policy_unknown || 0) + Number(item.lifecycle_unknown || 0) + Number(item.match_row_unknown || 0))}</span>{item.seo_block_reasons && Object.keys(item.seo_block_reasons).length > 0 && <span className="col-span-2 text-amber-100/55">SEO blocks {Object.entries(item.seo_block_reasons).map(([reason, count]) => `${reason}=${universeNumber(count)}`).join(' · ')}</span>}</div>)}</div></details>}
+    <div className="mt-2 text-[10px] text-white/45">MATCH SWITCH (operational): denied={universeNumber(opportunityUniverse.matching_switch_denied)} · unknown={universeNumber(opportunityUniverse.matching_switch_unknown)} · canonical permission unknown={universeNumber(opportunityUniverse.source_policy_unknown)}</div>
+    <div className="mt-1 text-[10px] text-white/45">ROUTING UNRESOLVED={universeNumber(opportunityUniverse.routing_unresolved_rows)} · ROWS WITH ANY PERMISSION UNKNOWN={universeNumber(opportunityUniverse.rows_with_any_source_permission_unknown)} · UNKNOWN DIMENSION CLAIMS={universeNumber(opportunityUniverse.source_permission_unknown_dimension_claims)}</div>
+    <div className="mt-1 text-[10px] text-white/45">SEO permission remains UNKNOWN on {universeNumber(opportunityUniverse.seo_permission_unknown_ready_rows)} SEO-row-ready rows; it does not block first-party routing.</div>
+    <div className="mt-1 text-[10px] text-amber-100/55">SEO CONTENT READY while lifecycle unresolved={universeNumber(opportunityUniverse.seo_content_ready_while_lifecycle_unresolved)} · RECOVERABLE NOW={universeNumber(opportunityUniverse.lifecycle_recovery?.RECOVERABLE_NOW)} · REFRESH REQUIRED={universeNumber(opportunityUniverse.lifecycle_recovery?.REFRESH_REQUIRED)} · CONTENT NOT READY={universeNumber(opportunityUniverse.lifecycle_recovery?.CONTENT_NOT_READY)} · SYSTEM ERROR={universeNumber(opportunityUniverse.lifecycle_recovery?.SYSTEM_ERROR)}</div>
+    {Array.isArray(opportunityUniverse.top_lifecycle_unresolved_reasons) && <div className="mt-1 text-[10px] text-amber-100/55">TOP LIFECYCLE UNRESOLVED: {opportunityUniverse.top_lifecycle_unresolved_reasons.map((item: any) => `${item.reason}=${universeNumber(item.count)}`).join(' · ') || 'none'}</div>}
+    {Array.isArray(opportunityUniverse.top_seo_content_block_reasons) && <div className="mt-1 text-[10px] text-amber-100/55">SEO CONTENT GAPS (lifecycle-independent): {opportunityUniverse.top_seo_content_block_reasons.map((item: any) => `${item.reason}=${universeNumber(item.count)}`).join(' · ') || 'none'}</div>}
+    {Array.isArray(opportunityUniverse.seo_content_reasons_per_source) && <details className="mt-2"><summary className="cursor-pointer text-[10px] text-white/45">SEO content readiness por fuente</summary><div className="mt-2 max-h-56 overflow-auto text-[10px]">{opportunityUniverse.seo_content_reasons_per_source.map((item: any) => <div key={item.source} className="grid grid-cols-2 gap-2 border-t border-white/[0.05] py-1 text-white/55 md:grid-cols-4"><span>{item.source}</span><span>Ready {universeNumber(item.content_ready)}</span><span>Not ready {universeNumber(item.content_not_ready)}</span><span>{(item.reasons || []).map((entry: any) => `${entry.reason}=${universeNumber(entry.count)}`).join(' · ') || 'Sin gaps'}</span></div>)}</div></details>}
+    {Array.isArray(opportunityUniverse.lifecycle_recovery_per_source) && <details className="mt-2"><summary className="cursor-pointer text-[10px] text-white/45">Lifecycle unresolved / SEO potential per source</summary><div className="mt-2 max-h-56 overflow-auto text-[10px]">{opportunityUniverse.lifecycle_recovery_per_source.map((item: any) => <div key={item.source} className="grid grid-cols-2 gap-2 border-t border-white/[0.05] py-1 text-white/55 md:grid-cols-4"><span>{item.source}</span><span>Unresolved {universeNumber(item.lifecycle_unresolved_total)}</span><span>SEO content ready {universeNumber(item.seo_content_ready_while_lifecycle_unresolved)}</span><span>{Object.entries(item.recovery || {}).map(([reason,count]) => `${reason}=${universeNumber(count)}`).join(' · ') || 'Sin clasificación'}</span><span className="col-span-2">{(item.top_reasons || []).map((entry: any) => `${entry.reason}=${universeNumber(entry.count)}`).join(' · ')}</span></div>)}</div></details>}
+    {opportunityUniverse.top_seo_block_reasons && <div className="mt-1 text-[10px] text-amber-100/55">TOP SEO BLOCKS: {(Array.isArray(opportunityUniverse.top_seo_block_reasons) ? opportunityUniverse.top_seo_block_reasons.map((item: any) => `${item.reason}=${universeNumber(item.count)}`) : Object.entries(opportunityUniverse.top_seo_block_reasons).map(([reason, count]) => `${reason}=${universeNumber(count)}`)).join(' · ') || 'none'}</div>}
+    {opportunityUniverse.matching_first_failure && <div className="mt-2 text-[10px] text-white/45">FIRST FAILURE: {Object.entries(opportunityUniverse.matching_first_failure).sort((a: any, b: any) => Number(b[1]) - Number(a[1])).map(([reason, count]) => `${reason}=${universeNumber(count)}`).join(' · ')} · inventory diff={universeNumber(opportunityUniverse.inventory_state_reconciliation_difference)} · matching partition diff={universeNumber(opportunityUniverse.matching_first_failure_reconciliation_difference)} · active matching diff={universeNumber(opportunityUniverse.active_matching_reconciliation_difference)}</div>}
+    <div className="mt-3 flex flex-wrap gap-2"><input value={universeOpportunityId} onChange={event => setUniverseOpportunityId(event.target.value)} placeholder="ID de oportunidad para trazar el primer cable" className="min-w-64 flex-1 border border-white/10 bg-black px-2 py-1.5 text-[10px] text-white/70" /><button onClick={async () => { if (!onAction || !universeOpportunityId.trim()) return; setUniverseRowDiagnosis(await onAction('inspect_opportunity_universe', { opportunity_id: universeOpportunityId.trim() })) }} className="border border-cyan-300/20 px-3 py-1.5 text-[10px] text-cyan-100/60">INSPECCIONAR FILA</button></div>
+    {universeRowDiagnosis && <p className="mt-2 text-[10px] text-cyan-100/65">{universeRowDiagnosis.found ? `${universeRowDiagnosis.source} · ${universeRowDiagnosis.first_broken_cable} · permission UNKNOWN: ${(universeRowDiagnosis.source_permission_unknown_dimensions || []).join(', ') || 'ninguna'} · Matching contract=${universeRowDiagnosis.source_matching_state}, operational=${universeRowDiagnosis.source_matching_operational_state}` : 'Fila no encontrada o todavía sin decisión persistida.'}</p>}
+  </div> : <div className="mb-4 border border-white/[0.08] px-4 py-3 text-[10px] text-white/35">Opportunity Universe aún no reconciliado o migración pendiente; no se interpreta el inventario mediante muestras.</div>
   const technicalFailure = gates.slice(0, 6).some((gate: any) => gate.status === 'FAIL')
-  const policyBlocked = !technicalFailure && [gates[6], gates[7]].some((gate: any) => gate && ['NOT_APPLICABLE', 'NOT_EVALUATED'].includes(gate.status))
+  const missingEvidence = gates.slice(0, 6).some((gate: any) => gate.status === 'NOT_EVALUATED')
+  const policyBlocked = !technicalFailure && !missingEvidence && [gates[6], gates[7]].some((gate: any) => gate && gate.status === 'NOT_APPLICABLE')
+  const rowOutcomeLabel = (row: any) => missingEvidence && row.persistence === 'PERSISTED' && !technicalFailure ? 'EVIDENCIA TÉCNICA INSUFICIENTE' : rowOutcome(row)
   const rowOutcome = (row: any) => row.persistence !== 'PERSISTED' ? '✕ FALLÓ' : technicalFailure ? '✕ FALLÓ' : row.description_length < 80 ? '! REQUIERE REVISIÓN' : policyBlocked ? '■ BLOQUEADA POR POLÍTICA' : '✓ LISTA PARA EVALUACIÓN'
 
   async function handleDiagnose() {
@@ -153,6 +183,9 @@ export default function SourceOperationsView({ sources, selectedSource, onSelect
   }
 
   return <section className="mb-7 border border-[#c9a84c]/25 bg-[#0b0b0b]">
+    {universePanel}
+    {universeRowDiagnosis?.observation && <p className="mx-4 mb-2 text-[9px] text-white/35">Observation: {universeRowDiagnosis.observation.linked ? `linked · ${universeRowDiagnosis.observation.identity_status || 'UNKNOWN'} · ${universeRowDiagnosis.observation.http_status || 'no HTTP status'}` : universeRowDiagnosis.observation.note}</p>}
+    {universeRowDiagnosis?.consumer_diagnostics && <div className="mx-4 mb-3 grid grid-cols-2 gap-1 text-[9px] md:grid-cols-4">{Object.entries(universeRowDiagnosis.consumer_diagnostics).map(([consumer, state]: any) => <div key={consumer} className="border border-white/[0.07] p-2"><b>{consumer}: {state.effective_state}</b><p className="text-white/40">fila={state.row_state}{state.row_reason ? ` (${state.row_reason})` : ''} · global={state.source_global_state} · switch={state.consumer_switch_state} · permiso={state.permission_state}</p><p className="text-amber-200/60">{state.first_unresolved_or_blocking_reason || 'CONFIRMADO'}</p></div>)}</div>}
     {policyModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
       <div className="w-full max-w-md border border-white/20 bg-[#0b0b0b] p-6">
         <h3 className="text-sm font-bold text-white">Aprobar política SEO — {source.canonical_source}</h3>
@@ -169,8 +202,7 @@ export default function SourceOperationsView({ sources, selectedSource, onSelect
         <div><p className="text-[10px] tracking-[.16em] text-[#c9a84c]" style={{ fontFamily: 'monospace' }}>SOURCE INTELLIGENCE OPERATIVO</p><h2 className="mt-2 text-2xl text-white">{source.display_name || source.canonical_source}</h2><p className="mt-1 text-xs text-white/45">{source.canonical_source} · {source.source_family || 'familia sin clasificar'} · certificado: {source.certified ? 'sí' : 'no'} · {source.implementation_state || 'NOT_IMPLEMENTED'} · último scan: {source.execution?.last_run ? new Date(source.execution.last_run).toLocaleString('es-PY') : 'sin evidencia'}</p></div>
         <div className="flex flex-wrap gap-2">
           {onAction && <button onClick={handleDiagnose} disabled={diagLoading} className="border border-white/25 px-4 py-3 text-xs text-white/65 disabled:opacity-45" style={{ fontFamily: 'monospace' }} title="Ejecuta diagnóstico de Eight Gates en tiempo real contra la DB">{diagLoading ? 'ANALIZANDO…' : 'ANALIZAR ESTADO'}</button>}
-          {onAction && <button onClick={handleReconciliationPreview} disabled={diagLoading} className="border border-white/25 px-4 py-3 text-xs text-white/65 disabled:opacity-45" style={{ fontFamily: 'monospace' }}>PREVIEW INVENTARIO</button>}
-          {onAction && <button onClick={() => handleReconciliationPreview('')} disabled={diagLoading} className="border border-white/15 px-4 py-3 text-xs text-white/45 disabled:opacity-45" style={{ fontFamily: 'monospace' }}>FUNNEL GLOBAL</button>}
+          <span className="border border-white/10 px-3 py-3 text-[10px] text-white/35" title="La reconciliación canónica procesa el inventario completo por páginas de clave estable.">RECONCILIACIÓN CANÓNICA: COMANDO BOUNDED</span>
           {reconciliationPreview && onAction && <button onClick={() => handleReconciliationApply(false)} disabled={diagLoading || reconciliationState === 'RUNNING'} className="border border-[#c9a84c]/60 px-4 py-3 text-xs text-[#c9a84c] disabled:opacity-45" style={{ fontFamily: 'monospace' }}>APLICAR RECONCILIACIÓN</button>}
           {(reconciliationResult?.resumable || (reconciliationPreview && reconciliationState === 'ERROR')) && onAction && <button onClick={() => handleReconciliationApply(true)} disabled={diagLoading} className="border border-amber-400/50 px-4 py-3 text-xs text-amber-300 disabled:opacity-45" style={{ fontFamily: 'monospace' }}>REANUDAR</button>}
           {source.execution?.telemetry_status === 'FAILED' && onAction && <button onClick={handleTelemetryRetry} disabled={diagLoading} className="border border-amber-400/50 px-4 py-3 text-xs text-amber-300 disabled:opacity-45" style={{ fontFamily: 'monospace' }}>REINTENTAR TELEMETRÍA</button>}
@@ -203,13 +235,14 @@ export default function SourceOperationsView({ sources, selectedSource, onSelect
 
     <div className="flex flex-wrap gap-2 border-b border-white/[0.08] px-5 py-3">{['RESULTADOS', 'PROBLEMAS', 'RECOMENDACIONES', 'HISTORIAL', 'SEO', 'LOGS'].map(item => <button key={item} onClick={() => setTab(item)} className={`px-2 py-1 text-[10px] ${tab === item ? 'border-b border-[#c9a84c] text-[#c9a84c]' : 'text-white/45'}`}>{item}</button>)}</div>
     <div className="p-5 text-xs text-white/55">
-      {tab === 'RESULTADOS' && <>{!run ? <p>Ejecutá o seleccioná un scan para ver resultados atribuibles exclusivamente a esa ejecución.</p> : <><p className="mb-3">Resultados atribuibles al run {lineage?.run_id || run.run_id || 'sin id'}.</p><div className="overflow-auto"><table className="w-full text-left"><thead className="text-[10px] text-white/35"><tr><th>TÍTULO</th><th>ORGANIZACIÓN</th><th>UBICACIÓN</th><th>DESCRIPCIÓN</th><th>URLS</th><th>OUTCOME</th></tr></thead><tbody>{sourceRows.slice(0, 100).map((row: any) => <tr key={row.identity || row.opportunity_id} className="border-t border-white/[0.06]"><td className="py-2">{row.title || '—'}</td><td>{row.organization || '—'}</td><td>{row.location || '—'}</td><td>{row.description_length || 0}</td><td>{row.application_url ? 'apply ✓' : 'apply ✕'} · {row.source_url ? 'source ✓' : 'source ?'}</td><td>{rowOutcome(row)}{row.reason_code ? ` · ${row.reason_code}` : ''}</td></tr>)}</tbody></table></div></>}</>}
+      {tab === 'RESULTADOS' && <>{!run ? <p>Ejecutá o seleccioná un scan para ver resultados atribuibles exclusivamente a esa ejecución.</p> : <><p className="mb-3">Resultados atribuibles al run {lineage?.run_id || run.run_id || 'sin id'}.</p><div className="overflow-auto"><table className="w-full text-left"><thead className="text-[10px] text-white/35"><tr><th>TÍTULO</th><th>ORGANIZACIÓN</th><th>UBICACIÓN</th><th>DESCRIPCIÓN</th><th>URLS</th><th>OUTCOME</th></tr></thead><tbody>{sourceRows.slice(0, 100).map((row: any) => <tr key={row.identity || row.opportunity_id} className="border-t border-white/[0.06]"><td className="py-2">{row.title || '—'}</td><td>{row.organization || '—'}</td><td>{row.location || '—'}</td><td>{row.description_length || 0}</td><td>{row.application_url ? 'apply ✓' : 'apply ✕'} · {row.source_url ? 'source ✓' : 'source ?'}</td><td>{rowOutcomeLabel(row)}{row.reason_code ? ` · ${row.reason_code}` : ''}</td></tr>)}</tbody></table></div></>}</>}
       {tab === 'PROBLEMAS' && <>{run && lineage?.issue_groups ? Object.entries(lineage.issue_groups).map(([reason, count]) => <div key={reason} className="mb-2 border border-white/[0.1] p-3"><b>{reason}</b><p className="mt-1">{number(count)} oportunidades afectadas · problema agrupado por causa, no por fila.</p></div>) : issues.length ? issues.map((gate: any) => <div key={gate.reason_code} className="mb-2 border border-white/[0.1] p-3"><b>{gate.reason_code || 'UNKNOWN'}</b><p className="mt-1">{metric(gate)} · problema agrupado por causa, no por fila.</p></div>) : <p>✓ No hay problemas técnicos agrupados por evidencia disponible.</p>}</>}
       {tab === 'RECOMENDACIONES' && <><p className="text-[#c9a84c]">{report.recommendation}</p>{issues.slice(1).map((gate: any) => <p key={gate.reason_code} className="mt-2">Secundaria: revisar {gate.reason_code}.</p>)}</>}
       {tab === 'HISTORIAL' && <>{history.length ? history.slice(0, 10).map((item: any) => <div key={item.id || item.run_id} className="flex flex-wrap justify-between gap-2 border-b border-white/[0.06] py-2"><span>{item.started_at ? new Date(item.started_at).toLocaleString('es-PY') : '—'} · {item.status}</span><span>found {number(item.found_count)} · valid {number(item.valid_count)} · persisted {number((item.inserted_count || 0) + (item.updated_count || 0))} · failed {number(item.error_count)}</span></div>) : <p>Sin historial durable.</p>}</>}
       {tab === 'SEO' && (() => {
         const seoGate = gates[7]
-        const seiAllowed = source.distribution_policy?.search_engine_indexing_allowed ?? null
+        const seiPermission = sourcePermissionDimensionTruth(source.canonical_source || source.source, 'seo_index')
+        const seiAllowed = seiPermission.state === 'ALLOWED' ? true : seiPermission.state === 'DENIED' ? false : null
         const seoEnabled = source.seo_enabled ?? null
         const seoState = seoGate?.metrics?.surfaces?.organic_seo?.state || 'POLICY_NOT_DEFINED'
         const inventorySeo = source.pools?.seo ?? 0
@@ -218,9 +251,9 @@ export default function SourceOperationsView({ sources, selectedSource, onSelect
             <div className="border border-white/[0.08] p-3">
               <span className="block text-[9px] text-white/35" style={{ fontFamily: 'monospace' }}>POLICY (search_engine_indexing_allowed)</span>
               <span className={`mt-2 block text-sm font-bold ${seiAllowed === false ? 'text-red-400' : seiAllowed === true ? 'text-green-400' : 'text-white/45'}`}>
-                {seiAllowed === false ? '✕ POLICY_DENIED' : seiAllowed === true ? '✓ ALLOWED' : '? LEGACY (null)'}
+                {seiAllowed === false ? '✕ DENIED' : seiAllowed === true ? '✓ ALLOWED' : '? UNKNOWN'}
               </span>
-              <p className="mt-1 text-[10px] text-white/35">{seiAllowed === false ? 'El contrato de fuente prohíbe indexación orgánica' : seiAllowed === true ? 'Política permite SEO (requiere seo_enabled)' : 'Comportamiento legado — rige seo_enabled DB'}</p>
+              <p className="mt-1 text-[10px] text-white/35">{seiAllowed === false ? 'Evidencia de fuente: indexación no permitida' : seiAllowed === true ? 'Permiso de fuente documentado; requiere seo_enabled' : `Permiso no evidenciado (${seiPermission.reason}); no equivale a DENIED`}</p>
             </div>
             <div className="border border-white/[0.08] p-3">
               <span className="block text-[9px] text-white/35" style={{ fontFamily: 'monospace' }}>DB FLAG (seo_enabled)</span>
@@ -238,8 +271,7 @@ export default function SourceOperationsView({ sources, selectedSource, onSelect
           </div>
           {seiAllowed === false && <p className="border border-red-900/40 bg-red-950/20 p-3 text-red-400">Esta fuente tiene restricción explícita de SEO orgánico por contrato. No se puede habilitar seo_enabled para esta fuente.</p>}
           {seiAllowed === null && <div className="border border-white/10 p-3">
-            <p className="text-white/45 text-xs">Política no definida (legado). Para habilitar SEO, primero aprobá la política de indexación.</p>
-            {onAction && <button onClick={() => { setPolicyModal(true); setPolicyNote(''); setPolicyResult(null) }} className="mt-3 border border-[#c9a84c] px-4 py-2 text-xs text-[#c9a84c]" style={{ fontFamily: 'monospace' }}>APROBAR POLÍTICA SEO</button>}
+            <p className="text-white/45 text-xs">Permiso de indexación UNKNOWN. El estado operacional no sustituye evidencia de fuente; no se habilita desde este panel.</p>
           </div>}
           {seiAllowed === true && seoEnabled !== true && <div className="border border-white/10 p-3">
             <p className="text-green-400 text-xs">✓ Política SEO aprobada. Siguiente paso: habilitar seo_enabled via enable_seo_for_source.</p>

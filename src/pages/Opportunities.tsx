@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link } from 'wouter'
-import { ArrowRight, CalendarDays, Clock, Filter, Globe, MapPin, Search, ShieldCheck, Sparkles, Zap } from 'lucide-react'
+import { ArrowRight, CalendarDays, Clock, Filter, MapPin, Search, ShieldCheck, Sparkles, Zap } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { Eyebrow } from '@/components/cv/visuals'
 import { loadPublicOpportunities } from '@/lib/public-source-policy'
 import { AdSlot } from '@/components/cv/AdSlot'
+import { PageEmptyState, PageErrorState, PageLoadingState } from '@/components/cv/PublicState'
 import { canonicalOpportunityPathForRow } from '@/lib/opportunity-truth'
 
 type Category = 'Todas' | 'Becas' | 'Financiación' | 'Programas' | 'Experiencias'
@@ -90,12 +91,16 @@ export default function Opportunities() {
   const [category, setCategory] = useState<Category>('Todas')
   const [query, setQuery] = useState('')
 
-  useEffect(() => {
+  const loadOpportunities = () => {
+    setLoading(true)
+    setError('')
     void loadPublicOpportunities<Opportunity[]>('all')
       .then(data => setItems((data || []) as Opportunity[]))
-      .catch(() => setError('Public source policy unavailable.'))
+      .catch(() => setError('No pudimos cargar las oportunidades. Revisá tu conexión e intentá de nuevo.'))
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { loadOpportunities() }, [])
 
   const filtered = useMemo(() => {
     const needle = clean(query).toLocaleLowerCase('es')
@@ -202,31 +207,15 @@ export default function Opportunities() {
 
           {/* Grid */}
           {error ? (
-            <div className="mt-6 border border-red-400/20 bg-red-400/[0.04] p-6 text-sm text-red-200" role="alert">{error}</div>
+            <PageErrorState message={error} onRetry={loadOpportunities} />
           ) : loading ? (
-            <div className="mt-4 grid gap-px overflow-hidden border border-white/8 bg-white/8 md:grid-cols-2">
-              {[0, 1, 2, 3].map(i => (
-                <div key={i} className="bg-[#0b0b0b] p-5">
-                  <div className="mb-3 h-3 w-16 animate-pulse bg-white/10" />
-                  <div className="mb-2 h-5 w-3/4 animate-pulse bg-white/10" />
-                  <div className="h-4 w-1/2 animate-pulse bg-white/[0.06]" />
-                  <div className="mt-8 h-px w-full bg-white/[0.05]" />
-                  <div className="mt-3 flex justify-between">
-                    <div className="h-3 w-24 animate-pulse bg-white/[0.06]" />
-                    <div className="h-3 w-20 animate-pulse bg-white/[0.06]" />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <PageLoadingState label="Cargando oportunidades" />
           ) : filtered.length === 0 ? (
-            <div className="mt-6 border border-white/8 px-6 py-14 text-center">
-              <Globe className="mx-auto mb-4 h-8 w-8 text-white/15" />
-              <p className="text-cream">{items.length === 0 ? 'Todavía no hay oportunidades publicadas en este catálogo.' : 'No hay oportunidades verificadas con estos filtros.'}</p>
-              <p className="mt-2 text-sm text-white/40">Solo mostramos fichas activas, vigentes y verificadas.</p>
-              <button onClick={() => { setQuery(''); setCategory('Todas') }} className="mt-4 text-sm text-[#c9a84c] hover:underline transition">
-                Limpiar filtros
-              </button>
-            </div>
+            <PageEmptyState
+              title={items.length === 0 ? 'Todavía no hay oportunidades publicadas en este catálogo.' : 'No hay oportunidades verificadas con estos filtros.'}
+              description="Solo mostramos fichas activas, vigentes y verificadas."
+              action={<button onClick={() => { setQuery(''); setCategory('Todas') }} className="text-sm text-[#c9a84c] hover:underline transition">Limpiar filtros</button>}
+            />
           ) : (
             <section className="mt-4 grid gap-px overflow-hidden border border-white/8 bg-white/8 md:grid-cols-2">
               {filtered.map(item => {

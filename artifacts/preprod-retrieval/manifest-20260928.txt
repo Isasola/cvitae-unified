@@ -1,0 +1,147 @@
+PRE-PROD RETRIEVAL FREEZE MANIFEST
+date_utc=2026-09-28
+branch=fix/item53-public-contracts-20260923
+HEAD=28014524085e0520be49465e160fa31a4fa79e65
+
+git status --short:
+ M WORKING_PRINCIPLES.md
+ M docs/GRAND_CHECKPOINT.md
+ M index.html
+ M netlify.toml
+ M netlify/functions/admin-data.ts
+ M netlify/functions/application-workspace.ts
+ M netlify/functions/b2c-profile.ts
+ M netlify/functions/gemini-courses.ts
+ M netlify/functions/lib/founding-mailer.ts
+ M netlify/functions/log-user-event.ts
+ M netlify/functions/public-opportunities.ts
+ M netlify/functions/send-high-match-alerts.ts
+ M netlify/functions/sitemap.ts
+ M package.json
+ M scrapers/empleapy_mtess_scraper.py
+ M scrapers/fcq_una_job_board_scraper.py
+ M scrapers/himalayas_scraper.py
+ M scrapers/impactpool_scraper.py
+ M scrapers/jobicy_scraper.py
+ M scrapers/one_young_world_scraper.py
+ M scrapers/remotive_scraper.py
+ M scrapers/santander_open_academy_scraper.py
+ M scrapers/source_adapters.py
+ M scrapers/source_automation_runtime.py
+ M scrapers/talentcom_scraper.py
+ M scrapers/ucom_job_board_scraper.py
+ M scrapers/weworkremotely_scraper.py
+ M scripts/audit-indexability.mjs
+ M scripts/check-public-html.mjs
+ M scripts/generate-sitemap.mjs
+ M scripts/generate_scraper_field_survival.py
+ M scripts/opportunity_factory.py
+ M scripts/prerender.mjs
+ M scripts/run_opportunity_automation.py
+ M scripts/run_opportunity_enrichment_batch.py
+ M scripts/verify-seo-build-parity.ts
+ M scripts/verify-source-intelligence-wiring.ts
+ M scripts/verify-source-policy.ts
+ M scripts/verify_himalayas_adapter.py
+ M scripts/verify_himalayas_inventory_reconciliation.py
+ M scripts/verify_matching_b2c_consumers.ts
+ M scripts/verify_matching_v21_decision_contract.ts
+ M scripts/verify_opportunity_factory.py
+ M scripts/verify_scraper_field_survival.py
+ M scripts/verify_sitemap_universe_item30.ts
+ M scripts/verify_source_automation_runtime.py
+ M scripts/verify_source_semantics.py
+ M scripts/verify_talent_adapter.py
+ M scripts/verify_unjobs_adapter.py
+ M scripts/verify_wwr_adapter.py
+ M skills/cvitae-scrapers/SKILL.md
+ M skills/cvitae-scrapers/references/checkpoint-methodology.md
+ M src/components/CVAnalyzer.tsx
+ M src/components/admin/SourceOperationsView.tsx
+ M src/components/admin/UserDetailDrawer.tsx
+ M src/components/cv/FeedbackReporter.tsx
+ M src/components/cv/ProductGuide.tsx
+ M src/components/cv/SiteShell.tsx
+ M src/components/cvitae/DashboardLayout.tsx
+ M src/hub/ATSDiagnostic.tsx
+ M src/hub/ApplicationWorkspace.tsx
+ M src/hub/CVRewrite.tsx
+ M src/hub/Dashboard.tsx
+ M src/hub/LearningPlan.tsx
+ M src/hub/ProfileBuilder.tsx
+ M src/index.css
+ M src/lib/analytics.ts
+ M src/lib/inventory-reconciliation.ts
+ M src/lib/sitemap-universe.js
+ M src/pages/AuthCallback.tsx
+ M src/pages/JobDetail.tsx
+ M src/pages/Jobs.tsx
+ M src/pages/LandingPage.tsx
+ M src/pages/NotFound.tsx
+ M src/pages/Opportunities.tsx
+ M src/pages/OpportunityDetail.tsx
+ M supabase/functions/_shared/embedding.ts
+ M supabase/functions/_shared/match-readiness.ts
+ M supabase/functions/_shared/matching-v2.ts
+ M supabase/functions/_shared/matching.ts
+ M supabase/functions/match-batch/index.ts
+?? .github/workflows/matching-retrieval.yml
+?? artifacts/
+?? docs/source-permission-matrix.md
+?? generated/
+?? public/favicon.svg
+?? scrapers/eligibility_truth.py
+?? scripts/account_matching_retrieval_funnel.ts
+?? scripts/fixtures/opportunity-detail-rich.json
+?? scripts/preview_candidate_eligibility_impact.ts
+?? scripts/run_matching_retrieval_expansion.ts
+?? scripts/verify-canonical-opportunity-enrichment-database.sql
+?? scripts/verify-matching-diagnostic-snapshots-database.sql
+?? scripts/verify_ads_readiness_item56_8.ts
+?? scripts/verify_application_eligibility.ts
+?? scripts/verify_audit_indexability_item53.mjs
+?? scripts/verify_b2c_opportunity_experience_item56.ts
+?? scripts/verify_b2c_value_clarity_item57.ts
+?? scripts/verify_brand_serp_item56_7.ts
+?? scripts/verify_candidate_eligibility_truth.ts
+?? scripts/verify_candidate_truth_backbone_item57.ts
+?? scripts/verify_canonical_field_contract_item56.ts
+?? scripts/verify_conversion_analytics_item56.ts
+?? scripts/verify_eligibility_provenance_survival_item57.py
+?? scripts/verify_eligibility_truth_preview_item57.ts
+?? scripts/verify_eligibility_unknown_accounting_artifact.ts
+?? scripts/verify_item57_matching_observability.ts
+?? scripts/verify_jobicy_semantic_contract.py
+?? scripts/verify_matching_retrieval_expansion.ts
+?? scripts/verify_matching_retrieval_scheduler.ts
+?? scripts/verify_opportunity_field_survival_item56.ts
+?? scripts/verify_public_html_item53.ts
+?? scripts/verify_remotive_semantic_contract.py
+?? scripts/verify_semantic_truth_item57.ts
+?? scripts/verify_shared_b2c_item57.ts
+?? scripts/verify_shared_dimension_separation.py
+?? scripts/verify_source_intelligence_item53.ts
+?? shared/
+?? skills/cvitae-debug/
+?? src/components/cv/B2CProgressLoader.tsx
+?? src/components/cv/MatchingCoverageCard.tsx
+?? src/components/cv/PublicState.tsx
+?? src/components/cvitae/OpportunityPresentation.tsx
+?? src/lib/ad-route-policy.ts
+?? src/lib/application-intent.ts
+?? src/lib/matching-coverage.ts
+?? src/lib/matching-profile-signature.ts
+?? src/lib/source-intelligence-contract.ts
+?? supabase/migrations/202609240001_canonical_opportunity_field_contract.sql
+?? supabase/migrations/202609240002_matching_diagnostic_snapshots.sql
+?? supabase/migrations/202609270001_matching_retrieval_coverage.sql
+
+SHA256
+CDC88684BBE4BB0E6B79BFD309BCB489AC924920CEB3CC17E8CBF98D5A236985  supabase/migrations/202609270001_matching_retrieval_coverage.sql
+E7E44F230AD38DF8E4F8EC63D5D732BE9026BA405BA75782C5EE65C8A5ED241D  shared/matching-retrieval.ts
+FB67912C1FD4F92E00489E45321197115A0BB6DAF042151D2989CFCE42091D0E  shared/retrieval-user-scheduler.ts
+148E65EA26A99833E96339920C98CBD0EA0CB9C30FBB047343606B780296A437  scripts/run_matching_retrieval_expansion.ts
+D280AF9BC81DC2A6E73C97FE0D4350AED5D80A91CCB338330806B5C8F59038B7  scripts/account_matching_retrieval_funnel.ts
+6D04C04C2D5C6D468D016829BB2CC5B7F3E04D78788D5EBCDA5F53DF82DCCB83  supabase/functions/match-batch/index.ts
+22D87C60DFAEF81C4A57AD3621D44AF859FEF661718C6096689FEB4843D4C54E  netlify/functions/send-high-match-alerts.ts
+A11347EFF676C0B5FCF9C89E6C8D0964BB703DEF76E06C19DE5ABAB613D4CE8E  docs/GRAND_CHECKPOINT.md

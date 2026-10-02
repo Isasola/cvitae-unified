@@ -18,6 +18,7 @@
 import https from 'https'
 import http from 'http'
 import { readFileSync, existsSync } from 'fs'
+import { parseSitemapLocs } from './check-public-html.mjs'
 
 const SITE_URL = 'https://cvitae.lat'
 const ROBOTS_URL = `${SITE_URL}/robots.txt`
@@ -98,9 +99,22 @@ function isAllowedByRobots(pathname, rules) {
 let sitemapUrls = null
 async function getSitemapUrls() {
   if (sitemapUrls) return sitemapUrls
-  const { body } = await fetchText(SITEMAP_URL)
-  sitemapUrls = new Set((body.match(/<loc>([^<]+)<\/loc>/g) || []).map(s => s.replace(/<\/?loc>/g, '').trim()))
+  const root = await fetchText(SITEMAP_URL)
+  if (root.status !== 200) { sitemapUrls = new Set(); return sitemapUrls }
+  const rootLocs = parseSitemapLocs(root.body)
+  if (!/<sitemapindex\b/i.test(root.body)) { sitemapUrls = new Set(rootLocs); return sitemapUrls }
+  const detailUrls = []
+  for (const childUrl of rootLocs) {
+    const child = await fetchText(childUrl)
+    if (child.status === 200) detailUrls.push(...parseSitemapLocs(child.body))
+  }
+  sitemapUrls = new Set(detailUrls)
   return sitemapUrls
+}
+
+export function expandSitemapLocs(rootXml, childXmls = []) {
+  if (!/<sitemapindex\b/i.test(rootXml)) return parseSitemapLocs(rootXml)
+  return childXmls.flatMap(parseSitemapLocs)
 }
 
 // ── HTML parser ──────────────────────────────────────────────────────────────
@@ -216,8 +230,7 @@ async function main() {
 
   if (args.includes('--sitemap')) {
     console.log(`🔍 Fetching sitemap from ${SITEMAP_URL}...`)
-    const { body } = await fetchText(SITEMAP_URL)
-    urls = (body.match(/<loc>([^<]+)<\/loc>/g) || []).map(s => s.replace(/<\/?loc>/g, '').trim())
+    urls = [...await getSitemapUrls()]
     console.log(`   Found ${urls.length} URLs in sitemap\n`)
   } else if (args.includes('--file')) {
     const filePath = args[args.indexOf('--file') + 1]
@@ -274,4 +287,4 @@ async function main() {
   console.log(`❌ Errors/404:       ${errors.length}`)
 }
 
-main().catch(err => { console.error(err); process.exit(1) })
+if (import.meta.url === new URL(`file://${process.argv[1].replace(/\\/g, '/')}`).href) main().catch(err => { console.error(err); process.exit(1) })

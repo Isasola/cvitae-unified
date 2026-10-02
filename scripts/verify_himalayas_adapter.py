@@ -20,13 +20,14 @@ assert adapt_himalayas_job({**BASE, "locationRestrictions":["Mexico"]}).eligible
 canada_us = adapt_himalayas_job({**BASE, "locationRestrictions":["Canada", "United States"]})
 assert canada_us.eligible_countries == ["CA", "US"] and canada_us.remote_scope == "REGIONAL"
 europe = adapt_himalayas_job({**BASE, "locationRestrictions":["Europe / EMEA"]})
-assert europe.country_code is None and europe.remote_scope == "REGIONAL"
+assert europe.country_code is None and europe.remote_scope == "REGIONAL" and europe.evidence["eligibility_provenance"] == "UNMAPPED_RESTRICTION_LABEL" and europe.recommendation == "HUMAN_REVIEW"
 world_without_restrictions = adapt_himalayas_job({**BASE, "locationRestrictions":[], "timezoneRestrictions":[]})
-assert world_without_restrictions.remote_scope == "WORLDWIDE" and world_without_restrictions.country_code is None
+assert world_without_restrictions.remote_scope == "UNKNOWN" and world_without_restrictions.eligible_regions == [] and world_without_restrictions.evidence["eligibility_provenance"] == "NO_RESTRICTIONS_DECLARED"
 timezone_restricted = adapt_himalayas_job({**BASE, "locationRestrictions":[], "timezoneRestrictions":["UTC-5 to UTC+2"]})
 assert timezone_restricted.remote_scope == "UNKNOWN" and "Timezone restrictions" in (timezone_restricted.applicant_location_requirements or "")
 FULL_TZ = [-11,-10,-9.5,-9,-8,-7,-6,-5,-4,-3.5,-3,-2,-1,0,1,2,3,3.5,4,4.5,5,5.5,5.75,6,6.5,7,8,8.75,9,9.5,10,10.5,11,12,12.75,13,14]
-assert adapt_himalayas_job({**BASE, "locationRestrictions":[], "timezoneRestrictions":FULL_TZ}).remote_scope == "WORLDWIDE"
+full_timezone = adapt_himalayas_job({**BASE, "locationRestrictions":[], "timezoneRestrictions":FULL_TZ})
+assert full_timezone.remote_scope == "UNKNOWN" and full_timezone.eligible_regions == [] and full_timezone.evidence["eligibility_provenance"] == "FULL_TIMEZONE_COVERAGE"
 assert adapt_himalayas_job({**BASE, "locationRestrictions":["Paraguay"], "timezoneRestrictions":FULL_TZ}).remote_scope == "COUNTRY_SPECIFIC"
 multi = adapt_himalayas_job({**BASE, "locationRestrictions":["Australia", "Singapore", "South Korea", "Taiwan"]})
 assert multi.location == "Remote" and multi.country_code is None and multi.onsite_country is None and multi.eligible_countries == ["AU", "KR", "SG", "TW"] and multi.remote_scope == "REGIONAL"
@@ -35,12 +36,12 @@ assert latam.eligible_countries == ["AR", "BO", "BR", "CL", "CO", "CR", "CU", "D
 unknown_country = adapt_himalayas_job({**BASE, "locationRestrictions":["Moon Base"]})
 assert unknown_country.eligible_countries == [] and unknown_country.recommendation == "HUMAN_REVIEW" and unknown_country.recommendation_reasons == ["eligibility_structure_mismatch"]
 territories = adapt_himalayas_job({**BASE, "locationRestrictions":["Jamaica", "Puerto Rico", "Trinidad and Tobago", "Aruba", "Curaçao", "Belize", "Guyana", "Suriname", "Bonaire, Sint Eustatius and Saba", "British Virgin Islands", "U.S. Virgin Islands"]})
-assert territories.eligible_countries == ["AW", "BQ", "BZ", "CW", "GY", "JM", "PR", "SR", "TT", "VG", "VI"] and territories.recommendation != "HUMAN_REVIEW"
+assert territories.eligible_countries == ["AW", "BQ", "BZ", "CW", "GY", "JM", "PR", "SR", "TT", "VG", "VI"] and territories.recommendation == "AUTO_PUBLISH"
 assert adapt_himalayas_job({**BASE, "expiryDate":"2026-11-20T00:00:00Z"}).deadline == "2026-11-20"
 legacy_geo_patch = build_rpc_patch(us, {"location": "Remote", "country_code": "WW", "onsite_country": "US", "remote": True, "remote_scope": None})
 assert legacy_geo_patch["country_code"] is None and legacy_geo_patch["onsite_country"] is None and legacy_geo_patch["eligible_countries"] == ["US"]
 patch = build_rpc_patch(world, {})
-assert "type" not in patch and "employment_type" not in patch and patch["description"] == world.description
+assert "type" not in patch and patch["employment_type"] == "Full Time" and patch["description"] == world.description
 assert world.recommendation == "AUTO_PUBLISH"
 assert coverage([])["description"] == 0.0
 assert health({"found":20,"detail_pages_attempted":20,"detail_pages_success":20,"parsed":20,"coverage":{"description":.95}})[0] == "HEALTHY"

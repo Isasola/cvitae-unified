@@ -1,257 +1,146 @@
 /**
- * check-public-html.mjs
- *
- * Validates that public routes have real pre-rendered HTML content.
- * Usage:
- *   node scripts/check-public-html.mjs                  # checks dist/ locally
- *   node scripts/check-public-html.mjs --live           # checks production URLs
- *   node scripts/check-public-html.mjs --live --url https://cvitae.lat
+ * Public HTML and sitemap observability checker.
+ * Usage: node scripts/check-public-html.mjs [--live] [--url=https://cvitae.lat] [--json=path]
  */
-
-import { readFileSync, existsSync } from 'fs'
-import { join } from 'path'
-import { createRequire } from 'module'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
+import { dirname, join } from 'path'
+import { pathToFileURL } from 'url'
+import { STATIC_PUBLIC_SITEMAP_ROUTES } from '../src/lib/static-sitemap-routes.js'
 
 const args = process.argv.slice(2)
 const isLive = args.includes('--live')
-const baseUrlArg = args.find(a => a.startsWith('--url='))
-const BASE_URL = baseUrlArg ? baseUrlArg.split('=')[1] : 'https://cvitae.lat'
+const baseArg = args.find(arg => arg.startsWith('--url='))
+const BASE_URL = (baseArg ? baseArg.slice(6) : 'https://cvitae.lat').replace(/\/$/, '')
+const jsonArg = args.find(arg => arg.startsWith('--json='))?.slice(7)
 const distDir = join(process.cwd(), 'dist')
-
 const HOME_TITLE = 'CVitae | Tu Agente de Carrera Inteligente para Paraguay'
+const HOME_MARKERS = ['Analizá tu CV gratis', 'AnalizÃ¡ tu CV gratis', 'Tu score ATS real, en segundos']
+const ROUTES = [['/', 'CVitae', true], ['/blog', 'Blog', true], ['/empleos', 'Empleo', true], ['/oportunidades', 'Oportunidades', true], ['/sobre-cvitae', 'Sobre CVitae', true], ['/privacy', 'Privacidad', false], ['/terminos', 'Términos', false], ['/cookies', 'Cookies', false]]
 
-// Routes to check — format: [path, expectedTitleFragment, shouldHaveContent]
-const ROUTES = [
-  ['/', 'CVitae', true],
-  ['/blog', 'Blog', true],
-  ['/empleos', 'Empleo', true],
-  ['/oportunidades', 'Oportunidades', true],
-  ['/sobre-cvitae', 'Sobre CVitae', true],
-  ['/privacy', 'Privacidad', false],
-  ['/terminos', 'Términos', false],
-  ['/cookies', 'Cookies', false],
-]
-
-function parseHtml(html) {
-  const get = (re) => { const m = html.match(re); return m ? m[1].trim() : '' }
+export function parseHtml(html) {
+  const get = re => { const match = html.match(re); return match ? match[1].trim() : '' }
   const title = get(/<title[^>]*>([^<]*)<\/title>/i)
   const h1 = get(/<h1[^>]*>([^<]*)<\/h1>/i)
-  const desc = get(/<meta[^>]+name=[\"']description[\"'][^>]+content=[\"']([^\"']*)[\"']/i)
-  const canonical = get(/<link[^>]+rel=[\"']canonical[\"'][^>]+href=[\"']([^\"']*)[\"']/i)
-  const robots = get(/<meta[^>]+name=[\"']robots[\"'][^>]+content=[\"']([^\"']*)[\"']/i)
-  const jsonLdTypes = (html.match(/"@type"\s*:\s*"([^"]+)"/g) || []).map(s => s.match(/"([^"]+)"$/)[1])
-  // Text content after stripping tags, remove script/style blocks
-  const stripped = html
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return { title, h1, desc, canonical, robots, jsonLdTypes, textLength: stripped.length, textSample: stripped.slice(0, 200) }
+  const desc = get(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i)
+  const canonical = get(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']*)["']/i)
+  const robots = get(/<meta[^>]+name=["']robots["'][^>]+content=["']([^"']*)["']/i)
+  const jsonLdTypes = (html.match(/"@type"\s*:\s*"([^"]+)"/g) || []).map(value => value.match(/"([^"]+)"$/)[1])
+  const text = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  return { title, h1, desc, canonical, robots, jsonLdTypes, text, textLength: text.length, textSample: text.slice(0, 200) }
 }
 
-async function getHtmlLive(path) {
-  const { default: https } = await import('https')
-  const { default: http } = await import('http')
+const marketPaths = new Set(['/oportunidades/paraguay', '/oportunidades/latam', '/oportunidades/peru', '/oportunidades/remoto-latam'])
+const indexableMarketPaths = new Set(STATIC_PUBLIC_SITEMAP_ROUTES.filter(route => marketPaths.has(route.url)).map(route => route.url))
+function isDetailRoute(routePath) { return /^\/(empleos|oportunidades|blog|vacante)\/[^/]+$/.test(routePath) && !marketPaths.has(routePath) }
 
-  async function fetchWithRedirects(targetUrl, depth = 0) {
-    if (depth > 5) throw new Error('Too many redirects')
+export function validatePublicHtml(routePath, html, { expectedCanonical, expectedTitleFragment, shouldHaveContent = true } = {}) {
+  const parsed = parseHtml(html); const issues = []; const detail = isDetailRoute(routePath)
+  if (routePath !== '/' && (parsed.title === HOME_TITLE || HOME_MARKERS.some(marker => parsed.text.includes(marker)))) issues.push('HOME_BODY_CONTAMINATION')
+  if (expectedTitleFragment && !parsed.title.toLowerCase().includes(expectedTitleFragment.toLowerCase())) issues.push(`TITLE_MISMATCH:${expectedTitleFragment}`)
+  if (parsed.textLength < (shouldHaveContent ? 80 : 50)) issues.push(`THIN_CONTENT:${parsed.textLength}`)
+  if (!parsed.canonical) issues.push('CANONICAL_MISSING')
+  else if (expectedCanonical && parsed.canonical !== expectedCanonical) issues.push(`CANONICAL_MISMATCH:${parsed.canonical}`)
+  const expectedNoindex = marketPaths.has(routePath) && !indexableMarketPaths.has(routePath)
+  if (parsed.robots.toLowerCase().includes('noindex') && routePath !== '/admin' && !expectedNoindex) issues.push('UNEXPECTED_NOINDEX')
+  if (detail && !parsed.h1) issues.push('DETAIL_H1_MISSING')
+  if (detail && parsed.jsonLdTypes.length === 0) issues.push('DETAIL_STRUCTURED_DATA_MISSING')
+  return { path: routePath, status: issues.length ? 'FAIL' : 'PASS', title: parsed.title, h1: parsed.h1 || '(none)', canonical: parsed.canonical || '(none)', jsonLd: parsed.jsonLdTypes.join(', ') || '(none)', textLength: parsed.textLength, issues, textSample: issues.length ? parsed.textSample : undefined }
+}
+
+async function getHtmlLive(pathOrUrl) {
+  const target = pathOrUrl.startsWith('http') ? pathOrUrl : `${BASE_URL}${pathOrUrl}`
+  const { default: https } = await import('https'); const { default: http } = await import('http')
+  async function fetchUrl(url, depth = 0) {
+    if (depth > 5) throw new Error('too_many_redirects')
     return new Promise((resolve, reject) => {
-      const client = targetUrl.startsWith('https') ? https : http
-      const req = client.get(targetUrl, { headers: { 'User-Agent': 'CVitaeHTMLChecker/1.0' } }, (res) => {
-        if (res.statusCode >= 301 && res.statusCode <= 308 && res.headers.location) {
-          const redirectUrl = res.headers.location.startsWith('http')
-            ? res.headers.location
-            : `${BASE_URL}${res.headers.location}`
-          res.resume()
-          resolve(fetchWithRedirects(redirectUrl, depth + 1))
-          return
-        }
-        let data = ''
-        res.on('data', chunk => { data += chunk })
-        res.on('end', () => resolve({ status: res.statusCode, html: data, url: targetUrl }))
-      })
-      req.on('error', reject)
-      req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')) })
+      const client = url.startsWith('https') ? https : http
+      const request = client.get(url, { headers: { 'User-Agent': 'CVitaeHTMLChecker/1.0' } }, response => {
+        if (response.statusCode >= 301 && response.statusCode <= 308 && response.headers.location) { const next = new URL(response.headers.location, url).toString(); response.resume(); resolve(fetchUrl(next, depth + 1)); return }
+        let html = ''; response.on('data', chunk => { html += chunk }); response.on('end', () => resolve({ status: response.statusCode, html, url }))
+      }); request.on('error', reject); request.setTimeout(10000, () => { request.destroy(); reject(new Error('timeout')) })
     })
   }
-
-  return fetchWithRedirects(`${BASE_URL}${path}`)
+  return fetchUrl(target)
 }
 
-function getHtmlLocal(path) {
-  // Convert route path to file path: /blog → dist/blog/index.html
-  const filePath = path === '/'
-    ? join(distDir, 'index.html')
-    : join(distDir, path.replace(/^\//, ''), 'index.html')
-  if (!existsSync(filePath)) return { status: 404, html: '', url: filePath }
-  return { status: 200, html: readFileSync(filePath, 'utf-8'), url: filePath }
+function getHtmlLocal(routePath) {
+  const filePath = routePath === '/' ? join(distDir, 'index.html') : join(distDir, routePath.slice(1), 'index.html')
+  return existsSync(filePath) ? { status: 200, html: readFileSync(filePath, 'utf8'), url: filePath } : { status: 404, html: '', url: filePath }
 }
 
-async function checkRoute(routePath, expectedTitleFragment, shouldHaveContent) {
-  let result
-  try {
-    result = isLive ? await getHtmlLive(routePath) : getHtmlLocal(routePath)
-  } catch (e) {
-    return { path: routePath, status: 'ERROR', error: e.message }
-  }
+async function checkRoute(routePath, title, content) {
+  try { const result = isLive ? await getHtmlLive(routePath) : getHtmlLocal(routePath); if (result.status !== 200) return { path: routePath, status: 'FAIL', issues: [`UNEXPECTED_HTTP_${result.status}`] }; const expectedCanonical = routePath === '/' ? BASE_URL : `${BASE_URL}${routePath}`; return validatePublicHtml(routePath, result.html, { expectedCanonical, expectedTitleFragment: title, shouldHaveContent: content }) } catch (error) { return { path: routePath, status: 'FAIL', issues: [`FETCH_ERROR:${error.message}`] } }
+}
 
-  const { status, html, url } = result
-  if (status === 404) {
-    return { path: routePath, status: 404, issue: 'FILE_MISSING', url }
-  }
+async function checkDetailRoute(routePath) {
+  try { const result = isLive ? await getHtmlLive(routePath) : getHtmlLocal(routePath); if (result.status !== 200) return { path: routePath, status: 'FAIL', issues: [`UNEXPECTED_HTTP_${result.status}`] }; return validatePublicHtml(routePath, result.html, { expectedCanonical: `${BASE_URL}${routePath}` }) } catch (error) { return { path: routePath, status: 'FAIL', issues: [`FETCH_ERROR:${error.message}`] } }
+}
 
-  const parsed = parseHtml(html)
-  const issues = []
-
-  // Check: not returning home shell for non-home routes
-  if (routePath !== '/' && parsed.title === HOME_TITLE) {
-    issues.push('HOME_SHELL — title is same as home')
-  }
-
-  // Check: title contains expected fragment
-  if (expectedTitleFragment && !parsed.title.toLowerCase().includes(expectedTitleFragment.toLowerCase())) {
-    issues.push(`TITLE_MISMATCH — expected "${expectedTitleFragment}", got "${parsed.title}"`)
-  }
-
-  // Check: has real content (text length > threshold).
-  // Index pages (empleos, oportunidades, blog) may be shells locally (no Supabase at build time)
-  // but will have full listings in production. Use 80 chars as minimum to catch truly empty pages.
-  const MIN_TEXT = shouldHaveContent ? 80 : 50
-  if (parsed.textLength < MIN_TEXT) {
-    issues.push(`THIN_CONTENT — text length ${parsed.textLength} < ${MIN_TEXT}`)
-  }
-
-  // Check: has canonical
-  if (!parsed.canonical) {
-    issues.push('NO_CANONICAL')
-  }
-
-  // Check: noindex on public pages (bad)
-  if (parsed.robots && parsed.robots.includes('noindex') && routePath !== '/admin') {
-    issues.push(`NOINDEX_ON_PUBLIC — robots: ${parsed.robots}`)
-  }
-
+const INVALID_DETAIL_ROUTES = ['/empleos/**cvitae-invalid-item53**', '/oportunidades/**cvitae-invalid-item53**', '/blog/**cvitae-invalid-item53**', '/vacante/**cvitae-invalid-item53**']
+export function validateInvalidDetailResult(routePath, result, { live = false } = {}) {
+  if (result.status === 404) return { path: routePath, status: 'PASS', issues: [] }
   return {
     path: routePath,
-    status: issues.length === 0 ? 'PASS' : 'FAIL',
-    title: parsed.title,
-    h1: parsed.h1 || '(none)',
-    canonical: parsed.canonical || '(none)',
-    jsonLd: parsed.jsonLdTypes.join(', ') || '(none)',
-    textLength: parsed.textLength,
-    issues,
-    textSample: issues.length > 0 ? parsed.textSample : undefined,
+    status: 'FAIL',
+    issues: [live ? `EXPECTED_HTTP_404_GOT_${result.status}` : `EXPECTED_LOCAL_404_GOT_${result.status}`],
   }
 }
+async function checkInvalidDetailRoute(routePath) {
+    try {
+      const result = isLive ? await getHtmlLive(routePath) : getHtmlLocal(routePath)
+      return validateInvalidDetailResult(routePath, result, { live: isLive })
+    } catch (error) { return { path: routePath, status: 'FAIL', issues: [`FETCH_ERROR:${error.message}`] }
+    }
+}
 
-async function checkSlugRoute(path) {
-  let result
-  try {
-    result = isLive ? await getHtmlLive(path) : getHtmlLocal(path)
-  } catch (e) {
-    return { path, status: 'ERROR', error: e.message }
-  }
+export function parseSitemapLocs(xml) { return [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => match[1].replace(/&amp;/g, '&')) }
 
-  const { status, html, url } = result
-  if (status === 404) return { path, status: 404, note: 'Hard 404 — correct if route is invalid' }
+async function discoverLiveDetailRoutes() {
+  const root = await getHtmlLive('/sitemap.xml'); if (root.status !== 200) throw new Error(`sitemap_http_${root.status}`)
+  const children = /<sitemapindex\b/i.test(root.html) ? parseSitemapLocs(root.html) : [root.url]; if (!children.length) throw new Error('sitemap_index_empty')
+  const routes = []
+  for (const child of children) { const response = child === root.url ? root : await getHtmlLive(child); if (response.status !== 200) throw new Error(`child_sitemap_http_${response.status}`); for (const url of parseSitemapLocs(response.html)) if (/\/(empleos|oportunidades|blog|vacante)\/[^/]+$/.test(url) && !marketPaths.has(new URL(url).pathname)) routes.push(new URL(url).pathname) }
+  return [...new Set(routes)]
+}
 
-  const parsed = parseHtml(html)
-  const issues = []
+function discoverLocalDetailRoutes() {
+  const routes = []
+  for (const family of ['blog', 'empleos', 'oportunidades', 'vacante']) { const dir = join(distDir, family); if (!existsSync(dir)) continue; for (const entry of readdirSync(dir, { withFileTypes: true })) { const route = `/${family}/${entry.name}`; if (entry.isDirectory() && existsSync(join(dir, entry.name, 'index.html')) && !marketPaths.has(route)) routes.push(route) } }
+  return routes
+}
 
-  if (parsed.title === HOME_TITLE) issues.push('HOME_SHELL')
-  // 80 chars: enough to confirm real content injected (title+org+location+type).
-  // Many jobs have no description in DB — data quality issue, not a prerender bug.
-  if (parsed.textLength < 80) issues.push(`THIN_CONTENT — ${parsed.textLength} chars`)
-  if (!parsed.canonical) issues.push('NO_CANONICAL')
-
-  return {
-    path,
-    status: issues.length === 0 ? 'PASS' : 'FAIL',
-    title: parsed.title,
-    textLength: parsed.textLength,
-    jsonLd: parsed.jsonLdTypes.join(', ') || '(none)',
-    issues,
-  }
+function checkLocalSitemap() {
+  const file = join(distDir, 'sitemap.xml'); if (!existsSync(file)) return { status: 'FAIL', issues: ['SITEMAP_MISSING'] }
+  const xml = readFileSync(file, 'utf8'); if (!/<sitemapindex\b/i.test(xml)) return { status: 'FAIL', issues: ['SITEMAP_NOT_INDEX'] }
+  const missing = parseSitemapLocs(xml).map(url => new URL(url).pathname.slice(1)).filter(fileName => !existsSync(join(distDir, fileName)))
+  return missing.length ? { status: 'FAIL', issues: [`SITEMAP_CHILD_MISSING:${missing.join(',')}`] } : { status: 'PASS', issues: [] }
 }
 
 async function main() {
-  console.log(`\n🔍 CVitae Public HTML Check — ${isLive ? `LIVE (${BASE_URL})` : 'LOCAL (dist/)'}`)
-  console.log('='.repeat(60))
-
-  let pass = 0, fail = 0
-
-  // Check static routes
-  console.log('\n📄 STATIC ROUTES')
-  for (const [path, titleFrag, hasContent] of ROUTES) {
-    const r = await checkRoute(path, titleFrag, hasContent)
-    const icon = r.status === 'PASS' ? '✅' : r.status === 404 ? '❌' : r.status === 'ERROR' ? '⚠️' : '❌'
-    const statusLabel = r.status === 'PASS' ? 'PASS' : r.status === 404 ? 'MISSING' : r.status === 'ERROR' ? 'ERROR' : 'FAIL'
-    console.log(`${icon} ${path.padEnd(20)} ${statusLabel.padEnd(8)} ${r.title || ''} [${r.textLength || 0} chars]`)
-    if (r.issues?.length) r.issues.forEach(i => console.log(`   ⚠ ${i}`))
-    if (r.status === 'PASS') pass++; else fail++
+  const results = []; for (const route of ROUTES) results.push(await checkRoute(route[0], route[1], route[2]))
+  const sitemap = isLive ? { status: 'PASS', issues: [] } : checkLocalSitemap(); if (sitemap.status !== 'PASS') results.push({ path: '/sitemap.xml', ...sitemap })
+  let dynamic = []
+  try { dynamic = isLive ? await discoverLiveDetailRoutes() : discoverLocalDetailRoutes() } catch (error) { results.push({ path: '/sitemap.xml', status: 'FAIL', issues: [`SITEMAP_DISCOVERY_ERROR:${error.message}`] }) }
+  const sampled = isLive
+    ? ['empleos', 'oportunidades', 'blog', 'vacante'].flatMap(family => [...new Set(dynamic)].filter(route => route.startsWith(`/${family}/`)).slice(0, 2))
+    : dynamic
+  for (const family of ['empleos', 'oportunidades', 'blog', 'vacante']) {
+    const available = [...new Set(dynamic)].filter(route => route.startsWith(`/${family}/`))
+    const checked = sampled.filter(route => route.startsWith(`/${family}/`))
+    if (isLive && available.length > 0 && checked.length === 0) results.push({ path: '/sitemap.xml', status: 'FAIL', issues: [`FAMILY_SAMPLE_MISSING:${family}`] })
   }
-
-  // Dynamic routes — get slugs from sitemap or dist files
-  console.log('\n📝 DYNAMIC ROUTE SAMPLES')
-  const dynamicRoutes = []
-
-  if (!isLive) {
-    // Check dist/ for generated files
-    const { readdirSync } = await import('fs')
-    for (const section of ['blog', 'empleos', 'oportunidades']) {
-      const sectionDir = join(distDir, section)
-      if (existsSync(sectionDir)) {
-        const slugs = readdirSync(sectionDir).filter(f => !f.endsWith('.html')).slice(0, 3)
-        slugs.forEach(slug => dynamicRoutes.push(`/${section}/${slug}`))
-      }
-    }
-  } else {
-    // Check sitemap for live slugs
-    try {
-      const sitemapResult = await getHtmlLive('/sitemap.xml')
-      const slugMatches = sitemapResult.html.match(/<loc>(https:\/\/cvitae\.lat\/(?:blog|empleos|oportunidades)\/[^<]+)<\/loc>/g) || []
-      slugMatches.slice(0, 6).forEach(m => {
-        const url = m.replace(/<\/?loc>/g, '')
-        dynamicRoutes.push(url.replace(BASE_URL, ''))
-      })
-    } catch (e) {
-      console.log('  ⚠️ Could not fetch sitemap:', e.message)
-    }
-  }
-
-  if (dynamicRoutes.length === 0) {
-    console.log('  (no dynamic routes found to check)')
-  }
-
-  for (const path of dynamicRoutes) {
-    const r = await checkSlugRoute(path)
-    const icon = r.status === 'PASS' ? '✅' : r.status === 404 ? '⚠️' : '❌'
-    console.log(`${icon} ${path.slice(0, 55).padEnd(55)} ${String(r.status).padEnd(6)} [${r.textLength || '404'} chars]`)
-    if (r.issues?.length) r.issues.forEach(i => console.log(`   ⚠ ${i}`))
-    if (r.status === 'PASS') pass++; else if (r.status !== 404) fail++
-  }
-
-  // Check invalid route (should be 404 or home-shell, depending on Netlify rules)
-  console.log('\n🚫 404 BEHAVIOR')
-  if (!isLive) {
-    const notFoundPath = join(distDir, '404.html')
-    console.log(`  dist/404.html: ${existsSync(notFoundPath) ? '✅ EXISTS' : '❌ MISSING'}`)
-  } else {
-    const badRoute = await getHtmlLive('/this-route-does-not-exist-xyz')
-    const parsed = parseHtml(badRoute.html)
-    const isHome = parsed.title === HOME_TITLE
-    console.log(`  /nonexistent → STATUS:${badRoute.status} ${isHome ? '⚠️ HOME_SHELL (soft 404)' : '✅ ' + parsed.title}`)
-  }
-
-  console.log('\n' + '='.repeat(60))
-  console.log(`RESULT: ${pass} PASS / ${fail} FAIL`)
-  if (fail > 0) {
-    console.log('❌ Some checks failed. Fix pre-render before pushing.')
-    process.exit(1)
-  } else {
-    console.log('✅ All checks passed.')
-  }
+  for (const route of [...new Set(sampled)]) results.push(await checkDetailRoute(route))
+  for (const route of INVALID_DETAIL_ROUTES) results.push(await checkInvalidDetailRoute(route))
+  const notFound = isLive ? await getHtmlLive('/this-route-does-not-exist-xyz') : { status: existsSync(join(distDir, '404.html')) ? 404 : 200, html: '' }
+  if (notFound.status === 200 && parseHtml(notFound.html).title === HOME_TITLE) results.push({ path: '/this-route-does-not-exist-xyz', status: 'FAIL', issues: ['UNEXPECTED_HOME_404'] })
+  const pass = results.filter(result => result.status === 'PASS').length; const fail = results.length - pass
+  const families = Object.fromEntries(['empleos', 'oportunidades', 'blog', 'vacante'].map(family => { const rows = results.filter(result => result.path?.startsWith(`/${family}/`)); return [family, { checked: rows.length, pass: rows.filter(row => row.status === 'PASS').length, fail: rows.filter(row => row.status !== 'PASS').length }] }))
+  const summary = { timestamp: new Date().toISOString(), mode: isLive ? 'live' : 'local', total_routes_checked: results.length, pass_count: pass, fail_count: fail, families, anomaly_reasons: results.flatMap(result => result.issues || []), canonical_mismatches: results.filter(result => (result.issues || []).some(issue => issue.startsWith('CANONICAL_'))).map(result => result.path), home_body_contamination: results.filter(result => (result.issues || []).includes('HOME_BODY_CONTAMINATION')).map(result => result.path), thin_or_missing_content: results.filter(result => (result.issues || []).some(issue => issue.startsWith('THIN_CONTENT') || issue.includes('MISSING'))).map(result => result.path), sitemap_failures: results.filter(result => (result.issues || []).some(issue => issue.startsWith('SITEMAP_'))).map(result => result.path) }
+  if (jsonArg) { mkdirSync(dirname(jsonArg), { recursive: true }); writeFileSync(jsonArg, JSON.stringify(summary, null, 2)) }
+  for (const result of results) console.log(`${result.status} ${result.path} ${(result.issues || []).join(' ')}`)
+  console.log(`PUBLIC_HTML_CHECK_SUMMARY ${JSON.stringify(summary)}`)
+  if (fail) { console.error(`Public HTML check failed: ${pass} PASS / ${fail} FAIL`); process.exit(1) }
+  console.log(`Public HTML check passed: ${pass} PASS / ${fail} FAIL`)
 }
 
-main().catch(err => { console.error('Check script error:', err); process.exit(1) })
+if (import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(error => { console.error('check-public-html failed:', error); process.exit(1) })

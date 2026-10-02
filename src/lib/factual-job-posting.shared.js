@@ -1,4 +1,5 @@
 import { toGoogleEmploymentType } from './seo/employment-type.shared.js'
+import { isISO3166Alpha2 } from '../../shared/iso-countries.ts'
 
 const JOB_TYPES = new Set(['job', 'internship', 'consultancy', 'empleo'])
 
@@ -66,7 +67,7 @@ export function factualJobPosting(row, canonicalUrl) {
 
   const country = clean(row.country_code).toUpperCase()
 
-  if (!/^[A-Z]{2}$/.test(country)) {
+  if (!isISO3166Alpha2(country)) {
     reasons.push('MISSING_FACTUAL_COUNTRY')
   }
 
@@ -138,10 +139,6 @@ export function aggregatedJobPosting(row, canonicalUrl) {
 
   if (row.distribution?.jobPosting?.allowed !== true) {
     reasons.push('JOBPOSTING_NOT_ALLOWED')
-  }
-
-  if (row.distribution?.googleJobs?.allowed !== true) {
-    reasons.push('GOOGLE_JOBS_NOT_ALLOWED')
   }
 
   if (reasons.length) {

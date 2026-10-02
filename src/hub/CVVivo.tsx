@@ -218,11 +218,6 @@ export default function CVVivo() {
       setWorkspaceError('Revisá las evidencias antes de crear una versión nueva.')
       return
     }
-    if (cvVivoUsedToday && !isSubscribed) {
-      setWorkspaceError('Ya usaste tu CV Vivo del día. Con Pro podés adaptarlo para cada vacante sin límite.')
-      return
-    }
-
     setAdapting(true)
     setWorkspaceError('')
     try {
@@ -451,22 +446,7 @@ export default function CVVivo() {
               />
             )}
 
-            {cvVivoUsedToday && !isSubscribed ? (
-              <div className="space-y-2">
-                <button
-                  disabled
-                  className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full bg-white/10 text-sm font-medium text-white/40 cursor-not-allowed"
-                >
-                  <Lock size={16} /> Límite diario alcanzado
-                </button>
-                <p className="text-center text-xs text-white/40">
-                  <a href={`https://wa.me/595992954169?text=${encodeURIComponent('Hola, quiero solicitar acceso ampliado a la beta de CVitae.')}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="text-[#c9a84c] hover:underline">Solicitá acceso beta</a> para más adaptaciones
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-1">
+            <div className="space-y-1">
                 <button
                   onClick={handleAdaptCV} disabled={!canAdapt || adapting || pendingEvidence.length > 0 || confirmedEvidence.length === 0}
                   className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-50 disabled:cursor-not-allowed"
@@ -477,11 +457,8 @@ export default function CVVivo() {
                       ? <><ShieldCheck size={16} /> Revisá evidencias primero</>
                       : <><Briefcase size={16} /> Crear versión adaptada</>}
                 </button>
-                {!isSubscribed && (
-                  <p className="text-center text-xs text-white/40">1 incluida hoy · <a href={`https://wa.me/595992954169?text=${encodeURIComponent('Hola, quiero solicitar acceso ampliado a la beta de CVitae.')}`} target="_blank" rel="noopener noreferrer" className="text-[#c9a84c] hover:underline">solicitá acceso beta</a> para más</p>
-                )}
-              </div>
-            )}
+                {!isSubscribed && <p className="text-center text-xs text-white/40">Durante esta beta, el uso no tiene límite diario.</p>}
+            </div>
           </div>
         </div>
 

@@ -51,7 +51,9 @@ assert description_change["semantic_fingerprint"] != first["semantic_fingerprint
 
 now = datetime(2026, 9, 10, tzinfo=timezone.utc)
 ready_status, ready_stamps, _ = seal(first, now)
-assert ready_status == "ready" and set(ready_stamps.values()) == {"pass"}
+assert ready_status == "review" and ready_stamps["job_geo"] == "pass" and ready_stamps["work_arrangement"] == "review" and ready_stamps["geo_decision"] == "review"
+onsite_status, onsite_stamps, _ = seal({**first, "remote_scope": "ONSITE"}, now)
+assert onsite_status == "ready" and onsite_stamps["geo_decision"] == "pass"
 assert MODEL_ID == "Supabase/gte-small"
 assert "Backend Engineer" in embedding_text(first)
 assert not should_generate_embedding({**first, "match_eligible": False}, "ready", dry_run=False)
@@ -68,6 +70,9 @@ assert not should_generate_embedding({**first, "match_eligible": False}, "ready"
 
 review_status, _, _ = seal({**first, "country_code": None, "location": None, "eligible_countries": [], "eligible_regions": [], "remote": False}, now)
 assert review_status == "review"
+# Candidate scope and remote modality are not physical workplace geography.
+remote_only_status, remote_only_stamps, _ = seal({**first, "country_code": None, "location": "Remote", "onsite_country": None, "eligible_countries": ["US"], "remote": True}, now)
+assert remote_only_status == "ready" and remote_only_stamps["job_geo"] == "review" and remote_only_stamps["geo_decision"] == "pass"
 blocked_status, _, _ = seal({**first, "application_url": "http://unsafe.example.org/job"}, now)
 assert blocked_status == "blocked"
 

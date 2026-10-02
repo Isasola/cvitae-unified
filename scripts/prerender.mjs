@@ -135,7 +135,7 @@ function injectPage(templateHtml, metaTagsBlock, contentHtml) {
     .replace(/<link[^>]+rel="canonical"[^>]*>\s*/g, '')
     .replace(/<meta[^>]+name="robots"[^>]*>\s*/g, '')
   return cleaned
-    .replace('<title>CVitae | Tu Agente de Carrera Inteligente para Paraguay</title>', metaTagsBlock)
+    .replace('<title>CVitae | Empleos, oportunidades y CV en Paraguay y LATAM</title>', metaTagsBlock)
     .replace('<div id="root"></div>', `<div id="root">${contentHtml}</div>`)
 }
 
@@ -338,21 +338,25 @@ ${snapshotNav('/oportunidades', '← Oportunidades')}
 // ── Main ───────────────────────────────────────────────────────────────────
 async function prerender() {
   if (!existsSync(join(distDir, 'index.html'))) {
-    console.error('dist/index.html no existe.')
-    process.exit(0)
+    throw new Error('prerender_template_missing')
   }
   const templateHtml = readFileSync(join(distDir, 'index.html'), 'utf-8')
+  const rootMarker = '<div id="root"></div>'
+  const rootMarkerCount = templateHtml.split(rootMarker).length - 1
+  if (rootMarkerCount !== 1 || templateHtml.includes('<main aria-label="CVitae" data-prerender>')) {
+    throw new Error('prerender_template_not_pristine')
+  }
 
   // ── 1. Home with static fallback ─────────────────────────────────────────
   const homeFallback = `<main aria-label="CVitae" data-prerender>
   <section>
-    <p>Gratis · Paraguay y Latinoamérica</p>
-    <h1>Analizá tu CV gratis. Después, encontrá el trabajo que te corresponde.</h1>
-    <p>Subí tu CV y recibí en segundos un score ATS, fortalezas y mejoras concretas.</p>
+    <p>Empleos · oportunidades · Paraguay y LATAM</p>
+    <h1>Encontrá oportunidades y prepará mejores postulaciones.</h1>
+    <p>CVitae reúne empleos, becas y otras oportunidades, entiende qué busca cada una y las compara con tu experiencia para ayudarte a adaptar tu CV y postular mejor, sin inventar experiencia.</p>
     <ol><li>CV</li><li>Perfil entendido</li><li>Matches</li><li>Próxima acción</li></ol>
     <p><a href="#analizador">Analizar mi CV gratis</a> · <a href="/mi-carrera">Crear mi perfil</a></p>
   </section>
-  <section id="analizador"><h2>Tu score ATS real, en segundos</h2><p>Análisis inicial sin crear una cuenta.</p></section>
+  <section id="analizador"><h2>Analizá tu CV y entendé qué mejorar</h2><p>El score ATS y las mejoras concretas son una de las herramientas de CV de CVitae.</p></section>
   <section><h2>Inteligencia profesional para avanzar</h2><p>Matching de oportunidades, CV adaptado, alertas y recomendaciones para candidatos.</p></section>
   <section><h2>Herramientas para empresas</h2><p>Análisis de CVs, ranking comparativo y evaluación explicable para revisión humana.</p><a href="/empresas">Conocer la solución para empresas</a></section>
   <nav aria-label="Secciones principales"><a href="/oportunidades">Oportunidades</a> · <a href="/blog">Blog</a> · <a href="/sobre-cvitae">Sobre CVitae</a></nav>

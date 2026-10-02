@@ -5,6 +5,7 @@ import {
 } from '../supabase/functions/_shared/matching.ts'
 import {
   isHighMatchAlertDecision,
+  isPotentialDiscoveryDecision,
   isVisibleMatchDecision,
   rankOpportunitiesV2,
   V2_PRESET_FULL,
@@ -20,12 +21,13 @@ const candidate = {
     location: 'Paraguay', seniority: 'mid', modality: 'remote',
     languages: ['Spanish', 'English'],
     candidate_truth: { evidence: { professional_title: 'CONFIRMED', summary: 'CONFIRMED', skills: 'CONFIRMED', location: 'CONFIRMED', seniority: 'CONFIRMED', languages: 'CONFIRMED' } },
+    candidate_eligibility: { version: 1, residence_country: 'PY', citizenship_countries: [], work_authorization_countries: [], evidence: { residence_country: 'USER_CONFIRMED', citizenship_countries: 'UNKNOWN', work_authorization_countries: 'UNKNOWN' }, confirmed_at: null },
   },
 }
 const base = {
   source_match_state: 'ALLOWED', is_active: true, verification_status: 'verified',
   match_eligible: true, alerts_eligible: true, deleted_at: null, archived_at: null,
-  deadline: FUTURE, eligible_countries: ['py'], eligible_regions: [], remote_scope: 'WORLDWIDE',
+  deadline: FUTURE, remote: true, work_arrangement: 'Remote', eligible_countries: ['py'], eligible_regions: [], remote_scope: 'WORLDWIDE',
   opportunity_type: 'job', organization: 'Fixture NGO', location: 'Remote',
 }
 const good = {
@@ -47,17 +49,22 @@ function decisions(profile: any, opportunities: any[]) {
 
 const baseline = decisions(candidate, [good, conflict, unknownEligibility, thin])
 const byId = new Map(baseline.decisions.map(({ opp, decision }) => [opp.id, decision]))
-assert.equal(byId.get('good')?.outcome, 'MATCH', 'compatible, eligible evidence is a visible base match')
+assert.equal(byId.get('good')?.outcome, 'ABSTAIN', 'generic tags alone cannot establish professional evidence')
 assert.equal(byId.get('conflict')?.outcome, 'DENY', 'professional conflict cannot reach any consumer despite semantic similarity')
 assert.equal(byId.get('unknown-eligibility')?.outcome, 'ABSTAIN', 'unknown eligibility cannot become a confident match')
 assert.equal(byId.get('thin')?.outcome, 'ABSTAIN', 'insufficient professional evidence cannot become a confident match')
+assert.equal(isPotentialDiscoveryDecision(byId.get('unknown-eligibility')), false, 'generic tags cannot turn unknown eligibility into discovery evidence')
+assert.equal(isPotentialDiscoveryDecision(byId.get('conflict')), false, 'professional conflict is never potential')
+assert.equal(isPotentialDiscoveryDecision(decisions(candidate, [{ ...good, id: 'ineligible', eligible_countries: ['us'] }]).decisions[0].decision), false, 'explicit ineligibility is never potential')
+assert.equal(isPotentialDiscoveryDecision(byId.get('thin')), false, 'insufficient professional evidence is hidden, not potential')
 
 // This is the exact outcome boundary used by match-batch, then consumed by all
 // interactive B2C surfaces. Counts are based on MATCH only.
 const apiMatches = baseline.rankedV2.filter(({ decision }) => isVisibleMatchDecision(decision))
-assert.deepEqual(apiMatches.map(({ opp }) => opp.id), ['good'], 'only MATCH is exposed through the common B2C payload')
-assert.equal(apiMatches.length, 1, 'Dashboard/Alertas/CV Vivo counts cannot include ABSTAIN or DENY')
-assert.equal(isHighMatchAlertDecision(byId.get('good')), true, 'eligible high-confidence base match may be delivered by alert policy')
+assert.deepEqual(apiMatches.map(({ opp }) => opp.id), [], 'generic tags cannot create a visible MATCH')
+assert.equal(apiMatches.length, 0, 'Dashboard/Alertas/CV Vivo counts cannot include ABSTAIN or DENY')
+assert.deepEqual(baseline.rankedPotentialV2.map(({ opp }) => opp.id), [], 'thin professional evidence cannot enter potential discovery')
+assert.equal(isHighMatchAlertDecision(byId.get('good')), false, 'insufficient professional evidence cannot be delivered by alert policy')
 assert.equal(isHighMatchAlertDecision(byId.get('unknown-eligibility')), false, 'ABSTAIN never qualifies for high-match delivery')
 assert.equal(isHighMatchAlertDecision(byId.get('conflict')), false, 'DENY never qualifies for high-match delivery')
 
@@ -95,9 +102,9 @@ assert.match(matchingV2, /export type \{[\s\S]*MatchDecision/, 'Edge matcher re-
 assert.match(batch, /isVisibleMatchDecision/, 'match-batch owns the common MATCH-only API payload')
 assert.match(email, /isHighMatchAlertDecision/, 'scheduled email starts from the same base decision')
 assert.doesNotMatch(email, /rankOpportunities\(profile/, 'scheduled email has no legacy candidate-fit invocation')
-assert.match(email, /deadline\.is\.null,deadline\.gte\.\$\{new Date\(\)\.toISOString\(\)\}/, 'scheduled email fail-closes expired opportunities while a missing deadline remains UNKNOWN')
-assert.match(profileBoundary, /updated_at: new Date\(\)\.toISOString\(\)/, 'candidate truth persistence updates the Dashboard cache signature')
-assert.match(dashboard, /updatedAt: profile\?\.updated_at/, 'Dashboard invalidates cached decisions after a candidate profile update')
+assert.match(email, /from\("opportunity_alert_universe"\)/, 'scheduled email discovers rows through the canonical alert universe, which applies lifecycle/deadline readiness')
+assert.match(dashboard, /matchingProfileSignature/, 'Dashboard cache uses the shared matching profile signature')
+assert.match(batch, /profile_signature: matchingProfileSignature/, 'match-batch persists the same matching profile signature')
 assert.match(profileBoundary, /action === 'opportunity_preference'/, 'likes remain a feedback action, not a matching decision engine')
 
 console.log('verify_matching_b2c_consumers: PASS consumers=5 match_only=1 alert_stricter=true profile_refresh=true likes=feedback_only')

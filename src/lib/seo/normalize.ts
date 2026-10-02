@@ -5,6 +5,7 @@
  */
 
 import { toGoogleEmploymentType } from './employment-type'
+import { isISO3166Alpha2 } from '../../../shared/iso-countries'
 
 /** Raw row from the opportunities table (only the fields relevant to SEO) */
 export interface RawOpportunity {
@@ -41,7 +42,7 @@ export interface NormalizedOpportunity {
   organization: string | null
   addressLocality: string | null // city or location field
   addressRegion: string | null   // department/state field
-  addressCountry: string         // ISO 3166-1 alpha-2 ('PY' default)
+  addressCountry: string | null  // ISO 3166-1 alpha-2 only when explicitly valid
   employmentType: string | null  // valid Google Jobs value or null
   opportunityType: string | null // normalized opportunity_type
   applicationUrl: string | null  // https:// only, or null
@@ -98,11 +99,10 @@ function normalizeDeadline(raw: string | null | undefined): string | null {
   }
 }
 
-function normalizeCountry(code: string | null | undefined): string {
-  if (!code) return 'PY'
+export function normalizeCountry(code: string | null | undefined): string | null {
+  if (!code) return null
   const upper = code.trim().toUpperCase()
-  // Accept ISO 3166-1 alpha-2 (2 letters)
-  return /^[A-Z]{2}$/.test(upper) ? upper : 'PY'
+  return isISO3166Alpha2(upper) ? upper : null
 }
 
 export function normalizeOpportunity(raw: RawOpportunity): NormalizedOpportunity {

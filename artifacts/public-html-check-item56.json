@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-09-24T02:31:50.296Z",
+  "mode": "local",
+  "total_routes_checked": 14,
+  "pass_count": 14,
+  "fail_count": 0,
+  "families": {
+    "empleos": {
+      "checked": 2,
+      "pass": 2,
+      "fail": 0
+    },
+    "oportunidades": {
+      "checked": 2,
+      "pass": 2,
+      "fail": 0
+    },
+    "blog": {
+      "checked": 1,
+      "pass": 1,
+      "fail": 0
+    },
+    "vacante": {
+      "checked": 1,
+      "pass": 1,
+      "fail": 0
+    }
+  },
+  "anomaly_reasons": [],
+  "canonical_mismatches": [],
+  "home_body_contamination": [],
+  "thin_or_missing_content": [],
+  "sitemap_failures": []
+}

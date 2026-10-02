@@ -2,23 +2,33 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { buildEffectiveSeoInventory, seoCanonicalPaths } from '../src/lib/seo-inventory.ts'
+import { sitemapIndexEntries } from '../src/lib/sitemap-universe.js'
 
 const root = path.resolve(import.meta.dirname, '..')
 const fixture = JSON.parse(fs.readFileSync(path.join(root, 'scripts/fixtures/seo-inventory.json'), 'utf8'))
 const inventory = buildEffectiveSeoInventory(fixture.opportunities, fixture.policies)
 const expected = seoCanonicalPaths(inventory)
 const same = (actual: string[], label: string) => assert.deepEqual([...new Set(actual)].sort(), expected, label)
-const sitemap = fs.readFileSync(path.join(root, 'dist/sitemap.xml'), 'utf8')
-const sitemapPaths = [...sitemap.matchAll(/<loc>https:\/\/cvitae\.lat(\/[^<]+)<\/loc>/g)].map(match => match[1])
-  .filter(item => /^\/(empleos|oportunidades)\/[^/]+$/.test(item) && !['/oportunidades/paraguay', '/oportunidades/latam'].includes(item))
-same(sitemapPaths, 'static sitemap must equal effective SEO inventory')
+const locs = (xml: string) => [...xml.matchAll(/<loc>https:\/\/cvitae\.lat(\/[^<]+)<\/loc>/g)].map(match => match[1])
+
+const sitemapIndex = fs.readFileSync(path.join(root, 'dist/sitemap.xml'), 'utf8')
+assert.match(sitemapIndex, /<sitemapindex\b/, 'build sitemap must be an index')
+const childNames = [...sitemapIndex.matchAll(/<loc>https:\/\/cvitae\.lat\/([^<]+)<\/loc>/g)].map(match => match[1])
+assert.ok(childNames.length > 0, 'sitemap index must advertise child files')
+const opportunityPaths: string[] = []
+for (const childName of childNames) {
+  const childPath = path.join(root, 'dist', ...childName.split('/'))
+  assert.ok(fs.existsSync(childPath), `advertised child must exist in build snapshot: ${childName}`)
+  const childXml = fs.readFileSync(childPath, 'utf8')
+  if (childName.startsWith('sitemap-opportunities/')) opportunityPaths.push(...locs(childXml))
+}
+same(opportunityPaths.filter(item => /^\/(empleos|oportunidades)\/[^/]+$/.test(item)), 'build child opportunity sitemaps must equal effective SEO inventory')
+assert.deepEqual(childNames.filter(name => name.startsWith('sitemap-opportunities/')), sitemapIndexEntries(expected.length).filter(name => name.startsWith('sitemap-opportunities/')), 'build child pagination must match shared universe')
 
 const prerendered = expected.filter(item => fs.existsSync(path.join(root, 'dist', ...item.split('/').filter(Boolean), 'index.html')))
 same(prerendered, 'every effective SEO URL must have a prerendered public page')
 for (const canonical of expected) {
-  const alias = canonical.startsWith('/empleos/')
-    ? canonical.replace('/empleos/', '/oportunidades/')
-    : canonical.replace('/oportunidades/', '/empleos/')
+  const alias = canonical.startsWith('/empleos/') ? canonical.replace('/empleos/', '/oportunidades/') : canonical.replace('/oportunidades/', '/empleos/')
   assert.equal(fs.existsSync(path.join(root, 'dist', ...alias.split('/').filter(Boolean), 'index.html')), false, `wrong family must not produce static content: ${alias}`)
 }
 
@@ -27,19 +37,9 @@ const redirectTargets = redirects.map(line => line.split(/\s+/)[1])
 same(redirectTargets, 'redirect targets must be canonical effective SEO URLs')
 assert.ok(redirects.every(line => line.endsWith(' 301!')), 'redirects must be forced HTTP redirects')
 
-// Runtime sitemap is fed by the same buildEffectiveSeoInventory core; this
-// fixture assertion prevents a runtime-specific selection from diverging.
+// Runtime uses the same Opportunity Truth projection; this guards against a
+// build-only URL selection being introduced beside the runtime function.
 same(seoCanonicalPaths(buildEffectiveSeoInventory(fixture.opportunities, fixture.policies)), 'runtime effective inventory')
-console.log(JSON.stringify({
-  total: fixture.opportunities.length,
-  source_permitted: 5,
-  seo_ready: 3,
-  effective_seo: expected.length,
-  unique_canonical: expected.length,
-  runtime_sitemap: expected.length,
-  static_sitemap: sitemapPaths.length,
-  prerender_public_200: prerendered.length,
-  redirects: redirects.length,
-  excluded_policy: 1,
-  excluded_thin: 1,
-}))
+assert.deepEqual(sitemapIndexEntries(2501).filter(name => name.startsWith('sitemap-opportunities/')), ['sitemap-opportunities/1.xml', 'sitemap-opportunities/2.xml', 'sitemap-opportunities/3.xml'], 'shared pagination contract remains 1000/1000/501')
+
+console.log(JSON.stringify({ total: fixture.opportunities.length, effective_seo: expected.length, build_child_opportunity_urls: opportunityPaths.length, prerender_public_200: prerendered.length, redirects: redirects.length, sitemap_children: childNames.length }))

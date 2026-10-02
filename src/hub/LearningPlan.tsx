@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { auth, supabase } from '@/lib/supabase'
+import { B2CProgressLoader } from '@/components/cv/B2CProgressLoader'
 
 const MATCH_BATCH_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1/match-batch'
 
@@ -236,7 +237,7 @@ export default function LearningPlan() {
     finally { setChanging('') }
   }
 
-  if (loading || user === undefined) return <DashboardLayout><div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-[#c9a84c]" /></div></DashboardLayout>
+  if (loading || user === undefined) return <DashboardLayout><div className="mx-auto flex min-h-[60vh] max-w-3xl items-center"><B2CProgressLoader title="Preparando tu plan" description="Conectamos tu objetivo con oportunidades reales y brechas respaldadas." stages={[{ label: 'Leyendo tu objetivo' }, { label: 'Revisando tus oportunidades' }, { label: 'Detectando brechas respaldadas' }, { label: 'Armando tu ruta' }]} /></div></DashboardLayout>
   if (!user) return <DashboardLayout><div className="mx-auto max-w-xl rounded-3xl border border-white/8 bg-white/[0.02] p-8 text-center"><LockKeyhole className="mx-auto h-8 w-8 text-[#c9a84c]" /><h1 className="font-display mt-4 text-3xl text-cream">Tu plan es privado</h1><p className="mt-3 text-sm text-white/45">Ingresá a Mi Carrera para relacionar oportunidades con un plan de aprendizaje.</p><a href="/mi-carrera" className="mt-6 inline-flex rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-medium text-black">Ingresar</a></div></DashboardLayout>
 
   return (
@@ -244,7 +245,7 @@ export default function LearningPlan() {
       <Helmet><title>Plan de aprendizaje | CVitae</title><meta name="robots" content="noindex" /></Helmet>
       <div className="mx-auto max-w-6xl space-y-8">
         <header className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-          <div><p className="text-[10px] uppercase tracking-[0.24em] text-[#c9a84c]">Brechas convertidas en acciones</p><h1 className="font-display mt-3 text-4xl leading-tight text-cream sm:text-5xl">Tu próxima habilidad.<br /><em className="font-normal text-white">Con una razón para aprenderla.</em></h1><p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/45">El plan usa brechas observadas en oportunidades verificadas. Los enlaces llevan a catálogos oficiales o búsquedas controladas; revisá precio, idioma y condiciones en el proveedor.</p></div>
+          <div><p className="text-[10px] uppercase tracking-[0.24em] text-[#c9a84c]">Tu plan para acercarte a tu objetivo</p><h1 className="font-display mt-3 text-3xl leading-tight text-cream sm:text-5xl">Tu próxima habilidad.<br /><em className="font-normal text-white">Con una razón para aprenderla.</em></h1><p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/45">Decinos qué querés lograr. CVitae compara tu objetivo con oportunidades reales y te muestra qué conviene fortalecer, por qué y dónde podés aprenderlo.</p></div>
           <button type="button" onClick={refreshPlan} disabled={refreshing} className="inline-flex h-11 self-start items-center gap-2 rounded-full bg-[#c9a84c] px-5 text-sm font-medium text-black disabled:opacity-40">{refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Actualizar con mis matches</button>
         </header>
 
@@ -252,7 +253,7 @@ export default function LearningPlan() {
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
             <div>
               <p className="text-[10px] uppercase tracking-[0.2em] text-[#c9a84c]">Tu norte profesional</p>
-              <h2 className="font-display mt-2 text-3xl text-cream">Decinos a dónde querés llegar.</h2>
+              <h2 className="font-display mt-2 text-3xl text-cream">Definí hacia dónde querés ir.</h2>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/45">El CV muestra tu punto de partida. Estas respuestas y las oportunidades que marques con el corazón le dicen a Gemini hacia dónde construir el plan.</p>
             </div>
             {intent.liked_opportunity_ids.length > 0 && <span className="shrink-0 rounded-full border border-rose-300/20 bg-rose-300/[0.06] px-3 py-1.5 text-xs text-rose-100">{intent.liked_opportunity_ids.length} de tu interés</span>}

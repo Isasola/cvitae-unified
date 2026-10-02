@@ -1,3 +1,5 @@
+import { canonicalCandidateProfile } from '../../../shared/candidate-profile.ts'
+
 function cleanSegment(value: unknown, maxLength: number): string {
   return String(value ?? '')
     .replace(/<[^>]*>/g, ' ')
@@ -26,7 +28,8 @@ function cleanStructuredList(value: unknown, maxItems: number, maxItemLength: nu
 }
 
 export function buildProfileEmbeddingText(profile: Record<string, any>): string {
-  const data = profile.profile_data ?? {}
+  const candidate = canonicalCandidateProfile(profile)
+  const data = candidate.profile_data
   const skills = Array.isArray(data.habilidades) ? data.habilidades.join(', ') : ''
   const interests = Array.isArray(data.career_interests) ? data.career_interests.join(', ') : ''
   const education = cleanStructuredList(data.education, 8, 180)

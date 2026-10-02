@@ -83,8 +83,8 @@ export function FeedbackReporter({ audience, feature, className }: { audience: A
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={cn('fixed z-40 inline-flex h-10 items-center gap-2 rounded-full border border-white/12 bg-[#0b0b0b]/95 px-4 text-xs text-white/55 shadow-xl backdrop-blur transition hover:border-[#c9a84c]/35 hover:text-[#dbc16f]', className)} aria-label="Reportar un error o sugerir una mejora">
-        <AlertTriangle className="h-3.5 w-3.5 text-[#c9a84c]" /> Reportar
+      <button type="button" onClick={() => setOpen(true)} className={cn('fixed z-40 inline-flex h-10 items-center gap-2 rounded-full border border-white/12 bg-[#0b0b0b]/95 px-3 text-xs text-white/55 shadow-xl backdrop-blur transition hover:border-[#c9a84c]/35 hover:text-[#dbc16f] sm:px-4', className)} aria-label="Reportar un error o sugerir una mejora">
+        <AlertTriangle className="h-3.5 w-3.5 text-[#c9a84c]" /><span className="max-[430px]:sr-only">Reportar</span>
       </button>
 
       {open && <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 p-3 backdrop-blur-sm sm:items-center" role="presentation">

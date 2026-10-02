@@ -1,0 +1,354 @@
+{
+  "schema_version": "public-seo-inventory:v1",
+  "generated_at": "2026-10-02T01:38:49.048Z",
+  "rows": [
+    {
+      "id": "job",
+      "slug": "programme-officer",
+      "title": "Programme Officer",
+      "organization": "UN",
+      "description": "Programme delivery, requirements and monitoring responsibilities. Programme delivery, requirements and monitoring responsibilities.",
+      "source": "computrabajo",
+      "opportunity_type": "job",
+      "is_active": true,
+      "verification_status": "verified",
+      "catalog_eligible": true,
+      "seo_eligible": true,
+      "seo_status": "eligible",
+      "created_at": "2026-09-20T00:00:00Z",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "canonical_source": "computrabajo",
+      "canonical_path": "/empleos/programme-officer",
+      "distribution": {
+        "canonicalSource": "computrabajo",
+        "sourceAttributionRequired": false,
+        "sourceAttributionState": "UNKNOWN",
+        "applicationRouting": {
+          "state": "UNKNOWN",
+          "reason": "APPLICATION_ROUTING_NOT_EVIDENCED",
+          "provenance": "https://py.computrabajo.com/avisolegal/"
+        },
+        "seo": {
+          "allowed": true,
+          "canonicalSource": "computrabajo",
+          "rowReadiness": {
+            "state": "READY",
+            "reasons": []
+          },
+          "capabilityState": "DENIED",
+          "adminSwitchState": "ENABLED",
+          "storedGateState": "TRUE",
+          "reasons": [],
+          "permissionReasons": [
+            "SOURCE_CAPABILITY_DENIED",
+            "SOURCE_SEO_PERMISSION_DENIED"
+          ],
+          "temporaryException": {
+            "name": "TEMP_LEGACY_SEO_EXCEPTION_UNTIL_2026_10_09",
+            "canonicalSource": "computrabajo",
+            "expiresOn": "2026-10-09",
+            "consumer": "seo",
+            "scope": "existing-first-party-seo-only",
+            "state": "ACTIVE",
+            "permissionState": "DENIED",
+            "applied": true
+          }
+        },
+        "jobPosting": {
+          "allowed": false,
+          "canonicalSource": "computrabajo",
+          "rowReadiness": {
+            "state": "READY",
+            "reasons": []
+          },
+          "capabilityState": "DENIED",
+          "adminSwitchState": "ENABLED",
+          "storedGateState": "NOT_APPLICABLE",
+          "reasons": [
+            "SOURCE_CAPABILITY_DENIED",
+            "SOURCE_JOBPOSTING_PERMISSION_DENIED"
+          ],
+          "permissionReasons": [
+            "SOURCE_CAPABILITY_DENIED",
+            "SOURCE_JOBPOSTING_PERMISSION_DENIED"
+          ],
+          "temporaryException": null
+        },
+        "googleJobs": {
+          "allowed": false,
+          "canonicalSource": "computrabajo",
+          "rowReadiness": {
+            "state": "READY",
+            "reasons": []
+          },
+          "capabilityState": "DENIED",
+          "adminSwitchState": "ENABLED",
+          "storedGateState": "NOT_APPLICABLE",
+          "reasons": [
+            "SOURCE_CAPABILITY_DENIED",
+            "SOURCE_GOOGLEJOBS_PERMISSION_DENIED"
+          ],
+          "permissionReasons": [
+            "SOURCE_CAPABILITY_DENIED",
+            "SOURCE_GOOGLEJOBS_PERMISSION_DENIED"
+          ],
+          "temporaryException": null
+        },
+        "thirdParty": {
+          "allowed": false,
+          "canonicalSource": "computrabajo",
+          "rowReadiness": {
+            "state": "READY",
+            "reasons": []
+          },
+          "capabilityState": "DENIED",
+          "adminSwitchState": "ENABLED",
+          "storedGateState": "NOT_APPLICABLE",
+          "reasons": [
+            "THIRD_PARTY_DELIVERY_UNAVAILABLE",
+            "SOURCE_CAPABILITY_DENIED",
+            "SOURCE_THIRDPARTY_PERMISSION_DENIED"
+          ],
+          "permissionReasons": [
+            "SOURCE_CAPABILITY_DENIED",
+            "SOURCE_THIRDPARTY_PERMISSION_DENIED"
+          ],
+          "temporaryException": null
+        }
+      }
+    },
+    {
+      "id": "non-job",
+      "slug": "regional-fellowship",
+      "title": "Regional Fellowship",
+      "organization": "UNESCO",
+      "description": "A factual fellowship description with eligibility, requirements, deadline and application instructions for candidates.",
+      "source": "unjobs",
+      "opportunity_type": "fellowship",
+      "is_active": true,
+      "verification_status": "verified",
+      "catalog_eligible": true,
+      "seo_eligible": true,
+      "seo_status": "eligible",
+      "updated_at": "2026-09-20T00:00:00Z",
+      "canonical_source": "unjobs",
+      "canonical_path": "/oportunidades/regional-fellowship",
+      "distribution": {
+        "canonicalSource": "unjobs",
+        "sourceAttributionRequired": false,
+        "sourceAttributionState": "UNKNOWN",
+        "applicationRouting": {
+          "state": "UNKNOWN",
+          "reason": "SOURCE_PERMISSION_NOT_EVIDENCED",
+          "provenance": "docs/source-permission-matrix.md; no affirmative permission evidence identified"
+        },
+        "seo": {
+          "allowed": true,
+          "canonicalSource": "unjobs",
+          "rowReadiness": {
+            "state": "READY",
+            "reasons": []
+          },
+          "capabilityState": "UNKNOWN",
+          "adminSwitchState": "ENABLED",
+          "storedGateState": "TRUE",
+          "reasons": [],
+          "permissionReasons": [
+            "SOURCE_CAPABILITY_UNKNOWN",
+            "SOURCE_SEO_PERMISSION_UNKNOWN"
+          ],
+          "temporaryException": {
+            "name": "TEMP_LEGACY_SEO_EXCEPTION_UNTIL_2026_10_09",
+            "canonicalSource": "computrabajo",
+            "expiresOn": "2026-10-09",
+            "consumer": "seo",
+            "scope": "existing-first-party-seo-only",
+            "state": "NOT_APPLICABLE",
+            "permissionState": null,
+            "applied": false
+          }
+        },
+        "jobPosting": {
+          "allowed": false,
+          "canonicalSource": "unjobs",
+          "rowReadiness": {
+            "state": "NOT_READY",
+            "reasons": [
+              "NOT_JOB_LIKE"
+            ]
+          },
+          "capabilityState": "UNKNOWN",
+          "adminSwitchState": "ENABLED",
+          "storedGateState": "NOT_APPLICABLE",
+          "reasons": [
+            "NOT_JOB_LIKE",
+            "SOURCE_CAPABILITY_UNKNOWN",
+            "SOURCE_JOBPOSTING_PERMISSION_UNKNOWN"
+          ],
+          "permissionReasons": [
+            "SOURCE_CAPABILITY_UNKNOWN",
+            "SOURCE_JOBPOSTING_PERMISSION_UNKNOWN"
+          ],
+          "temporaryException": null
+        },
+        "googleJobs": {
+          "allowed": false,
+          "canonicalSource": "unjobs",
+          "rowReadiness": {
+            "state": "NOT_READY",
+            "reasons": [
+              "NOT_JOB_LIKE"
+            ]
+          },
+          "capabilityState": "UNKNOWN",
+          "adminSwitchState": "ENABLED",
+          "storedGateState": "NOT_APPLICABLE",
+          "reasons": [
+            "NOT_JOB_LIKE",
+            "SOURCE_CAPABILITY_UNKNOWN",
+            "SOURCE_GOOGLEJOBS_PERMISSION_UNKNOWN"
+          ],
+          "permissionReasons": [
+            "SOURCE_CAPABILITY_UNKNOWN",
+            "SOURCE_GOOGLEJOBS_PERMISSION_UNKNOWN"
+          ],
+          "temporaryException": null
+        },
+        "thirdParty": {
+          "allowed": false,
+          "canonicalSource": "unjobs",
+          "rowReadiness": {
+            "state": "NOT_READY",
+            "reasons": [
+              "NOT_JOB_LIKE"
+            ]
+          },
+          "capabilityState": "UNKNOWN",
+          "adminSwitchState": "ENABLED",
+          "storedGateState": "NOT_APPLICABLE",
+          "reasons": [
+            "NOT_JOB_LIKE",
+            "THIRD_PARTY_DELIVERY_UNAVAILABLE",
+            "SOURCE_CAPABILITY_UNKNOWN",
+            "SOURCE_THIRDPARTY_PERMISSION_UNKNOWN"
+          ],
+          "permissionReasons": [
+            "SOURCE_CAPABILITY_UNKNOWN",
+            "SOURCE_THIRDPARTY_PERMISSION_UNKNOWN"
+          ],
+          "temporaryException": null
+        }
+      }
+    },
+    {
+      "id": "restricted",
+      "slug": "restricted",
+      "title": "Restricted",
+      "organization": "H",
+      "description": "This role includes factual responsibilities, qualifications, application context, and a clear explanation of the position. This role includes factual responsibilities and qualifications.",
+      "source": "himalayas",
+      "opportunity_type": "job",
+      "is_active": true,
+      "verification_status": "verified",
+      "catalog_eligible": true,
+      "seo_eligible": true,
+      "seo_status": "eligible",
+      "canonical_source": "himalayas",
+      "canonical_path": "/empleos/restricted",
+      "distribution": {
+        "canonicalSource": "himalayas",
+        "sourceAttributionRequired": true,
+        "sourceAttributionState": "ALLOWED",
+        "applicationRouting": {
+          "state": "ALLOWED",
+          "reason": "PRESERVE_ORIGINAL_HIMALAYAS_LINK",
+          "provenance": "https://himalayas.app/api"
+        },
+        "seo": {
+          "allowed": true,
+          "canonicalSource": "himalayas",
+          "rowReadiness": {
+            "state": "READY",
+            "reasons": []
+          },
+          "capabilityState": "ALLOWED",
+          "adminSwitchState": "ENABLED",
+          "storedGateState": "TRUE",
+          "reasons": [],
+          "permissionReasons": [],
+          "temporaryException": {
+            "name": "TEMP_LEGACY_SEO_EXCEPTION_UNTIL_2026_10_09",
+            "canonicalSource": "computrabajo",
+            "expiresOn": "2026-10-09",
+            "consumer": "seo",
+            "scope": "existing-first-party-seo-only",
+            "state": "NOT_APPLICABLE",
+            "permissionState": null,
+            "applied": false
+          }
+        },
+        "jobPosting": {
+          "allowed": false,
+          "canonicalSource": "himalayas",
+          "rowReadiness": {
+            "state": "READY",
+            "reasons": []
+          },
+          "capabilityState": "DENIED",
+          "adminSwitchState": "ENABLED",
+          "storedGateState": "NOT_APPLICABLE",
+          "reasons": [
+            "SOURCE_CAPABILITY_DENIED",
+            "SOURCE_JOBPOSTING_PERMISSION_DENIED"
+          ],
+          "permissionReasons": [
+            "SOURCE_CAPABILITY_DENIED",
+            "SOURCE_JOBPOSTING_PERMISSION_DENIED"
+          ],
+          "temporaryException": null
+        },
+        "googleJobs": {
+          "allowed": false,
+          "canonicalSource": "himalayas",
+          "rowReadiness": {
+            "state": "READY",
+            "reasons": []
+          },
+          "capabilityState": "DENIED",
+          "adminSwitchState": "ENABLED",
+          "storedGateState": "NOT_APPLICABLE",
+          "reasons": [
+            "SOURCE_CAPABILITY_DENIED",
+            "SOURCE_GOOGLEJOBS_PERMISSION_DENIED"
+          ],
+          "permissionReasons": [
+            "SOURCE_CAPABILITY_DENIED",
+            "SOURCE_GOOGLEJOBS_PERMISSION_DENIED"
+          ],
+          "temporaryException": null
+        },
+        "thirdParty": {
+          "allowed": false,
+          "canonicalSource": "himalayas",
+          "rowReadiness": {
+            "state": "READY",
+            "reasons": []
+          },
+          "capabilityState": "DENIED",
+          "adminSwitchState": "ENABLED",
+          "storedGateState": "NOT_APPLICABLE",
+          "reasons": [
+            "THIRD_PARTY_DELIVERY_UNAVAILABLE",
+            "SOURCE_CAPABILITY_DENIED",
+            "SOURCE_THIRDPARTY_PERMISSION_DENIED"
+          ],
+          "permissionReasons": [
+            "SOURCE_CAPABILITY_DENIED",
+            "SOURCE_THIRDPARTY_PERMISSION_DENIED"
+          ],
+          "temporaryException": null
+        }
+      }
+    }
+  ]
+}

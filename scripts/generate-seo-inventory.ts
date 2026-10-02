@@ -23,7 +23,7 @@ async function input(): Promise<Input> {
   const { data: policies, error: policyError } = await db.rpc('get_source_distribution_policy')
   if (policyError) throw policyError
   const opportunities = await fetchAllPages<Record<string, any>>(PAGE_SIZE, async (offset, size) => {
-    const { data, error } = await db.from('opportunities').select(OPPORTUNITY_COLUMNS).not('slug','is',null).order('updated_at', { ascending:false }).order('id', { ascending:true }).range(offset, offset + size - 1)
+    const { data, error } = await db.from('opportunity_seo_universe').select(OPPORTUNITY_COLUMNS).not('slug','is',null).order('updated_at', { ascending:false }).order('id', { ascending:true }).range(offset, offset + size - 1)
     if (error) throw error
     return data || []
   })

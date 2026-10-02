@@ -1,0 +1,74 @@
+{
+  "fixture_kind": "REPRESENTATIVE_FIXTURE",
+  "rows": [
+    {
+      "id": "rich-unjobs",
+      "slug": "monitor-a-de-asistencia-humanitaria-bogota-colombia-4f416c75",
+      "title": "Monitor/a de Asistencia Humanitaria",
+      "organization": "ACF International",
+      "description": "Coordinarás actividades de asistencia humanitaria, seguimiento de proyectos y análisis de riesgos.",
+      "requirements": ["1 año de experiencia", "Español"],
+      "responsibilities": ["Coordinar actividades", "Reportar avances"],
+      "tags": ["logística humanitaria", "gestión de proyectos"],
+      "location": "Bogotá, Colombia",
+      "city": "Bogotá",
+      "country_code": "CO",
+      "type": "full_time",
+      "deadline": "2026-12-31",
+      "source": "unjobs",
+      "source_url": "https://example.org/unjobs",
+      "opportunity_type": "job"
+    },
+    {
+      "id": "rich-local",
+      "slug": "analista-local",
+      "title": "Analista de Operaciones",
+      "organization": "Empresa local",
+      "description": "Rol de operaciones con experiencia en análisis y coordinación.",
+      "tags": ["operaciones", "análisis"],
+      "location": "Asunción, Paraguay",
+      "country_code": "PY",
+      "type": "part_time",
+      "source": "computrabajo",
+      "opportunity_type": "job"
+    },
+    {
+      "id": "rich-remote",
+      "slug": "remote-engineer",
+      "title": "Remote Software Engineer",
+      "organization": "Remote Provider",
+      "description": "Engineering role with explicit remote scope.",
+      "remote_scope": "COUNTRY_SPECIFIC",
+      "eligible_regions": ["LATAM"],
+      "tags": ["software", "engineering"],
+      "source": "himalayas",
+      "opportunity_type": "job"
+    },
+    {
+      "id": "rich-wwr",
+      "slug": "remote-support-specialist",
+      "title": "Remote Support Specialist",
+      "organization": "Remote Provider",
+      "description": "Remote support role with explicit regional eligibility and application details.",
+      "tags": ["customer-support", "remote"],
+      "location": "Remote",
+      "remote_scope": "REGIONAL",
+      "eligible_regions": ["LATAM"],
+      "type": "full_time",
+      "source": "weworkremotely",
+      "opportunity_type": "job"
+    },
+    {
+      "id": "rich-non-job",
+      "slug": "regional-fellowship",
+      "title": "Regional Fellowship",
+      "organization": "UNESCO",
+      "description": "Fellowship with eligibility and application information.",
+      "eligible_countries": ["PY", "CO"],
+      "education_level": "University",
+      "funding_type": "fully_funded",
+      "source": "unjobs",
+      "opportunity_type": "fellowship"
+    }
+  ]
+}

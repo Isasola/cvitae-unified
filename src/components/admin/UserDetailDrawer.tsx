@@ -35,9 +35,20 @@ interface UserDetailData {
     completeness_max: number
   }
   matching?: {
-    match_count: number
+    match_count: number | null
     top_score: number | null
     last_match_at: string | null
+    status?: string
+    potential_scoreable_count?: number | null
+    visible_potential_count?: number | null
+    diagnostics?: {
+      coverage_state?: string
+      eligibility_unknown?: number
+      professional_fit_known?: number
+      primary_retrieval?: number
+      semantic_retrieval?: number
+      top_reason_codes?: Record<string, number>
+    } | null
   }
   warnings?: string[]
 }
@@ -291,13 +302,21 @@ export function UserDetailDrawer({
                 {data.matching && (
                   <Section title="Matching">
                     <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 space-y-1.5">
-                      <Row label="Matches en DB" value={data.matching.match_count} />
+                      <Row label="Estado" value={data.matching.status || "UNKNOWN"} />
+                      {data.matching.status === 'STALE' && <Row label="Diagnóstico" value="Anterior a la última versión del perfil; no es estado actual" />}
+                      {data.matching.status !== 'STALE' && <Row label="Matches confirmados" value={data.matching.match_count ?? "UNKNOWN"} />}
+                      {data.matching.status !== 'STALE' && data.matching.visible_potential_count != null && <Row label="Potenciales visibles" value={data.matching.visible_potential_count} />}
+                      {data.matching.status !== 'STALE' && data.matching.potential_scoreable_count != null && <Row label="Candidatos potenciales scoreables" value={data.matching.potential_scoreable_count} />}
+                      {data.matching.diagnostics?.coverage_state && <Row label="Cobertura" value={data.matching.diagnostics.coverage_state} />}
+                      {data.matching.diagnostics?.eligibility_unknown != null && <Row label="Elegibilidad UNKNOWN" value={data.matching.diagnostics.eligibility_unknown} />}
                       {data.matching.top_score !== null && <Row label="Top score" value={`${Math.round(data.matching.top_score)}/100`} />}
                       {data.matching.last_match_at && <Row label="Último run" value={new Date(data.matching.last_match_at).toLocaleDateString('es-PY')} />}
                       <Row label="Matches visibles" value={
-                        data.profile.is_subscribed
-                          ? `${data.matching.match_count} (PRO — todos)`
-                          : `${Math.min(data.matching.match_count, 3)} / ${data.matching.match_count} (FREE — máx 3)`
+                        data.matching.match_count == null
+                          ? "UNKNOWN — no inferir cero"
+                          : data.profile.is_subscribed
+                            ? `${data.matching.match_count} (PRO — todos)`
+                            : `${Math.min(data.matching.match_count, 3)} / ${data.matching.match_count} (FREE — máx 3)`
                       } />
                     </div>
                   </Section>

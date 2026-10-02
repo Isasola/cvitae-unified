@@ -40,13 +40,8 @@ begin
     updated_at = clock_timestamp(), updated_by = left(coalesce(nullif(p_actor, ''), 'admin'), 120)
   where source = p_source returning * into v_after;
 
-  -- Disabling a source is safe to fan out as a kill-switch. Enabling it never
-  -- promotes rows: each row needs its own factory/quality readiness evidence.
-  if p_changes ? 'matching_enabled' and (p_changes->>'matching_enabled')::boolean is false then
-    update public.opportunities set match_eligible = false
-    where source = p_source and verification_status = 'verified' and is_active and deleted_at is null and match_eligible is distinct from false;
-    get diagnostics v_impacted = row_count;
-  end if;
+  -- Operational switches never mutate intrinsic row readiness. Effective
+  -- consumer eligibility is computed by the canonical Opportunity Universe.
 
   insert into public.admin_policy_events(entity_type, entity_key, before_state, after_state, impacted_rows, actor)
   values ('source', p_source, to_jsonb(v_current), to_jsonb(v_after), v_impacted, left(coalesce(nullif(p_actor, ''), 'admin'), 120));

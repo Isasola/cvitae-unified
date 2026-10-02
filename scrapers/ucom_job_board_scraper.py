@@ -123,9 +123,7 @@ def _parse_cpt_posts(posts: list[dict], now: datetime) -> list[dict]:
             "source_authority": "aggregator",
             "original_source_url": source_url,
             "original_source_verified": False,
-            "eligible_regions": ["PY"],
             "published_at": published.date().isoformat(),
-            "deadline": _op_deadline(published, now),
             "tags": ["UCOM", "Universidad Comunera", "empleo", "Paraguay"],
             "description": description[:4000],
         })
@@ -168,9 +166,7 @@ def _parse_html_fallback(html: str, base_url: str, now: datetime) -> list[dict]:
                 "source_authority": "aggregator",
                 "original_source_url": source_url,
                 "original_source_verified": False,
-                "eligible_regions": ["PY"],
                 "published_at": now.date().isoformat(),
-                "deadline": _op_deadline(now, now),
                 "tags": ["UCOM", "Universidad Comunera", "empleo", "Paraguay"],
                 "description": title,
             })
@@ -211,9 +207,7 @@ def _parse_html_fallback(html: str, base_url: str, now: datetime) -> list[dict]:
             "source_authority": "aggregator",
             "original_source_url": source_url,
             "original_source_verified": False,
-            "eligible_regions": ["PY"],
             "published_at": published.date().isoformat(),
-            "deadline": _op_deadline(published, now),
             "tags": ["UCOM", "Universidad Comunera", "empleo", "Paraguay"],
             "description": item.get_text(" ", strip=True)[:4000],
         })

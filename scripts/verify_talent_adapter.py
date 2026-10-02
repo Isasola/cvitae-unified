@@ -16,8 +16,10 @@ assert result.description and len(result.description) > 80 and result.organizati
 assert result.source_native_id == "fixture" and result.canonical_url.endswith("id=fixture")
 assert result.country_code is None and result.onsite_country is None and result.eligible_countries == ["US"] and result.remote_scope == "COUNTRY_SPECIFIC"
 assert result.employment_type == "FULL_TIME" and result.recommendation != "AUTO_BLOCK"
+created = talentcom_scraper.merge_detail_into_new_row({"source": "talentcom", "application_url": "https://listing.test"}, result)
+assert created["eligible_countries"] == ["US"] and created["eligible_regions"] == [], "CREATE must retain adapter eligibility"
 patch_data = build_rpc_patch(result, {"country_code":"PY", "location":"Paraguay"})
-assert "type" not in patch_data and "employment_type" not in patch_data and "country_code" not in patch_data
+assert "type" not in patch_data and patch_data["employment_type"] == result.employment_type and "country_code" not in patch_data
 unknown = AdapterResult(source="talentcom", adapter_version="talent:v2.0.0", source_url="x", remote=True)
 unknown.country_code, unknown.remote_scope, unknown.onsite_country = geo_from_detail(None, None, True)
 assert unknown.country_code is None and unknown.remote_scope == "UNKNOWN"
@@ -31,7 +33,7 @@ assert health({"found": 10, "detail_pages_attempted": 10, "detail_pages_success"
 assert health({"found": 10, "detail_pages_attempted": 10, "detail_pages_success": 6, "parsed": 10, "coverage": {"description": .8}})[0] == "WARNING"
 assert health({"found": 0, "detail_pages_attempted": 0, "detail_pages_success": 0, "parsed": 0, "coverage": {}})[0] == "UNKNOWN"
 assert health({"found": 10, "detail_pages_attempted": 10, "detail_pages_success": 10, "parsed": 10, "coverage": {"description": .2}}, {"coverage": {"description": .9}})[0] == "DEGRADED"
-assert result.recommendation == "AUTO_PUBLISH"  # aggregator provenance does not force a block.
+assert result.recommendation == "AUTO_PUBLISH"  # remote + explicit applicant eligibility is routing-ready, not job geo.
 assert recommend(AdapterResult(source="talentcom", adapter_version="talent:v2.0.0", source_url="x"), "DEGRADED").recommendation == "HUMAN_REVIEW"
 
 class RpcResponse:

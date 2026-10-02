@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import WebSocket from 'ws'
 import { STATIC_PUBLIC_SITEMAP_ROUTES } from '../src/lib/static-sitemap-routes.js'
 import { fetchAllPages } from '../src/lib/paged-fetch.js'
-import { canonicalSitemapRows } from '../src/lib/sitemap-universe.js'
+import { canonicalSitemapRows, sitemapIndexEntries } from '../src/lib/sitemap-universe.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const distPath = path.join(__dirname, '..', 'dist')
@@ -16,8 +16,6 @@ const seoInventory = JSON.parse(fs.readFileSync(seoInventoryPath, 'utf8'))
 if (!seoInventory.generated_at || !Array.isArray(seoInventory.rows)) throw new Error('seo_inventory_invalid')
 if (Date.now() - Date.parse(seoInventory.generated_at) > 24 * 60 * 60 * 1000) throw new Error('seo_inventory_stale')
 if (seoInventory.rows.length === 0 && process.env.SEO_INVENTORY_ALLOW_EMPTY !== 'true') throw new Error('seo_inventory_empty')
-const allowedSeoPaths = new Set((seoInventory.rows || []).map(row => row.canonical_path))
-
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
 
@@ -27,6 +25,11 @@ const supabase = supabaseUrl && supabaseAnonKey
 if (!fs.existsSync(distPath)) fs.mkdirSync(distPath, { recursive: true })
 
 const esc = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+const PAGE_SIZE = 1000
+
+function urlsetXml(rows, today) {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.map(row => `  <url>\n    <loc>${esc(`${SITE_URL}${row.canonical_path || row.url}`)}</loc>\n    <lastmod>${(row.updated_at || today).slice(0, 10)}</lastmod>\n    <changefreq>${row.freq || 'weekly'}</changefreq>\n    <priority>${row.priority || '0.7'}</priority>\n  </url>`).join('\n')}\n</urlset>`
+}
 
 async function fetchPublicRows(table, prefix) {
   if (!supabase) return []
@@ -51,38 +54,26 @@ async function generate() {
 
   const vacancies = await fetchPublicRows('recruiter_vacancies', '/vacante')
 
-  let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n'
-  sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-
   const staticPages = STATIC_PUBLIC_SITEMAP_ROUTES
+  const staticRows = staticPages.map(route => ({ ...route, canonical_path: route.url, updated_at: today }))
+  fs.writeFileSync(path.join(distPath, 'sitemap-static.xml'), urlsetXml(staticRows, today))
+  if (blogPosts.length) fs.writeFileSync(path.join(distPath, 'sitemap-blog.xml'), urlsetXml(blogPosts, today))
+  if (vacancies.length) fs.writeFileSync(path.join(distPath, 'sitemap-vacancies.xml'), urlsetXml(vacancies, today))
 
-  staticPages.forEach(p => {
-    sitemap += `  <url>\n    <loc>${esc(`${SITE_URL}${p.url}`)}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${p.freq}</changefreq>\n    <priority>${p.priority}</priority>\n  </url>\n`
-  })
+  for (let page = 1; page <= Math.ceil(jobs.length / PAGE_SIZE); page += 1) {
+    const rows = jobs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(job => ({
+      canonical_path: job.canonical_path,
+      updated_at: job.updated_at,
+      priority: job.canonical_path?.startsWith('/empleos/') ? '0.8' : '0.7',
+    }))
+    const pagePath = path.join(distPath, 'sitemap-opportunities', `${page}.xml`)
+    fs.mkdirSync(path.dirname(pagePath), { recursive: true })
+    fs.writeFileSync(pagePath, urlsetXml(rows, today))
+    if (page === 1) fs.writeFileSync(path.join(distPath, 'sitemap-opportunities-1.xml'), urlsetXml(rows, today))
+  }
 
-  blogPosts.forEach(post => {
-    const lastmod = post.updated_at?.split('T')[0] || today
-    sitemap += `  <url>\n    <loc>${esc(`${SITE_URL}${post.canonical_path}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`
-  })
-
-  const seenSlugs = new Set()
-  jobs?.forEach(job => {
-    if (!job.slug) return
-    const key = job.canonical_path
-    if (!allowedSeoPaths.has(key)) return
-    if (seenSlugs.has(key)) return
-    seenSlugs.add(key)
-    const lastmod = job.updated_at?.split('T')[0] || today
-    const priority = key.startsWith('/empleos/') ? '0.8' : '0.7'
-    sitemap += `  <url>\n    <loc>${esc(`${SITE_URL}${key}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${priority}</priority>\n  </url>\n`
-  })
-
-  vacancies.forEach(v => {
-    const lastmod = v.updated_at?.split('T')[0] || today
-    sitemap += `  <url>\n    <loc>${esc(`${SITE_URL}${v.canonical_path}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`
-  })
-
-  sitemap += '</urlset>'
+  const entries = sitemapIndexEntries(jobs.length, blogPosts.length, vacancies.length, PAGE_SIZE)
+  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map(name => `  <sitemap><loc>${esc(`${SITE_URL}/${name}`)}</loc><lastmod>${today}</lastmod></sitemap>`).join('\n')}\n</sitemapindex>`
   fs.writeFileSync(path.join(distPath, 'sitemap.xml'), sitemap)
   console.log(`✅ Sitemap generado con ${(blogPosts?.length || 0) + jobs.length + staticPages.length + (vacancies?.length || 0)} URLs en ${SITE_URL}`)
 }

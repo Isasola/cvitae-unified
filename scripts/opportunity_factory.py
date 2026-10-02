@@ -25,6 +25,7 @@ from scrapers.opportunity_sink import (
     SEMANTIC_FINGERPRINT_FIELDS,
     _fingerprint,
 )
+from scrapers.eligibility_truth import declared_eligibility_state, geo_decision_ready, has_explicit_job_geography, work_arrangement_state
 
 
 MODEL_ID = "Supabase/gte-small"
@@ -111,8 +112,15 @@ def seal(row: dict[str, Any], now: datetime) -> tuple[str, dict[str, Any], dict[
 
     opportunity_type = row.get("opportunity_type")
     stamps["classification"] = "pass" if opportunity_type in ALLOWED_TYPES else "review"
-    geo_known = bool(row.get("country_code") or row.get("eligible_countries") or row.get("eligible_regions") or row.get("remote"))
-    stamps["geo"] = "pass" if geo_known else "review"
+    job_geo_known = has_explicit_job_geography(row)
+    work_arrangement_known = work_arrangement_state(row) != "UNKNOWN"
+    applicant_eligibility_known = declared_eligibility_state(row) == "DECLARED"
+    decision_ready = geo_decision_ready(row)
+    stamps["job_geo"] = "pass" if job_geo_known else "review"
+    stamps["work_arrangement"] = "pass" if work_arrangement_known else "review"
+    stamps["applicant_eligibility"] = "pass" if applicant_eligibility_known else "review"
+    stamps["geo_decision"] = "pass" if decision_ready else "review"
+    evidence["geo"] = {"job_geo_known": job_geo_known, "work_arrangement_known": work_arrangement_known, "applicant_eligibility_known": applicant_eligibility_known, "geo_decision_ready": decision_ready}
     content_length = len(clean_segment(row.get("description"), 5000))
     stamps["content"] = "pass" if content_length >= 80 else "review"
     evidence["content"] = {"description_length": content_length, "minimum_length": 80}
@@ -122,7 +130,7 @@ def seal(row: dict[str, Any], now: datetime) -> tuple[str, dict[str, Any], dict[
     # identity-confirmed opportunity without pretending to be its employer.
     # The source-aware automation policy decides whether that ready row may
     # later move downstream.
-    structural_stamps = {key: value for key, value in stamps.items() if key != "provenance"}
+    structural_stamps = {key: value for key, value in stamps.items() if key not in {"provenance", "job_geo", "work_arrangement", "applicant_eligibility"}}
     if "block" in structural_stamps.values():
         status = "blocked"
     elif "review" in structural_stamps.values():
@@ -248,10 +256,10 @@ class FactoryClient:
             "archived_at": "is.null",
         }
 
-    def _count_lane(self, params: dict[str, str]) -> int | None:
+    def _count_lane(self, params: dict[str, str], table: str = "opportunities") -> int | None:
         try:
             response = self.session.get(
-                f"{self.base}/opportunities",
+                f"{self.base}/{table}",
                 headers={**self.headers, "Prefer": "count=exact"},
                 params={"select": "id", "limit": "1", **params},
                 timeout=45,
@@ -269,7 +277,7 @@ class FactoryClient:
         return {
             "structural_fresh_pending": self._count_lane(self._structural_filters(cutoff, "fresh")),
             "structural_backlog_pending": self._count_lane(self._structural_filters(cutoff, "backlog")),
-            "embedding_pending": self._count_lane(self._embedding_filters()),
+            "embedding_pending": self._count_lane(self._embedding_filters(), "opportunity_final_matching_universe"),
         }
 
     @staticmethod
@@ -288,8 +296,9 @@ class FactoryClient:
         # an individual newly-ingested row from being overtaken indefinitely by
         # later arrivals during sustained intake.
         order = "updated_at.asc,id.asc"
+        table = "opportunity_final_matching_universe" if lane == "embedding" else "opportunities"
         response = self.session.get(
-            f"{self.base}/opportunities",
+            f"{self.base}/{table}",
             headers=self.headers,
             params={"select": select, **params, "order": order, "limit": str(quota)},
             timeout=45,
@@ -368,8 +377,8 @@ class FactoryClient:
         )))
         quoted = ",".join(f'"{str(value).replace(chr(34), "")}"' for value in opportunity_ids[:50])
         response = self.session.get(
-            f"{self.base}/opportunities", headers=self.headers,
-            params={"select": ",".join(fields), "id": f"in.({quoted})", "match_eligible": "eq.true", "deleted_at": "is.null", "archived_at": "is.null"}, timeout=45,
+            f"{self.base}/opportunity_final_matching_universe", headers=self.headers,
+            params={"select": ",".join(fields), "id": f"in.({quoted})"}, timeout=45,
         )
         response.raise_for_status()
         return [row for row in response.json() if row.get("factory_status") in {"pending", "failed"} or row.get("embedding") is None]

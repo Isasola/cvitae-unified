@@ -6,13 +6,8 @@
 export type MatchReadiness = 'STRONG' | 'USABLE' | 'AMBIGUOUS' | 'BLOCKED'
 
 /** Shared row-evidence gate: a stored/verified card is not automatically a match. */
-export function hasProfessionalEvidence(opportunity: Record<string, any>): boolean {
-  const titleSpecific = String(opportunity.title || '').trim().split(/\s+/).length >= 2
-  const description = String(opportunity.description || '').trim().length >= 100
-  const requirements = String(opportunity.requirements || '').trim().length >= 60
-  const skills = Array.isArray(opportunity.tags) && opportunity.tags.filter(Boolean).length >= 2
-  return titleSpecific && (description || requirements || skills || Boolean(opportunity.professional_family))
-}
+export { hasProfessionalEvidence } from '../../../shared/professional-evidence.ts'
+import { hasProfessionalEvidence } from '../../../shared/professional-evidence.ts'
 
 export function assessMatchReadiness(opportunity: Record<string, any>, observation?: Record<string, any>) {
   const reasons: string[] = []

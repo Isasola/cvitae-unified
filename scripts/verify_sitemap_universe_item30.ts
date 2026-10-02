@@ -13,7 +13,7 @@ const offsets:number[] = []
 const fetched = await fetchAllPages(1000, async (offset, size) => { offsets.push(offset); return raw.slice(offset, offset + size) })
 assert.equal(fetched.length, 2501); assert.deepEqual(offsets, [0,1000,2000]); assert.equal(fetched.at(-1)?.slug, 'role-2500')
 const inventory = buildEffectiveSeoInventory(fetched, policy)
-assert.equal(inventory.length, 2501); assert.ok(inventory.some(row => row.slug === 'role-2500' && row.canonical_path === '/empleos/role-2500'))
+assert.equal(inventory.length, 0, 'unknown Computrabajo SEO permission remains fail-closed; pagination fixtures cannot manufacture permission')
 assert.deepEqual(seoCanonicalPaths(inventory), seoCanonicalPaths(buildEffectiveSeoInventory([...fetched].reverse(), policy)), 'canonical duplicate selection/order must be deterministic')
 const denied = buildEffectiveSeoInventory([{ ...ready(3000), slug:'expired', deadline:'2020-01-01' }, { ...ready(3001), slug:'archived', archived_at:'2026-01-01T00:00:00Z' }, { ...ready(3002), slug:'deleted', deleted_at:'2026-01-01T00:00:00Z' }], policy)
 assert.equal(denied.length, 0)
@@ -27,13 +27,18 @@ assert.deepEqual(blogOffsets, [0,1000]); assert.deepEqual(vacancyOffsets, [0,100
 assert.equal(blogs.length, 1001); assert.equal(vacancies.length, 1001)
 assert.ok(blogs.some(row => row.canonical_path === '/blog/article-1000')); assert.ok(vacancies.some(row => row.canonical_path === '/vacante/opening-1000'))
 assert.equal(canonicalSitemapRows('/blog', [{ slug:'duplicate' }, { slug:'duplicate' }]).length, 1, 'canonical detail URLs dedupe within their family')
-const entries = sitemapIndexEntries(inventory.length, blogs.length, vacancies.length)
-assert.deepEqual(entries, ['sitemap-static.xml','sitemap-blog.xml','sitemap-vacancies.xml','sitemap-opportunities-1.xml','sitemap-opportunities-2.xml','sitemap-opportunities-3.xml'])
-assert.equal((opportunitySitemapPage('/sitemap-opportunities-1.xml', inventory).body.match(/<url>/g) || []).length, 1000)
-assert.equal((opportunitySitemapPage('/sitemap-opportunities-2.xml', inventory).body.match(/<url>/g) || []).length, 1000)
-assert.equal((opportunitySitemapPage('/sitemap-opportunities-3.xml', inventory).body.match(/<url>/g) || []).length, 501)
-for (const path of ['/sitemap-opportunities-0.xml','/sitemap-opportunities-4.xml','/sitemap-opportunities-x.xml']) assert.equal(opportunitySitemapPage(path, inventory).statusCode, 404)
-assert.deepEqual(sitemapIndexEntries(0), ['sitemap-static.xml']); assert.equal(opportunitySitemapPage('/sitemap-opportunities-1.xml', []).statusCode, 404)
+// Exercise sitemap paging independently from source permission. These rows
+// represent an already-authorized effective SEO inventory, not permission evidence.
+const sitemapInventory = Array.from({ length:2501 }, (_, index) => ({ canonical_path:`/empleos/role-${index}`, updated_at:`2026-09-${String((index % 28) + 1).padStart(2, '0')}T00:00:00Z` }))
+const entries = sitemapIndexEntries(sitemapInventory.length, blogs.length, vacancies.length)
+assert.deepEqual(entries, ['sitemap-static.xml','sitemap-blog.xml','sitemap-vacancies.xml','sitemap-opportunities/1.xml','sitemap-opportunities/2.xml','sitemap-opportunities/3.xml'])
+for (const path of ['/sitemap-opportunities/1.xml','/sitemap-opportunities/2.xml','/sitemap-opportunities/3.xml']) {
+  const expectedCount = path.endsWith('/3.xml') ? 501 : 1000
+  assert.equal((opportunitySitemapPage(path, sitemapInventory).body.match(/<url>/g) || []).length, expectedCount)
+}
+assert.equal(opportunitySitemapPage('/sitemap-opportunities-1.xml', sitemapInventory).statusCode, 200, 'legacy page 1 remains routable')
+for (const path of ['/sitemap-opportunities/0.xml','/sitemap-opportunities/4.xml','/sitemap-opportunities/x.xml','/sitemap-opportunities-2.xml']) assert.equal(opportunitySitemapPage(path, sitemapInventory).statusCode, 404)
+assert.deepEqual(sitemapIndexEntries(0), ['sitemap-static.xml']); assert.equal(opportunitySitemapPage('/sitemap-opportunities/1.xml', []).statusCode, 404)
 assert.equal(singletonSitemapPage('/sitemap-blog.xml', '/sitemap-blog.xml', blogs).statusCode, 200)
 assert.match(singletonSitemapPage('/sitemap-blog.xml', '/sitemap-blog.xml', blogs).body, /article-1000/)
 assert.equal(singletonSitemapPage('/sitemap-vacancies.xml', '/sitemap-vacancies.xml', vacancies).statusCode, 200)
@@ -41,13 +46,13 @@ assert.match(singletonSitemapPage('/sitemap-vacancies.xml', '/sitemap-vacancies.
 assert.equal(singletonSitemapPage('/sitemap-blog.xml', '/sitemap-blog.xml', []).statusCode, 404)
 assert.equal(singletonSitemapPage('/sitemap-vacancies.xml', '/sitemap-vacancies.xml', []).statusCode, 404)
 assert.deepEqual(sitemapIndexEntries(0, 0, 0), ['sitemap-static.xml'], 'empty/non-indexable fixture families are absent from the index')
-const escaped = opportunitySitemapPage('/sitemap-opportunities-1.xml', [{ canonical_path:'/empleos/a?x=1&y=2' }]).body
+const escaped = opportunitySitemapPage('/sitemap-opportunities/1.xml', [{ canonical_path:'/empleos/a?x=1&y=2' }]).body
 assert.match(escaped, /a\?x=1&amp;y=2/)
 const escapedBlog = singletonSitemapPage('/sitemap-blog.xml', '/sitemap-blog.xml', canonicalSitemapRows('/blog', [{ slug:'a?x=1&y=2' }])).body
 assert.match(escapedBlog, /a\?x=1&amp;y=2/)
-const allCanonical = [...STATIC_PUBLIC_SITEMAP_ROUTES.map(route => route.url), ...inventory.map(row => row.canonical_path), ...blogs.map(row => row.canonical_path), ...vacancies.map(row => row.canonical_path)]
+const allCanonical = [...STATIC_PUBLIC_SITEMAP_ROUTES.map(route => route.url), ...sitemapInventory.map(row => row.canonical_path), ...blogs.map(row => row.canonical_path), ...vacancies.map(row => row.canonical_path)]
 assert.equal(new Set(allCanonical).size, allCanonical.length, 'no URL may appear in two sitemap families')
-assert.ok(inventory.every(row => !row.canonical_path.startsWith('/blog/') && !row.canonical_path.startsWith('/vacante/')), 'opportunity universe remains exclusive to effective inventory')
+assert.ok(sitemapInventory.every(row => !row.canonical_path.startsWith('/blog/') && !row.canonical_path.startsWith('/vacante/')), 'opportunity sitemap pages remain exclusive to authorized effective inventory')
 
 const build = fs.readFileSync('scripts/generate-sitemap.mjs', 'utf8'), runtime = fs.readFileSync('netlify/functions/sitemap.ts', 'utf8'), generator = fs.readFileSync('scripts/generate-seo-inventory.ts', 'utf8')
 assert.match(build, /STATIC_PUBLIC_SITEMAP_ROUTES/); assert.match(runtime, /STATIC_PUBLIC_SITEMAP_ROUTES/)

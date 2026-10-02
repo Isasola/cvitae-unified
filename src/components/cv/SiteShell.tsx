@@ -7,9 +7,9 @@ const navLinks = [
   { href: '/empleos', label: 'Empleos' },
   { href: '/oportunidades', label: 'Becas y programas' },
   { href: '/mi-carrera', label: 'Mi carrera' },
-  { href: '/demo', label: 'Demo' },
   { href: '/blog', label: 'Blog' },
   { href: '/empresas', label: 'Para empresas' },
+  { href: '/demo', label: 'Demo' },
 ]
 
 const footerCols = [
@@ -61,11 +61,11 @@ function Navbar() {
           <Logo className="text-2xl" />
         </Link>
         <nav className="hidden md:flex items-center gap-7 text-sm text-muted-foreground">
-          {navLinks.map((l) => (
+          {navLinks.map((l, index) => (
             <Link
               key={l.href}
               href={l.href}
-              className={`hover:text-cream transition-colors ${location === l.href ? 'text-cream' : ''}`}
+              className={`hover:text-cream transition-colors ${index === 2 ? 'md:border-l md:border-white/10 md:pl-5' : ''} ${location === l.href ? 'text-cream' : ''}`}
             >
               {l.label}
             </Link>

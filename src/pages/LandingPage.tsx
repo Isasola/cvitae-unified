@@ -23,13 +23,12 @@ function Hero() {
       <div className="relative mx-auto max-w-6xl px-6 pb-10 pt-16 sm:pb-16 sm:pt-24">
         <Eyebrow>Gratis · Paraguay &amp; LATAM</Eyebrow>
         <h1 className="font-display mt-3 max-w-3xl text-4xl leading-[1.05] text-cream sm:text-6xl">
-          Analizá tu CV gratis.
-          <br />Después, encontrá el trabajo
-          <br />que te <em>corresponde</em>.
+          Encontrá oportunidades y prepará mejores <em>postulaciones</em>.
         </h1>
         <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-          Subí tu CV y recibí en segundos un score ATS real, fortalezas y mejoras
-          concretas. Sin crear cuenta. El análisis inicial es gratis.
+          CVitae reúne empleos, becas y otras oportunidades, entiende qué busca cada
+          una y las compara con tu experiencia para ayudarte a adaptar tu CV y
+          postular mejor, sin inventar experiencia.
         </p>
         <div className="relative mt-10 max-w-3xl border-y border-white/[0.12] py-5">
           {/* Línea conectora horizontal en desktop */}
@@ -667,11 +666,11 @@ export default function LandingPage() {
   return (
     <>
       <Helmet>
-        <title>CVitae — Analizá tu CV gratis con IA | Paraguay &amp; LATAM</title>
-        <meta name="description" content="Analizá tu CV con IA y conocé tu score ATS. Encontrá oportunidades verificadas de Paraguay, adaptá tu CV y recibí recomendaciones según tu perfil." />
+        <title>CVitae | Empleos, oportunidades y CV en Paraguay y LATAM</title>
+        <meta name="description" content="Encontrá empleos, becas y otras oportunidades en Paraguay y LATAM. CVitae las compara con tu experiencia y te ayuda a adaptar tu CV sin inventar experiencia." />
         <link rel="canonical" href="https://cvitae.lat" />
-        <meta property="og:title" content="CVitae — Analizá tu CV gratis con IA" />
-        <meta property="og:description" content="Score ATS, matching con oportunidades verificadas de Paraguay y recomendaciones según tu perfil." />
+        <meta property="og:title" content="CVitae | Empleos, oportunidades y CV en Paraguay y LATAM" />
+        <meta property="og:description" content="Encontrá oportunidades, comparalas con tu experiencia y adaptá tu CV sin inventar experiencia." />
         <meta property="og:url" content="https://cvitae.lat" />
         <meta property="og:type" content="website" />
       </Helmet>

@@ -318,6 +318,7 @@ export default function Admin() {
   const [sourcePolicies, setSourcePolicies] = useState<any[]>([])
   const [sourceStats, setSourceStats] = useState<Record<string, any>>({})
   const [sourceIntelligence, setSourceIntelligence] = useState<any[]>([])
+  const [opportunityUniverse, setOpportunityUniverse] = useState<any | null>(null)
   const [controlCenterError, setControlCenterError] = useState<string | null>(null)
   const [sourceIntelligenceError, setSourceIntelligenceError] = useState<string | null>(null)
   const [selectedSourceIntelligence, setSelectedSourceIntelligence] = useState<string | null>(null)
@@ -867,9 +868,11 @@ export default function Admin() {
     }
     if (intelligenceResult.status === 'fulfilled') {
       setSourceIntelligence(intelligenceResult.value.sources || [])
+      setOpportunityUniverse(intelligenceResult.value.opportunity_universe || null)
       setSourceIntelligenceError(null)
     } else {
       setSourceIntelligenceError(intelligenceResult.reason?.message || 'Error desconocido')
+      setOpportunityUniverse(null)
     }
   }
 
@@ -1756,6 +1759,7 @@ export default function Admin() {
                   {sourceIntelligenceError && <div className="mb-4 border border-red-400/20 bg-red-400/[0.04] px-4 py-3 text-xs text-red-300" style={{ fontFamily: MONO }}>Source Intelligence no disponible: {sourceIntelligenceError}. Los controles avanzados siguen disponibles por separado.</div>}
                   <SourceOperationsView
                     sources={sourceIntelligence}
+                    opportunityUniverse={opportunityUniverse}
                     selectedSource={selectedSourceIntelligence}
                     onSelect={setSelectedSourceIntelligence}
                     onScan={executeSourceScan}

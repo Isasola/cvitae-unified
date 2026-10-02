@@ -10,8 +10,9 @@ import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { CompatibilityTrace, Eyebrow } from '@/components/cv/visuals'
 import { auth, supabase } from '@/lib/supabase'
-import { CVLoader, DiagnosticLoader } from '@/components/cv/CVLoader'
+import { CVLoader } from '@/components/cv/CVLoader'
 import { playComplete } from '@/lib/sounds'
+import { B2CProgressLoader } from '@/components/cv/B2CProgressLoader'
 
 type CategoryScore = { key: string; score: number; max: number; reason: string; evidence?: string | null }
 type AtsQuestion = {
@@ -267,9 +268,7 @@ export default function ATSDiagnostic() {
     finally { setQuestionBusy(null) }
   }
 
-  if (authLoading || loading) {
-    return <DashboardLayout><div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-[#c9a84c]" /></div></DashboardLayout>
-  }
+  if (authLoading || loading) return <DashboardLayout><div className="mx-auto flex min-h-[60vh] max-w-3xl items-center"><B2CProgressLoader title="Preparando tu diagnóstico" description="Leemos tu CV y conservamos las preguntas que requieren tu confirmación." stages={[{ label: 'Leyendo tu CV' }, { label: 'Revisando estructura y claridad' }, { label: 'Preparando tu diagnóstico' }]} /></div></DashboardLayout>
 
   if (!user) {
     return (
@@ -296,9 +295,9 @@ export default function ATSDiagnostic() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#080808]/85 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#080808]/85 p-4 backdrop-blur-sm"
           >
-            <DiagnosticLoader />
+            <div className="w-full max-w-2xl"><B2CProgressLoader title="Analizando tu CV" description="Te mostraremos qué está claro y qué conviene explicar mejor." stages={[{ label: 'Leyendo tu CV' }, { label: 'Buscando evidencia' }, { label: 'Preparando tu diagnóstico' }]} /></div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -312,7 +311,7 @@ export default function ATSDiagnostic() {
         <header className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div>
             <Eyebrow>Diagnóstico verificable</Eyebrow>
-            <h1 className="font-display mt-2 text-4xl leading-tight text-cream md:text-5xl">Entendé qué lee un ATS<br /><em>y qué falta aclarar.</em></h1>
+            <h1 className="font-display mt-2 text-3xl leading-tight text-cream sm:text-4xl md:text-5xl">Entendé qué lee un ATS<br /><em>y qué falta aclarar.</em></h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/50">Evaluamos el texto extraído con una rúbrica estable. Cada observación muestra su fundamento; las dudas se convierten en preguntas, no en datos inventados.</p>
           </div>
           {workspace && workspace.openQuestionCount > 0 && (
@@ -336,9 +335,9 @@ export default function ATSDiagnostic() {
 
         <section className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-3xl border border-white/8 bg-white/[0.025] p-5 md:p-6">
-            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#c9a84c]/20 bg-[#c9a84c]/10 text-[#c9a84c]"><History className="h-5 w-5" /></span>
-              <div><h2 className="font-display text-xl text-cream">Analizar una versión guardada</h2><p className="text-xs text-white/40">Usa exactamente el contenido de tu historial.</p></div>
+              <div><h2 className="font-display text-xl text-cream">Usar un CV guardado</h2><p className="text-xs text-white/40">Usa exactamente el contenido de tu historial.</p></div>
             </div>
             {workspace?.versions.length ? (
               <>
@@ -355,7 +354,7 @@ export default function ATSDiagnostic() {
           <div className="rounded-3xl border border-white/8 bg-white/[0.025] p-5 md:p-6">
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/60"><Upload className="h-5 w-5" /></span>
-              <div><h2 className="font-display text-xl text-cream">Analizar otro archivo</h2><p className="text-xs text-white/40">PDF, DOCX o TXT · máximo 4 MB.</p></div>
+              <div><h2 className="font-display text-xl text-cream">Subir otro CV</h2><p className="text-xs text-white/40">PDF, DOCX o TXT · máximo 4 MB.</p></div>
             </div>
             <input ref={inputRef} type="file" accept=".pdf,.docx,.txt" onChange={handleFile} className="hidden" />
             <button type="button" onClick={() => inputRef.current?.click()} disabled={extracting || analyzing} className="mt-5 flex w-full items-center justify-between rounded-xl border border-dashed border-white/12 bg-black/15 px-4 py-3 text-left transition hover:border-[#c9a84c]/35 disabled:opacity-40">

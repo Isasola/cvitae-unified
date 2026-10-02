@@ -12,9 +12,10 @@ import {
   MapPin, MessageSquareText, ShieldCheck, Sparkles, Target, X,
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
+import { applicationReturnTo, rememberApplicationReturnTo } from '@/lib/application-intent'
 import { auth, supabase } from '@/lib/supabase'
 import { safeExternalUrl } from '@/lib/safe-url'
-import { analytics } from '@/lib/analytics'
+import { analytics, type OpportunityAnalyticsContext } from '@/lib/analytics'
 
 type CvVersion = {
   id: string
@@ -70,6 +71,18 @@ type WorkspaceData = {
   versions: CvVersion[]
   workspaces: Workspace[]
   evidenceReadiness: { ready: boolean; pending: number; confirmed: number }
+  eligibilityAssessment: { state: 'ELIGIBLE' | 'INELIGIBLE' | 'UNKNOWN'; reason: string } | null
+}
+
+function opportunityAnalyticsContext(workspace: Workspace, routeFamily = 'application_workspace'): OpportunityAnalyticsContext {
+  return {
+    opportunity_id: workspace.opportunity_id,
+    opportunity_slug: workspace.opportunity_snapshot?.slug,
+    source: workspace.opportunity_snapshot?.source,
+    opportunity_kind: workspace.opportunity_snapshot?.opportunity_kind || workspace.opportunity_snapshot?.kind,
+    route_family: routeFamily,
+    auth_state: 'authenticated',
+  }
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -114,11 +127,39 @@ export default function ApplicationWorkspace() {
   const GUIDE_KEY = 'cvitae_guide_b2c_application_workspace_v1_completed'
   const [guideOpen, setGuideOpen] = useState(() => localStorage.getItem(GUIDE_KEY) !== 'true')
   const cvRef = useRef<HTMLDivElement>(null)
+  const trackedWorkspaceOpen = useRef(new Set<string>())
+  const trackedPreparation = useRef(new Set<string>())
+  const previousPreparedVersion = useRef(new Map<string, string | null>())
+  const trackedProfileReady = useRef(new Set<string>())
+  const trackedAuthStart = useRef(new Set<string>())
 
   const selectedWorkspace = useMemo(
     () => data?.workspaces.find((item) => item.id === selectedWorkspaceId) || data?.workspaces[0] || null,
     [data?.workspaces, selectedWorkspaceId],
   )
+
+  useEffect(() => {
+    if (!selectedWorkspace) return
+    const workspaceId = selectedWorkspace.id
+    const context = opportunityAnalyticsContext(selectedWorkspace)
+    if (!trackedWorkspaceOpen.current.has(workspaceId)) {
+      trackedWorkspaceOpen.current.add(workspaceId)
+      analytics.workspaceOpened(context)
+    }
+    const previous = previousPreparedVersion.current.get(workspaceId)
+    previousPreparedVersion.current.set(workspaceId, selectedWorkspace.prepared_version_id)
+    if (previous === null && selectedWorkspace.prepared_version_id && !trackedPreparation.current.has(workspaceId)) {
+      trackedPreparation.current.add(workspaceId)
+      analytics.preparationCompleted(context)
+    }
+  }, [selectedWorkspace])
+
+  useEffect(() => {
+    if (data?.evidenceReadiness.ready && selectedWorkspace && !trackedProfileReady.current.has(selectedWorkspace.id)) {
+      trackedProfileReady.current.add(selectedWorkspace.id)
+      analytics.profileReady(opportunityAnalyticsContext(selectedWorkspace))
+    }
+  }, [data?.evidenceReadiness.ready, selectedWorkspace])
 
   useEffect(() => {
     auth.getUser().then((current) => setUser(current || null))
@@ -127,6 +168,14 @@ export default function ApplicationWorkspace() {
   useEffect(() => {
     if (user) loadOverview()
     else if (user === null) setLoading(false)
+  }, [user, slug])
+
+  useEffect(() => {
+    if (user === null && slug && !trackedAuthStart.current.has(slug)) {
+      trackedAuthStart.current.add(slug)
+      rememberApplicationReturnTo(applicationReturnTo(slug))
+      analytics.authStarted({ opportunity_slug: slug, route_family: 'application_auth', auth_state: 'unauthenticated' })
+    }
   }, [user, slug])
 
   const mutation = async (body: Record<string, any>) => {
@@ -169,6 +218,12 @@ export default function ApplicationWorkspace() {
     try {
       const payload = await mutation({ action: 'prepare', sourceVersionId: selectedVersionId })
       applyPayload(payload)
+      const preparedWorkspaceId = payload.workspaceId || selectedWorkspace?.id || payload.accepted?.workspace_id
+      const preparedWorkspace = preparedWorkspaceId ? payload.workspaces.find((item) => item.id === preparedWorkspaceId && item.prepared_version_id) : undefined
+      if (preparedWorkspace && !trackedPreparation.current.has(preparedWorkspace.id)) {
+        trackedPreparation.current.add(preparedWorkspace.id)
+        analytics.preparationCompleted(opportunityAnalyticsContext(preparedWorkspace))
+      }
       setTab('requirements')
     } catch (caught: any) {
       setError(caught?.message || 'No pudimos preparar los documentos.')
@@ -218,7 +273,7 @@ export default function ApplicationWorkspace() {
     try {
       const payload = await mutation({ action: 'opened', workspaceId: selectedWorkspace.id })
       applyPayload(payload)
-      analytics.applyClicked(selectedWorkspace.opportunity_id, selectedWorkspace.opportunity_snapshot.source || 'unknown')
+      analytics.applyClicked(selectedWorkspace.opportunity_id, selectedWorkspace.opportunity_snapshot.source || 'unknown', { opportunity_slug: selectedWorkspace.opportunity_snapshot.slug, opportunity_kind: selectedWorkspace.opportunity_snapshot.opportunity_kind || selectedWorkspace.opportunity_snapshot.kind, route_family: 'application_workspace', auth_state: 'authenticated', surface: 'application_workspace' })
     } catch (caught: any) {
       setError(caught?.message || 'No pudimos registrar la apertura.')
     } finally {
@@ -272,7 +327,7 @@ export default function ApplicationWorkspace() {
   }
 
   if (loading || user === undefined) return <DashboardLayout><div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-[#c9a84c]" /></div></DashboardLayout>
-  if (!user) return <DashboardLayout><div className="mx-auto max-w-xl rounded-3xl border border-white/8 bg-white/[0.02] p-8 text-center"><LockKeyhole className="mx-auto h-8 w-8 text-[#c9a84c]" /><h1 className="font-display mt-4 text-3xl text-cream">Tu postulación es privada</h1><p className="mt-3 text-sm text-white/45">Ingresá a Mi Carrera para preparar documentos y guardar el seguimiento.</p><a href="/mi-carrera" className="mt-6 inline-flex rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-medium text-black">Ingresar</a></div></DashboardLayout>
+  if (!user) { const destination = slug ? applicationReturnTo(slug) : '/mi-carrera'; return <DashboardLayout><div className="mx-auto max-w-xl rounded-3xl border border-white/8 bg-white/[0.02] p-8 text-center"><LockKeyhole className="mx-auto h-8 w-8 text-[#c9a84c]" /><h1 className="font-display mt-4 text-3xl text-cream">Tu postulación es privada</h1><p className="mt-3 text-sm text-white/45">Ingresá a Mi Carrera para preparar documentos y guardar el seguimiento.</p><a href={slug ? `/mi-carrera?returnTo=${encodeURIComponent(destination)}` : '/mi-carrera'} className="mt-6 inline-flex rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-medium text-black">Ingresar</a></div></DashboardLayout> }
 
   if (!slug) return (
     <DashboardLayout>
@@ -300,6 +355,7 @@ export default function ApplicationWorkspace() {
 
         {error && <ErrorBanner message={error} />}
         {!opportunity ? <div className="rounded-3xl border border-white/8 p-8"><AlertCircle className="h-7 w-7 text-amber-200" /><h2 className="font-display mt-4 text-2xl text-cream">Esta oportunidad ya no está disponible</h2><a href="/oportunidades" className="mt-5 inline-flex text-sm text-[#c9a84c]">Volver al catálogo</a></div> : <>
+          {data?.eligibilityAssessment && <p role="status" className="rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-xs leading-relaxed text-white/65">{data.eligibilityAssessment.state === 'ELIGIBLE' ? 'Elegibilidad geográfica compatible según tus datos confirmados.' : data.eligibilityAssessment.state === 'INELIGIBLE' ? 'Hay una incompatibilidad geográfica según tus datos confirmados. Revisá igualmente los requisitos oficiales.' : 'No podemos confirmar todavía tu elegibilidad. Revisá los requisitos oficiales.'}</p>}
           <section className="grid overflow-hidden rounded-3xl border border-white/8 bg-gradient-to-br from-white/[0.035] to-transparent lg:grid-cols-[1fr_270px]">
             <div className="p-6 sm:p-8"><div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-white/35"><span>{opportunity.opportunity_kind || 'Oportunidad'}</span><span>•</span><span>Fuente verificada</span></div><h2 className="font-display mt-3 text-3xl text-cream">{opportunity.title}</h2><div className="mt-5 flex flex-wrap gap-4 text-xs text-white/45"><span className="flex items-center gap-2"><Building2 className="h-4 w-4" />{opportunity.organization || 'Organización no informada'}</span><span className="flex items-center gap-2"><MapPin className="h-4 w-4" />{opportunity.location || 'Ubicación no informada'}</span><span className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />{formatDate(opportunity.deadline)}</span></div></div>
             <div className="border-t border-white/8 p-6 lg:border-l lg:border-t-0"><p className="text-[10px] uppercase tracking-[0.18em] text-white/30">Fuente final</p><p className="mt-3 text-xs leading-relaxed text-white/45">Revisá requisitos y vigencia nuevamente en el sitio de la organización antes de enviar.</p><a href={`/oportunidades/${opportunity.slug}`} className="mt-4 inline-flex items-center gap-2 text-xs text-[#c9a84c]">Ver ficha pública <ExternalLink className="h-3.5 w-3.5" /></a></div>

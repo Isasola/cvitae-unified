@@ -109,7 +109,7 @@ def _restriction_values(value: object) -> list[tuple[str | None, str]]:
     return extracted
 
 
-def _himalayas_remote_semantics(job: dict) -> tuple[list[str], str, str | None, str | None]:
+def _himalayas_remote_semantics(job: dict) -> tuple[list[str], str, str | None, str | None, str]:
     """Keep applicant restrictions distinct from a remote job's workplace.
 
     Himalayas' ``locationRestrictions`` answers where an applicant may be
@@ -125,20 +125,30 @@ def _himalayas_remote_semantics(job: dict) -> tuple[list[str], str, str | None, 
     joined = " ".join(labels).casefold()
     explicit_worldwide = any(token in joined for token in ("worldwide", "anywhere", "global"))
     countries = sorted({code for code, _ in restrictions if code})
-    if explicit_worldwide or (not restrictions and (not timezones or full_timezone_coverage)):
+    # An explicit applicant restriction is the only evidence that can grant
+    # worldwide applicant eligibility. Empty restriction fields and complete
+    # timezone coverage describe an unresolved source payload, not GLOBAL
+    # eligibility. Keeping this distinction prevents absence from becoming a
+    # factual claim downstream.
+    if explicit_worldwide:
         scope = "WORLDWIDE"
+        eligibility_provenance = "EXPLICIT_APPLICANT_WORLDWIDE"
     elif len(countries) == 1:
         scope = "COUNTRY_SPECIFIC"
+        eligibility_provenance = "COUNTRY_RESTRICTIONS"
     elif len(countries) > 1 or restrictions:
         scope = "REGIONAL"
-    else:
-        # A time-zone restriction is real eligibility evidence, but is not
-        # equivalent to unrestricted worldwide work.
+        eligibility_provenance = "COUNTRY_RESTRICTIONS" if countries else "UNMAPPED_RESTRICTION_LABEL"
+    elif timezones:
         scope = "UNKNOWN"
+        eligibility_provenance = "FULL_TIMEZONE_COVERAGE" if full_timezone_coverage else "TIMEZONE_ONLY"
+    else:
+        scope = "UNKNOWN"
+        eligibility_provenance = "NO_RESTRICTIONS_DECLARED"
     requirements: list[str] = labels[:20]
     if timezones and not full_timezone_coverage:
         requirements.append("Timezone restrictions: " + "; ".join(label for _, label in timezones[:10]))
-    return countries, scope, clean("; ".join(requirements), 1000), clean("; ".join(label for _, label in timezones[:20]), 500)
+    return countries, scope, clean("; ".join(requirements), 1000), clean("; ".join(label for _, label in timezones[:20]), 500), eligibility_provenance
 
 RUBRO_MAP = {"engineering": "Tecnología e IT", "software": "Tecnología e IT", "devops": "Tecnología e IT", "data": "Tecnología e IT", "machine learning": "Tecnología e IT", "design": "Diseño", "marketing": "Marketing y Publicidad", "sales": "Ventas y Comercial", "customer": "Atención al Cliente", "finance": "Banca y Finanzas", "accounting": "Banca y Finanzas", "hr": "Recursos Humanos", "people": "Recursos Humanos", "product": "Producto", "operations": "Operaciones", "legal": "Legal", "content": "Comunicación y Medios", "writing": "Comunicación y Medios", "qa": "Tecnología e IT"}
 
@@ -169,15 +179,16 @@ def adapt_himalayas_job(job: dict, source_status: int = 200) -> AdapterResult:
     source_url = clean(job.get("guid"), 2000) or clean(job.get("applicationLink"), 2000) or ""
     apply_url = clean(job.get("applicationLink"), 2000) or source_url
     restrictions = _restriction_values(job.get("locationRestrictions"))
-    eligible_countries, scope, requirements, timezone_evidence = _himalayas_remote_semantics(job)
+    eligible_countries, scope, requirements, timezone_evidence, eligibility_provenance = _himalayas_remote_semantics(job)
+    eligible_regions = ["GLOBAL"] if scope == "WORLDWIDE" and not eligible_countries else []
     remote = True
     salary_text, currency = _salary(job)
     description = clean(job.get("description"), 12000) or clean(job.get("excerpt"), 4000)
-    result = AdapterResult(source="himalayas", adapter_version=ADAPTER_VERSION, source_url=source_url, source_native_id=source_url.rstrip("/").split("/")[-1] or None, canonical_url=source_url, apply_url=apply_url, title=clean(job.get("title"), 240), organization=clean(job.get("companyName"), 240), description=description, location="Remote", country_code=None, onsite_country=None, remote=remote, remote_scope=scope, employment_type=clean(job.get("employmentType"), 120), salary_text=salary_text, currency=currency, date_posted=_date(job.get("pubDate")), deadline=_date(job.get("expiryDate")), applicant_location_requirements=requirements, eligible_countries=eligible_countries, extraction_method="himalayas_api", source_status=source_status, confidence=.98)
+    result = AdapterResult(source="himalayas", adapter_version=ADAPTER_VERSION, source_url=source_url, source_native_id=source_url.rstrip("/").split("/")[-1] or None, canonical_url=source_url, apply_url=apply_url, title=clean(job.get("title"), 240), organization=clean(job.get("companyName"), 240), description=description, location="Remote", country_code=None, onsite_country=None, remote=remote, remote_scope=scope, employment_type=clean(job.get("employmentType"), 120), salary_text=salary_text, currency=currency, date_posted=_date(job.get("pubDate")), deadline=_date(job.get("expiryDate")), applicant_location_requirements=requirements, eligible_countries=eligible_countries, eligible_regions=eligible_regions, extraction_method="himalayas_api", source_status=source_status, confidence=.98)
     result.extracted_fields = [key for key in ("title", "organization", "description", "location", "remote", "remote_scope", "eligible_countries", "employment_type", "salary_text", "date_posted", "deadline") if getattr(result, key)]
     result.missing_expected_fields = [key for key in ("organization", "description") if not getattr(result, key)]
     unresolved = sorted({label for code, label in restrictions if not code and label})
-    result.evidence = {"method": "himalayas_api", "fields": result.extracted_fields, "source_status": source_status, "confidence": .98, "job_location_evidence": None, "work_arrangement_evidence": "himalayas_remote_job", "clear_inherited_geo": True, "location_restrictions": [{"alpha2": code, "name": label} for code, label in restrictions[:20]], "timezone_restrictions": timezone_evidence, "eligibility_evidence": requirements, "unresolved_eligibility_evidence": unresolved}
+    result.evidence = {"method": "himalayas_api", "fields": result.extracted_fields, "source_status": source_status, "confidence": .98, "job_location_evidence": None, "work_arrangement_evidence": "himalayas_remote_job", "clear_inherited_geo": True, "location_restrictions": [{"alpha2": code, "name": label} for code, label in restrictions[:20]], "timezone_restrictions": timezone_evidence, "eligibility_evidence": requirements, "eligibility_provenance": eligibility_provenance, "unresolved_eligibility_evidence": unresolved}
     result = recommend(result)
     # A restriction list is explicit candidate-eligibility evidence. Never
     # auto-publish if it cannot be faithfully represented in structured form.

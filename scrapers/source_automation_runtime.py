@@ -13,6 +13,7 @@ from opportunity_automation import (
 from opportunity_factory import seal
 from source_cleaners.base import SourceProfile
 from source_evidence import classify_run_evidence
+from eligibility_truth import eligibility_resolved
 
 
 AUTOMATION_FACTORY_STATUSES = {"pending", "ready", "review", "failed"}
@@ -83,12 +84,10 @@ def freshness_from_evidence(
 
 
 def automation_input(row: dict[str, Any], freshness: dict[str, Any]) -> dict[str, Any]:
-    scope = str(row.get("remote_scope") or "").upper()
-    countries = row.get("eligible_countries") or []
     return {
         **row,
         "identity_valid": bool(row.get("title") and str(row.get("application_url") or "").startswith("https://")),
-        "eligibility_resolved": not (scope in {"COUNTRY_SPECIFIC", "REGIONAL"} and not countries) and scope != "UNKNOWN",
+        "eligibility_resolved": eligibility_resolved(row),
         "eligibility_structure_mismatch": bool(row.get("eligibility_structure_mismatch")),
         "geo_contradiction": bool(row.get("geo_contradiction")),
         "freshness_state": freshness["state"],

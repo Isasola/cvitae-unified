@@ -17,7 +17,7 @@
  * Invariants (always apply, regardless of config):
  *   - match_eligible=false → excluded (no bypass)
  *   - isTender → excluded (no bypass)
- *   - isEligibleForProfile=false → excluded (no bypass)
+ *   - shared candidate eligibility evaluator=INELIGIBLE → excluded (no bypass)
  *   - UNKNOWN != ELIGIBLE
  *   - Remote != Worldwide
  *   - No source-specific logic
@@ -31,13 +31,13 @@ import {
   calculateSkillScore,
   careerBonus,
   extractSkills,
-  isEligibleForProfile,
   isTender,
   normalize,
   sameSkill,
   toStrings,
 } from './matching.ts'
 import { hasProfessionalEvidence } from './match-readiness.ts'
+import { evaluateOpportunityEligibility } from '../../../shared/candidate-eligibility.ts'
 import type {
   EligibilityState,
   HardRequirementsState,
@@ -408,6 +408,22 @@ export function isVisibleMatchDecision(decision: Pick<MatchDecision, 'outcome'> 
   return decision?.outcome === 'MATCH'
 }
 
+/**
+ * A potential is a discovery-only result.  It keeps the authoritative
+ * decision ABSTAIN when eligibility is unknown, while allowing a strong,
+ * professionally applicable opportunity to be surfaced for review.
+ */
+export function isPotentialDiscoveryDecision(decision: Pick<MatchDecision, 'outcome' | 'eligibility' | 'applicable' | 'professional_evidence' | 'work_arrangement' | 'hard_requirements' | 'hard_denials'> | null | undefined): boolean {
+  if (!decision || decision.outcome !== 'ABSTAIN') return false
+  if (decision.hard_denials.length > 0) return false
+  if (decision.professional_evidence !== 'SUFFICIENT') return false
+  if (decision.applicable === 'UNKNOWN' || decision.applicable === 'CONFLICT') return false
+  if (decision.eligibility !== 'UNKNOWN') return false
+  if (decision.work_arrangement === 'INCOMPATIBLE') return false
+  if (decision.hard_requirements === 'FAIL') return false
+  return true
+}
+
 /** Delivery is intentionally stricter than ordinary B2C match visibility. */
 export function isHighMatchAlertDecision(
   decision: Pick<MatchDecision, 'outcome' | 'confidence' | 'eligibility'> | null | undefined,
@@ -420,12 +436,6 @@ export function isHighMatchAlertDecision(
 type PreliminaryDecision = Omit<MatchDecision, 'confidence' | 'score' | 'matched_skills' | 'missing_skills'> & {
   candidateFamily: FamilyDetection
   vacancyFamily: FamilyDetection
-}
-
-function declaredEligibilityState(opp: any, profileLocation: string): EligibilityState {
-  const declared = toStrings(opp.eligible_countries).concat(toStrings(opp.eligible_regions))
-  if (!isEligibleForProfile(opp, profileLocation)) return 'INELIGIBLE'
-  return declared.length ? 'ELIGIBLE' : 'UNKNOWN'
 }
 
 function normalizedArrangement(value: unknown): 'REMOTE' | 'HYBRID' | 'ONSITE' | '' {
@@ -487,7 +497,8 @@ function preliminaryDecision(profile: any, opp: any, dictionary: any, now: strin
   const vacancySkills = extractSkills(opp, dictionary)
   const vacancyFamily = detectCareerFamily(opp.title ?? '', vacancySkills, opp.rubro ?? '')
   const applicable = getProfessionalCompatibility(candidateFamily, vacancyFamily)
-  const eligibility = declaredEligibilityState(opp, String(profile.profile_data?.location ?? ''))
+  const eligibilityEvaluation = evaluateOpportunityEligibility(profile.profile_data?.candidate_eligibility, opp)
+  const eligibility = eligibilityEvaluation.state
   const workArrangement = workArrangementFor(profile, opp)
   const hardRequirements = hardRequirementsFor(profileSkills, opp, dictionary)
   const professionalEvidence: ProfessionalEvidenceState = hasProfessionalEvidence(opp) ? 'SUFFICIENT' : 'INSUFFICIENT'
@@ -504,13 +515,13 @@ function preliminaryDecision(profile: any, opp: any, dictionary: any, now: strin
   if (opp.match_eligible !== true) hard_denials.push('ROW_MATCH_NOT_ELIGIBLE')
   if (isTender(opp)) hard_denials.push('NOT_APPLICABLE_TENDER')
   if (applicable === 'CONFLICT') hard_denials.push(`PROFESSIONAL_CONFLICT:${candidateFamily.family}->${vacancyFamily.family}`)
-  if (eligibility === 'INELIGIBLE') hard_denials.push('CANDIDATE_INELIGIBLE')
+  if (eligibility === 'INELIGIBLE') hard_denials.push('CANDIDATE_INELIGIBLE', eligibilityEvaluation.reason)
   if (hardRequirements === 'FAIL') hard_denials.push('HARD_REQUIREMENTS_FAILED')
   if (workArrangement === 'INCOMPATIBLE') hard_denials.push('WORK_ARRANGEMENT_INCOMPATIBLE')
 
   if (professionalEvidence === 'INSUFFICIENT') unknown_reasons.push('INSUFFICIENT_PROFESSIONAL_EVIDENCE')
   if (applicable === 'UNKNOWN') unknown_reasons.push('PROFESSIONAL_APPLICABILITY_UNKNOWN')
-  if (eligibility === 'UNKNOWN') unknown_reasons.push('CANDIDATE_ELIGIBILITY_UNKNOWN')
+  if (eligibility === 'UNKNOWN') unknown_reasons.push('CANDIDATE_ELIGIBILITY_UNKNOWN', eligibilityEvaluation.reason)
   if (workArrangement === 'UNKNOWN') unknown_reasons.push('WORK_ARRANGEMENT_UNKNOWN')
   if (hardRequirements === 'UNKNOWN') unknown_reasons.push('HARD_REQUIREMENTS_UNKNOWN')
 
@@ -522,7 +533,7 @@ function preliminaryDecision(profile: any, opp: any, dictionary: any, now: strin
   return {
     applicable, eligibility, work_arrangement: workArrangement, hard_requirements: hardRequirements,
     professional_evidence: professionalEvidence, outcome, score: null,
-    positive_reasons: [], negative_reasons, unknown_reasons, hard_denials,
+    positive_reasons: [], negative_reasons: [...new Set(negative_reasons)], unknown_reasons: [...new Set(unknown_reasons)], hard_denials: [...new Set(hard_denials)],
     candidateFamily, vacancyFamily,
   }
 }
@@ -684,7 +695,7 @@ export function rankOpportunitiesV2(
   cfg: V2Config,
   semanticSimilarities?: Map<string, number>,
   now = new Date().toISOString(),
-): { eligible: any[]; rankedOld: any[]; rankedV2: V2RankResult[]; decisions: Array<{ opp: any; decision: MatchDecision }> } {
+): { eligible: any[]; rankedOld: any[]; rankedV2: V2RankResult[]; rankedPotentialV2: V2RankResult[]; potentialTotal: number; decisions: Array<{ opp: any; decision: MatchDecision }> } {
   const candidate = candidateTruthForMatching(profile)
   const profileSkills = toStrings(candidate.profile_data.habilidades)
   const profileSeniority = String(candidate.profile_data.seniority ?? '')
@@ -702,7 +713,7 @@ export function rankOpportunitiesV2(
     opp.archived_at == null &&
     (opp.deadline == null || opp.deadline > now) &&
     !isTender(opp) &&                        // ← NON-BYPASSABLE
-    isEligibleForProfile(opp, profileLocation), // ← NON-BYPASSABLE
+    evaluateOpportunityEligibility(candidate.profile_data?.candidate_eligibility, opp).state !== 'INELIGIBLE', // ← NON-BYPASSABLE
   )
 
   const preliminary = opportunities.map((opp) => ({ opp, decision: preliminaryDecision(candidate, opp, dictionary, now) }))
@@ -717,7 +728,11 @@ export function rankOpportunitiesV2(
   const candidateFamily = detectCareerFamily(`${profileTitle} ${candidateEvidence}`, profileSkills, undefined)
   const calibratedSemantics = calibrationFor(semanticSimilarities, cfg.semanticMode ?? 'quantile')
 
-  const results: V2RankResult[] = eligible.map(opp => {
+  const scoreable = preliminary
+    .filter(({ decision }) => decision.outcome === 'MATCH' || isPotentialDiscoveryDecision(decision))
+    .map(({ opp }) => opp)
+
+  const results: V2RankResult[] = scoreable.map(opp => {
     const vacancySkills = extractSkills(opp, dictionary)
     const matchedSkills = vacancySkills.filter((skill) => profileSkills.some((own) => sameSkill(own, skill, dictionary)))
     const missingSkills = vacancySkills.filter((skill) => !profileSkills.some((own) => sameSkill(own, skill, dictionary)))
@@ -767,7 +782,7 @@ export function rankOpportunitiesV2(
     // Eligibility signal
     const legacyEligibilitySignal: MatchEvidence['eligibilitySignal'] =
       (opp.eligible_countries?.length > 0 || opp.eligible_regions?.length > 0)
-        ? 'ELIGIBLE'  // passed isEligibleForProfile, has declared countries
+        ? 'ELIGIBLE'  // retained compatibility signal only; decision uses shared evaluator
         : 'UNKNOWN'  // no declared countries — passed but unknown
 
     const eligibilitySignal: MatchEvidence['eligibilitySignal'] = pre.eligibility
@@ -842,7 +857,11 @@ export function rankOpportunitiesV2(
 
     const confidence: V2ScoreBreakdown['confidence'] =
       knownSignals >= 4 ? 'HIGH' : knownSignals >= 2 ? 'MEDIUM' : 'LOW'
-    const outcome: MatchOutcome = confidence === 'LOW' || v2FinalScore < 45 ? 'ABSTAIN' : 'MATCH'
+    const potentialDiscovery = isPotentialDiscoveryDecision(pre)
+    // Potential results are never authoritative matches, regardless of score.
+    const outcome: MatchOutcome = potentialDiscovery
+      ? 'ABSTAIN'
+      : confidence === 'LOW' || v2FinalScore < 45 ? 'ABSTAIN' : 'MATCH'
     const visible = outcome === 'MATCH'
 
     // Positive/negative/unknown reasons
@@ -912,6 +931,11 @@ export function rankOpportunitiesV2(
   })
 
   const rankedV2 = results.filter((result) => result.breakdown.visible).sort((a, b) => b.v2Score - a.v2Score).slice(0, 20)
+  const potentialCandidates = results.filter((result) => isPotentialDiscoveryDecision(result.decision))
+  const rankedPotentialV2 = potentialCandidates
+    .filter((result) => result.decision.confidence !== 'LOW' && (result.decision.score ?? 0) >= 45)
+    .sort((a, b) => b.v2Score - a.v2Score)
+    .slice(0, 20)
 
   // Also compute OLD ranked for comparison
   const rankedOld = [...results]
@@ -939,7 +963,7 @@ export function rankOpportunitiesV2(
       missing_skills: [],
     },
   }))
-  return { eligible, rankedOld, rankedV2, decisions }
+  return { eligible, rankedOld, rankedV2, rankedPotentialV2, potentialTotal: potentialCandidates.length, decisions }
 }
 
 // ─── EXPORTS re-used by harness ───────────────────────────────────────────────

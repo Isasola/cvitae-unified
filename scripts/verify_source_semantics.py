@@ -15,7 +15,7 @@ def result(source, location, requirements, remote, kind="job"):
 # Himalayas fixtures exercise the production API adapter rather than a
 # duplicate test-only geo parser.
 h_us = adapt_himalayas_job({"guid": "https://himalayas.app/companies/org/jobs/us-only", "title": "US", "companyName": "Org", "description": "x" * 120, "locationRestrictions": [{"alpha2": "US", "name": "United States"}], "employmentType": "Full time"}); assert h_us.country_code is None and h_us.onsite_country is None and h_us.eligible_countries == ["US"] and h_us.remote_scope == "COUNTRY_SPECIFIC"
-h_world = adapt_himalayas_job({"guid": "https://himalayas.app/companies/org/jobs/world", "title": "World", "companyName": "Org", "description": "x" * 120, "locationRestrictions": "Work from anywhere worldwide", "employmentType": "Full time"}); assert h_world.country_code is None and h_world.eligible_countries == [] and h_world.remote_scope == "WORLDWIDE"
+h_world = adapt_himalayas_job({"guid": "https://himalayas.app/companies/org/jobs/world", "title": "World", "companyName": "Org", "description": "x" * 120, "locationRestrictions": "Work from anywhere worldwide", "employmentType": "Full time"}); assert h_world.country_code is None and h_world.eligible_countries == [] and h_world.eligible_regions == ["GLOBAL"] and h_world.remote_scope == "WORLDWIDE"
 w_world = result("weworkremotely", None, "Anywhere in the World", True); assert w_world.remote_scope == "WORLDWIDE"
 w_unknown = result("weworkremotely", None, None, True); assert w_unknown.remote_scope in {None, "UNKNOWN"}
 jobicy = result("jobicy", None, "LATAM", True); assert jobicy.remote_scope != "WORLDWIDE"

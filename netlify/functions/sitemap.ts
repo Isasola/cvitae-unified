@@ -12,7 +12,7 @@ const urlset = (rows: Array<{ canonical_path: string; updated_at?: string | null
 
 async function effectiveInventory(supabase: ReturnType<typeof makeSupabaseAdmin>, policies: any[]) {
   const rows = await fetchAllPages(PAGE_SIZE, async (offset, size) => {
-    const { data, error } = await supabase.from('opportunities').select('id,slug,title,organization,description,location,country_code,eligible_countries,eligible_regions,remote_scope,tags,deadline,application_url,source_url,source,opportunity_type,opportunity_kind,type,created_at,updated_at,is_active,verification_status,catalog_eligible,seo_eligible,seo_status,deleted_at,archived_at').not('slug', 'is', null).order('updated_at', { ascending: false }).order('id', { ascending: true }).range(offset, offset + size - 1)
+    const { data, error } = await supabase.from('opportunity_seo_universe').select('id,slug,title,organization,description,location,country_code,eligible_countries,eligible_regions,remote_scope,tags,deadline,application_url,source_url,source,opportunity_type,opportunity_kind,type,created_at,updated_at,is_active,verification_status,catalog_eligible,seo_eligible,seo_status,deleted_at,archived_at').not('slug', 'is', null).order('updated_at', { ascending: false }).order('id', { ascending: true }).range(offset, offset + size - 1)
     if (error) throw error
     return data || []
   })
@@ -20,9 +20,12 @@ async function effectiveInventory(supabase: ReturnType<typeof makeSupabaseAdmin>
 }
 
 export function opportunitySitemapPage(path: string, inventory: Array<{ canonical_path:string; updated_at?:string | null }>) {
-  const match = /^\/sitemap-opportunities-(\d+)\.xml$/.exec(path)
+  const scalable = /^\/sitemap-opportunities\/(\d+)\.xml$/.exec(path)
+  const legacy = /^\/sitemap-opportunities-(\d+)\.xml$/.exec(path)
+  const match = scalable || legacy
   if (!match || !/^[1-9]\d*$/.test(match[1])) return { statusCode:404, body:'Unknown sitemap' }
   const page = Number(match[1]); const parts = Math.ceil(inventory.length / PAGE_SIZE)
+  if (legacy && page !== 1) return { statusCode:404, body:'Unknown sitemap' }
   if (page > parts) return { statusCode:404, body:'Unknown sitemap' }
   return response(urlset(inventory.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)))
 }

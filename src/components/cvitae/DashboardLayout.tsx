@@ -221,7 +221,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
         <div className="p-4 lg:p-8">{children}</div>
       </main>
-      <FeedbackReporter audience="b2c" className="bottom-20 right-5" />
+      <FeedbackReporter audience="b2c" className="bottom-20 right-3 sm:right-5" />
     </div>
   )
 }

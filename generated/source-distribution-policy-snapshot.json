@@ -1,0 +1,38 @@
+{
+  "schema_version": "source-distribution-policy:v1",
+  "generated_at": "2026-10-02T01:38:49.047Z",
+  "policies": [
+    {
+      "source": "computrabajo",
+      "is_enabled": true,
+      "catalog_enabled": true,
+      "seo_enabled": true,
+      "web_catalog_allowed": true,
+      "search_engine_indexing_allowed": true
+    },
+    {
+      "source": "unjobs",
+      "is_enabled": true,
+      "catalog_enabled": true,
+      "seo_enabled": true,
+      "web_catalog_allowed": true,
+      "search_engine_indexing_allowed": true
+    },
+    {
+      "source": "oya",
+      "is_enabled": true,
+      "catalog_enabled": true,
+      "seo_enabled": true,
+      "web_catalog_allowed": true,
+      "search_engine_indexing_allowed": true
+    },
+    {
+      "source": "himalayas",
+      "is_enabled": true,
+      "catalog_enabled": true,
+      "seo_enabled": true,
+      "web_catalog_allowed": true,
+      "search_engine_indexing_allowed": false
+    }
+  ]
+}

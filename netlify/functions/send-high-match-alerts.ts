@@ -3,6 +3,9 @@ import { makeSupabaseAdmin } from "./_supabase"
 import { buildDictionary } from "../../supabase/functions/_shared/matching"
 import { isHighMatchAlertDecision, rankOpportunitiesV2, V2_PRESET_FULL } from "../../supabase/functions/_shared/matching-v2"
 import { EDGE_SOURCE_IDENTITIES } from "../../supabase/functions/_shared/generated-source-registry"
+import { canonicalCandidateProfile } from "../../shared/candidate-profile"
+import { matchingProfileSignature } from "../../shared/matching-profile-signature"
+import { cacheCandidateAlertEligible, collectAlertCandidateSnapshot, normalizeSourcePolicyRow, opportunityCacheIsCurrent, sourcePolicySignature } from "../../shared/matching-retrieval"
 
 const RESEND_KEY = process.env.RESEND_API_KEY
 const SITE_URL = process.env.SITE_URL || "https://cvitae.lat"
@@ -82,22 +85,90 @@ function emailHtml(profile: any, opp: any, matched: string[]): string {
 const handler: Handler = async () => {
   if (!RESEND_KEY) return { statusCode: 503, body: JSON.stringify({ error: "RESEND_API_KEY no configurada" }) }
   const supabase = makeSupabaseAdmin()
-  const since = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString()
-  const [{ data: profiles, error: profilesError }, { data: opportunities, error: opportunitiesError }, { data: skillRows, error: skillsError }] = await Promise.all([
+  const alertCacheCutoff = new Date()
+  const alertCacheFreshnessStart = new Date(alertCacheCutoff.getTime() - 36 * 60 * 60 * 1000)
+  const since = alertCacheFreshnessStart.toISOString()
+  const [{ data: profiles, error: profilesError }, { data: skillRows, error: skillsError }, { data: allSourcePolicies, error: sourcePolicyError }, { data: permissionRows, error: permissionError }] = await Promise.all([
     supabase.from("user_master_profiles").select("id,user_id,email,full_name,professional_title,summary,cv_text,profile_data,match_alerts_enabled,match_alert_threshold,is_test").eq("match_alerts_enabled", true).not("email", "is", null).not("user_id", "is", null).or("is_test.is.null,is_test.eq.false").limit(250),
-    supabase.from("opportunities").select("id,slug,title,organization,location,rubro,type,description,tags,opportunity_kind,opportunity_type,eligible_countries,eligible_regions,deadline,created_at,is_active,verification_status,match_eligible,alerts_eligible,archived_at,deleted_at").eq("is_active", true).eq("verification_status", "verified").eq("match_eligible", true).eq("alerts_eligible", true).is("deleted_at", null).is("archived_at", null).or(`deadline.is.null,deadline.gte.${new Date().toISOString()}`).gte("created_at", since).order("created_at", { ascending: false }).limit(150),
     supabase.from("skill_dictionary").select("canonical_name,variants"),
+    supabase.from("opportunity_sources").select("source,is_enabled,matching_enabled"),
+    supabase.from("opportunity_source_consumer_permissions").select("canonical_source,consumer,permission_state").eq("consumer", "matching"),
   ])
-  if (profilesError || opportunitiesError || skillsError) return { statusCode: 500, body: JSON.stringify({ error: profilesError?.message || opportunitiesError?.message || skillsError?.message }) }
-  const sourceIds = [...new Set((opportunities || []).map((opp: any) => canonicalSource(opp.source)).filter(Boolean))]
-  const { data: sourcePolicies, error: sourcePolicyError } = sourceIds.length
-    ? await supabase.from('opportunity_sources').select('source,is_enabled').in('source', sourceIds)
-    : { data: [], error: null }
-  if (sourcePolicyError) return { statusCode: 500, body: JSON.stringify({ error: sourcePolicyError.message }) }
-  const enabledSources = new Set((sourcePolicies || []).filter((row: any) => row.is_enabled === true).map((row: any) => String(row.source).toLowerCase()))
-  const decisionOpportunities = (opportunities || [])
-    .filter((opp: any) => enabledSources.has(canonicalSource(opp.source)))
-    .map((opp: any) => ({ ...opp, source_match_state: 'ALLOWED' }))
+  if (profilesError || skillsError || sourcePolicyError || permissionError) return { statusCode: 500, body: JSON.stringify({ error: profilesError?.message || skillsError?.message || sourcePolicyError?.message || permissionError?.message }) }
+  const alertOpportunities: any[] = []
+  let alertCursor: { updated_at: string; id: string } | null = null
+  try {
+    for (;;) {
+      let query = supabase.from("opportunity_alert_universe").select("id,source,slug,title,organization,location,rubro,type,description,tags,opportunity_kind,opportunity_type,remote,remote_scope,eligible_countries,eligible_regions,citizenship_requirement,residency_requirement,deadline,created_at,updated_at,is_active,verification_status,match_eligible,alerts_eligible,archived_at,deleted_at,content_fingerprint")
+        .gte("updated_at", since).lte("updated_at", alertCacheCutoff.toISOString()).order("updated_at", { ascending: true }).order("id", { ascending: true }).limit(500)
+      if (alertCursor) query = query.or(`updated_at.gt.${alertCursor.updated_at},and(updated_at.eq.${alertCursor.updated_at},id.gt.${alertCursor.id})`)
+      const page = await query
+      if (page.error) throw new Error(page.error.message)
+      const rows = page.data || []
+      alertOpportunities.push(...rows)
+      if (rows.length < 500) break
+      const last = rows[rows.length - 1]
+      const next = { updated_at: String(last.updated_at), id: String(last.id) }
+      if (alertCursor && (next.updated_at < alertCursor.updated_at || (next.updated_at === alertCursor.updated_at && next.id <= alertCursor.id))) throw new Error("ALERT_UNIVERSE_CURSOR_DID_NOT_ADVANCE")
+      alertCursor = next
+    }
+  } catch (error: any) {
+    return { statusCode: 500, body: JSON.stringify({ error: error?.message || "ALERT_UNIVERSE_PAGE_FAILED" }) }
+  }
+  const sourceRows = (allSourcePolicies || []).map(normalizeSourcePolicyRow)
+  const sourceSignature = await sourcePolicySignature(sourceRows, canonicalSource, permissionRows || [])
+  const recentDecisionOpportunities = alertOpportunities.map((opp: any) => ({ ...opp, source_match_state: 'ALLOWED' }))
+  const userIds = (profiles || []).map((profile: any) => String(profile.user_id))
+  const cacheRows: any[] = []
+  try {
+    for (let offset = 0; offset < userIds.length; offset += 50) {
+      const userChunk = userIds.slice(offset, offset + 50)
+      const rows = await collectAlertCandidateSnapshot(async (cursor, limit) => {
+        let query = supabase.from('matching_retrieval_candidates')
+          .select('user_id,opportunity_id,profile_signature,opportunity_content_fingerprint,candidate_class,semantic_similarity,evaluation_lane,evaluated_at')
+          .in('user_id', userChunk).eq('candidate_class', 'MATCH')
+          .gte('evaluated_at', alertCacheFreshnessStart.toISOString()).lte('evaluated_at', alertCacheCutoff.toISOString())
+          .order('evaluated_at', { ascending: true }).order('user_id', { ascending: true }).order('opportunity_id', { ascending: true }).limit(limit)
+        if (cursor) query = query.or(`evaluated_at.gt.${cursor.evaluated_at},and(evaluated_at.eq.${cursor.evaluated_at},user_id.gt.${cursor.user_id}),and(evaluated_at.eq.${cursor.evaluated_at},user_id.eq.${cursor.user_id},opportunity_id.gt.${cursor.opportunity_id})`)
+        const result = await query
+        if (result.error) throw new Error(result.error.message)
+        return result.data || []
+      }, 500)
+      cacheRows.push(...rows)
+    }
+  } catch (error: any) {
+    return { statusCode: 500, body: JSON.stringify({ error: error?.message || 'ALERT_CACHE_PAGE_FAILED' }) }
+  }
+  const stateResult = userIds.length ? await supabase.from('matching_retrieval_states').select('user_id,profile_signature,source_policy_signature').in('user_id', userIds) : { data: [], error: null }
+  if (stateResult.error) return { statusCode: 500, body: JSON.stringify({ error: stateResult.error.message }) }
+  const states = new Map((stateResult.data || []).map((state: any) => [String(state.user_id), state]))
+  const profilesByUser = new Map((profiles || []).map((profile: any) => [String(profile.user_id), profile]))
+  const validCacheRows = cacheRows.filter((candidate: any) => {
+    const profile: any = profilesByUser.get(String(candidate.user_id))
+    const state: any = states.get(String(candidate.user_id))
+    return profile && state
+      && candidate.profile_signature === matchingProfileSignature(profile)
+      && state.profile_signature === candidate.profile_signature
+      && state.source_policy_signature === sourceSignature
+  })
+  const cachedIds = [...new Set(validCacheRows.map((candidate: any) => String(candidate.opportunity_id)))]
+  const hydratedRows: any[] = []
+  for (let offset = 0; offset < cachedIds.length; offset += 500) {
+    const result = await supabase.from('opportunity_alert_universe')
+      .select("id,source,slug,title,organization,location,rubro,type,description,tags,opportunity_kind,opportunity_type,remote,remote_scope,eligible_countries,eligible_regions,citizenship_requirement,residency_requirement,deadline,created_at,updated_at,is_active,verification_status,match_eligible,alerts_eligible,archived_at,deleted_at,content_fingerprint")
+      .in('id', cachedIds.slice(offset, offset + 500))
+    if (result.error) return { statusCode: 500, body: JSON.stringify({ error: result.error.message }) }
+    hydratedRows.push(...(result.data || []))
+  }
+  const hydratedById = new Map(hydratedRows.map((row: any) => [String(row.id), row]))
+  const cachedByUser = new Map<string, any[]>()
+  for (const candidate of validCacheRows) {
+    const opp = hydratedById.get(String(candidate.opportunity_id))
+    if (!opp || !opportunityCacheIsCurrent(candidate, opp) || !cacheCandidateAlertEligible(candidate, opp, since)) continue
+    const rows = cachedByUser.get(String(candidate.user_id)) || []
+    rows.push({ ...opp, source_match_state: 'ALLOWED', _cached_similarity: candidate.semantic_similarity })
+    cachedByUser.set(String(candidate.user_id), rows)
+  }
   const dictionary = buildDictionary((skillRows || []).map((row: any) => [
     String(row.canonical_name || '').trim(),
     Array.isArray(row.variants) ? row.variants.map(String) : [],
@@ -107,7 +178,12 @@ const handler: Handler = async () => {
   for (const profile of profiles || []) {
     if (sent + failed >= MAX_EMAILS_PER_RUN) break
     const threshold = Number(profile.match_alert_threshold || 85)
-    const { rankedV2 } = rankOpportunitiesV2(profile, decisionOpportunities, dictionary, V2_PRESET_FULL)
+    const cache = cachedByUser.get(String(profile.user_id)) || []
+    const byId = new Map<string, any>()
+    for (const opp of [...recentDecisionOpportunities, ...cache]) if (!byId.has(String(opp.id))) byId.set(String(opp.id), opp)
+    const decisionOpportunities = [...byId.values()]
+    const similarities = new Map<string, number>(cache.flatMap((opp: any) => Number.isFinite(Number(opp._cached_similarity)) ? [[String(opp.id), Number(opp._cached_similarity)] as [string, number]] : []))
+    const { rankedV2 } = rankOpportunitiesV2(canonicalCandidateProfile(profile), decisionOpportunities, dictionary, V2_PRESET_FULL, similarities)
     for (const { opp, decision } of rankedV2) {
       if (sent + failed >= MAX_EMAILS_PER_RUN) break
       if (!isHighMatchAlertDecision(decision)) continue
@@ -138,7 +214,7 @@ const handler: Handler = async () => {
       }
     }
   }
-  return { statusCode: 200, body: JSON.stringify({ profiles: profiles?.length || 0, opportunities: opportunities?.length || 0, eligible, claimed, sent, failed, limit: MAX_EMAILS_PER_RUN }) }
+  return { statusCode: 200, body: JSON.stringify({ profiles: profiles?.length || 0, opportunities: alertOpportunities.length, eligible, claimed, sent, failed, limit: MAX_EMAILS_PER_RUN }) }
 }
 
 export const config = { schedule: "0 */2 * * *" }

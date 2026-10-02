@@ -11,6 +11,7 @@ import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { Eyebrow } from '@/components/cv/visuals'
 import { auth, supabase } from '@/lib/supabase'
+import { B2CProgressLoader } from '@/components/cv/B2CProgressLoader'
 
 type CvVersion = {
   id: string; vacancy_id: string; version_number: number; parent_version_id: string | null
@@ -35,9 +36,9 @@ type Workspace = {
 }
 
 const OBJECTIVES = [
-  { id: 'ats_clarity', title: 'Claridad ATS', description: 'Orden simple, secciones previsibles y lectura directa.', icon: FileCheck2 },
-  { id: 'concise', title: 'Más conciso', description: 'Reduce redundancias sin perder hechos confirmados.', icon: Target },
-  { id: 'impact_clarity', title: 'Impacto claro', description: 'Explica mejor aportes ya respaldados, sin crear métricas.', icon: Sparkles },
+  { id: 'ats_clarity', title: 'Más claro para ATS', description: 'Ordenamos y aclaramos el contenido para facilitar su lectura.', icon: FileCheck2 },
+  { id: 'concise', title: 'Más breve', description: 'Quitamos repeticiones sin borrar experiencia.', icon: Target },
+  { id: 'impact_clarity', title: 'Mostrar mejor mis logros', description: 'Destacamos mejor lo que ya hiciste, sin inventar resultados.', icon: Sparkles },
 ] as const
 
 const SECTION_LABELS: Record<string, string> = {
@@ -209,7 +210,7 @@ export default function CVRewrite() {
     finally { setDiscarding(false) }
   }
 
-  if (authLoading || loading) return <DashboardLayout><div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-[#c9a84c]" /></div></DashboardLayout>
+  if (authLoading || loading) return <DashboardLayout><div className="mx-auto flex min-h-[60vh] max-w-3xl items-center"><B2CProgressLoader title="Preparando tu espacio de mejora" description="Cargamos tu CV y sus evidencias antes de proponer cambios." stages={[{ label: 'Leyendo tu experiencia confirmada' }, { label: 'Revisando la versión elegida' }, { label: 'Preparando tu propuesta' }]} /></div></DashboardLayout>
   if (!user) return <DashboardLayout><div className="mx-auto max-w-xl rounded-3xl border border-white/8 bg-white/[0.02] p-8 text-center"><LockKeyhole className="mx-auto h-8 w-8 text-[#c9a84c]" /><h1 className="font-display mt-4 text-3xl text-cream">Tu CV es privado</h1><p className="mt-3 text-sm text-white/45">Ingresá a Mi Carrera para preparar una reescritura trazable.</p><a href="/mi-carrera" className="mt-6 inline-flex rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-medium text-black">Ingresar</a></div></DashboardLayout>
 
   return (
@@ -217,7 +218,7 @@ export default function CVRewrite() {
       <Helmet><title>Mejorar mi CV | Mi Carrera · CVitae</title><meta name="description" content="Reescribí tu CV con cambios trazables y evidencia confirmada, sin inventar información." /><meta name="robots" content="noindex" /></Helmet>
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-          <div><Eyebrow>Edición con respaldo</Eyebrow><h1 className="font-display mt-2 text-4xl leading-tight text-cream md:text-5xl">Mejor redacción.<br /><em>Los mismos hechos.</em></h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/50">Cada cambio muestra su antes, su propuesta y las evidencias que lo autorizan. Nada reemplaza tu CV hasta que lo revises y aceptes.</p></div>
+          <div><Eyebrow>Edición con respaldo</Eyebrow><h1 className="font-display mt-2 text-3xl leading-tight text-cream sm:text-4xl md:text-5xl">Mejor redacción.<br /><em>Los mismos hechos.</em></h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/50">Cambiamos cómo lo contás, no los hechos. Revisás cada propuesta y tus evidencias antes de guardar.</p></div>
           <a href="/mi-carrera/ats" className="inline-flex self-start items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs text-white/55 transition hover:border-[#c9a84c]/30 hover:text-[#c9a84c]">Ver diagnóstico ATS <ArrowRight className="h-3.5 w-3.5" /></a>
         </header>
 
@@ -226,11 +227,11 @@ export default function CVRewrite() {
         <section className="rounded-3xl border border-white/8 bg-white/[0.02] p-5 md:p-7">
           <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
             <div>
-              <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#c9a84c]/20 bg-[#c9a84c]/10 text-[#c9a84c]"><History className="h-5 w-5" /></span><div><h2 className="font-display text-xl text-cream">1. Elegí la versión de origen</h2><p className="text-xs text-white/40">Nunca se sobrescribe.</p></div></div>
+              <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#c9a84c]/20 bg-[#c9a84c]/10 text-[#c9a84c]"><History className="h-5 w-5" /></span><div><h2 className="font-display text-xl text-cream">1. Elegí qué CV querés mejorar</h2><p className="text-xs text-white/40">La versión original nunca se sobrescribe.</p></div></div>
               {workspace?.versions.length ? <select value={selectedVersionId} onChange={(event) => setSelectedVersionId(event.target.value)} className="mt-5 w-full rounded-xl border border-white/10 bg-[#0d0d0d] px-3 py-3 text-sm text-cream outline-none focus:border-[#c9a84c]/40">{workspace.versions.map((version) => <option key={version.id} value={version.id}>{version.label} · v{version.version_number} · {formatDate(version.created_at)}</option>)}</select> : <div className="mt-5 rounded-xl border border-dashed border-white/10 p-4 text-sm text-white/40">Primero creá o guardá una versión en Mi CV.</div>}
             </div>
             <div>
-              <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/60"><WandSparkles className="h-5 w-5" /></span><div><h2 className="font-display text-xl text-cream">2. Definí el objetivo editorial</h2><p className="text-xs text-white/40">Cambia la forma, no los hechos.</p></div></div>
+              <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/60"><WandSparkles className="h-5 w-5" /></span><div><h2 className="font-display text-xl text-cream">2. Elegí qué querés mejorar</h2><p className="text-xs text-white/40">Cambiamos la forma, no los hechos.</p></div></div>
               <div className="mt-5 grid gap-2 sm:grid-cols-3">{OBJECTIVES.map((item) => <button key={item.id} type="button" onClick={() => setObjective(item.id)} className={`rounded-xl border p-3 text-left transition ${objective === item.id ? 'border-[#c9a84c]/35 bg-[#c9a84c]/[0.08]' : 'border-white/8 bg-black/10 hover:border-white/15'}`}><item.icon className={`h-4 w-4 ${objective === item.id ? 'text-[#c9a84c]' : 'text-white/35'}`} /><p className="mt-2 text-sm text-cream">{item.title}</p><p className="mt-1 text-[11px] leading-relaxed text-white/35">{item.description}</p></button>)}</div>
             </div>
           </div>

@@ -14,6 +14,6 @@ export function sitemapIndexEntries(opportunityCount, blogCount = 0, vacancyCoun
     'sitemap-static.xml',
     ...(blogCount ? ['sitemap-blog.xml'] : []),
     ...(vacancyCount ? ['sitemap-vacancies.xml'] : []),
-    ...Array.from({ length: Math.ceil(opportunityCount / pageSize) }, (_, i) => `sitemap-opportunities-${i + 1}.xml`),
+    ...Array.from({ length: Math.ceil(opportunityCount / pageSize) }, (_, i) => `sitemap-opportunities/${i + 1}.xml`),
   ]
 }

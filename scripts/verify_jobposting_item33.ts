@@ -4,6 +4,7 @@ import {
   aggregatedJobPosting,
   factualJobPosting,
 } from '../src/lib/factual-job-posting.ts'
+import { normalizeCountry } from '../src/lib/seo/normalize.ts'
 
 const base:any = {
   slug:'role',
@@ -18,6 +19,10 @@ const base:any = {
   is_active:true,
   verification_status:'verified',
 }
+assert.equal(normalizeCountry('PY'), 'PY')
+assert.equal(normalizeCountry('US'), 'US')
+assert.equal(normalizeCountry(null), null)
+assert.equal(normalizeCountry('ZZ'), null)
 
 const factual = factualJobPosting(base, 'https://cvitae.lat/empleos/role')
 
@@ -100,29 +105,19 @@ const bothAllowed = aggregatedJobPosting({
 
 assert.equal(bothAllowed.state, 'READY')
 
-for (const distribution of [
-  {
-    jobPosting:{ allowed:true },
-    googleJobs:{ allowed:false },
-  },
-  {
-    jobPosting:{ allowed:false },
-    googleJobs:{ allowed:true },
-  },
-  {
-    jobPosting:{ allowed:true },
-  },
-  {
-    googleJobs:{ allowed:true },
-  },
-  undefined,
-]) {
+for (const [distribution, expected] of [
+  [{ jobPosting:{ allowed:true }, googleJobs:{ allowed:false } }, 'READY'],
+  [{ jobPosting:{ allowed:true }, googleJobs:{ allowed:null } }, 'READY'],
+  [{ jobPosting:{ allowed:false }, googleJobs:{ allowed:true } }, 'NOT_READY'],
+  [{ googleJobs:{ allowed:true } }, 'NOT_READY'],
+  [undefined, 'NOT_READY'],
+] as const) {
   assert.equal(
     aggregatedJobPosting({
       ...base,
       distribution,
     }, 'x').state,
-    'NOT_READY',
+    expected,
   )
 }
 

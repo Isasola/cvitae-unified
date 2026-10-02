@@ -11,6 +11,7 @@ import {
   securityHeaders,
 } from './lib/b2c-security'
 import { confirmedEvidence, evidenceFromProfile, syncEvidence } from './lib/cv-evidence'
+import { evaluateOpportunityEligibility } from '../../shared/candidate-eligibility'
 
 const MODEL_ID = 'global.anthropic.claude-sonnet-4-6'
 const SECTIONS = new Set(['header', 'summary', 'skills', 'experience', 'education', 'courses_languages', 'other'])
@@ -246,7 +247,8 @@ export function normalizeApplicationResult(
 }
 
 async function invokeModel(sourceMarkdown: string, evidence: GroundingEvidence[], opportunity: any) {
-  const opportunityText = [opportunity.title, opportunity.organization, opportunity.description, ...(opportunity.tags || [])].filter(Boolean).join('\n')
+  const structuredOpportunity = [opportunity.requirements, opportunity.responsibilities, opportunity.benefits].flatMap((items: any[]) => Array.isArray(items) ? items.map(item => item?.text).filter(Boolean) : [])
+  const opportunityText = [opportunity.title, opportunity.organization, opportunity.description, ...(opportunity.tags || []), ...structuredOpportunity].filter(Boolean).join('\n')
   const prompt = `Prepará documentos para una postulación laboral en español.
 
 OPORTUNIDAD VERIFICADA:
@@ -256,6 +258,13 @@ ${JSON.stringify({
     location: opportunity.location,
     description: opportunity.description,
     tags: opportunity.tags,
+    requirements: opportunity.requirements,
+    responsibilities: opportunity.responsibilities,
+    benefits: opportunity.benefits,
+    employment_type: opportunity.employment_type,
+    duration_text: opportunity.duration_text,
+    start_date: opportunity.start_date,
+    start_date_text: opportunity.start_date_text,
     deadline: opportunity.deadline,
   }, null, 2)}
 
@@ -306,7 +315,7 @@ ${opportunityText}`
 
 const VERSION_FIELDS = 'id,vacancy_id,version_number,parent_version_id,label,generation_kind,cv_markdown,evidence_snapshot,vacancy_snapshot,content_hash,user_attested,created_at'
 const WORKSPACE_FIELDS = 'id,opportunity_id,source_version_id,source_content_hash,status,opportunity_snapshot,application_url_snapshot,requirement_analysis,fit_summary,tailored_cv_markdown,cover_message,evidence_snapshot,checklist,checklist_progress,safety_checks,prepared_version_id,accepted_at,opened_at,submitted_self_reported_at,archived_at,created_at,updated_at'
-const OPPORTUNITY_FIELDS = 'id,slug,title,organization,location,description,tags,deadline,application_url,source,opportunity_kind,updated_at,verification_status,is_active,catalog_eligible,deleted_at,archived_at'
+const OPPORTUNITY_FIELDS = 'id,slug,title,organization,location,description,tags,requirements,responsibilities,benefits,duration_text,start_date,start_date_text,employment_type,deadline,application_url,source,opportunity_kind,updated_at,verification_status,is_active,catalog_eligible,deleted_at,archived_at,remote,remote_scope,eligible_countries,eligible_regions,citizenship_requirement,residency_requirement'
 
 async function loadOpportunity(supabase: any, selector: { id?: string; slug?: string }) {
   let query = supabase.from('opportunities').select(OPPORTUNITY_FIELDS)
@@ -350,6 +359,9 @@ async function loadWorkspace(supabase: any, user: any, opportunity: any = null) 
   return {
     profileExists: Boolean(profile),
     opportunity,
+    eligibilityAssessment: profile && opportunity
+      ? evaluateOpportunityEligibility(profile.profile_data?.candidate_eligibility, opportunity)
+      : null,
     versions: versionsResult.data || [],
     workspaces: workspacesResult.data || [],
     evidenceReadiness: {

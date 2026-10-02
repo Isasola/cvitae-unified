@@ -59,6 +59,11 @@ For field survival, null persistence may be valid source absence. Classify
 only with evidence: `NOT_PROVIDED`, `EXTRACTION_FAILURE`,
 `LOST_BEFORE_PERSISTENCE`, `DOWNSTREAM_DERIVED`, `UNKNOWN`, `PERSISTED`.
 
+Structural persistence is not semantic proof. For critical claims record the
+producer branch and evidence class, then test CREATE, UPDATE, NO-OP and
+historical paths independently. A source-wide value, search filter, fallback
+or TTL is operational context unless the source contract proves a row fact.
+
 ## Safety
 
 Read-only production validation needs explicit scope and a technical guard

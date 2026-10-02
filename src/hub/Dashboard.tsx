@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sparkles, Search, MapPin, Lock,
   Bell, BookOpen, ArrowRight, Target,
-  Mail, ExternalLink, ChevronRight, RefreshCw, AlertCircle,
+  Mail, ExternalLink, ChevronRight, RefreshCw,
   Heart,
 } from 'lucide-react'
 import { GrowthLine, CompatibilityTrace, Connector, Eyebrow } from '@/components/cv/visuals'
@@ -13,11 +13,15 @@ import { SiteShell } from '@/components/cv/SiteShell'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { auth, supabase } from '@/lib/supabase'
 import { isProfileComplete } from '@/lib/profile'
-import { CVLoader } from '@/components/cv/CVLoader'
+import { B2CProgressLoader } from '@/components/cv/B2CProgressLoader'
+import { PageErrorState, PageLoadingState } from '@/components/cv/PublicState'
 import { playComplete } from '@/lib/sounds'
 import { useFoundingBeta } from '@/hooks/useFoundingBeta'
 import { FoundingBetaModal } from '@/components/cvitae/FoundingBetaModal'
 import type { MatchDecision } from '@/lib/match-decision'
+import { canonicalOpportunityPathForRow } from '@/lib/opportunity-truth'
+import { MatchingCoverageCard } from '@/components/cv/MatchingCoverageCard'
+import { matchingProfileSignature } from '@/lib/matching-profile-signature'
 
 const MATCH_BATCH_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1/match-batch'
 const WA_NUMBER = '595992954169'
@@ -34,6 +38,9 @@ interface MatchItem {
   professionalCompatibility?: 'COMPATIBLE' | 'ADJACENT' | 'TRANSFERABLE' | 'CONFLICT' | 'UNKNOWN'
   eligibilitySignal?: 'ELIGIBLE' | 'INELIGIBLE' | 'UNKNOWN'
   downstreamTrusted?: boolean
+  presentationState?: 'CONFIRMED' | 'POTENTIAL'
+  eligibilityPending?: boolean
+  opportunityKind?: string | null
   matchDecision?: MatchDecision
 }
 interface CourseRecommendation {
@@ -48,11 +55,13 @@ interface DashboardCache {
   storedAt: number
   profileSignature: string
   matches: MatchItem[]
+  potentialMatches?: MatchItem[]
   profileSkills: string[]
   missingSkills: string[]
   isSubscribed: boolean
   alertsEnabled: boolean
   courses: CourseRecommendation[]
+  coverage?: { status?: string; coverage_state?: string; potential?: number; potential_scoreable?: number; match?: number } | null
 }
 
 const CACHE_TTL = 30 * 60 * 1000
@@ -60,17 +69,6 @@ const CACHE_VERSION = 5
 
 function cacheKey(userId: string) {
   return `cvitae:dashboard:v${CACHE_VERSION}:${userId}`
-}
-
-function profileSignature(profile: any): string {
-  return JSON.stringify({
-    title: profile?.professional_title || '',
-    skills: profile?.profile_data?.habilidades || [],
-    seniority: profile?.profile_data?.seniority || '',
-    location: profile?.profile_data?.location || '',
-    route: profile?.profile_data?.career_route || '',
-    updatedAt: profile?.updated_at || '',
-  })
 }
 
 function readCache(userId: string, signature: string): DashboardCache | null {
@@ -119,10 +117,10 @@ function EmptyState() {
   }
 
   const pillars = [
-    { n: '01', t: 'Analiza tu CV', d: 'La IA lee tu trayectoria y te da un Score de Empleabilidad.' },
-    { n: '02', t: 'Te matchea', d: 'Con empleos, becas, diplomados y concursos reales en Paraguay.' },
-    { n: '03', t: 'Traza tu ruta', d: 'Habilidades, cursos y certificaciones puntuales para crecer.' },
-    { n: '04', t: 'Te hace visible', d: 'Las empresas que buscan talento en CVitae te encuentran.' },
+    { n: '01', t: 'Entendemos tu experiencia', d: 'Organizamos tu CV y tus habilidades con evidencia real.' },
+    { n: '02', t: 'Comparamos oportunidades', d: 'Encontrá empleos, becas y programas que encajan con tu perfil.' },
+    { n: '03', t: 'Detectamos brechas', d: 'Ves qué requisitos podés respaldar y cuáles conviene fortalecer.' },
+    { n: '04', t: 'Preparás tu postulación', d: 'Adaptá tu CV sin inventar la experiencia que te falta.' },
   ]
 
   return (
@@ -135,11 +133,11 @@ function EmptyState() {
       <div className="relative">
         <Eyebrow>Bienvenida a CVitae</Eyebrow>
         <h1 className="font-display mt-2 max-w-2xl text-4xl leading-tight text-cream">
-          Tu carrera, <em>trazada</em> por una IA que conoce el mercado paraguayo.
+          Tu carrera, <em>mejor preparada</em> para la próxima oportunidad.
         </h1>
         <p className="mt-4 max-w-xl text-muted-foreground">
-          Subí tu CV y CVitae lo analiza, te da un Score de Empleabilidad, te matchea con
-          empleos, becas y diplomados reales, y te traza una ruta concreta para crecer.
+          Subí tu CV y CVitae lo compara con oportunidades reales, te muestra tu encaje y te ayuda a
+          preparar mejores postulaciones con evidencia confirmada.
         </p>
         <div className="mt-7 grid gap-3 sm:grid-cols-2">
           {pillars.map((p, i) => (
@@ -189,31 +187,7 @@ function EmptyState() {
 // ─── Loader state ─────────────────────────────────────────────────────────────
 
 function LoaderState({ steps, currentStep }: { steps: string[]; currentStep: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-      className="rounded-3xl border border-white/8 bg-[#0a0a0a] p-10"
-    >
-      <Eyebrow>Trazando tu trayecto</Eyebrow>
-      <h2 className="font-display mt-2 text-3xl text-cream">Un momento…</h2>
-      <p className="mt-1 text-muted-foreground">Estamos leyendo tu carrera, paso a paso.</p>
-      <div className="mt-8 flex justify-center">
-        <CVLoader variant="inline" size={40} label="Buscando matches..." />
-      </div>
-      <ul className="mt-6 space-y-3">
-        {steps.map((label, i) => (
-          <li key={label} className="flex items-center gap-3 text-sm">
-            <span className={`h-1.5 w-1.5 rounded-full ${
-              i < currentStep ? 'bg-[#c9a84c]' : i === currentStep ? 'bg-[#c9a84c] animate-pulse' : 'bg-white/15'
-            }`} />
-            <span className={i <= currentStep ? 'text-cream' : 'text-muted-foreground'}>
-              {label}{i === currentStep ? '…' : ''}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </motion.div>
-  )
+  return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}><B2CProgressLoader title="Un momento" description="Estamos leyendo tu carrera, paso a paso." stages={steps.map(label => ({ label }))} activeIndex={currentStep} /></motion.div>
 }
 
 // ─── Incomplete profile ───────────────────────────────────────────────────────
@@ -391,6 +365,8 @@ export default function Dashboard() {
   const [user, setUser] = useState<any>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [matches, setMatches] = useState<MatchItem[]>([])
+  const [potentialMatches, setPotentialMatches] = useState<MatchItem[]>([])
+  const [matchingCoverage, setMatchingCoverage] = useState<{ status?: string; coverage_state?: string; potential?: number; match?: number } | null>(null)
   const [loadingMatches, setLoadingMatches] = useState(false)
   const [profileSkills, setProfileSkills] = useState<string[]>([])
   const [isSubscribed, setIsSubscribed] = useState(false)
@@ -408,7 +384,7 @@ export default function Dashboard() {
 
   const foundingBeta = useFoundingBeta(user?.id || null)
 
-  const loaderSteps = ['Leyendo tu perfil', 'Cargando vacantes activas', 'Calculando compatibilidad', 'Ordenando recomendaciones']
+  const loaderSteps = ['Leyendo tu perfil', 'Buscando oportunidades elegibles', 'Comparando requisitos y experiencia', 'Ordenando tus mejores coincidencias']
 
   useEffect(() => {
     const init = async () => {
@@ -452,15 +428,17 @@ export default function Dashboard() {
       if (!token) throw new Error('No autorizado')
 
       const { data: prof, error: profileError } = await supabase.from('user_master_profiles')
-        .select('professional_title, profile_data, updated_at').eq('user_id', user.id).maybeSingle()
+        .select('professional_title, summary, cv_text, profile_data').eq('user_id', user.id).maybeSingle()
       if (profileError) throw profileError
       setProfile(prof)
       setLikedOpportunityIds(new Set((prof?.profile_data?.liked_opportunity_ids || []).map(String)))
 
-      const signature = profileSignature(prof)
+        const signature = matchingProfileSignature(prof)
       const cached = !force ? readCache(user.id, signature) : null
       if (cached) {
         setMatches(cached.matches)
+        setPotentialMatches(cached.potentialMatches || [])
+        setMatchingCoverage(cached.coverage || null)
         setProfileSkills(cached.profileSkills)
         setServerMissingSkills(cached.missingSkills)
         setIsSubscribed(cached.isSubscribed)
@@ -480,9 +458,19 @@ export default function Dashboard() {
       // match-batch is MATCH-only. Defend against stale/corrupt payloads so
       // ABSTAIN or DENY can never inflate a B2C card or count.
       const nextMatches = (data.matches || []).filter((match: MatchItem) => match.matchDecision?.outcome === 'MATCH')
+      const nextPotentialMatches = (data.potentialMatches || []).filter((match: MatchItem) => match.presentationState === 'POTENTIAL' && match.matchDecision?.outcome === 'ABSTAIN')
+      if (data.meta?.diagnosticSnapshotId && data.meta?.diagnostics?.coverage_state && ['ELIGIBILITY_UNKNOWN', 'DATA_COVERAGE_GAP', 'LOW_RETRIEVAL_COVERAGE'].includes(data.meta.diagnostics.coverage_state) && nextMatches.length === 0) {
+        fetch('/.netlify/functions/log-user-event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ event_type: 'matching_coverage_gap', event_data: { route: 'dashboard', snapshot_id: data.meta?.diagnosticSnapshotId } }),
+        }).catch(() => {})
+      }
       const nextSkills = data.profileSkills || []
       const nextMissing = data.missingSkills || []
       setMatches(nextMatches)
+      setPotentialMatches(nextPotentialMatches)
+      setMatchingCoverage({ ...(data.meta?.diagnostics || {}), status: data.meta?.diagnostics?.run_status === 'SUCCESS' ? (nextMatches.length ? 'SUCCESS_WITH_RESULTS' : 'SUCCESS_ZERO') : data.meta?.diagnostics?.run_status })
       setProfileSkills(nextSkills)
       setServerMissingSkills(nextMissing)
       setIsSubscribed(data.is_subscribed || false)
@@ -501,6 +489,8 @@ export default function Dashboard() {
       writeCache(user.id, {
         profileSignature: signature,
         matches: nextMatches,
+        potentialMatches: nextPotentialMatches,
+        coverage: { ...(data.meta?.diagnostics || {}), status: data.meta?.diagnostics?.run_status === 'SUCCESS' ? (nextMatches.length ? 'SUCCESS_WITH_RESULTS' : 'SUCCESS_ZERO') : data.meta?.diagnostics?.run_status },
         profileSkills: nextSkills,
         missingSkills: nextMissing,
         isSubscribed: data.is_subscribed || false,
@@ -584,9 +574,11 @@ export default function Dashboard() {
   const nextStep = useMemo(() => {
     if (!hasProfile) return { label: 'Completar mi perfil', detail: 'Necesitamos tus habilidades para encontrarte el trabajo ideal.', href: '/mi-carrera/perfil' }
     if (missingSkills.length > 0) return { label: `Sumá ${missingSkills[0]}`, detail: `Agregar esta skill puede mejorar tu score significativamente.`, href: '/mi-carrera/perfil' }
-    if (matches.length === 0) return { label: 'Explorar oportunidades', detail: 'No encontramos matches aún. Explorá oportunidades manualmente.', href: '/oportunidades' }
+    if (matches.length === 0) return { label: 'Explorar oportunidades', detail: 'Todavía no encontramos coincidencias suficientemente respaldadas. También podés explorar el catálogo.', href: '/oportunidades' }
     return { label: 'Generá tu CV Vivo', detail: 'Creá un CV adaptado por IA para tu mejor oportunidad actual.', href: '/mi-carrera/cv' }
   }, [hasProfile, missingSkills, matches])
+
+  const careerIntent = profile?.profile_data?.desired_role_1y || profile?.profile_data?.career_route || ''
 
   if (!authLoading && !user) {
     return (
@@ -609,16 +601,14 @@ export default function Dashboard() {
     <DashboardLayout>
       <Helmet>
         <title>Mi Carrera | CVitae</title>
-        <meta name="description" content="Tu dashboard con matching de oportunidades, score de empleabilidad y recomendaciones con IA." />
+        <meta name="description" content="Encontrá oportunidades, entendé tu encaje y prepará mejores postulaciones con tu perfil y CV." />
         <meta name="robots" content="noindex" />
       </Helmet>
 
       <div className="space-y-6">
         <AnimatePresence mode="wait">
           {authLoading ? (
-            <motion.div key="loading" className="flex items-center justify-center py-32">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#c9a84c] border-t-transparent" />
-            </motion.div>
+            <motion.div key="loading"><PageLoadingState label="Cargando tu carrera" rows={2} /></motion.div>
           ) : !user ? (
             <motion.div key="empty"><EmptyState /></motion.div>
           ) : hasProfile === false ? (
@@ -643,22 +633,13 @@ export default function Dashboard() {
                   Actualizar con IA
                 </button>
               </div>
-              {dashboardError && (
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4 text-sm text-red-300">
-                  <span className="inline-flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4" />
-                    {dashboardError}
-                  </span>
-                  <button type="button" onClick={() => loadMatches(true)} className="text-xs underline underline-offset-4">
-                    Reintentar
-                  </button>
-                </div>
-              )}
+              {dashboardError && <PageErrorState message={dashboardError} onRetry={() => loadMatches(true)} />}
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
                 {/* Main column */}
                 <div className="space-y-5">
                   {employabilityScore > 0 && <ScoreHero score={employabilityScore} />}
                   <NextStep {...nextStep} />
+                  <MatchingCoverageCard coverage={matchingCoverage} compact />
 
                   <div className="flex items-baseline justify-between pt-2">
                     <h3 className="font-display text-2xl text-cream">
@@ -670,16 +651,38 @@ export default function Dashboard() {
                   </div>
 
                   {matches.length === 0 ? (
+                    <>
                     <div className="glass-panel p-10 text-center">
                       <Search className="mx-auto mb-4 h-10 w-10 text-muted-foreground/30" />
-                      <h3 className="font-display mb-2 text-lg text-cream">No encontramos matches aún</h3>
+                      <h3 className="font-display mb-2 text-lg text-cream">Todavía no encontramos coincidencias suficientemente respaldadas</h3>
                       <p className="mx-auto mb-6 max-w-xs text-sm text-muted-foreground">
-                        Completá tu perfil con más habilidades para ver oportunidades.
+                        {matchingCoverage?.coverage_state === 'ELIGIBILITY_UNKNOWN'
+                          ? 'Encontramos oportunidades potenciales, pero necesitamos confirmar tu país de residencia para evaluar aquellas restricciones que sí se pueden comprobar. Otras pueden seguir sin datos suficientes. También podés explorar el catálogo.'
+                          : 'Esto no significa que no haya oportunidades. Podés ajustar tu perfil u objetivo, o explorar el catálogo mientras mejoramos tus recomendaciones.'}
                       </p>
-                      <a href="/mi-carrera/perfil" className="inline-flex h-9 items-center gap-2 rounded-full border border-white/10 px-4 text-sm text-cream transition hover:border-white/25">
-                        Mejorar perfil
-                      </a>
+                      <div className="flex flex-wrap justify-center gap-2">
+                        {matchingCoverage?.coverage_state === 'ELIGIBILITY_UNKNOWN'
+                          ? <a href="/mi-carrera/perfil" className="inline-flex h-9 items-center gap-2 rounded-full border border-[#c9a84c]/50 px-4 text-sm text-cream transition hover:border-[#c9a84c]">Confirmar mi elegibilidad</a>
+                          : <a href="/mi-carrera/perfil" className="inline-flex h-9 items-center gap-2 rounded-full border border-white/10 px-4 text-sm text-cream transition hover:border-white/25">Mejorar mi perfil</a>}
+                        <a href="/mi-carrera/aprender" className="inline-flex h-9 items-center gap-2 rounded-full border border-white/10 px-4 text-sm text-cream transition hover:border-white/25">Definir mi objetivo</a>
+                        <a href="/oportunidades" className="inline-flex h-9 items-center gap-2 rounded-full bg-[#c9a84c] px-4 text-sm font-medium text-black transition hover:bg-[#e6cf8a]">Explorar oportunidades</a>
+                      </div>
                     </div>
+                    {potentialMatches.length > 0 && (
+                      <div className="glass-panel mt-4 p-5">
+                        <h4 className="font-display text-lg text-cream">Oportunidades potenciales</h4>
+                        <p className="mt-1 text-xs text-muted-foreground">Elegibilidad por confirmar — no son matches confirmados.</p>
+                        <div className="mt-3 space-y-2">
+                          {potentialMatches.slice(0, 3).map((item) => (
+                            <a key={item.id} href={canonicalOpportunityPathForRow({ slug: item.slug, opportunity_type: item.opportunityKind, opportunity_kind: item.opportunityKind })} className="block rounded-xl border border-white/10 p-3 transition hover:border-[#c9a84c]/50">
+                              <p className="text-sm text-cream">{item.titulo}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">{item.organization || item.ubicacion || 'Oportunidad'} · Elegibilidad por confirmar</p>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    </>
                   ) : (
                     <>
                       <OpportunityCard m={matches[0]} featured liked={likedOpportunityIds.has(matches[0].id)} onToggleLike={toggleOpportunityPreference} />
@@ -756,12 +759,13 @@ export default function Dashboard() {
                   {/* Learning plan */}
                   <div className="glass-panel p-5">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-display text-lg text-cream">Plan de aprendizaje</h4>
+                      <h4 className="font-display text-lg text-cream">Tu plan para acercarte a tu objetivo</h4>
                       <a href="/mi-carrera/aprender" className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-[#c9a84c]">Ver plan <ArrowRight className="h-3 w-3" /></a>
                     </div>
-                    {profile?.profile_data?.career_route && (
+                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Usamos tu objetivo, tus matches y brechas respaldadas para priorizar qué conviene fortalecer.</p>
+                    {careerIntent && (
                       <p className="mt-1 text-[11px] text-muted-foreground">
-                        Enfocado en tu ruta: <span className="text-[#c9a84c]">
+                        Objetivo: <span className="text-[#c9a84c]">
                           {{
                             'empleo-local': '💼 Empleo en Paraguay',
                             'remoto': '💻 Trabajo remoto',
@@ -770,7 +774,7 @@ export default function Dashboard() {
                             'emprendimiento': '🚀 Emprendimiento',
                             'freelance': '🧩 Trabajo freelance',
                             'cambio-area': '🔄 Cambio de área',
-                          }[profile.profile_data.career_route] || profile.profile_data.career_route}
+                          }[profile?.profile_data?.career_route] || careerIntent}
                         </span>
                       </p>
                     )}
@@ -788,13 +792,14 @@ export default function Dashboard() {
                                 <BookOpen className="h-3.5 w-3.5 text-[#c9a84c]" />
                                 <p className="text-sm text-cream transition-colors group-hover:text-[#c9a84c]">{c.course}</p>
                               </div>
-                              <p className="pl-[22px] text-[11px] text-muted-foreground">{c.platform} · {c.level} · {c.sources.length} {c.sources.length === 1 ? 'oportunidad' : 'oportunidades'}</p>
+                              <p className="pl-[22px] text-[11px] text-muted-foreground">{c.platform} · {c.level} · respaldado por {c.sources.length} {c.sources.length === 1 ? 'oportunidad' : 'oportunidades'}</p>
+                              {c.why && <p className="mt-1 pl-[22px] text-[11px] leading-relaxed text-white/40">{c.why}</p>}
                             </a>
                           ))}
                         </div>
                       </div>
                     ) : (
-                      <p className="mt-3 text-xs italic text-muted-foreground">Actualizá tus matches para crear una ruta respaldada por oportunidades verificadas.</p>
+                      careerIntent ? <p className="mt-3 text-xs italic text-muted-foreground">Todavía no hay brechas corroboradas para recomendar un curso. Actualizá tus matches cuando quieras volver a revisar.</p> : <div className="mt-3"><p className="text-xs text-muted-foreground">Contanos qué querés lograr y CVitae usará oportunidades reales para orientar qué conviene fortalecer.</p><a href="/mi-carrera/aprender" className="mt-3 inline-flex items-center gap-1 text-xs text-[#c9a84c]">Definir mi objetivo <ArrowRight className="h-3 w-3" /></a></div>
                     )}
                   </div>
 

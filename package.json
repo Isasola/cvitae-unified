@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "build": "tsx scripts/generate-seo-inventory.ts && vite build && node scripts/generate-sitemap.mjs && node scripts/prerender.mjs && node scripts/generate-opportunity-redirects.mjs",
+    "build": "tsx scripts/generate-seo-inventory.ts && vite build && node scripts/generate-sitemap.mjs && node scripts/prerender.mjs && node scripts/generate-opportunity-redirects.mjs && node scripts/generate-robots.mjs",
     "preview": "vite preview --host",
     "staging:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-local-staging.ps1",
     "staging:status": "npx supabase status",

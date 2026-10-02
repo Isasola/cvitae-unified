@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 
 from opportunity_sink import OpportunitySink
 from source_adapters import AdapterResult, AtomicEnricher, COUNTRY_TERMS, RunLineageWriter, build_scan_lineage, clean, country_from_text, geo_from_detail, health, recommend
+from eligibility_truth import normalize_eligibility_region
 from source_evidence import runtime_telemetry, eight_gates_run_evidence, run_quality_metrics
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
@@ -69,13 +70,15 @@ def _eligibility_from_restriction(value: str | None) -> tuple[list[str], list[st
     """WWR RSS/detail restrictions are applicant evidence, never workplace geo."""
     text = clean(value, 1000) or ""
     lowered = text.casefold()
-    if any(token in lowered for token in ("worldwide", "anywhere", "all countries")):
-        return [], [], "WORLDWIDE"
+    region = normalize_eligibility_region(text)
+    if region == "GLOBAL":
+        # Applicant restriction, not workplace geography. GLOBAL is the
+        # canonical explicit worldwide eligibility alias consumed by matching.
+        return [], [region], "WORLDWIDE"
     countries = sorted({code for terms, code in COUNTRY_TERMS if any(term in lowered for term in terms)})
     if countries:
         return countries, [], "COUNTRY_SPECIFIC" if len(countries) == 1 else "REGIONAL"
-    if any(token in lowered for token in ("europe", "emea", "americas", "apac", "latin america", "latam")):
-        region = "LATAM" if "lat" in lowered or "america" in lowered and "latin" in lowered else "REGIONAL"
+    if region:
         return [], [region], "REGIONAL"
     return [], [], "UNKNOWN"
 

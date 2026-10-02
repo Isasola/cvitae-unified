@@ -8,10 +8,10 @@ export type PublicSeoRow = Record<string, any> & {
 }
 
 /** The sole effective SEO selection. Static consumers use its generated JSON. */
-export function buildEffectiveSeoInventory(rows: Record<string, any>[], policies: SourcePolicyRow[]): PublicSeoRow[] {
+export function buildEffectiveSeoInventory(rows: Record<string, any>[], policies: SourcePolicyRow[], asOf = new Date()): PublicSeoRow[] {
   const paths = new Set<string>()
   return [...rows].sort((left, right) => String(right.updated_at || '').localeCompare(String(left.updated_at || '')) || String(left.id || '').localeCompare(String(right.id || ''))).flatMap(row => {
-    const distribution = publicDistributionProjection(row, policies)
+    const distribution = publicDistributionProjection(row, policies, asOf)
     if (!distribution.seo.allowed || !String(row.slug || '').trim()) return []
     const canonical_path = canonicalOpportunityPathForRow({ ...row, slug: String(row.slug) })
     if (paths.has(canonical_path)) return []

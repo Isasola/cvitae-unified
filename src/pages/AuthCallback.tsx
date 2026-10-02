@@ -3,6 +3,8 @@ import { useLocation } from 'wouter'
 import { supabase } from '@/lib/supabase'
 import { isProfileComplete } from '@/lib/profile'
 import { motion } from 'framer-motion'
+import { consumeApplicationReturnTo } from '@/lib/application-intent'
+import { analytics } from '@/lib/analytics'
 
 export default function AuthCallback() {
   const [, setLocation] = useLocation()
@@ -23,7 +25,9 @@ export default function AuthCallback() {
           body: JSON.stringify({ action: 'status' }),
         })
         const payload = await res.json().catch(() => ({}))
-        const destination = isProfileComplete(payload.profile) ? '/mi-carrera' : '/mi-carrera/perfil'
+        const returnTo = consumeApplicationReturnTo()
+        if (returnTo) analytics.authCompleted({ opportunity_slug: decodeURIComponent(returnTo.split('/').pop() || ''), route_family: 'application_auth', auth_state: 'authenticated' })
+        const destination = returnTo && isProfileComplete(payload.profile) ? returnTo : (returnTo ? `/mi-carrera/perfil?returnTo=${encodeURIComponent(returnTo)}` : (isProfileComplete(payload.profile) ? '/mi-carrera' : '/mi-carrera/perfil'))
         if (isMounted) setTimeout(() => setLocation(destination), 700)
       } catch {
         if (isMounted) setTimeout(() => setLocation('/mi-carrera/perfil'), 700)

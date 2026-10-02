@@ -250,8 +250,8 @@ export function isEligibleForProfile(opp, profileLocation) {
   if (!declared.length) return !/(emea|north america|united states|canada only)/.test(text);
   const profile = normalize(profileLocation);
   const country = /\b(peru|lima|\bpe\b)\b/.test(profile) ? 'pe' : /\b(paraguay|asuncion|\bpy\b)\b/.test(profile) ? 'py' : '';
-  if (!country) return declared.some((v)=>/(worldwide|all countr|latam|latin america|south america)/.test(v));
-  return declared.some((v)=>v === country || (country === 'py' && v.includes('paraguay')) || (country === 'pe' && v.includes('peru')) || /(latam|latin america|latinoamerica|south america|sudamerica|worldwide|all countr)/.test(v));
+  if (!country) return declared.some((v)=>/(worldwide|global|all countr|latam|latin america|south america)/.test(v));
+  return declared.some((v)=>v === country || (country === 'py' && v.includes('paraguay')) || (country === 'pe' && v.includes('peru')) || /(latam|latin america|latinoamerica|south america|sudamerica|worldwide|global|all countr)/.test(v));
 }
 export function isTender(opp) {
   return opp.opportunity_type === 'tender' || /(^|\s)(tender|licitacion|licitaciones|llamado a licitacion)(\s|$)/i.test(normalize(`${opp.title ?? ''} ${opp.type ?? ''} ${opp.opportunity_kind ?? ''} ${opp.rubro ?? ''}`));

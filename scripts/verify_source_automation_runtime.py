@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "scrapers"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from source_automation_runtime import (
+    automation_input,
     evaluate_runtime_row,
     freshness_from_evidence,
     operational_health_from_runs,
@@ -66,11 +67,16 @@ assert freshness_from_evidence(BASE, {"identity_status": "REMOVED", "http_status
 assert freshness_from_evidence(BASE, {"identity_status": "NETWORK_TRANSIENT", "http_status": 0, "observed_at": NOW.isoformat()}, PROFILE, now=NOW)["state"] == "UNKNOWN"
 assert freshness_from_evidence(BASE, {"identity_status": "RATE_LIMITED", "http_status": 429, "observed_at": NOW.isoformat()}, PROFILE, now=NOW)["state"] == "UNKNOWN"
 assert freshness_from_evidence(BASE, {"identity_status": "UPSTREAM_5XX", "http_status": 503, "observed_at": NOW.isoformat()}, PROFILE, now=NOW)["state"] == "UNKNOWN"
+assert automation_input({**BASE, "eligible_countries": [], "eligible_regions": ["LATAM"]}, {"state": "FRESH"})["eligibility_resolved"] is True
+assert automation_input({**BASE, "eligible_countries": [], "eligible_regions": [], "remote_scope": "WORLDWIDE"}, {"state": "FRESH"})["eligibility_resolved"] is False
+assert automation_input({**BASE, "eligible_countries": [], "eligible_regions": [], "remote_scope": None}, {"state": "FRESH"})["eligibility_resolved"] is False
 
 policy = {"source_policy_available": True, "source_enabled": True, "certified": True, "auto_enabled": False, "operational_health": "HEALTHY", "health_fresh": True, "health_observed_at": NOW.isoformat(), "health_source": "scraper_runs", "matching_enabled": True, "catalog_enabled": True, "alerts_enabled": True, "seo_enabled": True}
 output = evaluate_runtime_row(BASE, PROFILE, LIVE, policy, now=NOW)
 assert output["actual"]["decision"] == "HOLD"
 assert output["actual"]["reason_codes"] == ("SOURCE_NOT_AUTO_ENABLED",)
+assert output["actual"]["evidence"]["factory_stamps"]["job_geo"] == "review"
+assert output["actual"]["evidence"]["factory_stamps"]["geo_decision"] == "pass"
 assert output["would_auto_promote_if_enabled"] is True
 assert output["embedding_allowed_now"] is False
 assert output["embedding_candidate"] is True
@@ -110,6 +116,6 @@ assert runtime["rows_evaluated"] == 2
 assert runtime["excluded"]["factory_status_not_automation_state"] == 2
 assert runtime["scan_complete"] is False and runtime["stop_reason"] == "row_limit_reached"
 assert runtime["decisions"]["HOLD"] == 2
-assert runtime["would_auto_promote_if_enabled"] == 2
+assert runtime["would_auto_promote_if_enabled"] == 0, "stale runtime telemetry must override an otherwise eligible row"
 
 print("verify_source_automation_runtime: PASS")

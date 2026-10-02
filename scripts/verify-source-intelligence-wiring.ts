@@ -77,10 +77,10 @@ assert('P0.3-C: runnerIdsFor includes _scrapper suffix',
 
 assert('P0.3-D: latestRun uses runnerIds.has (not aliasSet.has)',
   adminData.includes('const runnerIds = runnerIdsFor(profile)') &&
-  adminData.includes('runnerIds.has(String(item.scraper_id'))
+  adminData.includes('runsForSource') && adminData.includes('runnerIdsFor(profile)'))
 
 assert('P0.3-E: history filter uses runnerIds (not aliasSet)',
-  adminData.includes('runRows.filter((item: any) => runnerIds.has('))
+  adminData.includes('const history = runsForSource.slice(0, 12)'))
 
 assert('P0.3-F: diagnose_source uses runnerIdsFor for scraper_runs query',
   adminData.includes('diagRunnerIds') && adminData.includes('.in("scraper_id", diagRunnerIds)'))
@@ -172,7 +172,7 @@ assert('Safety-B: search_engine_indexing_allowed still in SourceProfile',
   base.includes('search_engine_indexing_allowed: bool | None = None'))
 
 assert('Safety-C: aliasSet still used for observations/policy filtering',
-  adminData.includes('aliasSet.has(String(item.source'))
+  adminData.includes('indexRowsBySource') && adminData.includes('rowsForAliases(observationBySource, aliases)') && adminData.includes('rowsForAliases(policyBySource, aliases)'))
 
 assert('Safety-D: OpportunitySink still applies max_items as hard cap',
   readFileSync(resolve(process.cwd(), 'scrapers/opportunity_sink.py'), 'utf8')

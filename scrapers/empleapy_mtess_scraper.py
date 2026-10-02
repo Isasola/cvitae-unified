@@ -128,10 +128,11 @@ def _parse_wp_posts(posts: list[dict], now: datetime) -> list[dict]:
             "original_source_verified": True,
             "eligible_regions": ["PY"],
             "published_at": published.date().isoformat(),
-            "deadline": dl.isoformat() if dl else _op_deadline(published, now),
             "tags": ["MTESS", "EmpleaPY", "empleo", "Paraguay"],
             "description": content[:4000],
         })
+        if dl:
+            rows[-1]["deadline"] = dl.isoformat()
     return rows
 
 

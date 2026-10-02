@@ -4,7 +4,7 @@ import { evaluateOpportunityDistribution, publicDistributionProjection, type Sou
 import { matchesPublicOpportunityMode, type PublicOpportunityMode } from '../../src/lib/opportunity-truth'
 import { collectAllowedPages } from './lib/public-opportunity-pagination'
 
-const COLUMNS = 'id,slug,title,organization,location,city,department,country_code,type,rubro,description,opportunity_type,opportunity_kind,deadline,funding_type,fully_funded,source,source_url,application_url,eligible_countries,eligible_regions,education_level,remote_scope,is_active,verification_status,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,seo_status,deleted_at,archived_at,created_at,updated_at'
+const COLUMNS = 'id,slug,title,organization,location,city,department,country_code,onsite_country,remote,remote_scope,type,employment_type,rubro,description,tags,requirements,responsibilities,benefits,duration_text,start_date,start_date_text,opportunity_type,opportunity_kind,deadline,published_at,value,currency,funding_type,funding_amount,fully_funded,experience_required,education_level,citizenship_requirement,residency_requirement,sector,source,source_url,application_url,eligible_countries,eligible_regions,is_active,verification_status,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,seo_status,deleted_at,archived_at,created_at,updated_at'
 
 export function publicOpportunityResponse<T>(rows: T[], slug?: string) {
   if (slug && !rows[0]) return { statusCode: 404, body: { error:'not_found' } }
@@ -29,7 +29,7 @@ export const handler: Handler = async (event) => {
       // catalog truth. Pre-filtering by historical `catalog_eligible` would
       // permanently hide a newly-ready or reconciled row before that truth can
       // be applied.
-      let query = db.from('opportunities').select(COLUMNS).order('updated_at', { ascending: false }).range(offset, offset + size - 1)
+      let query = db.from('opportunity_catalog_universe').select(COLUMNS).order('updated_at', { ascending: false }).range(offset, offset + size - 1)
       if (slug) query = query.eq('slug', slug)
       const { data, error } = await query
       if (error) throw error

@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict'
 import { buildDefaultDictionary } from '../supabase/functions/_shared/matching.ts'
 import { rankOpportunitiesV2, V2_PRESET_FULL } from '../supabase/functions/_shared/matching-v2.ts'
+import { confirmedCandidateEligibility } from '../shared/candidate-eligibility.ts'
 
 const dictionary = buildDefaultDictionary()
 const base = { is_active: true, verification_status: 'verified', match_eligible: true, archived_at: null, deleted_at: null, deadline: null, location: 'Asunción, Paraguay', eligible_countries: ['py'], eligible_regions: [] }
@@ -25,9 +26,9 @@ const specs: Spec[] = [
 let totals = { mustMatch:0, shownMatch:0, hardReject:0, rejected:0, visible:0, candidates:specs.length }
 const ablations: Record<string, number[]> = { no_semantic: [], legacy_cosine: [], quantile: [] }
 for (const spec of specs) {
-  const profile = { professional_title: spec.title, summary: spec.title, profile_data: { habilidades: spec.skills, seniority:'semi-senior', location:'Paraguay' } }
-  const good = { ...base, id:`${spec.key}-good`, title:spec.goodTitle, rubro:spec.goodRubro, tags:spec.goodSkills, description:`${spec.goodTitle} semi-senior ${spec.goodSkills.join(' ')}` }
-  const bad = { ...base, id:`${spec.key}-bad`, title:spec.badTitle, rubro:spec.badRubro, tags:spec.badSkills, description:`${spec.badTitle} semi-senior ${spec.badSkills.join(' ')}` }
+  const profile = { professional_title: spec.title, summary: spec.title, profile_data: { candidate_eligibility: confirmedCandidateEligibility({ residence_country: 'PY' }), habilidades: spec.skills, seniority:'semi-senior', location:'Paraguay' } }
+  const good = { ...base, source_match_state: 'ALLOWED', remote: true, id:`${spec.key}-good`, title:spec.goodTitle, rubro:spec.goodRubro, tags:spec.goodSkills, description:`${spec.goodTitle}. Responsibilities include professional delivery, coordination, reporting, and accountable outcomes. Required skills: ${spec.goodSkills.join(', ')}.` }
+  const bad = { ...base, source_match_state: 'ALLOWED', remote: true, id:`${spec.key}-bad`, title:spec.badTitle, rubro:spec.badRubro, tags:spec.badSkills, description:`${spec.badTitle}. Responsibilities include professional delivery, coordination, reporting, and accountable outcomes. Required skills: ${spec.badSkills.join(', ')}.` }
   const sims = new Map([[good.id,.87],[bad.id,.85]])
   for (const [label, semanticMode] of Object.entries({ no_semantic:'none', legacy_cosine:'raw', quantile:'quantile' } as const)) {
     const result = rankOpportunitiesV2(profile, [good,bad], dictionary, { ...V2_PRESET_FULL, semanticMode }, sims)

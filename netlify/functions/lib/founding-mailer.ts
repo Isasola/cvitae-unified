@@ -224,7 +224,7 @@ export async function notifyFounder({
   })
 }
 
-type FounderMilestoneEvent = "founding_offered" | "founding_accepted" | "founding_requested" | "first_value"
+type FounderMilestoneEvent = "founding_offered" | "founding_accepted" | "founding_requested" | "first_value" | "matching_coverage_gap"
 
 function buildFounderMilestoneEmail(
   event: FounderMilestoneEvent,
@@ -300,6 +300,30 @@ function buildFounderMilestoneEmail(
     }
   }
 
+  if (event === "matching_coverage_gap") {
+    const d = data.details || {}
+    return {
+      subject: `[CVitae] Brecha de cobertura en matching — ${name}`,
+      html: `
+<div style="font-family:monospace;background:#0a0a0a;color:#f5f0e8;padding:20px;border-radius:8px;max-width:520px">
+  <div style="color:#c9a84c;font-weight:bold;margin-bottom:12px">MATCHING COVERAGE GAP — CVitae</div>
+  <div style="color:#a0a0a0;line-height:1.8">
+    <div><strong style="color:#f5f0e8">Perfil:</strong> ${name}</div>
+    <div><strong style="color:#f5f0e8">Ubicación:</strong> ${d.location_summary || "UNKNOWN"}</div>
+    <div><strong style="color:#f5f0e8">Perfil profesional:</strong> ${d.professional_title || "UNKNOWN"}</div>
+    <div><strong style="color:#f5f0e8">Cobertura:</strong> ${d.coverage_state || "UNKNOWN"}</div>
+    <div><strong style="color:#f5f0e8">Matches confirmados:</strong> ${Number(d.confirmed_matches || 0)}</div>
+    <div><strong style="color:#f5f0e8">Potenciales:</strong> ${Number(d.potential_matches || 0)}</div>
+    <div><strong style="color:#f5f0e8">Elegibilidad UNKNOWN:</strong> ${Number(d.eligibility_unknown || 0)}</div>
+    <div><strong style="color:#f5f0e8">Fuentes permitidas:</strong> ${Number(d.source_allowed || 0)}</div>
+    <div><strong style="color:#f5f0e8">Acción recomendada:</strong> ${d.recommended_action || "technical investigation"}</div>
+    <div><strong style="color:#f5f0e8">Run:</strong> ${d.run_at || ts}</div>
+  </div>
+  <div style="margin-top:16px"><a href="${d.admin_link || adminLink}" style="color:#c9a84c;text-decoration:none;font-size:12px">Revisar diagnóstico en Admin →</a></div>
+</div>`,
+    }
+  }
+
   // first_value
   const d = data.details || {}
   const ttfvStr = d.ttfv_seconds != null ? `${d.ttfv_seconds}s` : "—"
@@ -333,6 +357,7 @@ export async function notifyFounderMilestone({
   userEmail,
   userName,
   timestamp,
+  dedupeKey,
   details,
   supabaseAdmin,
   resend,
@@ -342,11 +367,12 @@ export async function notifyFounderMilestone({
   userEmail: string
   userName?: string
   timestamp?: string
+  dedupeKey?: string
   details?: Record<string, any>
   supabaseAdmin: SupabaseClient
   resend: Resend
 }): Promise<{ ok: boolean; already_sent?: boolean }> {
-  const idempotencyKey = `founder_${event}:${userId}:v1`
+  const idempotencyKey = `founder_${event}:${userId}:${dedupeKey || "v1"}`
   const now = timestamp || new Date().toISOString()
 
   const { data: existing } = await supabaseAdmin

@@ -1,3 +1,5 @@
+import { hasProfessionalEvidence } from '../../shared/professional-evidence.ts'
+
 /** Pure boundary: known source permission is required and never promotes rows. */
 export type FieldState = 'EXTRACTED' | 'INFERRED' | 'UNKNOWN' | 'FAILED'
 export type Readiness = 'CATALOG_READY' | 'MATCHING_READY' | 'SEO_READY' | 'JOBPOSTING_READY'
@@ -33,10 +35,7 @@ export function fieldState(value: unknown, provenance?: FieldProvenance): FieldS
 }
 /** Row readiness only: catalog visibility does not imply professional evidence. */
 export function matchingEvidenceReady(row: Pick<OpportunityTruthInput, 'title' | 'description'> & { tags?: unknown; requirements?: string | null; professional_family?: string | null }): boolean {
-  const tags = Array.isArray(row.tags) ? row.tags.filter(tag => Boolean(String(tag || '').trim())).length : 0
-  const titleSpecific = String(row.title || '').trim().split(/\s+/).length >= 2
-  const richText = String(row.description || '').trim().length >= 100 || String(row.requirements || '').trim().length >= 60
-  return titleSpecific && (richText || tags >= 2 || Boolean(row.professional_family))
+  return hasProfessionalEvidence(row)
 }
 const ready = (): ReadinessResult => ({ state:'READY', reasons:[] })
 const notReady = (...reasons: string[]): ReadinessResult => ({ state:'NOT_READY', reasons })
@@ -80,8 +79,15 @@ export function alertsReadiness(row: OpportunityTruthInput & { tags?: unknown; r
   const matching = matchingReadiness(row)
   return matching.state === 'READY' ? ready() : { state: matching.state, reasons: [...matching.reasons] }
 }
-export function seoReadiness(row: OpportunityTruthInput): ReadinessResult {
-  const catalog = catalogReadiness(row); if (catalog.state !== 'READY') return catalog
+export function seoReadiness(row: OpportunityTruthInput, now = new Date()): ReadinessResult {
+  const catalog = catalogReadiness(row, now); if (catalog.state !== 'READY') return catalog
+  return seoContentReadinessIndependentOfLifecycle(row)
+}
+
+/** Diagnostic only: factual SEO content potential without making any lifecycle claim. */
+export function seoContentReadinessIndependentOfLifecycle(row: Pick<OpportunityTruthInput, 'title' | 'slug' | 'description' | 'organization'>): ReadinessResult {
+  if (!String(row.title || '').trim()) return notReady('MISSING_TITLE')
+  if (!String(row.slug || '').trim()) return notReady('MISSING_CANONICAL_IDENTITY')
   if (String(row.description || '').trim().length < 100) return notReady('THIN_CONTENT')
   if (!String(row.organization || '').trim()) return notReady('MISSING_ORGANIZATION')
   return ready()

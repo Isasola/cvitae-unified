@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link } from 'wouter'
-import { Briefcase, MapPin, Search, SlidersHorizontal } from 'lucide-react'
+import { MapPin, Search, SlidersHorizontal } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { Eyebrow } from '@/components/cv/visuals'
 import { loadPublicOpportunities } from '@/lib/public-source-policy'
 import { AdSlot } from '@/components/cv/AdSlot'
+import { PageEmptyState, PageErrorState, PageLoadingState } from '@/components/cv/PublicState'
 import { canonicalOpportunityPathForRow } from '@/lib/opportunity-truth'
 
 interface Job {
@@ -34,12 +35,16 @@ export default function Jobs() {
   const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get('q') || '')
   const [area, setArea] = useState('Todas')
 
-  useEffect(() => {
+  const loadJobs = () => {
+    setLoading(true)
+    setError('')
     void loadPublicOpportunities<Job[]>('jobs')
       .then(data => setJobs((data || []) as Job[]))
-      .catch(() => setError('Public source policy unavailable.'))
+      .catch(() => setError('No pudimos cargar los empleos. Revisá tu conexión e intentá de nuevo.'))
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { loadJobs() }, [])
 
   const areas = useMemo(() => ['Todas', ...Array.from(new Set(jobs.map(job => clean(job.rubro)).filter(Boolean))).sort()], [jobs])
   const filtered = useMemo(() => {
@@ -99,17 +104,11 @@ export default function Jobs() {
           </div>
 
           {error ? (
-            <div className="mt-6 border border-red-400/20 bg-red-400/[0.04] p-6 text-sm text-red-200" role="alert">{error}</div>
+            <PageErrorState message={error} onRetry={loadJobs} />
           ) : loading ? (
-            <div className="mt-6 grid gap-px overflow-hidden border border-white/8 bg-white/8 md:grid-cols-2">
-              {[0, 1, 2, 3].map(item => <div key={item} className="h-44 animate-pulse bg-[#0b0b0b]" />)}
-            </div>
+            <PageLoadingState label="Cargando empleos" />
           ) : filtered.length === 0 ? (
-            <div className="mt-6 border border-white/8 px-6 py-14 text-center">
-              <Briefcase className="mx-auto h-7 w-7 text-white/20" aria-hidden="true" />
-              <p className="mt-4 text-cream">No encontramos resultados con esos filtros.</p>
-              <button onClick={() => { setQuery(''); setArea('Todas') }} className="mt-3 text-sm text-[#c9a84c] hover:underline">Limpiar filtros</button>
-            </div>
+            <PageEmptyState title="No encontramos resultados con estos filtros." description="Probá otra búsqueda o explorá todas las áreas disponibles." action={<button onClick={() => { setQuery(''); setArea('Todas') }} className="text-sm text-[#c9a84c] hover:underline">Limpiar filtros</button>} />
           ) : (
             <section className="mt-6 grid gap-px overflow-hidden border border-white/8 bg-white/8 md:grid-cols-2" aria-label="Listado de empleos">
               {filtered.map(job => (

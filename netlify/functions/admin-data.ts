@@ -9,7 +9,10 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { randomUUID } from "node:crypto"
 import { evaluateEightGates } from "./lib/eight-gates"
-import { reconcileInventoryRows, reconciliationSummary, mergeReconciliationSummaries } from "../../src/lib/inventory-reconciliation"
+import { reconcileInventoryRows, reconciliationSummary, mergeReconciliationSummaries, accumulateReconciliationPerSource } from "../../src/lib/inventory-reconciliation"
+import { indexRowsBySource, latestRowsByKey, rowsForAliases, scopedMetric, summarizeSourceHealth } from "../../src/lib/source-intelligence-contract"
+import { matchingProfileSignature } from "../../shared/matching-profile-signature"
+import { SOURCE_PERMISSION_DIMENSIONS, sourcePermissionDimensionTruth } from "../../src/lib/source-permission-truth"
 
 const SOURCE_SCAN_SCRAPERS: Record<string, string> = {
   unjobs: "unjobs_scraper", himalayas: "himalayas_scraper", talentcom: "talentcom_scraper", weworkremotely: "weworkremotely_scraper",
@@ -37,6 +40,10 @@ function sourceIntelligenceRegistry() {
   return JSON.parse(readFileSync(resolve(process.cwd(), "src/generated/source-intelligence-registry.json"), "utf8"))
 }
 
+function sourcePermissionSnapshot(source: string) {
+  return Object.fromEntries(SOURCE_PERMISSION_DIMENSIONS.map(dimension => [dimension, sourcePermissionDimensionTruth(source, dimension)]))
+}
+
 function scraperFieldSurvival() {
   // Generated offline from Registry V2 + the active emitter contracts.  An
   // unavailable diagnostic never changes a source decision; it is reported as
@@ -54,6 +61,7 @@ function scraperFieldSurvival() {
 const RECONCILIATION_FIELDS = "id,source,slug,title,organization,description,tags,opportunity_type,opportunity_kind,is_active,verification_status,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,seo_status,deleted_at,archived_at,embedding,embedding_error"
 const RECONCILIATION_POLICY_FIELDS = "source,is_enabled,catalog_enabled,matching_enabled,alerts_enabled,seo_enabled,web_catalog_allowed,search_engine_indexing_allowed,google_jobs_distribution_allowed,third_party_job_distribution_allowed,source_attribution_required"
 const RECONCILIATION_PAGE_SIZE = 250
+const SOURCE_DIAGNOSTIC_SAMPLE_LIMIT = 2000
 
 function reconciliationAliases(scope: string): string[] | null {
   if (!scope || scope === "all") return null
@@ -83,7 +91,41 @@ function runnerIdsFor(profile: any): Set<string> {
   return ids
 }
 
-async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, controls: any[] = []) {
+export async function loadMissingOpportunitySamples(supabase: any, profiles: any[], globalIndex: Map<string, any[]>) {
+  const result = new Map<string, { rows: any[], status: 'GLOBAL_SAMPLE' | 'PER_SOURCE_SAMPLE' | 'EMPTY_FULL_DB' | 'UNAVAILABLE' }>()
+  const missing = profiles.filter(profile => {
+    const aliases = profile.emitted_aliases || [profile.canonical_source]
+    return rowsForAliases(globalIndex, aliases).length === 0
+  })
+  for (const profile of profiles) {
+    const aliases = profile.emitted_aliases || [profile.canonical_source]
+    const globalRows = rowsForAliases(globalIndex, aliases)
+    if (globalRows.length > 0) result.set(profile.canonical_source, { rows: globalRows.slice(0, SOURCE_DIAGNOSTIC_SAMPLE_LIMIT), status: 'GLOBAL_SAMPLE' })
+  }
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < missing.length) {
+      const profile = missing[cursor++]
+      const aliases = profile.emitted_aliases || [profile.canonical_source]
+      try {
+        const response = await supabase.from("opportunities")
+          .select("id,title,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope")
+          .in("source", aliases).is("deleted_at", null).is("archived_at", null)
+          .order("id", { ascending: true }).limit(SOURCE_DIAGNOSTIC_SAMPLE_LIMIT)
+        const rows = response.error ? [] : (response.data || [])
+        result.set(profile.canonical_source, { rows, status: response.error ? 'UNAVAILABLE' : rows.length ? 'PER_SOURCE_SAMPLE' : 'EMPTY_FULL_DB' })
+      } catch {
+        result.set(profile.canonical_source, { rows: [], status: 'UNAVAILABLE' })
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(8, Math.max(1, missing.length)) }, () => worker()))
+  return result
+}
+
+export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, controls: any[] = []) {
+  const assemblyStartedAt = Date.now()
+  const queryStartedAt = Date.now()
   // Generated from the Python V2 core. This function joins read-only DB facts;
   // aliases, certification and semantics remain owned by that core.
   const registry = sourceIntelligenceRegistry()
@@ -103,6 +145,8 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
     supabase.rpc("admin_source_quality_aggregate"),
     supabase.from("source_control_audit_log").select("source,action,result_status,created_at").in("action", ["maintenance_telemetry", "maintenance_telemetry_retry"]).order("created_at", { ascending: false }).limit(1000),
   ])
+  const universeRes = await supabase.rpc("get_opportunity_universe_summary")
+  const queryDurationMs = Date.now() - queryStartedAt
   const observationRows = observationsRes.error ? [] : (observationsRes.data || [])
   const policyRows = policyRes.error ? [] : (policyRes.data || [])
   const runRows = runsRes.error ? [] : (runsRes.data || [])
@@ -112,6 +156,17 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
   const telemetryAuditRows: any[] = telemetryAuditRes.error ? [] : (telemetryAuditRes.data || [])
   // P0.1: Server-side fingerprint pending counts (full DB, no limit).
   const qualityAgg: Record<string, any> = qualityAggRes.error ? {} : (qualityAggRes.data || {})
+  const observationBySource = indexRowsBySource(observationRows)
+  const policyBySource = indexRowsBySource(policyRows)
+  const fingerprintBySource = indexRowsBySource(fingerprintRows)
+  const enrichmentBySource = indexRowsBySource(enrichmentRows)
+  const telemetryBySource = indexRowsBySource(telemetryAuditRows)
+  const statsBySource = new Map(Object.entries(stats).map(([source, value]) => [source.toLowerCase(), value]))
+  const sourceCapBySource = new Map(sourceCapRows.map(item => [String(item.source || '').toLowerCase(), item]))
+  const qualityBySource = new Map(Object.entries(qualityAgg).map(([source, value]) => [source.toLowerCase(), value]))
+  const runsByRunner = indexRowsBySource(runRows.map(item => ({ ...item, source: item.scraper_id })))
+  const controlsByRunner = indexRowsBySource(controls.map(item => ({ ...item, source: item.scraper_id })))
+  const sourceOpportunitySamples = await loadMissingOpportunitySamples(supabase, registry.sources || [], fingerprintBySource)
   const knownAliases = new Set<string>((registry.sources || []).flatMap((profile: any) => profile.emitted_aliases || []).map((value: string) => value.toLowerCase()))
   const unresolvedEmittedSources = Object.keys(stats).filter(source => !knownAliases.has(source.toLowerCase()))
   const now = Date.now()
@@ -119,7 +174,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
     const aliases = profile.emitted_aliases || [profile.canonical_source]
     const aliasSet = new Set<string>(aliases.map((value: string) => value.toLowerCase()))
     // Merge durable DB capability flags into profile for Gate 8 independent surface display
-    const srcCap = sourceCapRows.find((item: any) => aliasSet.has(String(item.source || '').toLowerCase()))
+    const srcCap = aliases.map(alias => sourceCapBySource.get(alias.toLowerCase())).find(Boolean)
       const capabilityFlags = srcCap ? {
         is_enabled: Boolean(srcCap.is_enabled),
         catalog_enabled: Boolean(srcCap.catalog_enabled),
@@ -131,42 +186,37 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
         google_jobs_distribution_allowed: srcCap.google_jobs_distribution_allowed ?? null,
       } : {}
     const pools = aliases.reduce((acc: any, emitted: string) => {
-      const statKey = Object.keys(stats).find(key => key.toLowerCase() === emitted.toLowerCase())
-      const value = stats[emitted] || (statKey ? stats[statKey] : {}) || {}
+      const value = statsBySource.get(emitted.toLowerCase()) || {}
       acc.inventory += Number(value.total || 0); acc.catalog += Number(value.catalog || 0)
       acc.matching += Number(value.matching || 0); acc.seo += Number(value.seo || 0)
       acc.thin_description += Number(value.thin_description || 0); acc.missing_country += Number(value.missing_country || 0)
       return acc
     }, { inventory: 0, catalog: 0, matching: 0, seo: 0, thin_description: 0, missing_country: 0 })
-    const latestObservationByOpportunity = new Map<string, any>()
-    observationRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase())).forEach((item: any) => {
-      if (!latestObservationByOpportunity.has(String(item.opportunity_id))) latestObservationByOpportunity.set(String(item.opportunity_id), item)
-    })
-    const observations = [...latestObservationByOpportunity.values()]
+    const observationGlobalRows = rowsForAliases(observationBySource, aliases)
+    const observationSampleStatus = observationGlobalRows.length > 0 ? 'GLOBAL_SAMPLE' : pools.inventory > 0 ? 'UNAVAILABLE' : 'EMPTY_FULL_DB'
+    const observations = latestRowsByKey(rowsForAliases(observationBySource, aliases), 'opportunity_id')
     const ttlMs = Number(profile.freshness_ttl_hours || 0) * 60 * 60 * 1000
     const fresh = observations.filter((item: any) => ttlMs > 0 && now - Date.parse(item.observed_at) <= ttlMs).length
     const stale = observations.length - fresh
-    const latestPolicyByOpportunity = new Map<string, any>()
-    policyRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase())).forEach((item: any) => {
-      if (!latestPolicyByOpportunity.has(String(item.opportunity_id))) latestPolicyByOpportunity.set(String(item.opportunity_id), item)
-    })
-    const policyLatest = [...latestPolicyByOpportunity.values()]
+    const policyLatest = latestRowsByKey(rowsForAliases(policyBySource, aliases), 'opportunity_id')
     // P0.3: runnerIds includes canonical_source + _scraper/_scrapper variants.
     const runnerIds = runnerIdsFor(profile)
-    const latestRun = runRows.find((item: any) => runnerIds.has(String(item.scraper_id || '').toLowerCase())) || null
-    const latestTelemetry = telemetryAuditRows.find((item: any) => aliasSet.has(String(item.source || '').toLowerCase())) || null
-    const control = controls.find((item: any) => runnerIds.has(String(item.scraper_id || '').toLowerCase()))
+    const runsForSource = [...runnerIds].flatMap(id => runsByRunner.get(id.toLowerCase()) || [])
+      .sort((left, right) => Date.parse(String(right.started_at || '')) - Date.parse(String(left.started_at || '')))
+    const latestRun = runsForSource[0] || null
+    const latestTelemetry = rowsForAliases(telemetryBySource, aliases)[0] || null
+    const control = [...runnerIds].flatMap(id => controlsByRunner.get(id.toLowerCase()) || [])[0]
     const extractionHealth = latestRun?.extraction_metrics?.health?.status
     const runFailed = latestRun?.status === "failed" || Boolean(latestRun?.error_summary) || extractionHealth === "DEGRADED"
-    const operationalHealth = control && control.collection_enabled === false ? "PAUSED"
+    const operationalHealthBase = control && control.collection_enabled === false ? "PAUSED"
       : profile.auto_enabled && !profile.certified ? "BLOCKED"
       : runFailed ? "DEGRADED"
-      : !latestRun && observations.length === 0 ? "UNKNOWN"
+      : !latestRun || observations.length === 0 ? "UNKNOWN"
       : "HEALTHY"
     // P0.1: Use full-DB RPC result instead of client-side limited rows.
     const fingerprintPending = aliases.reduce((sum: number, alias: string) => {
-      const key = Object.keys(qualityAgg).find(k => k.toLowerCase() === alias.toLowerCase())
-      return sum + (key ? Number((qualityAgg[key] as any)?.fingerprint_pending || 0) : 0)
+      const value = qualityBySource.get(alias.toLowerCase()) as any
+      return sum + Number(value?.fingerprint_pending || 0)
     }, 0)
     const latestObservation = observations[0] || null
     const latestPolicyEvent = policyLatest[0] || null
@@ -175,13 +225,25 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       ...(profile.blocking_requirements || []).map((reason: string) => `certification:${reason}`),
       ...(runFailed ? ["latest_run_degraded"] : []),
     ]
+    const sourceSample = sourceOpportunitySamples.get(profile.canonical_source) || { rows: [], status: 'UNAVAILABLE' as const }
+    const sourceRows = sourceSample.rows
+    const diagnosticSampleStatus = sourceSample.status === 'EMPTY_FULL_DB' && pools.inventory > 0 ? 'UNAVAILABLE' : sourceSample.status
+    const diagnosticSampleUnavailable = diagnosticSampleStatus === 'UNAVAILABLE'
+    const enrichmentForSource = rowsForAliases(enrichmentBySource, aliases)
+    const eightGates = diagnosticSampleUnavailable
+      ? { gates: [], overall_health: 'UNKNOWN', reason_code: 'SOURCE_SAMPLE_UNAVAILABLE', scope: 'UNAVAILABLE' }
+      : evaluateEightGates({ ...profile, ...capabilityFlags }, sourceRows, latestRun, observations, enrichmentForSource)
+    const gateStatuses = eightGates.gates.map((gate: any) => gate.status)
+    const gateEvidenceUnknown = gateStatuses.includes('NOT_EVALUATED')
+    const gateDegraded = gateStatuses.includes('WARNING')
+    const gateFailed = gateStatuses.includes('FAIL')
+    const operationalHealth = ['PAUSED', 'BLOCKED', 'DEGRADED'].includes(operationalHealthBase) ? operationalHealthBase
+      : gateFailed ? 'DEGRADED' : gateEvidenceUnknown ? 'UNKNOWN' : gateDegraded ? 'PARTIAL' : operationalHealthBase
     const sourceStatus = !profile.active || operationalHealth === "PAUSED" ? "DISABLED"
-      : operationalHealth === "DEGRADED" ? "RED"
-      : !profile.contract_covered || !profile.certified || operationalHealth === "UNKNOWN" ? "YELLOW"
+      : operationalHealth === "DEGRADED" || gateFailed ? "RED"
+      : diagnosticSampleUnavailable || !profile.contract_covered || !profile.certified || operationalHealth === "UNKNOWN" || gateEvidenceUnknown || gateDegraded ? "YELLOW"
       : "GREEN"
-    const sourceRows = fingerprintRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase()))
-    const eightGates = evaluateEightGates({ ...profile, ...capabilityFlags }, sourceRows, latestRun, observations, enrichmentRows.filter((item: any) => aliasSet.has(String(item.source || '').toLowerCase())))
-    const history = runRows.filter((item: any) => runnerIds.has(String(item.scraper_id || '').toLowerCase())).slice(0, 12)
+    const history = runsForSource.slice(0, 12)
     const previousRun = history[1]
     const latestMetrics = latestRun?.extraction_metrics || {}
     const previousMetrics = previousRun?.extraction_metrics || {}
@@ -194,6 +256,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
     }
     return {
       ...profile, ...capabilityFlags, pools,
+      source_permission_truth: sourcePermissionSnapshot(profile.canonical_source),
       field_survival: survivalBySource.get(profile.canonical_source) || {
         canonical_source: profile.canonical_source, classification: "UNKNOWN_SOURCE", fields: {}, persistence_transforms: {},
       },
@@ -201,16 +264,20 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
         catalog_flagged: pools.catalog,
         matching_flagged: pools.matching,
         seo_flagged: pools.seo,
-        catalog_effective: Boolean(srcCap?.is_enabled && srcCap?.catalog_enabled && srcCap?.web_catalog_allowed) ? pools.catalog : 0,
-        matching_effective: Boolean(srcCap?.is_enabled && srcCap?.matching_enabled) ? pools.matching : 0,
-        seo_effective: Boolean(srcCap?.is_enabled && srcCap?.catalog_enabled && srcCap?.seo_enabled && srcCap?.web_catalog_allowed && srcCap?.search_engine_indexing_allowed === true) ? pools.seo : 0,
+        catalog_effective: Boolean(srcCap?.is_enabled && srcCap?.catalog_enabled && sourcePermissionDimensionTruth(profile.canonical_source, 'catalog').state === 'ALLOWED') ? pools.catalog : 0,
+        matching_effective: Boolean(srcCap?.is_enabled && srcCap?.matching_enabled && sourcePermissionDimensionTruth(profile.canonical_source, 'matching').state === 'ALLOWED') ? pools.matching : 0,
+        seo_effective: Boolean(srcCap?.is_enabled && srcCap?.seo_enabled && sourcePermissionDimensionTruth(profile.canonical_source, 'seo_index').state === 'ALLOWED') ? pools.seo : 0,
       },
       operational_health: operationalHealth,
       source_status: sourceStatus,
       observation: {
-        observed_opportunities: observations.length,
-        observation_coverage_pct: pools.inventory ? Math.round(observations.length / pools.inventory * 10000) / 100 : null,
-        fresh, stale, unknown: Math.max(0, pools.inventory - observations.length),
+        observed_opportunities: observationSampleStatus === 'UNAVAILABLE' ? null : observations.length,
+        ...scopedMetric(observationSampleStatus === 'UNAVAILABLE' ? null : null, observations.length),
+        observation_coverage_pct: observationSampleStatus === 'UNAVAILABLE' ? null : pools.inventory ? Math.round(observations.length / pools.inventory * 10000) / 100 : null,
+        fresh: observationSampleStatus === 'UNAVAILABLE' ? null : fresh,
+        stale: observationSampleStatus === 'UNAVAILABLE' ? null : stale,
+        unknown: observationSampleStatus === 'UNAVAILABLE' ? null : Math.max(0, pools.inventory - observations.length),
+        sample_status: observationSampleStatus,
         last_observed_at: latestObservation?.observed_at || null,
       },
       policy: {
@@ -232,7 +299,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
       latest_impact: latestImpact,
       maintenance_action: "DRY_RUN_ONLY", apply_enabled: false,
       // P0.6: Explicit scope markers so consumers know where each data section comes from.
-      _inventory_scope: { pools: "full_db_rpc", fingerprint_pending: qualityAggRes.error ? "unavailable" : "full_db_rpc", recent_rows: "client_sample", eight_gates_quality: "client_sample" },
+      _inventory_scope: { pools: "full_db_rpc", inventory_sampled: sourceRows.length, recent_rows: "client_sample", eight_gates_quality: "client_sample", inventory: "FULL_DB", sample: "SAMPLED", diagnostic_sample: diagnosticSampleStatus, observation_sample: observationSampleStatus },
       eight_gates: eightGates,
     }
   })
@@ -241,7 +308,7 @@ async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, control
     const group = exceptionGroups[reason] || { count: 0, sources: [] }
     group.count += 1; group.sources.push(source.canonical_source); exceptionGroups[reason] = group
   }
-  return { registry: { profiles: registry.profiles, emitted_aliases: registry.emitted_aliases, alias_collisions: registry.alias_collisions, ambiguous_patterns: registry.ambiguous_patterns, alias_pattern_conflicts: registry.alias_pattern_conflicts || [], registry_hash: registry.registry_hash, schema_version: registry.schema_version, unresolved_emitted_sources: unresolvedEmittedSources, exception_groups: exceptionGroups, dynamic_metrics_unavailable: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null, quality_agg: qualityAggRes.error ? "unavailable" : null } }, sources }
+  return { registry: { profile_count: (registry.sources || []).length, emitted_aliases: registry.emitted_aliases, alias_collisions: registry.alias_collisions, ambiguous_patterns: registry.ambiguous_patterns, alias_pattern_conflicts: registry.alias_pattern_conflicts || [], registry_hash: registry.registry_hash, schema_version: registry.schema_version, unresolved_emitted_sources: unresolvedEmittedSources, exception_groups: exceptionGroups, dynamic_metrics_unavailable: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null, quality_agg: qualityAggRes.error ? "unavailable" : null } }, sources, opportunity_universe: universeRes.error ? null : universeRes.data, opportunity_universe_error: universeRes.error ? "UNIVERSE_MIGRATION_NOT_APPLIED_OR_UNAVAILABLE" : null, _observability: { source_count: sources.length, query_duration_ms: queryDurationMs, assembly_duration_ms: Date.now() - assemblyStartedAt, sample_sizes: { observations: observationRows.length, policy_events: policyRows.length, runs: runRows.length, fingerprints: fingerprintRows.length, enrichment: enrichmentRows.length, telemetry: telemetryAuditRows.length }, unavailable_metrics: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null, quality_agg: qualityAggRes.error ? "unavailable" : null } } }
 }
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
@@ -468,7 +535,18 @@ const handler: Handler = async (event) => {
       ])
       const { data, error } = dashboardRes
       if (error) throw error
-      return { statusCode: 200, body: JSON.stringify(await sourceIntelligenceSnapshot(supabase, data, controlsRes.error ? [] : (controlsRes.data || []))) }
+      const snapshot = await sourceIntelligenceSnapshot(supabase, data, controlsRes.error ? [] : (controlsRes.data || []))
+      const body = JSON.stringify(snapshot)
+      snapshot._observability.response_bytes = Buffer.byteLength(body, "utf8")
+      return { statusCode: 200, body: JSON.stringify(snapshot) }
+    }
+
+    if (action === "inspect_opportunity_universe") {
+      const id = String(payload?.opportunity_id || "").trim()
+      if (!id) return { statusCode: 400, body: JSON.stringify({ error: "opportunity_id requerido" }) }
+      const { data, error } = await supabase.rpc("get_opportunity_universe_row", { p_opportunity_id: id })
+      if (error) throw error
+      return { statusCode: 200, body: JSON.stringify(data || { found: false }) }
     }
 
     if (action === "trigger_source_scan") {
@@ -844,7 +922,7 @@ const handler: Handler = async (event) => {
         authEmail = authUser?.user?.email || null
       }
 
-      const [foundingRes, eventsRes, emailsRes, acquisitionRes, matchCountRes] = await Promise.all([
+      const [foundingRes, eventsRes, emailsRes, acquisitionRes, matchingSnapshotRes] = await Promise.all([
         supabase.from("founding_beta_enrollments")
           .select("*").eq("user_id", userId).maybeSingle(),
         supabase.from("user_events")
@@ -861,10 +939,10 @@ const handler: Handler = async (event) => {
           .select("source, medium, campaign, landing_page, referrer, created_at")
           .eq("user_id", userId)
           .maybeSingle(),
-        supabase.from("candidate_opportunity_matches")
-          .select("id, score, created_at", { count: "exact" })
-          .eq("candidate_id", userId)
-          .order("score", { ascending: false })
+        supabase.from("matching_diagnostic_snapshots")
+          .select("*")
+          .eq("user_id", userId)
+          .order("run_at", { ascending: false })
           .limit(1),
       ])
 
@@ -881,13 +959,28 @@ const handler: Handler = async (event) => {
         skills.length > 0, hasLocation, hasCv || hasCvText,
       ].filter(Boolean).length
 
-      const matchCount = matchCountRes.count || 0
-      const topMatchScore = matchCountRes.data?.[0]?.score ?? null
+      const snapshot = matchingSnapshotRes.data?.[0] as any | undefined
+      const snapshotError = matchingSnapshotRes.error
+      const currentMatchingSignature = matchingProfileSignature(profile)
+      const matchingStatus = snapshotError
+        ? "ERROR"
+        : !snapshot
+          ? "NO_RUN"
+          : snapshot.run_status === "ERROR"
+            ? "ERROR"
+            : (Date.now() - new Date(snapshot.run_at).getTime() > 24 * 60 * 60 * 1000 || !snapshot.profile_signature || snapshot.profile_signature !== currentMatchingSignature ? "STALE" : (snapshot.match_count > 0 ? "SUCCESS_WITH_RESULTS" : "SUCCESS_ZERO"))
+      const matchCount = snapshot?.match_count ?? null
+      const topMatchScore = null
 
       const warnings: string[] = []
       if (!hasLocation) warnings.push("Sin ubicación — afecta el filtro geográfico del matching")
       if (!hasEmbedding) warnings.push("Sin embedding — matching solo por keywords")
-      if (completeness >= 4 && matchCount <= 1) warnings.push("Perfil completo pero ≤1 match — investigar")
+      if (matchingStatus === "ERROR") warnings.push("Error al leer el diagnóstico de matching — no equivale a cero matches")
+      else if (matchingStatus === "NO_RUN") warnings.push("Todavía no hay una ejecución de matching para este perfil")
+      else if (matchingStatus === "STALE") warnings.push("El diagnóstico de matching está desactualizado")
+      else if (snapshot?.coverage_state === "ELIGIBILITY_UNKNOWN") warnings.push("Cero matches confirmados: hay oportunidades potenciales con elegibilidad por confirmar")
+      else if (snapshot?.coverage_state === "LOW_RETRIEVAL_COVERAGE") warnings.push("Cobertura de recuperación acotada; no equivale a baja oferta total")
+      else if (snapshot?.coverage_state === "PROFESSIONAL_FIT_GAP") warnings.push("No encontramos suficiente evidencia profesional compatible")
       if (!hasCv && !hasCvText) warnings.push("Sin CV cargado")
 
       return {
@@ -910,9 +1003,33 @@ const handler: Handler = async (event) => {
             completeness_max: 6,
           },
           matching: {
-            match_count: matchCount,
+            match_count: matchingStatus === "STALE" ? null : matchCount,
             top_score: topMatchScore,
-            last_match_at: matchCountRes.data?.[0]?.created_at || null,
+            last_match_at: snapshot?.run_at || null,
+            status: matchingStatus,
+            snapshot_profile_signature: snapshot?.profile_signature ?? null,
+            potential_scoreable_count: snapshot?.potential_scoreable_count ?? null,
+            visible_potential_count: snapshot?.visible_potential_count ?? null,
+            diagnostics: snapshot ? {
+              primary_retrieval: snapshot.primary_retrieval_count,
+              semantic_retrieval: snapshot.semantic_retrieval_count,
+              unique_policy_candidates: snapshot.unique_policy_candidates_count,
+              source_allowed: snapshot.source_allowed_count,
+              professional_evidence_ready: snapshot.professional_evidence_ready_count,
+              professional_fit_known: snapshot.professional_fit_known_count,
+              eligibility_eligible: snapshot.eligibility_eligible_count,
+              eligibility_unknown: snapshot.eligibility_unknown_count,
+              eligibility_ineligible: snapshot.eligibility_ineligible_count,
+              match: snapshot.match_count,
+            potential: snapshot.visible_potential_count,
+              abstain: snapshot.abstain_count,
+              deny: snapshot.deny_count,
+              visible_confirmed: snapshot.visible_confirmed_count,
+              coverage_state: snapshot.coverage_state,
+              top_reason_codes: snapshot.top_reason_codes,
+              embedding_readiness: snapshot.embedding_readiness,
+              run_at: snapshot.run_at,
+            } : null,
           },
           warnings,
         })
@@ -1567,6 +1684,7 @@ const handler: Handler = async (event) => {
           catalog_enabled: cap?.catalog_enabled ?? null,
           matching_enabled: cap?.matching_enabled ?? null,
           web_catalog_allowed: cap?.web_catalog_allowed ?? (profile.distribution_policy?.web_catalog_allowed ?? null),
+          source_permission_truth: sourcePermissionSnapshot(profile.canonical_source),
         }
       })
       return { statusCode: 200, body: JSON.stringify({ catalog, total: catalog.length, fetched_at: new Date().toISOString() }) }
@@ -1586,17 +1704,19 @@ const handler: Handler = async (event) => {
       if (!profile) blockers.push("SOURCE_NOT_IN_REGISTRY")
       else if (!profile.certified) blockers.push("SOURCE_NOT_CERTIFIED")
 
-      // P2: search_engine_indexing_allowed must be explicitly TRUE (approve_search_indexing_policy must run first)
+      // Canonical evidence, not distribution_policy booleans or legacy DB flags,
+      // is authority for source permission.
       const { data: capRow } = await supabase.from("opportunity_sources").select("source,seo_enabled,search_engine_indexing_allowed,web_catalog_allowed,catalog_enabled").eq("source", targetSource).maybeSingle()
-      if (capRow?.search_engine_indexing_allowed === false) blockers.push("POLICY_DENIED_BY_SOURCE_CONTRACT")
-      else if (capRow?.search_engine_indexing_allowed !== true) blockers.push("POLICY_NOT_EXPLICITLY_APPROVED")
+      const seoPermission = sourcePermissionDimensionTruth(targetSource, 'seo_index')
+      const catalogPermission = sourcePermissionDimensionTruth(targetSource, 'catalog')
+      if (seoPermission.state === 'DENIED') blockers.push("POLICY_DENIED_BY_SOURCE_CONTRACT")
+      else if (seoPermission.state !== 'ALLOWED') blockers.push("SOURCE_PERMISSION_NOT_EVIDENCED")
 
       // P3: must not already be enabled
       if (capRow?.seo_enabled === true) blockers.push("ALREADY_ENABLED")
 
       // P4: web_catalog_allowed is a prerequisite for SEO (content must be catalog-worthy first)
-      const webCatalogAllowed = capRow?.web_catalog_allowed ?? profile?.distribution_policy?.web_catalog_allowed ?? false
-      if (!webCatalogAllowed) blockers.push("WEB_CATALOG_NOT_ALLOWED")
+      if (catalogPermission.state !== 'ALLOWED') blockers.push(catalogPermission.state === 'DENIED' ? "WEB_CATALOG_NOT_ALLOWED" : "CATALOG_PERMISSION_NOT_EVIDENCED")
 
       // P5: minimum inventory — at least 50 live rows for the source
       const { count: liveCount } = await supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("source", targetSource).is("deleted_at", null).is("archived_at", null)
@@ -1612,7 +1732,7 @@ const handler: Handler = async (event) => {
           action: "enable_seo_for_source", source: targetSource,
           admin_note: String(payload?.admin_note || "").trim() || null,
           result_status: "blocked", blockers,
-          before_state: { seo_enabled: capRow?.seo_enabled ?? null, search_engine_indexing_allowed: capRow?.search_engine_indexing_allowed ?? null },
+          before_state: { seo_enabled: capRow?.seo_enabled ?? null, source_seo_permission: seoPermission.state, source_catalog_permission: catalogPermission.state },
           after_state: null,
           result_detail: `Bloqueado: ${blockers.join(", ")}`,
         }).select("id").maybeSingle()
@@ -1693,9 +1813,14 @@ const handler: Handler = async (event) => {
           matching_enabled: cap?.matching_enabled ?? null,
           search_engine_indexing_allowed: cap?.search_engine_indexing_allowed ?? null,
           web_catalog_allowed: cap?.web_catalog_allowed ?? (profile.distribution_policy?.web_catalog_allowed ?? null),
+          source_permission_truth: sourcePermissionSnapshot(profile.canonical_source),
         }
       })
       return { statusCode: 200, body: JSON.stringify({ stats: result, total: result.length, generated_at: new Date().toISOString() }) }
+    }
+
+    if (["preview_inventory_reconciliation", "apply_inventory_reconciliation", "resume_inventory_reconciliation"].includes(action)) {
+      return { statusCode: 410, body: JSON.stringify({ error: "REPLACED_BY_CANONICAL_OPPORTUNITY_UNIVERSE_COMMAND", dry_run: "pnpm.cmd exec tsx scripts/reconcile_opportunity_universe.ts", apply: "requires explicit approved prod-apply.sql bundle" }) }
     }
 
     if (action === "preview_inventory_reconciliation") {
@@ -1715,21 +1840,16 @@ const handler: Handler = async (event) => {
         if (error) throw error
         const pageDecisions = reconcileInventoryRows(data || [], policiesRes.data || [])
         summaries.push(reconciliationSummary(pageDecisions))
-        for (const decision of pageDecisions) {
-          // Accumulate counters only; no full source inventory remains in memory.
-          perSource[decision.canonical_source] = mergeReconciliationSummaries([
-            ...(perSource[decision.canonical_source] ? [perSource[decision.canonical_source]] : []),
-            reconciliationSummary([decision]),
-          ])
-        }
+        // Accumulate counters only; no full source inventory remains in memory.
+        accumulateReconciliationPerSource(perSource, pageDecisions)
         if (sample.length < 100) sample.push(...pageDecisions.slice(0, 100 - sample.length))
         if (!data?.length || data.length < pageSize) break
       }
       const summary = mergeReconciliationSummaries(summaries)
       const source_totals = perSource
       const accounted_total = Object.values(source_totals).reduce((total: number, item: any) => total + Number(item.total_examined || 0), 0)
-      const explained_rows = summary.total_examined
-      const unexplained_rows = summary.total_examined - explained_rows
+      const explained_rows = summary.total_examined - Number(summary.unexplained || 0)
+      const unexplained_rows = Number(summary.unexplained || 0)
       const knownCanonical = new Set((sourceIntelligenceRegistry().sources || []).map((item: any) => item.canonical_source))
       const unknown_sources = Object.keys(source_totals).filter(source => !knownCanonical.has(source))
       const reconciliation_id = randomUUID(); const generated_at = new Date().toISOString()
@@ -1740,10 +1860,10 @@ const handler: Handler = async (event) => {
         // preserved under metadata.preview for approval and auditability.
         page_size: RECONCILIATION_PAGE_SIZE, started_at: generated_at, finished_at: generated_at, examined: 0,
         would_change: 0, changed: 0, unchanged: 0, failed: 0, reason_counts: {},
-        actor: "admin", metadata: { preview: summary, source_totals, accounted_total, explained_rows, unexplained_rows, unknown_sources, sample },
+        actor: "admin", metadata: { preview: summary, per_source: perSource, source_totals, accounted_total, explained_rows, unexplained_rows, unknown_sources, sample },
       })
       if (jobError) throw jobError
-      return { statusCode: 200, body: JSON.stringify({ mode: "DRY_RUN", reconciliation_id, source: targetSource || "all", cursor: 0, resumable: false, blocked: summary.total_examined - summary.catalog_allowed, ...summary, source_totals, accounted_total, explained_rows, unexplained_rows, unknown_sources, decisions: sample, generated_at }) }
+      return { statusCode: 200, body: JSON.stringify({ mode: "DRY_RUN", reconciliation_id, source: targetSource || "all", cursor: 0, resumable: false, blocked: summary.total_examined - summary.catalog_allowed, ...summary, per_source: perSource, source_totals, accounted_total, explained_rows, unexplained_rows, unknown_sources, decisions: sample, generated_at }) }
     }
 
     if (action === "apply_inventory_reconciliation" || action === "resume_inventory_reconciliation") {
@@ -1837,30 +1957,25 @@ const handler: Handler = async (event) => {
         return { statusCode: 404, body: JSON.stringify({ error: "Fuente no encontrada en el registro" }) }
       }
 
+      const seoPermission = sourcePermissionDimensionTruth(targetSource, 'seo_index')
+      if (seoPermission.state !== 'ALLOWED') {
+        const blocker = seoPermission.state === 'DENIED' ? 'POLICY_DENIED_IMMUTABLE' : 'SOURCE_PERMISSION_NOT_EVIDENCED'
+        const result: AdminActionResult = {
+          status: 'blocked', executed: false, changed: false, source: targetSource,
+          action: 'approve_search_indexing_policy', reason: seoPermission.reason,
+          rows_scanned: 1, rows_changed: 0, started_at: startedAt, finished_at: new Date().toISOString(),
+          event_id: null, error: null, blockers: [blocker],
+        }
+        return { statusCode: 200, body: JSON.stringify(result) }
+      }
+
       const { data: capRow } = await supabase.from("opportunity_sources")
         .select("source,search_engine_indexing_allowed,seo_enabled")
         .eq("source", targetSource).maybeSingle()
 
       const beforeState = { search_engine_indexing_allowed: capRow?.search_engine_indexing_allowed ?? null }
 
-      if (capRow?.search_engine_indexing_allowed === false) {
-        await supabase.from("source_control_audit_log").insert({
-          action: "approve_search_indexing_policy", source: targetSource, admin_note: adminNote,
-          result_status: "blocked", blockers: ["POLICY_DENIED_IMMUTABLE"],
-          before_state: beforeState, after_state: null,
-          result_detail: "search_engine_indexing_allowed=false es inmutable vía esta acción",
-        })
-        const result: AdminActionResult = {
-          status: "blocked", executed: false, changed: false, source: targetSource,
-          action: "approve_search_indexing_policy",
-          reason: "La prohibición contractual de SEO es inmutable. Requiere revisión del contrato de fuente.",
-          rows_scanned: 1, rows_changed: 0, started_at: startedAt, finished_at: new Date().toISOString(),
-          event_id: null, error: null, blockers: ["POLICY_DENIED_IMMUTABLE"],
-        }
-        return { statusCode: 200, body: JSON.stringify(result) }
-      }
-
-      if (capRow?.search_engine_indexing_allowed === true) {
+      if (seoPermission.state === 'ALLOWED' && capRow?.search_engine_indexing_allowed === true) {
         const result: AdminActionResult = {
           status: "no_change", executed: false, changed: false, source: targetSource,
           action: "approve_search_indexing_policy", reason: "La política ya está aprobada (TRUE)",
@@ -1915,9 +2030,9 @@ const handler: Handler = async (event) => {
         supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,error_count,found_count,valid_count,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,error_summary,adapter_version,extraction_metrics")
           .in("scraper_id", diagRunnerIds)
           .order("started_at", { ascending: false }).limit(5),
-        supabase.from("opportunities").select("id,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope")
+        supabase.from("opportunities").select("id,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope", { count: "exact" })
           .in("source", aliases).is("deleted_at", null).is("archived_at", null).limit(2000),
-        supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at")
+        supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at", { count: "exact" })
           .in("source", aliases).order("observed_at", { ascending: false }).limit(2000),
         supabase.from("opportunity_enrichment_events").select("opportunity_id,source,changed_fields,created_at")
           .in("source", aliases).order("created_at", { ascending: false }).limit(1000),
@@ -1932,18 +2047,16 @@ const handler: Handler = async (event) => {
 
       const capRow = (capRes.data || []).find((r: any) => aliasSet.has(String(r.source || "").toLowerCase()))
       const capabilityFlags = capRow ? {
-        catalog_enabled: Boolean(capRow.catalog_enabled),
-        matching_enabled: Boolean(capRow.matching_enabled),
-        alerts_enabled: Boolean(capRow.alerts_enabled),
-        seo_enabled: Boolean(capRow.seo_enabled),
+        catalog_enabled: capRow.catalog_enabled ?? null,
+        matching_enabled: capRow.matching_enabled ?? null,
+        alerts_enabled: capRow.alerts_enabled ?? null,
+        seo_enabled: capRow.seo_enabled ?? null,
         search_engine_indexing_allowed: capRow.search_engine_indexing_allowed ?? null,
       } : {}
 
       const eightGates = evaluateEightGates({ ...profile, ...capabilityFlags }, sourceRows, latestRun, observations, enrichmentRows)
 
-      const failing = eightGates.gates.filter((g: any) => g.status === "FAIL")
-      const warnings = eightGates.gates.filter((g: any) => g.status === "WARNING")
-      const overallHealth = failing.length > 0 ? "CRITICAL" : warnings.length > 0 ? "DEGRADED" : "HEALTHY"
+      const healthSummary = summarizeSourceHealth(eightGates.gates)
 
       const runSummary = latestRun ? {
         run_id: latestRun.run_id,
@@ -1957,16 +2070,19 @@ const handler: Handler = async (event) => {
         updated: latestRun.updated_count ?? null,
       } : null
 
-      const totalActive = sourceRows.length
+      const totalActive = typeof sourceRowsRes.count === "number" ? sourceRowsRes.count : null
+      const inventorySampled = sourceRows.length
       const runPersisted = runSummary ? runSummary.persisted : null
-      const runCoveragePct = (runPersisted !== null && totalActive > 0)
+      const runCoveragePct = (runPersisted !== null && typeof totalActive === "number" && totalActive > 0)
         ? Math.round((runPersisted / totalActive) * 10000) / 100
         : null
       const reconciliation = {
         run_coverage_pct: runCoveragePct,
         full_inventory_total_active: totalActive,
+        inventory_sampled: inventorySampled,
+        inventory_scope: typeof totalActive === "number" ? "FULL_DB" : "UNAVAILABLE",
         run_persisted: runPersisted,
-        note: totalActive >= 2000 ? "inventory_sample_capped_2000" : null,
+        note: inventorySampled >= 2000 ? "inventory_sample_capped_2000" : null,
       }
 
       return {
@@ -1974,15 +2090,21 @@ const handler: Handler = async (event) => {
         body: JSON.stringify({
           source: targetSource,
           display_name: profile.display_name || targetSource,
-          overall_health: overallHealth,
-          failing_gates: failing.length,
-          warning_gates: warnings.length,
+        overall_health: healthSummary.overall_health,
+        first_non_confirmed_required_stage: healthSummary.first_non_confirmed_required_stage < 0 ? null : { gate: healthSummary.first_non_confirmed_required_stage + 1, status: eightGates.gates[healthSummary.first_non_confirmed_required_stage].status, reason: eightGates.gates[healthSummary.first_non_confirmed_required_stage].reason_code },
+          failing_gates: healthSummary.failing_gates,
+          warning_gates: healthSummary.warning_gates,
+          not_evaluated_gates: healthSummary.not_evaluated_gates,
           eight_gates: eightGates,
           run_summary: runSummary,
           reconciliation,
           latest_run: latestRun ? { run_id: latestRun.run_id, status: latestRun.status, started_at: latestRun.started_at } : null,
-          inventory: sourceRows.length,
+          inventory: totalActive,
+          inventory_sampled: inventorySampled,
           observations: observations.length,
+          observations_total: typeof observationsRes.count === "number" ? observationsRes.count : null,
+          observations_sampled: observations.length,
+          _scope: { inventory: typeof totalActive === "number" ? "FULL_DB" : "UNAVAILABLE", inventory_sample: "SAMPLED", observations: typeof observationsRes.count === "number" ? "FULL_DB" : "UNAVAILABLE", observations_sample: "SAMPLED", eight_gates: "SAMPLED" },
           diagnosed_at: new Date().toISOString(),
         }),
       }

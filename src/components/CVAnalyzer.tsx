@@ -154,7 +154,7 @@ export function CVAnalyzer() {
             </div>
             <div className="bg-gold/10 border border-gold/30 rounded-2xl p-6 text-center">
               <h3 className="text-xl font-bold text-white mb-2">¿Querés ver las oportunidades que encajan con tu perfil?</h3>
-              <p className="text-muted mb-4">Ingresá tu correo y te mostramos las {1154} vacantes activas que tenemos para vos.</p>
+              <p className="text-muted mb-4">Ingresá tu correo y te ayudamos a explorar oportunidades que pueden encajar con tu perfil.</p>
               <div className="flex items-center justify-center gap-2 max-w-md mx-auto">
                 <input
                   type="email"

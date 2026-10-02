@@ -114,7 +114,6 @@ def _parse_next_data(page: str) -> list[dict]:
             "source_authority": "aggregator",
             "original_source_url": url,
             "original_source_verified": False,
-            "eligible_regions": ["LATAM", "CARIBBEAN", "GLOBAL"],
             "tags": ["Impactpool", "ONU", "ONG", "multilateral", opp_type],
             "description": description,
         }
@@ -177,7 +176,6 @@ def _parse_html_cards(page: str, search_url: str) -> list[dict]:
             "source_authority": "aggregator",
             "original_source_url": full_url,
             "original_source_verified": False,
-            "eligible_regions": ["LATAM", "CARIBBEAN", "GLOBAL"],
             "tags": ["Impactpool", "ONU", "ONG", "multilateral", opp_type],
             "description": description,
         })

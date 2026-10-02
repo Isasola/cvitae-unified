@@ -16,7 +16,7 @@ import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scrapers"))
-from source_adapters import AtomicEnricher, AdapterResult, build_rpc_patch, coverage, health
+from source_adapters import AtomicEnricher, AdapterResult, build_rpc_patch, coverage, eligibility_evidence_payload, health
 from opportunity_sink import normalize_opportunity, OpportunitySink
 from source_identity import IdentityResult, confirm_identity, native_id
 from opportunity_quality import quality_signals_for
@@ -572,6 +572,7 @@ def observation_payload(row: dict[str, Any], result: AdapterResult, identity: Id
             "method": result.extraction_method, "fields": result.extracted_fields,
             "confidence": result.confidence, "detail_match": result.evidence.get("detail_match", True),
             "recommendation": result.recommendation, "recommendation_reasons": result.recommendation_reasons,
+            **eligibility_evidence_payload(result),
         },
     }
 
