@@ -3,6 +3,76 @@
 This is the system-reasoning constitution for work on CVitae. It is not a
 style guide.
 
+## Canonical Opportunity Pipeline — Everything Has a Trace and a Route
+
+CVitae is one information-processing system, not separate scrapers, tables,
+filters, and consumers. The canonical contract is:
+
+`RAW INFORMATION → INGESTION TRACE → NORMALIZED → SEALED → OBSERVED → CLASSIFIED → ROUTED → CONSUMED`.
+
+Every discovered result must enter this pipeline and leave durable evidence of
+its path. A row merely being present in `opportunities` does not mean it was
+processed. `SCRAPER RESULT != PROCESSED RESULT`. Processing means its
+provenance, sealing, classification, and routing are determined; no record may
+disappear between stages without an observable reason.
+
+```text
+SCRAPER
+   ↓
+CANONICAL INGESTION
+   ↓
+GATES / EVIDENCE LAYERS
+   ↓
+COMPLETE SEAL
+   ↓
+CLASSIFICATION
+   ↓
+ROUTING ── Catalog / Matching / Alerts / SEO / JobPosting
+         └─ Review / Blocked / Unknown
+
+Admin observes the complete path, not only its final result.
+```
+
+Each phase records what it received, what it did and produced, the evidence
+and timestamp used, its state and reason, missing evidence, and the next
+possible destination/action. For any opportunity, operators should be able to
+identify its producer and run, ingestion time, adapter/cleaner, normalized
+fields, fingerprints, Factory stamps, factual source observation,
+verification, lifecycle, permissions, and each consumer's independent
+decision and first blocking reason.
+
+Every gate must emit an explicit state (`READY`, `BLOCKED`, `REVIEW`,
+`UNKNOWN`, `NOT_APPLICABLE`, `STALE`, or the contract's equivalent) with an
+observable reason. `UNKNOWN` means the trace is intact and the missing evidence
+is identified; it never becomes a positive decision by default. Ingestion
+lineage is not HTTP/live/identity evidence. Historical reconstruction from DB
+presence must remain labeled reconstructed and must not masquerade as a
+scraper run or source observation.
+
+Existing authorities remain authoritative: `opportunities`,
+`opportunity_factory_snapshots`, `opportunity_source_observations`,
+`opportunity_universe_state`, source/permission policy, `scraper_runs`, and the
+source registry/intelligence. Admin projects these truths; it does not create
+a parallel truth system. Factory, Observation, and readiness can be
+independent; expose their full matrix rather than inventing one linear
+first-failure state. Each consumer uses its canonical routed state and must
+not reinterpret raw opportunity data independently.
+
+Historical and future rows use the same reducer and routing contract. New
+sources should connect to the canonical input and reuse existing gates;
+source-specific differences belong in the adapter, cleaner, or documented
+policy, not in parallel pipelines or special cases in common reducers.
+
+When debugging, follow the real flow in order:
+`PRODUCER → INGESTION → NORMALIZATION → EVIDENCE → QUALITY → LIFECYCLE →
+POLICY → SEALING → ROUTING → CONSUMER`. Locate the exact last completed and
+first incomplete gate, explain why it stopped, and identify the safe next
+action before changing a downstream consumer.
+
+**Master rule:** no datum without provenance, no state without a reason, no
+gate without an observable output, no exclusion without explanation, and no
+opportunity outside the canonical pipeline.
+
 ## 1. Think in systems, not components
 
 For substantial work reason through:
@@ -177,3 +247,70 @@ RECONCILE 100% → TEST END-TO-END → PROD VALIDATE → CLOSE`.
 
 Do not reopen a closed workstream without a concrete regression, failed
 discriminating test, mathematical inconsistency, or real PROD evidence.
+
+## 19. Verdad externa antes de compilar o aplicar
+
+La coherencia interna del repositorio no demuestra compatibilidad con producción. Antes de ejecutar una migration, deploy, RPC, integración o cambio que dependa de infraestructura existente, definir primero el universo completo de dependencias externas del artefacto —schemas, extensiones, tipos, tablas, columnas y sus tipos, funciones y firmas, operadores, constraints, roles, permisos, variables y servicios— y contrastarlo en una sola pasada read-only contra la realidad actual del entorno destino. Un test local puede dar PASS porque código, generator, verifier y fixture comparten la misma suposición equivocada; por eso `REPO CONSISTENT != PROD COMPATIBLE`. No avanzar mediante ciclos de “corregir el primer error y volver a probar”: `EXTRACT ALL DEPENDENCIES → VERIFY ALL AGAINST TARGET → FIX ALL MISMATCHES SYSTEMICALLY → REGENERATE → TEST → FULL COMPILE/DRY-RUN → APPLY → VERIFY`. El preflight debe detectar también incompatibilidades silenciosas —por ejemplo objetos que existen con schema, firma o tipo distinto— y debe evolucionar junto al artefacto mediante un coverage guard que falle si aparece una nueva dependencia externa no verificada. Sólo cuando el contrato completo contra el entorno real esté demostrado se autoriza el siguiente paso.
+
+## UNIVERSE-FIRST EXECUTION PROTOCOL — MANDATORY
+
+This procedure operationalizes the system principles above; it does not create
+another architecture or truth source.
+
+A. **Define the denominator.** Before implementation, state the complete row,
+object, or source universe and its count; identify producer, transformers,
+authorities, consumers, Admin surface, historical and future paths, and target
+environment.
+
+B. **Map the whole flow once.** Trace `PRODUCER → INGESTION → NORMALIZATION →
+EVIDENCE → SEALING → CLASSIFICATION → ROUTING → CONSUMER → ADMIN` before the
+first fix. Read enough repository/review-bundle context once to understand the
+shared flow; do not rediscover it on every iteration.
+
+C. **Measure the whole universe.** Obtain state, reason, and next action for
+the full denominator. Samples are useful for diagnosis, never a substitute for
+whole-universe accounting.
+
+D. **Group by systemic cause.** Prioritize by affected rows × consumer
+criticality × systemic repairability. Fix a shared cause before an individual
+row/source when the evidence supports it.
+
+E. **Fix the shared cable.** Prefer a shared producer, adapter contract, sink,
+reducer, orchestrator, or consumer contract over source-specific patches.
+
+F. **Handle historical and future paths together.** Every change states what
+happens to already-persisted rows and what will happen automatically to the
+next input.
+
+G. **Treat Admin as acceptance criteria.** Do not close a flow unless Admin
+can show what entered, each gate's work and evidence, current state, stop
+reason, missing evidence, and safe next action.
+
+H. **Run one external preflight.** Extract all dependencies and verify them
+against the target in one read-only pass before migration or deployment. Do
+not wait for PostgreSQL or runtime to reveal one missing assumption per run.
+
+I. **Implement systemically once.** Diagnose the full cause set, then apply
+the coherent implementation. Avoid `fix → test → discover architecture → fix`
+loops; repair deterministic syntax, wiring, generator, or verifier defects
+within the same implementation pass.
+
+J. **Reconcile the denominator.** Recompute against the same whole universe.
+Require `DENOMINATOR = PROJECTED_ROWS`, zero duplicates, zero unexplained rows,
+and zero missing status. READY is not required; explained is.
+
+K. **Test end to end.** `PART WORKING != SYSTEM WORKING`. Prove producer →
+persistence → reducer → routing → consumer → Admin, including representative
+negative states.
+
+L. **Validate production explicitly.** Evidence order is `LOCAL → COMPILE →
+APPLY → PROD VERIFY → SMOKE/CANARY → CLOSED`. Local or fixture PASS is never
+production validation.
+
+M. **Do not reopen without evidence.** After `PROD_VALIDATED`, reopen only for
+a regression, new data, broken invariant, or explicit product decision.
+
+N. **Leave an executable checkpoint.** Every session records
+`CURRENT_DENOMINATOR`, `LAST_PROVEN_GATE`, `CURRENT_BLOCKER_CLASS`,
+`NEXT_ACTION`, `EXACT_COMMAND/ARTIFACT`, and `DO_NOT_REOPEN`, so another session
+can continue without reconstructing prior weeks of reasoning.

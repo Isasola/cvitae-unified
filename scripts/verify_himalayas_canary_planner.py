@@ -92,13 +92,21 @@ for collision in ("source_url_collision", "application_url_collision", "slug_col
 sink = OpportunitySink("https://example.supabase.co", "key")
 response = Mock(status_code=201)
 response.json.return_value = [{"id": "new-id", "slug": payload["slug"]}]
-with patch("opportunity_sink.requests.post", return_value=response) as post:
+lineage_response = Mock(status_code=201)
+with patch("opportunity_sink.requests.post", return_value=response) as post, patch.object(sink.session, "post", return_value=lineage_response) as lineage_post:
     inserted = sink.insert_new_fail_closed(payload)
 assert inserted["id"] == "new-id"
-assert post.call_args.args[0].endswith("/rest/v1/opportunities")
-assert "params" not in post.call_args.kwargs
-assert "on_conflict" not in str(post.call_args)
-assert "merge-duplicates" not in str(post.call_args)
+assert post.call_count == 1
+opportunity_insert = post.call_args
+assert opportunity_insert.args[0].endswith("/rest/v1/opportunities")
+assert "params" not in opportunity_insert.kwargs
+assert "on_conflict" not in str(opportunity_insert)
+assert "merge-duplicates" not in str(opportunity_insert)
+assert lineage_post.call_count == 1
+ingestion_receipt = lineage_post.call_args
+assert ingestion_receipt.args[0].endswith("/rest/v1/opportunity_ingestion_events?on_conflict=event_key")
+assert ingestion_receipt.kwargs["json"][0]["opportunity_id"] == "new-id"
+assert ingestion_receipt.kwargs["json"][0]["evidence"]["is_source_observation"] is False
 conflict = Mock(status_code=409)
 with patch("opportunity_sink.requests.post", return_value=conflict):
     try:
@@ -131,10 +139,15 @@ with tempfile.TemporaryDirectory() as temp:
 
 snapshot = json.loads((ROOT / "src/generated/source-intelligence-registry.json").read_text(encoding="utf-8"))
 himalayas = next(item for item in snapshot["sources"] if item["canonical_source"] == "himalayas")
-assert himalayas["distribution_policy"] == POLICY
+assert himalayas["distribution_policy"]["web_catalog_allowed"] is True
+assert himalayas["distribution_policy"]["source_attribution_required"] is True
+assert himalayas["distribution_policy"]["third_party_job_distribution_allowed"] is False
+assert himalayas["distribution_policy"]["google_jobs_distribution_allowed"] is False
 job_detail = (ROOT / "src/pages/JobDetail.tsx").read_text(encoding="utf-8")
-assert "google_jobs_distribution_allowed !== false" in job_detail
-assert "source_attribution_required" in job_detail and "job.source_url" in job_detail
+jobposting_contract = (ROOT / "src/lib/factual-job-posting.shared.js").read_text(encoding="utf-8")
+assert "aggregatedJobPosting(job,canonical)" in job_detail
+assert "row.distribution?.jobPosting?.allowed !== true" in jobposting_contract
+assert "sourceAttributionRequired" in job_detail and "source_url:job.source_url" in job_detail
 app = (ROOT / "src/App.tsx").read_text(encoding="utf-8")
 assert 'path="/empleos/:slug" component={JobDetail}' in app
 assert 'path="/vacante/:slug" component={VacantePage}' in app

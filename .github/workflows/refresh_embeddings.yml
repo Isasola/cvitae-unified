@@ -2,8 +2,9 @@ name: CVitae - Fabrica incremental de oportunidades
 
 on:
   schedule:
-    # Red de seguridad: solo procesa cambios pendientes, nunca hace backfill completo.
-    - cron: '30 15 * * *'
+    # Drain bounded pending structural work hourly; observations/factory state
+    # remain durable resume state and every run is capped at 250 rows.
+    - cron: '0 * * * *'
   workflow_run:
     workflows: ['CVitae Scrapers']
     types: [completed]
@@ -12,7 +13,7 @@ on:
       limit:
         description: 'Presupuesto estructural máximo por ejecución (1-250)'
         required: false
-        default: '100'
+        default: '250'
 
 permissions:
   contents: read
@@ -29,7 +30,7 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      FACTORY_STRUCTURAL_LIMIT: ${{ github.event.inputs.limit || '100' }}
+      FACTORY_STRUCTURAL_LIMIT: ${{ github.event.inputs.limit || '250' }}
       FACTORY_EMBEDDING_LIMIT: '20'
       HF_HOME: ~/.cache/huggingface
       PIP_DISABLE_PIP_VERSION_CHECK: '1'

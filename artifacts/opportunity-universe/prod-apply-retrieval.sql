@@ -68,11 +68,11 @@ create policy matching_retrieval_scheduler_service_role on public.matching_retri
   for all to service_role using (auth.role() = 'service_role') with check (auth.role() = 'service_role');
 
 create or replace function public.score_opportunity_embeddings(
-  query_embedding extensions.vector(384),
+  query_embedding public.vector(384),
   opportunity_ids text[]
 ) returns table(id text, similarity double precision)
 language plpgsql stable
-set search_path = public, extensions
+set search_path = public
 as $$
 begin
   if coalesce(auth.role(), '') <> 'service_role' then
@@ -88,8 +88,8 @@ begin
       and o.embedding is not null;
 end;
 $$;
-revoke all on function public.score_opportunity_embeddings(extensions.vector, text[]) from public, anon, authenticated;
-grant execute on function public.score_opportunity_embeddings(extensions.vector, text[]) to service_role;
+revoke all on function public.score_opportunity_embeddings(public.vector, text[]) from public, anon, authenticated;
+grant execute on function public.score_opportunity_embeddings(public.vector, text[]) to service_role;
 
 create or replace function public.prune_matching_retrieval_candidates()
 returns integer

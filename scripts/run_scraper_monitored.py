@@ -281,6 +281,11 @@ def main() -> int:
         # Propagate the durable monitored-run identity into adapter evidence.
         # The child never derives lineage from wall-clock timestamps.
         child_env["CVITAE_SCRAPER_RUN_ID"] = run_id
+        child_env["CVITAE_SCRAPER_ID"] = args.scraper_id
+        child_env.setdefault("CVITAE_ADAPTER_VERSION", os.getenv("CVITAE_ADAPTER_VERSION", ""))
+        child_env.pop("CVITAE_SCRAPER_RUN_DB_ID", None)
+        if record_id:
+            child_env["CVITAE_SCRAPER_RUN_DB_ID"] = record_id
         child_env["CVITAE_SOURCE_SCAN_REQUEST_ID"] = scan_request_id
         # scan (Admin Play): bounded diagnostic cap — never overwhelm production
         # schedule (production cron): high fallback so full inventory is processed

@@ -562,12 +562,13 @@ def persist_run(source: str, metrics: dict[str, Any], started: datetime, finishe
     response.raise_for_status()
 
 
-def observation_payload(row: dict[str, Any], result: AdapterResult, identity: IdentityResult) -> dict[str, Any]:
+def observation_payload(row: dict[str, Any], result: AdapterResult, identity: IdentityResult, run_id: str | None = None) -> dict[str, Any]:
     """Compact append-only record of an attempted detail, including no-patch outcomes."""
     return {
         "opportunity_id": row["id"], "source": row["source"], "adapter_version": result.adapter_version,
         "identity_status": identity.status, "identity_method": identity.method, "identity_reason": identity.reason,
         "http_status": result.source_status, "detail_url": result.source_url, "canonical_url": result.canonical_url,
+        "run_id": run_id or os.getenv("CVITAE_SCRAPER_RUN_ID") or None,
         "evidence": {
             "method": result.extraction_method, "fields": result.extracted_fields,
             "confidence": result.confidence, "detail_match": result.evidence.get("detail_match", True),
@@ -577,12 +578,12 @@ def observation_payload(row: dict[str, Any], result: AdapterResult, identity: Id
     }
 
 
-def persist_observations(plans: list[tuple[dict[str, Any], AdapterResult, dict[str, Any], IdentityResult]]) -> int:
+def persist_observations(plans: list[tuple[dict[str, Any], AdapterResult, dict[str, Any], IdentityResult]], run_id: str | None = None) -> int:
     if not plans:
         return 0
     response = requests.post(
         f"{api_base()}/opportunity_source_observations", headers={**api_headers(), "Prefer": "return=minimal"},
-        json=[observation_payload(row, result, identity) for row, result, _, identity in plans], timeout=30,
+        json=[observation_payload(row, result, identity, run_id) for row, result, _, identity in plans], timeout=30,
     )
     response.raise_for_status()
     return len(plans)

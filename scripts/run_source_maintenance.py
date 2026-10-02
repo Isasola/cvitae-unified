@@ -232,7 +232,7 @@ def assert_apply_authorized(profile: Any) -> dict[str, Any]:
     return certificate
 
 
-def process_source(source: str, apply: bool, chunk_size: int, max_items: int | None, opportunity_id: str | None, explain: bool, diagnose_only: bool, verbose_items: bool = False) -> dict[str, Any]:
+def process_source(source: str, apply: bool, chunk_size: int, max_items: int | None, opportunity_id: str | None, explain: bool, diagnose_only: bool, verbose_items: bool = False, observations_only: bool = False) -> dict[str, Any]:
     started = datetime.now(timezone.utc)
     profile = get_profile(source)
     certificate = certification(profile)
@@ -249,7 +249,7 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
         pairs, himalayas_inventory = himalayas_current_rows(profile.max_detail_fetches_per_run, opportunity_id, start_cursor=resume_cursor)
         rows = [row for row, _ in pairs]
         source_payloads = {str(row["id"]): raw for row, raw in pairs}
-    summary: dict[str, Any] = {"source": source, "mode": "APPLY" if apply else "DRY_RUN", "adapter_version": profile.adapter_version, "inventory": len(rows), "considered": 0, "fresh_skipped": 0, "processed": 0, "live": 0, "removed": 0, "hard_dead_suppressed": 0, "rescued": 0, "failed": 0, "transient": 0, "mismatch": 0, "descriptions_restored": 0, "geo_corrected": 0, "eligibility_corrected": 0, "remote_scope_corrected": 0, "semantic_rows_changed": 0, "embeddings_invalidated": 0, "embeddings_regenerated": 0, "embeddings_failed": 0, "exceptions": [], "circuit_breaker": None}
+    summary: dict[str, Any] = {"source": source, "mode": "OBSERVATIONS_ONLY_APPLY" if apply and observations_only else "OBSERVATIONS_ONLY_DRY_RUN" if observations_only else "APPLY" if apply else "DRY_RUN", "adapter_version": profile.adapter_version, "telemetry_run_id": f"source-maintenance-{source}-{int(started.timestamp())}", "inventory": len(rows), "considered": 0, "fresh_skipped": 0, "processed": 0, "observations_persisted": 0, "live": 0, "removed": 0, "hard_dead_suppressed": 0, "rescued": 0, "failed": 0, "transient": 0, "mismatch": 0, "descriptions_restored": 0, "geo_corrected": 0, "eligibility_corrected": 0, "remote_scope_corrected": 0, "semantic_rows_changed": 0, "embeddings_invalidated": 0, "embeddings_regenerated": 0, "embeddings_failed": 0, "exceptions": [], "circuit_breaker": None}
     # A scout is deliberately bounded and never declares a missing item dead.
     # It gives the run cheap current-source context before any detail fetch.
     snapshot = scout_source(source, profile.scout)
@@ -287,14 +287,14 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
     # fetches by TTL, but they still need policy reconciliation exactly once.
     # The RPC re-reads the latest observation under lock, so this is safe if a
     # subsequent live observation arrived after our read.
-    policy_candidates = [
+    policy_candidates = [] if observations_only else [
         (row, classify_source_policy(row, observations.get(str(row["id"]))))
         for row in rows
     ]
     summary["hard_dead_pending"] = sum(decision.action == "SUPPRESS" for _, decision in policy_candidates)
     all_plans: list[tuple[dict[str, Any], Any, dict[str, Any], Any]] = []
-    enricher = AtomicEnricher(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"]) if apply else None
-    policy = SourcePolicyApplier() if apply else None
+    enricher = AtomicEnricher(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"]) if apply and not observations_only else None
+    policy = SourcePolicyApplier() if apply and not observations_only else None
     if apply:
         for row, decision in policy_candidates:
             if decision.action != "SUPPRESS":
@@ -346,7 +346,9 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
             print(f"[{source}] {index + len(chunk)}/{len(selected)} processed | live {summary['live']} | removed {summary['removed']} | transient {summary['transient']} | remaining ~{max(0, len(selected) - index - len(chunk))}")
         if not apply:
             continue
-        persist_observations(plans)
+        summary["observations_persisted"] += persist_observations(plans, run_id=summary["telemetry_run_id"])
+        if observations_only:
+            continue
         embedding_ids: list[str] = []
         for row, result, patch, identity in plans:
             decision = classify_source_policy(row, {"id": None, "identity_status": identity.status, "http_status": result.source_status})
@@ -394,7 +396,7 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
     summary["started_at"] = started.isoformat()
     summary["finished_at"] = datetime.now(timezone.utc).isoformat()
     summary["duration_seconds"] = round((datetime.now(timezone.utc) - started).total_seconds(), 2)
-    summary["changes_applied"] = bool(apply and (summary["rescued"] or summary["hard_dead_suppressed"] or summary["semantic_rows_changed"]))
+    summary["changes_applied"] = bool(apply and (summary["observations_persisted"] or summary["rescued"] or summary["hard_dead_suppressed"] or summary["semantic_rows_changed"]))
     summary["execution_status"] = "SUCCESS" if summary["failed"] == 0 else "WARNING"
     summary["telemetry_status"] = "NOT_REQUESTED"
     summary["telemetry_error"] = None
@@ -411,6 +413,7 @@ def main() -> int:
     parser.add_argument("--diagnose", action="store_true"); parser.add_argument("--explain", action="store_true"); parser.add_argument("--verbose-items", action="store_true")
     parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK); parser.add_argument("--max-items", type=int)
     parser.add_argument("--id", dest="opportunity_id")
+    parser.add_argument("--observations-only", action="store_true", help="persiste exclusivamente evidencia factual del adapter; no aplica policy, enrichment ni embeddings")
     args = parser.parse_args(); load_local_env()
     if args.chunk_size < 1 or args.chunk_size > MAX_CHUNK: parser.error("--chunk-size debe estar entre 1 y 50")
     if args.max_items is not None and args.max_items < 1: parser.error("--max-items debe ser positivo")
@@ -431,7 +434,7 @@ def main() -> int:
         if args.apply and args.source == "all" and (not get_profile(source).auto_enabled or not certification(get_profile(source))["certified"]):
             auto_skipped += 1
             continue
-        outputs.append(process_source(source, args.apply, args.chunk_size, args.max_items, args.opportunity_id, args.explain, args.diagnose, args.verbose_items))
+        outputs.append(process_source(source, args.apply, args.chunk_size, args.max_items, args.opportunity_id, args.explain, args.diagnose, args.verbose_items, args.observations_only))
     if args.source == "all" and args.diagnose:
         nonempty = [
             {"source": item["source"], "inventory": item["inventory"], "degraded": item["diagnosis"]["degraded"], "adapter": item["adapter_version"], "auto_enabled": get_profile(item["source"]).auto_enabled,

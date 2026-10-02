@@ -6,6 +6,9 @@ import hashlib
 import json
 import re
 import unicodedata
+import uuid
+from datetime import datetime, timezone
+from functools import lru_cache
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
@@ -113,6 +116,9 @@ class IngestionSummary:
     budget_skipped: int = 0
     failed: int = 0
     errors: list[str] = field(default_factory=list)
+    lineage_attempted: int = 0
+    lineage_written: int = 0
+    lineage_failed: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -121,6 +127,8 @@ class IngestionSummary:
         payload["processed_attempted"] = self.inserted + self.updated + self.unchanged + self.rejected + self.failed
         payload["processed"] = payload["processed_attempted"]
         payload["unprocessed_due_to_budget"] = self.budget_skipped
+        payload["pipeline_traced"] = self.lineage_written
+        payload["persisted_without_lineage"] = self.lineage_failed
         return payload
 
 
@@ -258,12 +266,123 @@ class OpportunitySink:
             response = self.session.get(
                 self.table_url,
                 headers=self.headers,
-                params={"select": "application_url,slug,verification_status,is_active,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,content_fingerprint,semantic_fingerprint", "application_url": f"in.({expression})"},
+                params={"select": "id,application_url,source,slug,verification_status,is_active,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,content_fingerprint,semantic_fingerprint", "application_url": f"in.({expression})"},
                 timeout=30,
             )
             response.raise_for_status()
             existing.update({row["application_url"]: row for row in response.json()})
         return existing
+
+    @staticmethod
+    @lru_cache(maxsize=512)
+    def _canonical_source(emitted_source: Any) -> tuple[str | None, str | None]:
+        emitted = _text(emitted_source, 120).casefold()
+        if not emitted:
+            return None, "SOURCE_IDENTITY_MISSING"
+        # Registry V2 owns source identity. Unknown/ambiguous emitters remain
+        # visible in ingestion evidence; they are never guessed from a label.
+        try:
+            import sys
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from source_registry_v2 import resolve_emitted_source
+            return resolve_emitted_source(emitted).source, None
+        except (ImportError, ValueError):
+            return None, "SOURCE_IDENTITY_UNRESOLVED"
+
+    def _persist_ingestion_lineage(
+        self,
+        accepted: list[tuple[dict[str, Any], str]],
+        rejected: list[tuple[dict[str, Any], str]],
+        existing: dict[str, dict[str, Any]],
+    ) -> None:
+        """Record producer receipt, not live/HTTP/identity evidence.
+
+        Opportunity rows are already persisted at this point. A lineage error
+        is reported separately and never rolled back or disguised as an
+        observation. Missing run metadata remains explicit in the event.
+        """
+        self._lineage_pending_events = []
+        if self.audit_mode or (not accepted and not rejected):
+            return
+        run_id = _text(os.getenv("CVITAE_SCRAPER_RUN_ID"), 200) or None
+        scraper_run_id = _text(os.getenv("CVITAE_SCRAPER_RUN_DB_ID"), 80) or None
+        producer_id = _text(os.getenv("CVITAE_SCRAPER_ID"), 160) or None
+        scan_request_id = _text(os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID"), 200) or None
+        received_at = datetime.now(timezone.utc).isoformat()
+        events: list[dict[str, Any]] = []
+        for item, outcome in [*accepted, *rejected]:
+            url = item.get("application_url")
+            prior = existing.get(str(url)) if url else None
+            opportunity_id = (prior or {}).get("id")
+            # Newly upserted IDs are resolved from persisted rows below.
+            emitted = item.get("source") or (prior or {}).get("source")
+            canonical, identity_reason = self._canonical_source(emitted)
+            reason = identity_reason
+            if not producer_id:
+                reason = reason or "SCRAPER_IDENTITY_NOT_SUPPLIED"
+            if not run_id:
+                reason = reason or "SCRAPER_RUN_ID_NOT_SUPPLIED"
+            if outcome in {"REJECTED", "BUDGET_SKIPPED", "PERSISTENCE_FAILED"}:
+                reason = item.get("reason") or outcome
+            identity_hash = hashlib.sha256(str(url or json.dumps(item, sort_keys=True, default=str)).encode("utf-8")).hexdigest()
+            # A random event key is intentional when there is no durable run
+            # id; it does not fabricate one or claim idempotence across runs.
+            event_key_seed = "|".join((str(opportunity_id or identity_hash), str(run_id or uuid.uuid4()), str(producer_id or "UNKNOWN"), outcome, str(item.get("content_fingerprint") or "")))
+            events.append({
+                "event_key": hashlib.sha256(event_key_seed.encode("utf-8")).hexdigest(),
+                "opportunity_id": opportunity_id,
+                "emitted_source": _text(emitted, 120) or None,
+                "canonical_source": canonical,
+                "producer_id": producer_id,
+                "adapter_id": _text(os.getenv("CVITAE_ADAPTER_VERSION"), 120) or None,
+                "cleaner_id": _text(os.getenv("CVITAE_CLEANER_ID"), 120) or None,
+                "normalizer_version": "opportunity-sink:v1",
+                "normalized_fields": sorted(item.keys()),
+                "run_id": run_id,
+                "scraper_run_id": scraper_run_id,
+                "scan_request_id": scan_request_id,
+                "outcome": outcome,
+                "trace_state": "TRACED" if not reason else "INCOMPLETE",
+                "reason": reason,
+                "identity_sha256": identity_hash,
+                "content_fingerprint": item.get("content_fingerprint"),
+                "semantic_fingerprint": item.get("semantic_fingerprint"),
+                "evidence": {"evidence_kind": "INGESTION_RECEIPT", "is_source_observation": False, "is_http_evidence": False, "received_at": received_at},
+            })
+        # Resolve rows inserted in this batch after the upsert; this lookup is
+        # factual persistence linkage, not identity or observation evidence.
+        unresolved = [e for e in events if e["opportunity_id"] is None and e["outcome"] not in {"REJECTED", "BUDGET_SKIPPED", "PERSISTENCE_FAILED"}]
+        if unresolved:
+            try:
+                persisted = self._existing_urls([str(item.get("application_url") or "") for item, _ in accepted])
+                for event in unresolved:
+                    # Hash matching avoids retaining an extra raw URL in the
+                    # event and resolves via the submitted item ordering.
+                    match = next((item for item, _ in accepted if hashlib.sha256(str(item.get("application_url") or "").encode("utf-8")).hexdigest() == event["identity_sha256"]), None)
+                    row = persisted.get(str(match.get("application_url"))) if match else None
+                    if row:
+                        event["opportunity_id"] = row.get("id")
+                    if not event["opportunity_id"]:
+                        event["trace_state"] = "INCOMPLETE"
+                        event["reason"] = "PERSISTED_OPPORTUNITY_ID_UNRESOLVED"
+            except requests.RequestException:
+                pass
+        self._lineage_pending_events = events
+
+    def _flush_ingestion_lineage(self) -> tuple[int, int]:
+        events = getattr(self, "_lineage_pending_events", [])
+        self._lineage_pending_events = []
+        if not events or self.audit_mode:
+            return 0, 0
+        response = self.session.post(
+            f"{self.supabase_url}/rest/v1/opportunity_ingestion_events?on_conflict=event_key",
+            headers={**self.headers, "Prefer": "resolution=ignore-duplicates,return=minimal"},
+            json=events,
+            timeout=45,
+        )
+        if response.status_code not in (200, 201, 204):
+            raise requests.HTTPError(f"ingestion_lineage_http_{response.status_code}")
+        return len(events), 0
 
     def insert_new_fail_closed(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Insert precisely one new opportunity without any conflict resolution.
@@ -289,17 +408,29 @@ class OpportunitySink:
             raise RuntimeError("insert_fail_closed_bad_response") from exc
         if not isinstance(rows, list) or len(rows) != 1:
             raise RuntimeError("insert_fail_closed_bad_response")
-        return rows[0]
+        persisted = rows[0]
+        try:
+            url = str(payload.get("application_url") or "")
+            self._persist_ingestion_lineage([(payload, "INSERTED")], [], {url: persisted})
+            self._flush_ingestion_lineage()
+        except (requests.RequestException, RuntimeError) as exc:
+            # The no-retry insert remains persisted; surface the split outcome
+            # so callers cannot mistake it for a fully traced result.
+            raise RuntimeError("insert_succeeded_but_lineage_persistence_failed") from exc
+        return persisted
 
     def upsert(self, raw_items: Iterable[dict[str, Any]], batch_size: int = 100) -> IngestionSummary:
         raw_list = list(raw_items)
         summary = IngestionSummary(found=len(raw_list))
+        rejected_lineage: list[tuple[dict[str, Any], str]] = []
         max_items = max(1, int(os.getenv("CVITAE_MAX_ITEMS", "1000")))
         unique: dict[str, dict[str, Any]] = {}
+        duplicate_lineage: list[tuple[dict[str, Any], str]] = []
         for raw in raw_list:
             item, reason = normalize_opportunity(raw)
             if not item:
                 summary.rejected += 1
+                rejected_lineage.append(({"source": raw.get("source"), "application_url": raw.get("application_url"), "reason": reason}, "REJECTED"))
                 if len(summary.errors) < 10:
                     summary.errors.append(reason or "oportunidad inválida")
                 continue
@@ -312,6 +443,8 @@ class OpportunitySink:
             if item.get("source_authority") != "original" and not item.get("original_source_verified"):
                 item["verification_status"] = "in_review"
                 item["is_active"] = False
+            if item["application_url"] in unique:
+                duplicate_lineage.append((item, "DUPLICATE_IN_RUN"))
             unique[item["application_url"]] = item
 
         summary.unique = len(unique)
@@ -320,9 +453,18 @@ class OpportunitySink:
         if len(items) > max_items:
             summary.budget_skipped += len(items) - max_items
             summary.errors.append(f"Límite operativo aplicado: {max_items} de {len(items)} oportunidades únicas")
+            rejected_lineage.extend(({**item, "reason": "PROCESSING_BUDGET_SKIPPED"}, "BUDGET_SKIPPED") for item in items[max_items:])
             items = items[:max_items]
         if not items:
             self._write_audit(summary, items)
+            if not self.audit_mode and rejected_lineage:
+                self._persist_ingestion_lineage([], [*rejected_lineage, *duplicate_lineage], {})
+                summary.lineage_attempted = len(self._lineage_pending_events)
+                try:
+                    summary.lineage_written, _ = self._flush_ingestion_lineage()
+                except requests.RequestException as exc:
+                    summary.lineage_failed = summary.lineage_attempted
+                    summary.errors.append(f"No se pudo persistir ingestion lineage: {type(exc).__name__}")
             return summary
 
         if self.audit_mode:
@@ -334,17 +476,27 @@ class OpportunitySink:
         except requests.RequestException as exc:
             summary.errors.append(f"No se pudo consultar deduplicación previa: {type(exc).__name__}")
             summary.failed += len(items)
+            rejected_lineage.extend(({**item, "reason": "PRE_PERSISTENCE_LOOKUP_FAILED"}, "PERSISTENCE_FAILED") for item in items)
+            self._persist_ingestion_lineage([], [*rejected_lineage, *duplicate_lineage], {})
+            summary.lineage_attempted = len(self._lineage_pending_events)
+            try:
+                summary.lineage_written, _ = self._flush_ingestion_lineage()
+            except requests.RequestException as lineage_exc:
+                summary.lineage_failed = summary.lineage_attempted
+                summary.errors.append(f"No se pudo persistir ingestion lineage: {type(lineage_exc).__name__}")
             return summary
 
         # Preserve the first public slug when a source later corrects its title.
         # This keeps indexed URLs and shared links stable across updates.
         changed_items: list[dict[str, Any]] = []
+        lineage_items: list[tuple[dict[str, Any], str]] = []
         for item in items:
             previous = existing.get(item["application_url"])
             if previous and previous.get("slug"):
                 item["slug"] = _text(previous["slug"], 120)
             if previous and previous.get("content_fingerprint") == item["content_fingerprint"]:
                 summary.unchanged += 1
+                lineage_items.append((item, "UNCHANGED"))
                 continue
             if previous and previous.get("verification_status") == "verified":
                 if previous.get("content_fingerprint"):
@@ -362,9 +514,6 @@ class OpportunitySink:
             changed_items.append(item)
 
         items = changed_items
-        if not items:
-            return summary
-
         for start in range(0, len(items), batch_size):
             batch = items[start:start + batch_size]
             # Normalize: all rows in batch must have identical keys for Supabase REST
@@ -380,13 +529,23 @@ class OpportunitySink:
                 if response.status_code not in (200, 201, 204):
                     summary.failed += len(batch)
                     summary.errors.append(f"Supabase {response.status_code}: {_text(response.text, 800)}")
+                    rejected_lineage.extend(({**item, "reason": f"OPPORTUNITY_UPSERT_HTTP_{response.status_code}"}, "PERSISTENCE_FAILED") for item in batch)
                     continue
                 updated = sum(item["application_url"] in existing for item in batch)
                 summary.updated += updated
                 summary.inserted += len(batch) - updated
+                lineage_items.extend((item, "UPDATED" if item["application_url"] in existing else "INSERTED") for item in batch)
             except requests.RequestException as exc:
                 summary.failed += len(batch)
                 summary.errors.append(f"Error de red al insertar lote: {type(exc).__name__}")
+                rejected_lineage.extend(({**item, "reason": f"OPPORTUNITY_UPSERT_{type(exc).__name__}"}, "PERSISTENCE_FAILED") for item in batch)
+        self._persist_ingestion_lineage(lineage_items, [*rejected_lineage, *duplicate_lineage], existing)
+        summary.lineage_attempted = len(self._lineage_pending_events)
+        try:
+            summary.lineage_written, _ = self._flush_ingestion_lineage()
+        except requests.RequestException as exc:
+            summary.lineage_failed = summary.lineage_attempted
+            summary.errors.append(f"No se pudo persistir ingestion lineage: {type(exc).__name__}")
         return summary
 
     def _write_audit(self, summary: IngestionSummary, items: list[dict[str, Any]]) -> None:

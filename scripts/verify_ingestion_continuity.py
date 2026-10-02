@@ -126,8 +126,10 @@ def test_a_unchanged() -> None:
     assert_eq(summary.unchanged, 1, "A: unchanged=1")
     assert_eq(summary.inserted, 0, "A: inserted=0")
     assert_eq(summary.updated, 0, "A: updated=0")
-    # POST must not have been called (no DB write)
-    assert_eq(sink.session.post.called, False, "A: no POST issued")
+    # Unchanged rows still record a receipt; no opportunities upsert is sent.
+    opportunity_posts = [call for call in sink.session.post.call_args_list if "/opportunities?on_conflict=" in call.args[0]]
+    assert_eq(len(opportunity_posts), 0, "A: no opportunities upsert issued")
+    assert_eq(sink.session.post.called, True, "A: ingestion receipt is recorded")
 
 
 # ─── Fixture B: Same URL + changed title --UPDATE ────────────────────────────
@@ -205,6 +207,8 @@ def test_f_inrun_dedup() -> None:
     assert_eq(summary.duplicates_in_run, 1, "F: duplicates_in_run=1")
     assert_eq(summary.unique, 1, "F: unique=1")
     assert_eq(summary.valid, 2, "F: valid=2 (both passed normalize)")
+    receipt_batches = [call.kwargs.get("json", []) for call in sink.session.post.call_args_list if "opportunity_ingestion_events" in call.args[0]]
+    assert_true(any(event.get("outcome") == "DUPLICATE_IN_RUN" for batch in receipt_batches for event in batch), "F: in-run duplicate remains represented in ingestion ledger")
 
 
 # ─── Fixture G: coverage_complete=False --existing rows NOT marked stale ─────
@@ -232,8 +236,9 @@ def test_g_partial_run_no_stale() -> None:
     sink = _sink_with_existing(not_in_run_existing)
     summary = sink.upsert([in_run])
     # POST is called only for `in_run` — never touches `not_in_run_url`
-    if sink.session.post.called:
-        posted_payload = sink.session.post.call_args[1].get("json") or sink.session.post.call_args[0][1] if len(sink.session.post.call_args[0]) > 1 else []
+    opportunity_posts = [call for call in sink.session.post.call_args_list if "/opportunities?on_conflict=" in call.args[0]]
+    if opportunity_posts:
+        posted_payload = opportunity_posts[0].kwargs.get("json") or []
         posted_urls = [row.get("application_url") for row in (posted_payload if isinstance(posted_payload, list) else [])]
         assert_true(not_in_run_url not in posted_urls, "G: unseen URL never written")
     else:
@@ -266,7 +271,8 @@ def test_h_verified_content_change() -> None:
     summary = sink.upsert([raw])
     # Should be an update (content changed) — POST is called
     assert_eq(sink.session.post.called, True, "H: POST issued for changed verified opp")
-    posted_payload = sink.session.post.call_args[1].get("json") or []
+    opportunity_post = next(call for call in sink.session.post.call_args_list if "/opportunities?on_conflict=" in call.args[0])
+    posted_payload = opportunity_post.kwargs.get("json") or []
     if posted_payload:
         row = posted_payload[0] if isinstance(posted_payload, list) else posted_payload
         assert_eq(row.get("verification_status"), "in_review", "H: verification_status=in_review")
@@ -284,7 +290,8 @@ def test_i_aggregator_source() -> None:
     sink = _sink_with_existing({})
     sink.upsert([raw])
     assert_eq(sink.session.post.called, True, "I: POST called for new aggregator item")
-    posted_payload = sink.session.post.call_args[1].get("json") or [] if sink.session.post.called else []
+    opportunity_post = next(call for call in sink.session.post.call_args_list if "/opportunities?on_conflict=" in call.args[0])
+    posted_payload = opportunity_post.kwargs.get("json") or []
     row = posted_payload[0] if isinstance(posted_payload, list) and posted_payload else {}
     assert_eq(row.get("verification_status"), "in_review", "I: verification_status=in_review")
     assert_eq(row.get("is_active"), False, "I: is_active=False for unverified aggregator")
@@ -304,6 +311,8 @@ def test_j_max_items_cap() -> None:
     assert_eq(summary.budget_skipped, 1, "J: one valid item skipped due to budget")
     assert_eq(summary.rejected, 0, "J: budget must not be a rejection")
     assert_true(any("Límite operativo" in e for e in summary.errors), "J: cap error logged")
+    receipt_batches = [call.kwargs.get("json", []) for call in sink.session.post.call_args_list if "opportunity_ingestion_events" in call.args[0]]
+    assert_true(any(event.get("outcome") == "BUDGET_SKIPPED" for batch in receipt_batches for event in batch), "J: budget-skipped result remains observable")
 
 
 # ─── Fixture J2: persistence errors are attempted failures, not rejections ───
@@ -391,7 +400,8 @@ def test_k_source_alias_stable() -> None:
     sink = _sink_with_existing(existing)
     summary = sink.upsert([raw])
     assert_eq(summary.unchanged, 1, "K: same source string -- unchanged=1")
-    assert_eq(sink.session.post.called, False, "K: no DB write for truly unchanged item")
+    opportunity_posts = [call for call in sink.session.post.call_args_list if "/opportunities?on_conflict=" in call.args[0]]
+    assert_eq(len(opportunity_posts), 0, "K: no opportunities upsert for truly unchanged item")
 
 
 # ─── Fixture L: different canonical source — fingerprints must differ ─────────

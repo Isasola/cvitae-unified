@@ -868,7 +868,9 @@ export default function Admin() {
     }
     if (intelligenceResult.status === 'fulfilled') {
       setSourceIntelligence(intelligenceResult.value.sources || [])
-      setOpportunityUniverse(intelligenceResult.value.opportunity_universe || null)
+      setOpportunityUniverse(intelligenceResult.value.opportunity_universe
+        ? { ...intelligenceResult.value.opportunity_universe, pipeline_ledger: intelligenceResult.value.opportunity_pipeline_ledger || null }
+        : null)
       setSourceIntelligenceError(null)
     } else {
       setSourceIntelligenceError(intelligenceResult.reason?.message || 'Error desconocido')

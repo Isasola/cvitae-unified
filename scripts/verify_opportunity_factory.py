@@ -80,6 +80,8 @@ assert blocked_status == "blocked"
 class Response:
     status_code = 201
     text = ""
+    def raise_for_status(self) -> None:
+        return None
 
 
 class Session:
@@ -89,6 +91,16 @@ class Session:
     def post(self, _url: str, **kwargs: Any) -> Response:
         self.posts.append(kwargs["json"])
         return Response()
+
+class LineageSession(Session):
+    def __init__(self) -> None:
+        super().__init__()
+        self.get_calls = 0
+    def get(self, _url: str, **kwargs: Any) -> Response:
+        self.get_calls += 1
+        response = Response()
+        response.json = lambda: [] if self.get_calls == 1 else [{"id": "opportunity-1", "application_url": BASE["application_url"], "source": "unjobs"}]
+        return response
 
 
 def sink_with_existing(existing: dict[str, Any]) -> tuple[OpportunitySink, Session]:
@@ -107,7 +119,8 @@ unchanged_sink, unchanged_session = sink_with_existing({
     "content_fingerprint": first["content_fingerprint"], "verification_status": "verified",
 })
 unchanged_summary = unchanged_sink.upsert([BASE])
-assert unchanged_summary.unchanged == 1 and not unchanged_session.posts
+assert unchanged_summary.unchanged == 1 and len(unchanged_session.posts) == 1
+assert unchanged_session.posts[0][0]["outcome"] == "UNCHANGED"
 
 changed_sink, changed_session = sink_with_existing({
     "application_url": BASE["application_url"], "slug": first["slug"],
@@ -131,6 +144,34 @@ bootstrap_row = bootstrap_session.posts[0][0]
 assert bootstrap_summary.updated == 1 and bootstrap_row["verification_status"] == "verified"
 assert bootstrap_row["is_active"] is True and bootstrap_row["alerts_eligible"] is False
 
+# A successful insert leaves durable producer/run lineage, never a fabricated
+# HTTP/identity observation.
+lineage_sink = OpportunitySink("https://fixture.supabase.co", "fixture-key")
+lineage_session = LineageSession()
+lineage_sink.session = lineage_session  # type: ignore[assignment]
+from unittest.mock import patch
+with patch.dict(os.environ, {
+    "CVITAE_SCRAPER_ID": "unjobs_scraper", "CVITAE_SCRAPER_RUN_ID": "run-fixture",
+    "CVITAE_SCRAPER_RUN_DB_ID": "00000000-0000-0000-0000-000000000001",
+}):
+    lineage_summary = lineage_sink.upsert([{**BASE, "source": "unjobs"}])
+assert lineage_summary.inserted == 1 and lineage_summary.lineage_written == 1
+lineage_event = lineage_session.posts[-1][0]
+assert lineage_event["opportunity_id"] == "opportunity-1"
+assert lineage_event["canonical_source"] == "unjobs" and lineage_event["producer_id"] == "unjobs_scraper"
+assert lineage_event["run_id"] == "run-fixture" and lineage_event["trace_state"] == "TRACED"
+assert lineage_event["evidence"]["is_source_observation"] is False
+
+unattributed_sink = OpportunitySink("https://fixture.supabase.co", "fixture-key")
+unattributed_session = LineageSession()
+unattributed_sink.session = unattributed_session  # type: ignore[assignment]
+with patch.dict(os.environ, {"CVITAE_SCRAPER_ID": "", "CVITAE_SCRAPER_RUN_ID": "", "CVITAE_SCRAPER_RUN_DB_ID": ""}):
+    unattributed_sink.upsert([{**BASE, "source": "unjobs"}])
+unattributed_event = unattributed_session.posts[-1][0]
+assert unattributed_event["opportunity_id"] == "opportunity-1"
+assert unattributed_event["trace_state"] == "INCOMPLETE"
+assert unattributed_event["reason"] in {"SCRAPER_IDENTITY_NOT_SUPPLIED", "SCRAPER_RUN_ID_NOT_SUPPLIED"}
+
 workflow = (ROOT / ".github/workflows/refresh_embeddings.yml").read_text(encoding="utf-8")
 migration = (ROOT / "supabase/migrations/202609100001_admin_atomic_factory_foundation.sql").read_text(encoding="utf-8")
 queue_preflight = (ROOT / "scripts/check_opportunity_factory_queue.py").read_text(encoding="utf-8")
@@ -143,5 +184,6 @@ assert "revoke all on table public.opportunity_factory_snapshots from anon, auth
 assert "structural_fresh_pending" in queue_preflight and "embedding_pending" in queue_preflight
 assert "count=exact" in queue_preflight and "unknown" in queue_preflight
 assert "FACTORY_STRUCTURAL_LIMIT" in workflow and "FACTORY_EMBEDDING_LIMIT" in workflow
+assert "cron: '0 * * * *'" in workflow and "default: '250'" in workflow
 
 print("PASS verify_opportunity_factory: stable fingerprints, delta invalidation, seals, safe scraper updates, local cached workflow, atomic private commit")

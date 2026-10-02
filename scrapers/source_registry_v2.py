@@ -200,6 +200,13 @@ def registry_snapshot() -> dict:
         item["contract_covered"] = bool(profile.source_family and profile.semantic_version and profile.opportunity_kinds or profile.adapter is None)
         item["freshness_ttl_hours"] = profile.freshness_ttl_hours
         item["active"] = profile.active
+        item["refresh_capability"] = {
+            "scout": profile.scout,
+            "discovery_strategy": profile.discovery_strategy,
+            "detail_strategy": profile.detail_strategy,
+            "adapter": profile.adapter,
+            "cleaner": profile.cleaner,
+        }
         # Snapshot consumers receive the same evidence as core certification,
         # under an explicit public name rather than a second copy.
         item["certification_evidence"] = item.pop("evidence")

@@ -145,7 +145,10 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
     supabase.rpc("admin_source_quality_aggregate"),
     supabase.from("source_control_audit_log").select("source,action,result_status,created_at").in("action", ["maintenance_telemetry", "maintenance_telemetry_retry"]).order("created_at", { ascending: false }).limit(1000),
   ])
-  const universeRes = await supabase.rpc("get_opportunity_universe_summary")
+  const [universeRes, pipelineLedgerRes] = await Promise.all([
+    supabase.rpc("get_opportunity_universe_summary"),
+    supabase.rpc("admin_opportunity_pipeline_ledger"),
+  ])
   const queryDurationMs = Date.now() - queryStartedAt
   const observationRows = observationsRes.error ? [] : (observationsRes.data || [])
   const policyRows = policyRes.error ? [] : (policyRes.data || [])
@@ -308,7 +311,7 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
     const group = exceptionGroups[reason] || { count: 0, sources: [] }
     group.count += 1; group.sources.push(source.canonical_source); exceptionGroups[reason] = group
   }
-  return { registry: { profile_count: (registry.sources || []).length, emitted_aliases: registry.emitted_aliases, alias_collisions: registry.alias_collisions, ambiguous_patterns: registry.ambiguous_patterns, alias_pattern_conflicts: registry.alias_pattern_conflicts || [], registry_hash: registry.registry_hash, schema_version: registry.schema_version, unresolved_emitted_sources: unresolvedEmittedSources, exception_groups: exceptionGroups, dynamic_metrics_unavailable: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null, quality_agg: qualityAggRes.error ? "unavailable" : null } }, sources, opportunity_universe: universeRes.error ? null : universeRes.data, opportunity_universe_error: universeRes.error ? "UNIVERSE_MIGRATION_NOT_APPLIED_OR_UNAVAILABLE" : null, _observability: { source_count: sources.length, query_duration_ms: queryDurationMs, assembly_duration_ms: Date.now() - assemblyStartedAt, sample_sizes: { observations: observationRows.length, policy_events: policyRows.length, runs: runRows.length, fingerprints: fingerprintRows.length, enrichment: enrichmentRows.length, telemetry: telemetryAuditRows.length }, unavailable_metrics: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null, quality_agg: qualityAggRes.error ? "unavailable" : null } } }
+  return { registry: { profile_count: (registry.sources || []).length, emitted_aliases: registry.emitted_aliases, alias_collisions: registry.alias_collisions, ambiguous_patterns: registry.ambiguous_patterns, alias_pattern_conflicts: registry.alias_pattern_conflicts || [], registry_hash: registry.registry_hash, schema_version: registry.schema_version, unresolved_emitted_sources: unresolvedEmittedSources, exception_groups: exceptionGroups, dynamic_metrics_unavailable: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null, quality_agg: qualityAggRes.error ? "unavailable" : null, pipeline_ledger: pipelineLedgerRes.error ? "unavailable" : null } }, sources, opportunity_universe: universeRes.error ? null : universeRes.data, opportunity_pipeline_ledger: pipelineLedgerRes.error ? null : pipelineLedgerRes.data, opportunity_universe_error: universeRes.error ? "UNIVERSE_MIGRATION_NOT_APPLIED_OR_UNAVAILABLE" : null, _observability: { source_count: sources.length, query_duration_ms: queryDurationMs, assembly_duration_ms: Date.now() - assemblyStartedAt, sample_sizes: { observations: observationRows.length, policy_events: policyRows.length, runs: runRows.length, fingerprints: fingerprintRows.length, enrichment: enrichmentRows.length, telemetry_audit: telemetryAuditRows.length }, unavailable_metrics: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null, quality_agg: qualityAggRes.error ? "unavailable" : null, pipeline_ledger: pipelineLedgerRes.error ? "unavailable" : null } } }
 }
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
@@ -544,9 +547,13 @@ const handler: Handler = async (event) => {
     if (action === "inspect_opportunity_universe") {
       const id = String(payload?.opportunity_id || "").trim()
       if (!id) return { statusCode: 400, body: JSON.stringify({ error: "opportunity_id requerido" }) }
-      const { data, error } = await supabase.rpc("get_opportunity_universe_row", { p_opportunity_id: id })
+      const [{ data, error }, pipelineResult] = await Promise.all([
+        supabase.rpc("get_opportunity_universe_row", { p_opportunity_id: id }),
+        supabase.from("opportunity_pipeline_status").select("*").eq("opportunity_id", id).maybeSingle(),
+      ])
       if (error) throw error
-      return { statusCode: 200, body: JSON.stringify(data || { found: false }) }
+      if (pipelineResult.error) throw pipelineResult.error
+      return { statusCode: 200, body: JSON.stringify({ ...(data || { found: false }), pipeline: pipelineResult.data || null }) }
     }
 
     if (action === "trigger_source_scan") {
