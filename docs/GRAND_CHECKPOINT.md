@@ -1571,3 +1571,32 @@ OPPORTUNITY UNIVERSE SQL COMPILE FIX — 29 SEP 2026
   lifecycle/permission/Matching/SEO contracts without new evidence`.
 - No canary write, deployment, new schema apply, historical reconciliation,
   or alert delivery has occurred in this pre-deploy checkpoint.
+
+## 2026-10-02 â€” Post-deploy smoke outcome
+
+- The single Git-connected Netlify production deploy completed READY:
+  deploy `6abfc0a7020dec0008057d32`, commit `8b124f90ba1b7230467531228939c34fedf7b63`,
+  branch `feature/aws-migration`, primary URL `https://cvitae.lat`.
+- Read-only smoke: home, `/empleos`, public opportunities endpoint, one real
+  SEO detail, and `/sitemap.xml` all returned HTTP 200. The first sitemap call
+  exceeded the 30-second client budget; the retry returned 200. Admin row
+  inspection returned 200 with a real pipeline projection and actionable next
+  action.
+- `source_intelligence_snapshot` did not pass smoke: two requests failed with
+  Netlify response-payload limit `6,291,556` bytes (HTTP 502). Logs identify
+  `RequestEntityTooLarge`; this is a concrete Admin source-ledger response
+  size blocker, not missing PROD pipeline rows. The row-level Admin projection
+  remains available.
+- `CANARY=NOT_RUN`: release smoke was not wholly PASS, so no opportunity rows
+  were inserted and no alerts were sent. No additional deploy will be started
+  under the one-deploy constraint.
+- Final release state is NOT CLOSED. `CURRENT_DENOMINATOR=16459`;
+  `LAST_PROVEN_GATE=final read-only PROD verifier, production build, deploy,
+  public routes and row-level Admin inspection`; `CURRENT_BLOCKER_CLASS=Admin
+  source snapshot response exceeds Netlify 6,291,556-byte limit`;
+  `NEXT_ACTION=reduce/fix the source snapshot response payload, verify source
+  and row Admin endpoints, then authorize one combined follow-up deploy and
+  smoke/canary`; `DO_NOT_REOPEN=all PROD-validated pipeline/Universe/Retrieval
+  semantics without a new invariant failure`.
+- This update is documentation-only. The Netlify ignore-build contract skips
+  docs-only changes; it does not initiate a second site deploy.
