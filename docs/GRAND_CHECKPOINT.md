@@ -1,5 +1,292 @@
 # CVITAE GRAND CHECKPOINT
 
+## ACTIVE CORRECTIVE LIST — SINGLE OPERATIONAL BIBLE
+
+El master historico 1-67 permanece intacto debajo de esta Biblia. `DO NOT REOPEN` se limita al contrato local probado; PROD continua pendiente donde se indica.
+
+### C01
+- STATUS: LOCAL_NODE24_PASS / CI_PROD_PENDING
+- MASTER_ITEMS: 18, 23
+- CONTRACT: CI determinism; pnpm 11.8.0 and frozen lockfile
+- TOOLS/FILES: package.json; pnpm-lock.yaml; matching-retrieval.yml; netlify.toml
+- DEPENDS_ON: local pnpm/node; GitHub Actions and Netlify target Node 24
+- CURRENT_EVIDENCE: Release preflight 2026-10-05: temporary worktree-local Node 24.21.0; pnpm 11.8.0 frozen/offline install PASS with unchanged lockfile; production build PASS with local SEO fixture (no PROD inventory access). Critical pipeline/B2C/Admin/SEO and release-gate verifiers PASS. RC TypeScript syntax and affected Alert typecheck evidence: artifacts/release/rc-node24-compile.json. This is local runtime evidence, not GitHub/Netlify or real product validation.
+- CLOSURE_TEST: Local Node 24 frozen install/build/critical checks PASS; GitHub and chosen Netlify environment still require the same runtime and authorized release validation.
+- NEXT: Run the metadata-only PROD preflight once; resolve target incompatibilities before any authorized migration/deployment. CI and PROD remain pending.
+
+### C02
+- STATUS: CLOSED_LOCAL / PROD_PENDING
+- MASTER_ITEMS: 4, 18, 23
+- CONTRACT: Outcome and trace completeness are orthogonal; persisted outcomes require exact opportunity_id
+- TOOLS/FILES: scrapers/opportunity_sink.py; pipeline ledger migration; ingestion continuity verifiers
+- DEPENDS_ON: Producer/run/source identity; deployed schema compatibility
+- CURRENT_EVIDENCE: Local contract separates all outcomes from TRACED/INCOMPLETE; historical rows are not rewritten. Correccion de prefix 2026-10-05: migration 202610030001 y proyeccion inicial agregan ingestion_outcome/ingestion_trace_contract_version/ingestion_outcome_reason al final, conservando las 72 columnas legacy. verify_pipeline_view_prefix.ts ejecuta PostgreSQL local sobre fixture pre-v2 independiente del candidato: siete outcomes, trace factual/persisted-ID constraints e incertidumbre historica PASS. PROD schema/runtime siguen pendientes.
+- CLOSURE_TEST: Test traced business outcomes, missing identity, persisted IDs and historical non-rewrite; then validate schema/runtime in PROD.
+- NEXT: Test traced business outcomes, missing identity, persisted IDs and historical non-rewrite; then validate schema/runtime in PROD.
+
+### C03
+- STATUS: CLOSED_LOCAL / PROD_PENDING
+- MASTER_ITEMS: 21, 23, 24
+- CONTRACT: One trace authority drives ingestion_state, health, counts, next_actions and Admin
+- TOOLS/FILES: pipeline ledger SQL; Admin pipeline ledger
+- DEPENDS_ON: C02 trace contract; deployed schema/runtime
+- CURRENT_EVIDENCE: Local projection uses trace_state and does not infer TRACED from ledger id. verify_pipeline_view_prefix.ts 2026-10-05: misma autoridad en ingestion_state/health/next_actions/counts; admin_opportunity_pipeline_ledger, accounting SQL y consumer Admin por nombre PASS. CREATE OR REPLACE conserva el OID y dependencia SELECT * sin DROP; instalacion inicial + corrective repetida conserva la misma proyeccion 72+3. Sin cambio C09/C20 ni revalidacion PROD.
+- CLOSURE_TEST: Same row cannot report TRACED and INCOMPLETE; Admin counts and reasons agree; PROD runtime validation.
+- NEXT: Same row cannot report TRACED and INCOMPLETE; Admin counts and reasons agree; PROD runtime validation.
+
+### C04
+- STATUS: CLOSED_LOCAL / PROD_PENDING
+- MASTER_ITEMS: 4, 18, 19, 23
+- CONTRACT: Technical persistence/lineage failure fails the final run; legitimate business outcomes do not
+- TOOLS/FILES: run_scraper_monitored.py; summarize_scraper_run.py; scrapers.yml; refresh_embeddings.yml
+- DEPENDS_ON: C02 receipt and workflow summary
+- CURRENT_EVIDENCE: Local fixtures distinguish business outcomes and technical failures.
+- CLOSURE_TEST: Technical failure makes final workflow fail after sources finish; business rejection remains non-technical; PROD workflow run.
+- NEXT: Technical failure makes final workflow fail after sources finish; business rejection remains non-technical; PROD workflow run.
+
+### C05
+- STATUS: CLOSED_LOCAL / PROD_PENDING
+- MASTER_ITEMS: 22, 23
+- CONTRACT: Shared factual AdapterResult evidence writes Observation; sink never fabricates facts
+- TOOLS/FILES: source_adapters.py; source_evidence.py; observation_writer.py; scan lineage
+- DEPENDS_ON: Exact persisted identity, run identity and factual source evidence
+- CURRENT_EVIDENCE: Local fixtures cover persisted, missing and write-failed observations; existing trigger remains refresh authority.
+- CLOSURE_TEST: Factual adapter -> persisted row -> lineage -> Observation -> Universe refresh; validate future PROD event.
+- NEXT: Factual adapter -> persisted row -> lineage -> Observation -> Universe refresh; validate future PROD event.
+
+### C06
+- STATUS: CLOSED_LOCAL / PROD_PENDING
+- MASTER_ITEMS: 6, 22, 23
+- CONTRACT: EXPECTED registry adapter/cleaner is distinct from actually EXECUTED provenance
+- TOOLS/FILES: OpportunitySink; modern adapters; Admin Source Intelligence
+- DEPENDS_ON: Adapter invocation metadata and Registry expectation
+- CURRENT_EVIDENCE: Local provenance reports executed modern versions and LEGACY/NOT_REPORTED where unavailable.
+- CLOSURE_TEST: Admin distinguishes EXPECTED and EXECUTED on future PROD runs.
+- NEXT: Admin distinguishes EXPECTED and EXECUTED on future PROD runs.
+
+### C07
+- STATUS: LOCAL_READY / PROD_CANARY_PENDING
+- MASTER_ITEMS: 23, 27
+- CONTRACT: Normal scheduled ingestion uses existing bounded/resumable Automation Core only for certified, allowed sources
+- TOOLS/FILES: run_source_scan_automation_bridge.py; run_scheduled_source_automation.py; manual workflow
+- DEPENDS_ON: Sink lineage; factual Observation; Factory; explicit source certification/permission
+- CURRENT_EVIDENCE: Worker locally bounded, resumable and fail-closed for UNKNOWN; workflow requires manual dispatch and release gate.
+- CLOSURE_TEST: Authorized bounded PROD canary traverses producer -> sink -> Observation -> Factory -> Automation -> Universe; no bulk verification.
+- NEXT: Authorized bounded PROD canary traverses producer -> sink -> Observation -> Factory -> Automation -> Universe; no bulk verification.
+
+### C08
+- STATUS: LOCAL_READY / PROD_PENDING
+- MASTER_ITEMS: 8, 12, 16, 23
+- CONTRACT: Universe due/dirty maintenance has a bounded common owner independent of Matching
+- TOOLS/FILES: refresh_opportunity_universe_maintenance.ts; manual workflow; existing RPCs
+- DEPENDS_ON: Existing due/dirty Universe RPCs
+- CURRENT_EVIDENCE: Local owner calls same RPCs; cron removed pending authorized release/canary.
+- CLOSURE_TEST: Prove policy deadlines/dirtiness reconcile while Matching is stopped; then PROD pending.
+- NEXT: Prove policy deadlines/dirtiness reconcile while Matching is stopped; then PROD pending.
+
+### C09 — Filas listas bloqueadas por switches históricos
+- STATUS: LOCAL_WIRING_COMPLETE / PROD_APPLY_PENDING
+- MASTER_ITEMS: 7, 8, 24
+- CONTRACT: Filas READY + permisos ALLOWED estaban bloqueadas por switches operativos stale/false. El cierre exige sincronización real, historical repair y future automation. ROW_READY + permiso ALLOWED + fuente enabled + sin kill manual explícito = FINAL_READY. UNKNOWN y DENIED nunca se habilitan por un switch true.
+- TOOLS/FILES: effective-source-policy.ts; opportunity-universe.ts; 202610040001_source_switch_wiring.sql; get_source_distribution_policy; admin_policy_events; common Universe owner; public catalog handler/RPC; Matching Retrieval/match-batch/Alert sender policy inputs; admin-data.ts exact-row inspector; verify_cable_wiring_sql.mjs; final-cable-apply-plan.md.
+- DEPENDS_ON: Permisos canónicos existentes; audit del operador existente; migraciones/runtime desplegados; reconciliación con cursor; C21 autorización; C20 budget/cursor probado localmente; validacion PROD pendiente.
+- CURRENT_EVIDENCE: PROD suministrado 2026-10-04, sin volver a consultarlo: inventory=16497; Catalog row_ready=6681/final=0; Matching y Alerts row_ready=6224/final=0; SEO=6284. Himalayas inventory=13204, Catalog row_ready=5477, Matching/Alerts=5441; permisos ALLOWED y tres switches DENIED. Jobicy/Remotive muestran el mismo patrón; UNJobs UNKNOWN y WWR DENIED se conservan. PostgreSQL local ejecutó las definiciones reales, triggers y vistas: existing eligible row pasa después de reconcile; future INSERT pasa automáticamente; UNKNOWN/DENIED bloqueadas; false->false manual explícito bloquea inmediatamente y queda auditado; factual Observation resuelve lifecycle UNKNOWN. El handler público real encontró una fila después de 1.200 filas nuevas. Admin exact-row y sus next_actions copian la misma autoridad del RPC actual; los estados anteriores quedan etiquetados como evidencia persistida. Evidencia: artifacts/release/cable-local-sql-evidence.json. Esto NO demuestra aplicación ni validación PROD.
+- CLOSURE_TEST: Casos 1-8 en SQL ejecutado + endpoint real + Admin row inspector; permiso ALLOWED/default false sincroniza; override auditado mantiene denial; cursor histórico idempotente completa denominador. PROD: reconciliar bounded, verificar una Himalayas real y canary futuro después de autorización.
+- NEXT: C20 budget/cursor ya PASS local; aplicar unicamente el plan despues del preflight y autorizacion. No repetir diagnóstico PROD ni habilitar cron por esta prueba local.
+
+### C10
+- STATUS: CLOSED_LOCAL / PROD_PENDING
+- MASTER_ITEMS: 8, 30-34, 38-39
+- CONTRACT: Himalayas first-party public page y ordinary organic SEO = ALLOWED; attribution/linkback = REQUIRED; JobPosting, Google Jobs y third-party distribution = DENIED. Computrabajo conserva exactamente su contrato temporal existente hasta 2026-10-09 inclusive, sin extensión ni permiso general.
+- TOOLS/FILES: permission matrix; source Registry; source-permission-truth.ts; effective policy; Universe TS/SQL; SEO inventory; sitemap/prerender; Admin; fixtures
+- DEPENDS_ON: C09 permission projection; exact factual row and UTC date
+- CURRENT_EVIDENCE: Himalayas: Catalog/Matching/Alerts/SEO allowed when row gates pass, attribution/linkback required, JobPosting/Google Jobs/third-party denied. Computrabajo qualifying legacy SEO row only: READY 2026-10-03 and 2026-10-09 inclusive; expired 2026-10-10.
+- CLOSURE_TEST: Runtime, Universe, SQL/artifact, build/sitemap/Admin parity; deny Himalayas job distribution; test Computrabajo on Oct 3/9/10 and new-row exclusion.
+- NEXT: Validar el contrato desplegado después de un release autorizado; los gates locales y casos Computrabajo Oct 3/9/10 ya pasaron y no se reabren sin regresión concreta.
+
+### C11
+- STATUS: CLOSED_LOCAL / PROD_PENDING
+- MASTER_ITEMS: 27, 42
+- CONTRACT: Secondary B2C consumers read canonical Catalog/Matching state
+- TOOLS/FILES: application-workspace.ts; gemini-courses.ts; generate-cv-vivo.ts
+- DEPENDS_ON: Catalog universe; exact canonical Matching flow
+- CURRENT_EVIDENCE: Local secondary contracts now use canonical consumer authorities; preserve UX and analytics.
+- CLOSURE_TEST: Verify consumer result plus protected CTA/UI/mobile/state/analytics contracts; deployed consumer validation pending.
+- NEXT: Verify consumer result plus protected CTA/UI/mobile/state/analytics contracts; deployed consumer validation pending.
+
+### C12
+- STATUS: CLOSED_LOCAL / PROD_PENDING
+- MASTER_ITEMS: 42
+- CONTRACT: User-pasted CV vacancy remains a private factual snapshot and never enters global opportunities/Universe
+- TOOLS/FILES: generate-cv-vivo.ts; private vacancy_snapshot contract
+- DEPENDS_ON: Existing generated-CV storage/user flow
+- CURRENT_EVIDENCE: Local contract prevents global opportunity insert.
+- CLOSURE_TEST: Custom CV path works while global Universe denominator stays unchanged; PROD validation pending.
+- NEXT: Custom CV path works while global Universe denominator stays unchanged; PROD validation pending.
+
+### C13
+- STATUS: CLOSED_LOCAL / PROD_PENDING
+- MASTER_ITEMS: 30, 38
+- CONTRACT: URL_UPDATED queues only canonical SEO READY rows; URL_DELETED remains usable
+- TOOLS/FILES: seo-pipeline-runner.ts; indexing queue
+- DEPENDS_ON: Canonical effective SEO Universe
+- CURRENT_EVIDENCE: Local queue checks canonical SEO membership.
+- CLOSURE_TEST: Blocked/denied row cannot enqueue update; ready row can; prior indexed URL can be deleted.
+- NEXT: Blocked/denied row cannot enqueue update; ready row can; prior indexed URL can be deleted.
+
+### C14
+- STATUS: CLOSED_LOCAL / PROD_PENDING
+- MASTER_ITEMS: 21, 24
+- CONTRACT: Global Source Intelligence is source-level and bounded; row evidence is on-demand
+- TOOLS/FILES: admin-data.ts; Admin row inspector; payload verifier
+- DEPENDS_ON: Existing Registry, pipeline and Universe projections
+- CURRENT_EVIDENCE: Serialized local summary omits row descriptions, recent opportunity rows, evidence arrays and extraction histories; C20 additionally bounds Admin sample reads. Updated fixture payload gate PASS at 524632 bytes; deployed endpoint remains PROD_PENDING.
+- CLOSURE_TEST: Global endpoint <1 MB target and hard fail >=2 MB; row inspector works; verify deployed endpoint.
+- NEXT: Global endpoint <1 MB target and hard fail >=2 MB; row inspector works; verify deployed endpoint.
+
+### C15 — Verificador local y producto realmente funcionando
+- STATUS: CLOSED_LOCAL / PRODUCT_PROD_VALIDATION_PENDING
+- MASTER_ITEMS: 20-24, 27-33, 38-39
+- CONTRACT: El verificador local distingue correctamente estructura técnica de producto realmente funcionando. Falta comprobarlo con datos reales de PROD.
+- TOOLS/FILES: verify-release-candidate.mjs; Admin endpoint and row inspector; release artifacts
+- DEPENDS_ON: C01-C14 and future authorized PROD evidence
+- CURRENT_EVIDENCE: El agregador local informó STRUCTURAL_LOCAL_PASS, MATCHING_PRODUCT_VALIDATION_PENDING (7 V2 + 1 downstream preexistentes) y PRODUCT_RELEASE_PENDING por Catalog/Matching/Alerts=0 y falta de evidencia desplegada de Admin/canary. Local PASS no afirma producto funcionando en PROD.
+- CLOSURE_TEST: Structural suite passes; product gate demonstrates public rows, matching candidates, explicit routing, SEO exclusions, Admin payload/inspector, future canary and explained state.
+- NEXT: Revisar el JSON real de diagnóstico; después del release autorizado demostrar contenido público, candidatos Matching, permisos, SEO, Admin y canary con datos PROD. No repetir la suite local sin cambios relevantes.
+
+### C16
+- STATUS: DEFERRED_HISTORICAL_RECOVERY
+- MASTER_ITEMS: 12, 13, 16, 20
+- CONTRACT: Historical backlog uses existing Observation recovery and Factory runners; no synthetic Observation or new backfill architecture
+- TOOLS/FILES: existing recovery and Factory runners
+- DEPENDS_ON: Correct future wiring and separate explicit PROD authorization
+- CURRENT_EVIDENCE: No historical recovery executed in this pass; backlog remains.
+- CLOSURE_TEST: After future PROD wiring, run bounded/resumable recovery through existing authorities only.
+- NEXT: After future PROD wiring, run bounded/resumable recovery through existing authorities only.
+
+### C17 — Primero candidatos reales, después el perfil real
+- STATUS: BLOCKED_UNTIL_MATCHING_HAS_REAL_CANDIDATES
+- MASTER_ITEMS: 25-27
+- CONTRACT: NO tocar scoring. Primero deben existir oportunidades reales disponibles para Matching. Después se prueba el perfil real del usuario.
+- TOOLS/FILES: matching.ts; matching-v2.ts; verify-matching-v2.ts; verify_downstream_match_behavior.ts
+- DEPENDS_ON: C09 routing and matching_ready > 0
+- CURRENT_EVIDENCE: Matching core and two failing verifiers/fixtures have no diff from HEAD in this worktree; seven V2 assertions and one downstream confidence assertion remain product validation failures.
+- CLOSURE_TEST: After authorized release produces matching_ready > 0, test a real profile end-to-end; reopen scoring only for demonstrated relevance failure.
+- NEXT: After authorized release produces matching_ready > 0, test a real profile end-to-end; reopen scoring only for demonstrated relevance failure.
+
+### C18
+- STATUS: BLOCKED_BY_PROD_GSC_MEASUREMENT
+- MASTER_ITEMS: 34, 37-40
+- CONTRACT: SEO/GSC measurement and any copy/keyword work wait for corrected route truth and PROD
+- TOOLS/FILES: existing Search Console evidence loop
+- DEPENDS_ON: C10 corrected SEO truth; future authorized release
+- CURRENT_EVIDENCE: No SEO copy or keyword work performed; measurement remains pending while routes are blocked/unvalidated.
+- CLOSURE_TEST: After release compare indexing, impressions, clicks, queries and pages; no optimization before evidence.
+- NEXT: After release compare indexing, impressions, clicks, queries and pages; no optimization before evidence.
+
+### C19
+- STATUS: CLOSED_LOCAL
+- MASTER_ITEMS: MASTER 1-67
+- CONTRACT: Esta única Biblia operativa conserva C01-C21 y el Master histórico 1-67 intacto. CLOSED_LOCAL no equivale a PROD_VALIDATED.
+- TOOLS/FILES: docs/GRAND_CHECKPOINT.md; this local verifier pass
+- DEPENDS_ON: Estados/evidencia exactos C01-C21 y contrato C21 explícito del usuario.
+- CURRENT_EVIDENCE: Única Biblia C01-C21; Master histórico conservado sin cambios. Diagnóstico PROD recibido del usuario, no repetido. PostgreSQL embebido ejecutó migrations/reducers/triggers/vistas de cableado y consumer/Admin locales; esto no implica PROD. C09 queda LOCAL_WIRING_COMPLETE / PROD_APPLY_PENDING; C20 tiene presupuesto/cursor/cobertura local probados; su validacion PROD sigue pendiente. C21 mantiene push = deploy y autorización explícita.
+- CLOSURE_TEST: Check every Cxx required field/status, Active Left and retained Master 1-67.
+- NEXT: Mantener esta Biblia con evidencia ejecutada y pendientes exactos; no afirmar validación PROD desde pruebas locales.
+
+### C20 — FULL-SYSTEM CAPACITY / QUERY COST
+- STATUS: LOCAL_BOUNDED_CONTRACT_PASS / PROD_VALIDATION_PENDING
+- MASTER_ITEMS: 18, 20-24, 27-39, 42
+- CONTRACT: BOUNDED WORK != TRUNCATED PRODUCT. Límites de batch/cursor controlan costo por ejecución sin eliminar cobertura; búsqueda/filtros consultan el conjunto canónico completo. No declarar FULL-SYSTEM bounded PASS si una ventana se pagina pero se acumula completa en memoria sin presupuesto total/cursor.
+- TOOLS/FILES: Matriz C20 existente; 202610040001_source_switch_wiring.sql; 202610040002_public_catalog_coverage.sql; public-opportunity-pagination.ts; public catalog handler/browser lists; recovery/maintenance; common Universe owner; verify_cable_wiring_sql.mjs; verify_observation_coverage_recovery.py; final-cable-apply-plan.md; performance-prod-readonly.sql (antecedente, NO ejecutar nuevamente); 202610050001_bounded_alert_progress.sql; verify_c20_alert_pages.ts; verify_c20_alert_sql.mjs; verify_c20_maintenance_pages.py; verify_source_maintenance.py.
+- DEPENDS_ON: C09 configuración efectiva; mismos reducers/RPCs; índices y schema desplegados; presupuesto/cursor del snapshot de Alertas y selección normal de maintenance; autorización C21.
+- CURRENT_EVIDENCE: Correcciones comprobadas localmente: Catalog filtra en SQL antes de page=101, entrega 100 + cursor y conserva field allowlist; fila posterior a 1.200 encontrada por handler real; 1.301 filas recorren 14 páginas sin pérdida en verifier. Sitemap conserva todas las URLs en páginas de 1.000. Dirty source conserva cursor y refresca máximo 250/source/page, owner=1 source x 10 batches, sin full source refresh por consumer. Reconcile histórico recorre una sola secuencia de IDs para todos los consumers. Due lifecycle usa next_lifecycle_check_at indexado; no reevalúa todas las fechas por tick. Recovery real main/planner recorre 251 IDs en 3 ejecuciones, cursor durable, sin HTTP real; sólo marca completado cuando la evidencia autorizada fue procesada; CLI ahora acepta el flag exacto que invoca recovery. Admin fixture=524632 bytes. Métricas PROD YA suministradas: DB~182MB, connections=9/active=1, cache~99.999%, blocks_read=2088; temp_bytes=200071624327/temp_files=46955; opportunities seq_scan=41807/seq_tup_read=493174773. Son acumulados; no atribuyen por sí solos queries ni justifican comprar compute. No hubo nueva lectura PROD. Cierre local 2026-10-05: sender real 7 rows / batches de 2 / 4+ paginas, pendientes durables y fair profile rotation; PostgreSQL local recorre 251 perfiles elegibles, sin mover el cursor de Matching. Cache lane, delta watermark, preferencias, threshold, exclusion canonica, retry y fallo de checkpoint posterior al email pasan sin duplicar envios. Maintenance real recorre 7 filas / 4 paginas, reanuda automaticamente desde scraper_runs, prueba runtime partial page sin repetir IDs completados, TTL skip y backpressure de checkpoint. Himalayas usa solo la DB page actual + una API page y cursor, nunca inventa observations por ausencia. Lecturas limitadas en query, maximo batch+1 lookahead. Tests afectados y compilacion TS pasan; no suite general ni build/deploy/lectura PROD.
+- CURRENT_BLOCKER: NONE_LOCAL. Los dos snapshots quedaron acotados antes de acumular. Schema/runtime y canary PROD siguen pendientes; PD-003 conserva el hallazgo y su evidencia local, sin afirmar PROD_VALIDATED.
+- CLOSURE_TEST: verify_c20_alert_pages.ts + verify_c20_alert_sql.mjs + verify_c20_maintenance_pages.py + verify_source_maintenance.py + verify_matching_retrieval_expansion.ts + verify_matching_b2c_consumers.ts + verify_cable_wiring_sql.mjs + compilacion TS modificados + git diff --check PASS. Fixtures de 3+ paginas: <=budget por invocacion, cursor durable, segunda ejecucion continua, cobertura 100%, efectos no duplicados y memoria limitada al batch. Los contratos C09 no se reauditaron; su verifier se repitio solo por el helper compartido.
+- NEXT: Release preflight existente: Node 24 CI, schema/rollback/budget y autorizacion C21; luego aplicar migration aditiva/runtime coherente y bounded canary PROD. El antiguo blocker local C20 ya no impide el plan. No repetir diagnostico ni pg_stat_statements; no afirmar PROD_VALIDATED.
+
+
+#### C20 path contract matrix
+
+Every entry records the local trigger, scope, limit, lookup, concurrency, scan/replay behavior, failure handling and closure evidence. “Index/lookup” identifies only what repository SQL/code proves; the read-only PROD artifact supplies live index inventory and query statistics later.
+
+| PATH | REQUIRED FIELDS |
+|---|---|
+| Scrapers | TRIGGER=scheduled/manual source workflow; QUERY/INPUT SCOPE=source feed/API; BATCH/PAGE LIMIT=source-specific discovery and max detail budget (profiles commonly 100-250); INDEX/LOOKUP USED=source-native identity then Sink application_url conflict key; CONCURRENCY=workflow steps sequential, adapter-specific workers (profile max_workers); CAN_CAUSE_FULL_INVENTORY_SCAN=NO (external feed enumeration only); CAN_REPROCESS_UNCHANGED_ROWS=NO persisted mutation (Sink fingerprint returns UNCHANGED); FAILURE/BACKPRESSURE=source failure continues other sources but technical persistence/lineage failure fails final contract; CLOSURE_EVIDENCE=monitored-run, Sink continuity and source adapter verifiers. |
+| OpportunitySink | TRIGGER=AdapterResult; QUERY/INPUT SCOPE=one source run; BATCH/PAGE LIMIT=upsert batch_size 100 default; INDEX/LOOKUP USED=unique application_url upsert and event_key conflict, persisted URL lookup; CONCURRENCY=one sink batch per producer run; CAN_CAUSE_FULL_INVENTORY_SCAN=NO; CAN_REPROCESS_UNCHANGED_ROWS=NO (content fingerprint); FAILURE/BACKPRESSURE=technical persist or lineage write fails the run; CLOSURE_EVIDENCE=ingestion continuity and producer failure propagation fixtures. |
+| Ingestion lineage | TRIGGER=each sink outcome; QUERY/INPUT SCOPE=accepted/rejected events in current sink batch; BATCH/PAGE LIMIT=at most sink batch size; INDEX/LOOKUP USED=opportunity_id+received_at and canonical_source+received_at indexes; CONCURRENCY=batched append; CAN_CAUSE_FULL_INVENTORY_SCAN=NO; CAN_REPROCESS_UNCHANGED_ROWS=NO (receipt event key idempotence); FAILURE/BACKPRESSURE=lineage write failure is technical and visible; CLOSURE_EVIDENCE=C02/C03 trace contract verifiers. |
+| Observation | TRIGGER=factual AdapterResult or explicit recovery; QUERY/INPUT SCOPE=one persisted opportunity or cursor page; BATCH/PAGE LIMIT=10 source pages x 100 rows per recovery invocation, external items max 250/source and runtime max 3,600s; INDEX/LOOKUP USED=opportunity_id exact link, `latest_opportunity_universe_observations` batch RPC, and `opportunity_source_observations_opportunity_observed_idx`; CONCURRENCY=serial source pages and exact-ID recovery; CAN_CAUSE_FULL_INVENTORY_SCAN=NO per invocation (cursor may cover historical rows across resumable runs); CAN_REPROCESS_UNCHANGED_ROWS=NO after durable observation/source completion; FAILURE/BACKPRESSURE=missing evidence remains MISSING; source failure stops before cursor advancement; CLOSURE_EVIDENCE=Observation writer/recovery bounded keyset verifier; maintenance exact-ID devuelve resumable/no exit verde si falta completar el feed factual; cursor directed aislado del source walk. |
+| Factory | TRIGGER=scheduled/manual Factory workflow or exact maintenance IDs; QUERY/INPUT SCOPE=pending/failed rows and matching-final embedding-pending lane; BATCH/PAGE LIMIT=100 structural default, max 250; embedding 20 default, max 50; exact IDs max 50; INDEX/LOOKUP USED=opportunities_factory_pending_idx, final Matching view, exact opportunity primary key; CONCURRENCY=single concurrency group; CAN_CAUSE_FULL_INVENTORY_SCAN=NO for candidate fetch (queue count is aggregate); CAN_REPROCESS_UNCHANGED_ROWS=NO (pending/failed status + fingerprints); FAILURE/BACKPRESSURE=failed rows remain retryable and run fails; CLOSURE_EVIDENCE=Factory queue/fairness and fixture verifiers. |
+| Automation Core | TRIGGER=bounded manual scheduled-source worker or authorized exact IDs; QUERY/INPUT SCOPE=certified, allowed opportunity IDs persisted by an exact scraper run and not yet terminally classified; BATCH/PAGE LIMIT=1 run x 4 batches x 50; exact run receipts/refetch max 50 IDs; INDEX/LOOKUP USED=scan_lineage persisted IDs, promotion_status resume marker, source policy exact lookup; CONCURRENCY=one shared pipeline-maintenance workflow group, source worker limited by profile; CAN_CAUSE_FULL_INVENTORY_SCAN=NO; CAN_REPROCESS_UNCHANGED_ROWS=NO (terminal promotion_status excluded); FAILURE/BACKPRESSURE=stop on RPC/technical failure, preserve per-item resume markers; CLOSURE_EVIDENCE=Automation runtime/transition tests and authorized bounded canary pending. |
+| Lifecycle | TRIGGER=Universe due refresh or explicit paged reconciliation; QUERY/INPUT SCOPE=due rows or ID cursor; BATCH/PAGE LIMIT=due RPC max 500; explicit reconcile page max 500; INDEX/LOOKUP USED=Universe opportunity_id key and opportunity_universe_next_lifecycle_check_idx (migration pending PROD); CONCURRENCY=single maintenance job group; CAN_CAUSE_FULL_INVENTORY_SCAN=NO per invocation; CAN_REPROCESS_UNCHANGED_ROWS=NO except explicit reconciliation page; FAILURE/BACKPRESSURE=RPC failure fails worker and durable due state retries; CLOSURE_EVIDENCE=actual PostgreSQL due transition, second tick zero work and indexed plan. |
+| Universe maintenance | TRIGGER=manual/common owner, producer/Observation exact row; QUERY/INPUT SCOPE=due index + durable dirty-source queue; BATCH/PAGE LIMIT=500 due, source page 250, owner 1 source x 10 batches; INDEX/LOOKUP USED=next_lifecycle_check_at partial index, lower(source)+id cursor, existing PK/observation index; CONCURRENCY=shared maintenance group; CAN_CAUSE_FULL_INVENTORY_SCAN=NO per execution; CAN_REPROCESS_UNCHANGED_ROWS=NO normal tick (explicit source-policy invalidation intentionally reconciles that source once); FAILURE/BACKPRESSURE=queue/cursor persist atomically, budget exit reports pending/resumable; CLOSURE_EVIDENCE=SQL multi-page queue, due transition and idempotent historical RPC execution. |
+| Source maintenance | TRIGGER=worker/CLI existente autorizado; QUERY/INPUT SCOPE=source aliases + immutable id keyset current page, latest evidence solo para IDs de esa pagina; BATCH/PAGE LIMIT=min(profile.max_detail_fetches_per_run, max-items, 250) +1 lookahead, detail chunks <=50, runtime ceiling 3000s (no nuevos fetches al vencer; solo requests ya en vuelo con timeout propio); Himalayas API max 1 page/call (100, hasta 2 si cursor expirado requiere restart); INDEX/LOOKUP USED=opportunities_maintenance_cursor_idx, scraper_runs_maintenance_progress_idx (source/lane/exact ID/time), existing enrichment/Observation exact-ID indexes; CONCURRENCY=source profile min/max workers dentro del workflow serial existente; no ejecutar workers paralelos para la misma fuente/lane; CAN_CAUSE_FULL_INVENTORY_SCAN=NO por ejecucion, cobertura global entre invocaciones; CAN_REPROCESS_UNCHANGED_ROWS=NO detail fetch por TTL/fresh skip, IDs completados en pagina parcial no se repiten; FAILURE/BACKPRESSURE=checkpoint append en scraper_runs despues de cada chunk completo, runtime/circuit breaker retiene pagina y IDs; outage retorna payload telemetry-only y falla antes de otro chunk; CLOSURE_EVIDENCE=actual fetch/process/telemetry fixture 7 rows/4 paginas, dry continuation, runtime partial, TTL y bounded Himalayas PASS. |
+| Catalog | TRIGGER=public list/detail/search/filter; QUERY/INPUT SCOPE=canonical Catalog, query predicates BEFORE limit; BATCH/PAGE LIMIT=101 lookahead / 100 output + keyset cursor; slug exact 1; INDEX/LOOKUP USED=trigram factual search expression, rubro/order, PK, canonical view; CONCURRENCY=one request, browser debounce/request sequence; CAN_CAUSE_FULL_INVENTORY_SCAN=NO application collector; CAN_REPROCESS_UNCHANGED_ROWS=NO (read-only); FAILURE/BACKPRESSURE=invalid request 400, DB/policy failure 503; CLOSURE_EVIDENCE=real handler finds beyond 1,200, 14 pages/1,301 fixture rows and SQL all-page exact coverage. No first-1,000 product cap. |
+| Matching Retrieval | TRIGGER=hourly Retrieval workflow/manual bounded run; QUERY/INPUT SCOPE=selected profiles and Retrieval candidate set from final Matching Universe; BATCH/PAGE LIMIT=2 users x 4 x 250 rows by default; hard CLI max 25 users, 100 pages x 500; score IDs max 500/call; INDEX/LOOKUP USED=Retrieval state/candidate composite indexes and final Matching Universe; CONCURRENCY=serialized by matching-retrieval workflow group; CAN_CAUSE_FULL_INVENTORY_SCAN=NO per run (FULL coverage advances durable cursor over future runs); CAN_REPROCESS_UNCHANGED_ROWS=NO when content fingerprint/watermark match; FAILURE/BACKPRESSURE=cursor advances only after page effects succeed; failure leaves page retryable; CLOSURE_EVIDENCE=Retrieval scheduler/expansion verifiers. |
+| Embeddings | TRIGGER=Factory structural/embedding queue or exact changed IDs; QUERY/INPUT SCOPE=eligible final Matching rows missing/stale embedding; BATCH/PAGE LIMIT=20 default/50 max per Factory invocation; workflow structural 250; exact maintenance IDs max 50; INDEX/LOOKUP USED=Factory pending index and exact opportunity IDs; CONCURRENCY=serialized inside Factory concurrency group; CAN_CAUSE_FULL_INVENTORY_SCAN=NO for work selection; CAN_REPROCESS_UNCHANGED_ROWS=NO (fingerprints/model/status); FAILURE/BACKPRESSURE=failed row stays retryable without blocking structural lane; CLOSURE_EVIDENCE=Factory fingerprints, embedding freshness and queue verifiers. |
+| Alerts | TRIGGER=scheduled sender existente; QUERY/INPUT SCOPE=un perfil consentido seleccionado por cursor durable, canonical Alert page y cache exact-user page; BATCH/PAGE LIMIT=100 rows/page x 5 paginas max, 20 intentos email, 20s runtime, pending descriptors <=100; INDEX/LOOKUP USED=Alert canonical view + updated_at/id, matching_retrieval_candidates_alert_cursor_idx, profile eligibility index, existing delivery unique(user_id,opportunity_id); CONCURRENCY=lease por perfil 60s + selector lock corto + delivery claim/provider idempotency; CAN_CAUSE_FULL_INVENTORY_SCAN=NO por ejecucion; CAN_REPROCESS_UNCHANGED_ROWS=NO entre snapshots completos (watermark delta), replay solo por invalidacion de perfil/policy o efectos pendientes; FAILURE/BACKPRESSURE=cursor y pending effects se persisten antes de enviar, ledger sent evita duplicados tras outage; pending retry/lease retained, error 500 resumable; CLOSURE_EVIDENCE=actual handler multi-page + 251-profile PostgreSQL selector + bounded helper, threshold/consent/cache/dedup PASS. |
+| SEO/sitemap/indexing | TRIGGER=SEO build, sitemap page request, or exact-row classifier; QUERY/INPUT SCOPE=build pages all canonical SEO rows; runtime sitemap reads requested page only; indexing lookup exact opportunity ID in SEO Universe; BATCH/PAGE LIMIT=1,000 rows/page; build paginates the authorized output; one sitemap request one page; INDEX/LOOKUP USED=opportunity_seo_universe READY membership and ID lookup; CONCURRENCY=build job or one request; CAN_CAUSE_FULL_INVENTORY_SCAN=YES for full sitemap/build artifact generation, NO for child sitemap page; CAN_REPROCESS_UNCHANGED_ROWS=NO indexing update only canonical READY and fingerprinted queue; FAILURE/BACKPRESSURE=canonical SEO lookup failure does not enqueue; sitemap/SEO build fails closed; CLOSURE_EVIDENCE=SEO parity, JobPosting separation, indexing queue tests and sitemap page verifier. |
+| Application Workspace | TRIGGER=authenticated selected-opportunity workspace; QUERY/INPUT SCOPE=exact Catalog row + current user records; BATCH/PAGE LIMIT=1 opportunity, 30 workspaces, 40 CV versions; INDEX/LOOKUP USED=Catalog slug/ID and user_id exact scoped lookups; CONCURRENCY=4 independent user-scoped reads; CAN_CAUSE_FULL_INVENTORY_SCAN=NO; CAN_REPROCESS_UNCHANGED_ROWS=NO (content/evidence fingerprints idempotency); FAILURE/BACKPRESSURE=canonical excluded row is unavailable; DB failure returns endpoint error; CLOSURE_EVIDENCE=secondary B2C contract verifier. |
+| CV Vivo | TRIGGER=authenticated CV generate/update; QUERY/INPUT SCOPE=exact canonical Matching or private vacancy snapshot + user evidence; BATCH/PAGE LIMIT=one opportunity, one latest version, bounded user evidence; INDEX/LOOKUP USED=Matching Universe exact ID and user/vacancy/version keys; CONCURRENCY=one generation per request; CAN_CAUSE_FULL_INVENTORY_SCAN=NO; CAN_REPROCESS_UNCHANGED_ROWS=NO (latest content/evidence fingerprint cache); FAILURE/BACKPRESSURE=invalid/excluded vacancy or AI/service failure returns explicit error; CLOSURE_EVIDENCE=CV Vivo custom vacancy/secondary contract. |
+| Gemini Courses/Learning | TRIGGER=authenticated recommendation request; QUERY/INPUT SCOPE=profile plus at most 20 exact canonical Matching opportunity IDs; BATCH/PAGE LIMIT=20 opportunity IDs, 6 requested skills, 30 existing recommendations; INDEX/LOOKUP USED=Matching Universe exact IDs, user_id/profile_signature; CONCURRENCY=bounded per request and rate limit 8 plans/day; CAN_CAUSE_FULL_INVENTORY_SCAN=NO; CAN_REPROCESS_UNCHANGED_ROWS=NO (profile signature idempotence); FAILURE/BACKPRESSURE=uncorroborated gaps omitted, rate limit returns 429; CLOSURE_EVIDENCE=secondary B2C contract verifier. |
+| Dashboard | TRIGGER=authenticated candidate dashboard request; QUERY/INPUT SCOPE=Matching Retrieval candidates for one profile; BATCH/PAGE LIMIT=canonical match response top 300, Free presentation top 3; INDEX/LOOKUP USED=Retrieval candidate user/profile signature indexes; CONCURRENCY=one request; CAN_CAUSE_FULL_INVENTORY_SCAN=NO; CAN_REPROCESS_UNCHANGED_ROWS=NO (persisted signature/state); FAILURE/BACKPRESSURE=honest zero/loading/empty/error states; CLOSURE_EVIDENCE=matching B2C consumers and protected Dashboard suite. |
+| Admin Source Intelligence | TRIGGER=global Admin refresh; QUERY/INPUT SCOPE=registry, run/event samples and existing aggregate RPCs; BATCH/PAGE LIMIT=1,000 global rows per sample category, 1,000 total per-source fallback rows, 8 fallback readers; INDEX/LOOKUP USED=RPC aggregates, ID-ordered opportunity sample, recent-run order; event-order index plan pending read-only metrics; CONCURRENCY=8 fallback workers plus bounded parallel aggregate reads; CAN_CAUSE_FULL_INVENTORY_SCAN=NO in application memory (aggregate RPCs may touch full DB server-side); CAN_REPROCESS_UNCHANGED_ROWS=NO (read-only projection); FAILURE/BACKPRESSURE=failed aggregate marked unavailable; payload target <1MB/hard fail >=2MB; CLOSURE_EVIDENCE=Admin payload/wiring verifier and row-snapshot fixture. |
+| Admin row inspector | TRIGGER=operator requests exact opportunity ID; QUERY/INPUT SCOPE=single row and related stage evidence; BATCH/PAGE LIMIT=one row plus bounded related histories; INDEX/LOOKUP USED=opportunity primary key, pipeline and Universe opportunity_id keys; CONCURRENCY=one exact-row request; CAN_CAUSE_FULL_INVENTORY_SCAN=NO; CAN_REPROCESS_UNCHANGED_ROWS=NO (read only); FAILURE/BACKPRESSURE=missing authority/stage reports explicit unavailable/reason; CLOSURE_EVIDENCE=Admin row inspector verifier. |
+
+### C21 — Gobernanza del release y créditos de Netlify
+- STATUS: ACTIVE_RELEASE_GOVERNANCE
+- MASTER_ITEMS: 49-53
+- FUNCTION: Evitar gastar créditos de Netlify y evitar usar producción como entorno de debug.
+- PRODUCTION_BRANCH: feature/aws-migration
+- HARD RULE: push a feature/aws-migration = production deployment
+- CONTRACT: El release requiere diagnóstico read-only, gates finales y autorización explícita del usuario. Desarrollo y tests primero localmente; un release coherente, no una cadena de deploy/fix/deploy.
+- CURRENT OPERATING RULE: no debug deploys; no push sin autorización explícita del usuario; desarrollo y tests primero localmente; PROD sólo después del diagnóstico read-only, gates finales y autorización; preferir Deploy Preview/branch environment si más adelante se necesita validación remota sin production deploy; un release coherente, no una cadena de deploy/fix/deploy.
+- TOOLS/FILES: docs/GRAND_CHECKPOINT.md; artifacts/release/final-release-preflight-readonly.sql; artifacts/release/rc-preflight-inventory.json; final-cable-apply-plan.md; verify_release_automatic_gates.ts; verify_release_preflight_readonly.mjs; gates de release y smoke/canary existentes; branch feature/aws-migration.
+- DEPENDS_ON: C09 aplicación/canary; C20 presupuesto/cobertura; C15 gates; autorización explícita; rollback conocido.
+- CURRENT_EVIDENCE: Preflight local 2026-10-05: se detectaron siete jobs con cron sin gate, workflow_run de embeddings y sender Netlify programado sin gate. Excepcion minima autorizada: sus entradas automaticas ahora requieren CVITAE_PROD_RELEASE_VALIDATED exactamente true; dispatch manual existente se conserva. Los dos owners nuevos siguen manual-only con confirmacion y gate. Test offline demuestra gate ausente/false bloquea antes de DB/email. Flags reales remotos NO consultados: deben confirmarse false antes del canary. SQL metadata-only validado en PostgreSQL local. Segundo preflight real de PROD comunicado por el usuario: blockers=[]; opportunity_pipeline_status=PASS; las cinco migrations compatibles con la estructura real conocida. El agente no ejecuto SQL remoto ni aplico migrations. Migrations con indices sincronicos requieren presupuesto IO, backups y autorizacion. C09 y C20 conservan evidencia y estados, sin reapertura. Sin PROD write, migration apply, commit, push ni deploy; PD-005 sigue BACKLOG.
+- CLOSURE_TEST: Release final autorizado + smoke PASS + canary PASS + rollback conocido.
+- CLOSURE: release final autorizado + smoke PASS + canary PASS + rollback conocido.
+- PROD_PREFLIGHT_REPORTED_2026_10_05: El usuario suministra exactamente un blocker real: public.opportunity_pipeline_status = BLOCKER_VIEW_PREFIX_OR_TYPE. PROD ordinal 17 ingestion_reason text y 18 provenance_certainty text fueron desplazados por campos nuevos en 202610030001. pg_trgm = NOT_INSTALLED_PLANNED_IN_EXTENSIONS / compatible=true: no es blocker; 202610040002 lo crea en extensions. Indices nuevos siguen requiriendo IO durante apply; estrategia intacta, ninguno ejecutado por esta pasada.
+- PROD_PREFLIGHT_SECOND_REPORTED_2026_10_05: Confirmado por el usuario: blockers=[]; public.opportunity_pipeline_status=PASS; las cinco migrations compatibles con la estructura real conocida de PROD. Evidencia reportada, no una nueva consulta del agente ni autorizacion para apply/deploy.
+- PREFLIGHT_BLOCKER_STATUS: PROD_READONLY_PREFLIGHT_PASS / APPLY_PENDING
+- PREFLIGHT_BLOCKER_EVIDENCE: PostgreSQL local reproduce el error de la proyeccion anterior y acepta la corrective con 72 columnas legacy intactas y tres nuevas al final. Fixture congelado del contrato pre-v2 de HEAD de este mismo worktree, coincidente con los ordinals reportados; no se inventa un export completo de metadata PROD. Preflight regenerado con nuevo SHA/orden esperado: vista legacy pasa BLOCKER_VIEW_PREFIX_OR_TYPE -> PASS local y fixture metadata positivo no tiene blockers. El agente no ejecuto SQL contra PROD. El segundo preflight real reportado por el usuario ya confirma PASS; no repetir el diagnostico durante el freeze. Aplicacion, smoke/canary y autorizacion siguen pendientes.
+- NEXT: El diagnóstico real ya fue suministrado. C20 local PASS; gates finales y autorización antes de cualquier release. No repetir consultas ni gastar créditos en debug.
+
+### ACTIVE LEFT
+
+Referencias a los contratos anteriores: C09 (aplicación PROD pendiente), C16, C17, C18, C20 (validacion PROD pendiente), C21. Los contratos CLOSED_LOCAL conservan sus pendientes PROD en su propio STATUS; no hay una lista operativa paralela.
+
+### Mapa de cierre end-to-end (mismas autoridades; sin arquitectura paralela)
+| Superficie | INPUT | AUTHORITY/GATE | OUTPUT | CONSUMER | FAILURE STATE | CLOSURE TEST |
+|---|---|---|---|---|---|---|
+| Scrapers | HTTP/API y run | fuente autorizada, run identity | AdapterResult factual | Sink | error tecnico/outcome/UNKNOWN | create-update-noop y fallo tecnico propagado |
+| Adapters/cleaners | payload crudo | adapter/cleaner ejecutado + normalizacion | Opportunity normalizada y provenance | Sink/Factory | INVALID/NOT_REPORTED | factual mapping y provenance tests |
+| OpportunitySink | AdapterResult | identidad canonica y persistencia | row + receipt exacta | lineage/Observation | persistence failed | sink continuity y exact IDs |
+| Ingestion lineage | receipt del sink | OUTCOME x TRACE | producer/run/source/identity | ledger/Admin | INCOMPLETE explicado | contrato C02/C03 |
+| Observation | evidencia factual | source identity/status/URL/persisted ID | observacion factual o MISSING | trigger/Universe | MISSING/WRITE_FAILED | writer fixture y refresh boundary |
+| Factory | oportunidades sellables | Factory snapshot/seal | clasificacion y queue | Automation/Universe | REVIEW/BLOCKED/PENDING/FAILED | Factory fixture y future canary |
+| Automation | IDs elegibles | Automation Core + permiso/certificacion | promocion/verificacion permitida | Universe | UNKNOWN/skipped/failure | bounded resumable canary; no bulk verify |
+| Lifecycle | row + fechas/evidencia | lifecycle authority | active/stale/dead/expired | Universe/consumers | UNKNOWN/STALE/terminal | historical + future lifecycle tests |
+| Universe | row, lifecycle, policy, switches | canonical reducer | estados por consumer y razones | Catalog/Matching/Alerts/SEO/Admin | NOT_READY/UNKNOWN/conflict | reducer + SQL/artifact parity |
+| Catalog | búsqueda/filtros/cursor o slug exacto | canonical Catalog y policy efectiva; predicados antes de LIMIT | 100 resultados + cursor, detalle exacto | listas/detalles públicos, Workspace | 400 invalid page; 503 policy/DB unavailable; excluded | handler SQL encuentra resultado posterior a 1.200; todas las páginas sin pérdida |
+| Matching | Universe rows + perfil | matching-ready route + Matching core | candidates/rank | Dashboard/Gemini/CV Vivo | zero candidates/pending validation | real profile after matching_ready>0 |
+| Alerts | canonical Alert rows, exact-user Retrieval page y perfil consentido por cursor | policy RPC actual, fingerprints/signatures, high-match decision, delivery claim + profile lease | alertas deduplicadas, pending effects y continuation durable | email/candidato | canonical exclusion; retry/lease/backpressure explicitos | handler real 4+ paginas + SQL selector 251 perfiles + preferencias/threshold/dedup PASS local; PROD pendiente |
+| SEO | Universe rows | first-party SEO effective state | public WebPage URL | inventory/sitemap/index queue | NOT_READY/denied/expired | same row parity through build and queue |
+| JobPosting | public job row | separate structured-data gate | JSON-LD JobPosting or none | search engines | NOT_READY | Himalayas and deny/eligibility tests |
+| Application Workspace | selected opportunity | canonical Catalog universe | workspace/application context | candidate | missing/excluded | secondary consumer contract |
+| CV Vivo | profile + selected/private vacancy | canonical Matching; private snapshot | generated CV | candidate | validation/generation error | custom vacancy without global insert |
+| Gemini Courses/Learning Plan | profile gaps + opportunities | exact canonical Matching opportunities | corroborated learning gaps | candidate | uncorroborated gaps omitted | secondary consumer fixture |
+| Dashboard | profile + matches | shared Dashboard matching state | match list/top-3 presentation | candidate | honest zero-match/loading/error | protected Dashboard suite |
+| Opportunity Detail | canonical row | shared detail/presentation contract | attributed page + source link | candidate/search | 404/recovery/unavailable | field and route parity tests |
+| shared CTA | opportunity + return intent | shared OpportunityApplicationCta | source application navigation | candidate/analytics | unavailable URL with honest state | CTA + return intent tests |
+| mobile states | page and viewport | shared responsive components | usable mobile states | candidate | overflow/loading/empty/error | protected mobile suite |
+| analytics | CTA/action events | existing event contract | conversion telemetry | product analytics | missing/duplicate event | protected analytics suite |
+| Admin Source Intelligence | source aggregates | Registry + pipeline + Universe projections | source summary/reason/next action | operator | bounded payload/error | payload budget and endpoint test |
+| Admin row inspector | exact row | existing row authorities | on-demand evidence and route detail | operator | missing stage/reason visible | row inspector verifier |
+| GitHub Actions | manual dispatch inputs | release-validation variable + explicit confirmation | bounded job execution | maintenance/automation | default denied/no schedule | YAML contract; do not run this pass |
+| release verifier | local gates + supplied/deployed evidence | structural vs product release criteria | independent statuses | release operator | STRUCTURAL_FAIL or PRODUCT_PENDING | aggregator tests and honest zero-count handling |
+| build/sitemap/prerender | canonical SEO inventory | effective SEO + separate JobPosting gate | assets and prerendered pages | public site/search | blocked row omitted; build fails | build/parity/sitemap/JobPosting tests |
+
 MASTER PLAN: 67 ITEMS
 
 ## CURRENT

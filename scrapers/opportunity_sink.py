@@ -12,6 +12,7 @@ from functools import lru_cache
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
+from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -119,6 +120,9 @@ class IngestionSummary:
     lineage_attempted: int = 0
     lineage_written: int = 0
     lineage_failed: int = 0
+    lineage_traced: int = 0
+    lineage_incomplete: int = 0
+    source_identity_failed: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -127,8 +131,13 @@ class IngestionSummary:
         payload["processed_attempted"] = self.inserted + self.updated + self.unchanged + self.rejected + self.failed
         payload["processed"] = payload["processed_attempted"]
         payload["unprocessed_due_to_budget"] = self.budget_skipped
-        payload["pipeline_traced"] = self.lineage_written
+        payload["pipeline_traced"] = self.lineage_traced
+        payload["lineage_events_written"] = self.lineage_written
         payload["persisted_without_lineage"] = self.lineage_failed
+        payload["trace_traced"] = self.lineage_traced
+        payload["trace_incomplete"] = self.lineage_incomplete
+        payload["source_identity_failed"] = self.source_identity_failed
+        payload["technical_failure"] = bool(self.failed or self.lineage_failed or self.source_identity_failed or self.lineage_traced < self.inserted + self.updated + self.unchanged)
         return payload
 
 
@@ -317,14 +326,21 @@ class OpportunitySink:
             # Newly upserted IDs are resolved from persisted rows below.
             emitted = item.get("source") or (prior or {}).get("source")
             canonical, identity_reason = self._canonical_source(emitted)
-            reason = identity_reason
+            identity_seed = url or item.get("source_url") or item.get("canonical_url")
+            parsed_identity = urlparse(str(identity_seed or ""))
+            factual_identity = parsed_identity.scheme in {"http", "https"} and bool(parsed_identity.netloc)
+            trace_reasons = []
+            if identity_reason:
+                trace_reasons.append(identity_reason)
             if not producer_id:
-                reason = reason or "SCRAPER_IDENTITY_NOT_SUPPLIED"
+                trace_reasons.append("SCRAPER_IDENTITY_NOT_SUPPLIED")
             if not run_id:
-                reason = reason or "SCRAPER_RUN_ID_NOT_SUPPLIED"
-            if outcome in {"REJECTED", "BUDGET_SKIPPED", "PERSISTENCE_FAILED"}:
-                reason = item.get("reason") or outcome
-            identity_hash = hashlib.sha256(str(url or json.dumps(item, sort_keys=True, default=str)).encode("utf-8")).hexdigest()
+                trace_reasons.append("SCRAPER_RUN_ID_NOT_SUPPLIED")
+            if not factual_identity:
+                trace_reasons.append("FACTUAL_SOURCE_IDENTITY_NOT_SUPPLIED")
+            if outcome in {"INSERTED", "UPDATED", "UNCHANGED", "DUPLICATE_IN_RUN"} and not opportunity_id:
+                trace_reasons.append("PERSISTED_OPPORTUNITY_ID_UNRESOLVED")
+            identity_hash = hashlib.sha256(str(identity_seed or json.dumps(item, sort_keys=True, default=str)).encode("utf-8")).hexdigest()
             # A random event key is intentional when there is no durable run
             # id; it does not fabricate one or claim idempotence across runs.
             event_key_seed = "|".join((str(opportunity_id or identity_hash), str(run_id or uuid.uuid4()), str(producer_id or "UNKNOWN"), outcome, str(item.get("content_fingerprint") or "")))
@@ -334,16 +350,19 @@ class OpportunitySink:
                 "emitted_source": _text(emitted, 120) or None,
                 "canonical_source": canonical,
                 "producer_id": producer_id,
-                "adapter_id": _text(os.getenv("CVITAE_ADAPTER_VERSION"), 120) or None,
-                "cleaner_id": _text(os.getenv("CVITAE_CLEANER_ID"), 120) or None,
+                "adapter_id": _text(getattr(self, "_executed_adapter_version", None) or os.getenv("CVITAE_ADAPTER_VERSION"), 120) or None,
+                "cleaner_id": _text(getattr(self, "_executed_cleaner_id", None) or os.getenv("CVITAE_CLEANER_ID"), 120) or None,
                 "normalizer_version": "opportunity-sink:v1",
                 "normalized_fields": sorted(item.keys()),
                 "run_id": run_id,
                 "scraper_run_id": scraper_run_id,
                 "scan_request_id": scan_request_id,
                 "outcome": outcome,
-                "trace_state": "TRACED" if not reason else "INCOMPLETE",
-                "reason": reason,
+                "trace_state": "TRACED" if not trace_reasons else "INCOMPLETE",
+                "trace_reason": ";".join(trace_reasons) or None,
+                "trace_contract_version": "v2",
+                "identity_factual": factual_identity,
+                "reason": item.get("reason") or identity_reason,
                 "identity_sha256": identity_hash,
                 "content_fingerprint": item.get("content_fingerprint"),
                 "semantic_fingerprint": item.get("semantic_fingerprint"),
@@ -364,7 +383,12 @@ class OpportunitySink:
                         event["opportunity_id"] = row.get("id")
                     if not event["opportunity_id"]:
                         event["trace_state"] = "INCOMPLETE"
-                        event["reason"] = "PERSISTED_OPPORTUNITY_ID_UNRESOLVED"
+                        event["trace_reason"] = ";".join(filter(None, [event.get("trace_reason"), "PERSISTED_OPPORTUNITY_ID_UNRESOLVED"]))
+                    else:
+                        trace_reasons = [reason for reason in str(event.get("trace_reason") or "").split(";") if reason and reason != "PERSISTED_OPPORTUNITY_ID_UNRESOLVED"]
+                        event["trace_reason"] = ";".join(trace_reasons) or None
+                        if not trace_reasons and event.get("canonical_source") and event.get("producer_id") and event.get("run_id") and event.get("identity_factual"):
+                            event["trace_state"] = "TRACED"
             except requests.RequestException:
                 pass
         self._lineage_pending_events = events
@@ -383,6 +407,13 @@ class OpportunitySink:
         if response.status_code not in (200, 201, 204):
             raise requests.HTTPError(f"ingestion_lineage_http_{response.status_code}")
         return len(events), 0
+
+    def _summarize_lineage(self, summary: IngestionSummary) -> None:
+        events = getattr(self, "_lineage_pending_events", [])
+        summary.lineage_attempted = len(events)
+        summary.lineage_traced = sum(event.get("trace_state") == "TRACED" for event in events)
+        summary.lineage_incomplete = summary.lineage_attempted - summary.lineage_traced
+        summary.source_identity_failed = sum("SOURCE_IDENTITY_" in str(event.get("trace_reason") or "") for event in events)
 
     def insert_new_fail_closed(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Insert precisely one new opportunity without any conflict resolution.
@@ -419,7 +450,11 @@ class OpportunitySink:
             raise RuntimeError("insert_succeeded_but_lineage_persistence_failed") from exc
         return persisted
 
-    def upsert(self, raw_items: Iterable[dict[str, Any]], batch_size: int = 100) -> IngestionSummary:
+    def upsert(self, raw_items: Iterable[dict[str, Any]], batch_size: int = 100, *, adapter_version: str | None = None, cleaner_id: str | None = None) -> IngestionSummary:
+        # Callers with an AdapterResult pass the code version that actually ran.
+        # Registry versions remain expected metadata and are never copied here.
+        self._executed_adapter_version = _text(adapter_version, 120) or None
+        self._executed_cleaner_id = _text(cleaner_id, 120) or None
         raw_list = list(raw_items)
         summary = IngestionSummary(found=len(raw_list))
         rejected_lineage: list[tuple[dict[str, Any], str]] = []
@@ -459,7 +494,7 @@ class OpportunitySink:
             self._write_audit(summary, items)
             if not self.audit_mode and rejected_lineage:
                 self._persist_ingestion_lineage([], [*rejected_lineage, *duplicate_lineage], {})
-                summary.lineage_attempted = len(self._lineage_pending_events)
+                self._summarize_lineage(summary)
                 try:
                     summary.lineage_written, _ = self._flush_ingestion_lineage()
                 except requests.RequestException as exc:
@@ -478,7 +513,7 @@ class OpportunitySink:
             summary.failed += len(items)
             rejected_lineage.extend(({**item, "reason": "PRE_PERSISTENCE_LOOKUP_FAILED"}, "PERSISTENCE_FAILED") for item in items)
             self._persist_ingestion_lineage([], [*rejected_lineage, *duplicate_lineage], {})
-            summary.lineage_attempted = len(self._lineage_pending_events)
+            self._summarize_lineage(summary)
             try:
                 summary.lineage_written, _ = self._flush_ingestion_lineage()
             except requests.RequestException as lineage_exc:
@@ -540,7 +575,7 @@ class OpportunitySink:
                 summary.errors.append(f"Error de red al insertar lote: {type(exc).__name__}")
                 rejected_lineage.extend(({**item, "reason": f"OPPORTUNITY_UPSERT_{type(exc).__name__}"}, "PERSISTENCE_FAILED") for item in batch)
         self._persist_ingestion_lineage(lineage_items, [*rejected_lineage, *duplicate_lineage], existing)
-        summary.lineage_attempted = len(self._lineage_pending_events)
+        self._summarize_lineage(summary)
         try:
             summary.lineage_written, _ = self._flush_ingestion_lineage()
         except requests.RequestException as exc:

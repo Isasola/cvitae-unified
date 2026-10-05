@@ -177,7 +177,7 @@ Deno.serve(async (req)=>{
     const candidate = canonicalCandidateProfile(profile);
     const profileSignature = matchingProfileSignature(profile);
     const [{ data: allSourcePolicies, error: allSourcePoliciesError }, { data: sourcePermissions, error: sourcePermissionError }] = await Promise.all([
-      supabase.from('opportunity_sources').select('source,is_enabled,matching_enabled'),
+      supabase.rpc('get_source_distribution_policy'),
       supabase.from('opportunity_source_consumer_permissions').select('canonical_source,consumer,permission_state').eq('consumer', 'matching'),
     ]);
     if (allSourcePoliciesError) throw allSourcePoliciesError;

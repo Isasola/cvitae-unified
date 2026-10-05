@@ -9,7 +9,7 @@ const view = read('src/components/admin/SourceOperationsView.tsx')
 const migration = read('supabase/migrations/202609210001_inventory_reconciliation_jobs.sql')
 
 for (const token of ['preview_inventory_reconciliation', 'apply_inventory_reconciliation', 'resume_inventory_reconciliation', 'retry_maintenance_telemetry', 'inventory_reconciliation_jobs', 'confirm=true requerido', 'source_totals', 'accounted_total', 'explained_rows', 'unexplained_rows', 'unknown_sources']) assert.ok(admin.includes(token), token)
-for (const token of ['PREVIEW INVENTARIO', 'APLICAR RECONCILIACIÓN', 'REANUDAR', 'REINTENTAR TELEMETRÍA', 'QUEUED', 'RUNNING']) assert.ok(view.includes(token), token)
+for (const token of ['ANALIZAR ESTADO', 'APLICAR RECONCILIACIÓN', 'REANUDAR', 'REINTENTAR TELEMETRÍA', 'QUEUED', 'RUNNING']) assert.ok(view.includes(token), token)
 for (const token of ['cursor_offset', 'PARTIAL', 'reason_counts', 'reconciliation_id']) assert.ok(migration.includes(token), token)
 assert.ok(admin.includes('examined: 0') && admin.includes('reason_counts: {}'), 'preview must not populate APPLY counters')
 assert.ok(admin.includes('metadata: { preview: summary'), 'preview summary must be retained separately')
@@ -23,7 +23,7 @@ for (const action of ['preview_inventory_reconciliation', 'apply_inventory_recon
   assert.doesNotMatch(scope, /opportunity_sources[\s\S]{0,250}limit\(500\)/, `${action} has no 500-row source-policy ceiling`)
 }
 assert.ok(!admin.includes('select(RECONCILIATION_POLICY_FIELDS).limit(500)'), 'reconciliation cannot reintroduce a fixed source-policy ceiling')
-assert.ok(admin.includes('supabase.rpc("get_source_distribution_policy"),\n    // P0.1'), 'source operation snapshot uses the shared complete policy boundary')
+assert.match(admin, /supabase\.rpc\("get_source_distribution_policy"\)/, 'source operation snapshot uses the shared complete policy boundary')
 
 const policy = [{ source: 'computrabajo', is_enabled: true, catalog_enabled: true, matching_enabled: true, alerts_enabled: true, seo_enabled: true, web_catalog_allowed: true, search_engine_indexing_allowed: true }]
 const base = { source: 'computrabajo', is_active: true, verification_status: 'verified', catalog_eligible: false, match_eligible: false, alerts_eligible: null, seo_eligible: false, seo_status: 'review', opportunity_type: 'job', title: 'Data Analyst', organization: 'Fixture', slug: 'data-analyst', description: 'Data analysis, SQL, dashboards, modelling and reporting for business decisions. '.repeat(3), tags: ['sql', 'analysis'] }

@@ -2,6 +2,7 @@ export const TEMP_LEGACY_SEO_EXCEPTION_UNTIL_2026_10_09 = Object.freeze({
   name: 'TEMP_LEGACY_SEO_EXCEPTION_UNTIL_2026_10_09',
   canonicalSource: 'computrabajo',
   expiresOn: '2026-10-09',
+  legacyCutoff: '2026-10-03',
   consumer: 'seo',
   scope: 'existing-first-party-seo-only',
 })
@@ -20,7 +21,11 @@ export function temporaryLegacySeoExceptionState(canonicalSource: string, asOf =
   }
 }
 
-export function isQualifyingTemporaryLegacySeoRow(row: Record<string, unknown>): boolean {
-  return row.seo_eligible === true
+export function isQualifyingTemporaryLegacySeoRow(row: Record<string, unknown>, canonicalSource = String(row.source || '')): boolean {
+  const created = Date.parse(String(row.created_at || ''))
+  return canonicalSource === TEMP_LEGACY_SEO_EXCEPTION_UNTIL_2026_10_09.canonicalSource
+    && row.seo_eligible === true
     && row.seo_status === 'eligible'
+    && Number.isFinite(created)
+    && new Date(created).toISOString().slice(0, 10) <= TEMP_LEGACY_SEO_EXCEPTION_UNTIL_2026_10_09.legacyCutoff
 }

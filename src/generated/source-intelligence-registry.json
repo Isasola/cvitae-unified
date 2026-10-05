@@ -7,7 +7,7 @@
   "emitted_aliases": 148,
   "pending_certification": 103,
   "profiles": 105,
-  "registry_hash": "c1391fd7ede2ecb56057b4f35529c149846ce5f800f3c3d8d4173a6b5e4d59c8",
+  "registry_hash": "abae925e104b2235eaeefbbca1fa2f4bb6b2f01f1cc56e70bcd111fcd2539191",
   "schema_version": "source-intelligence-registry:v2",
   "sources": [
     {
@@ -77,7 +77,7 @@
       "contract_covered": true,
       "distribution_policy": {
         "google_jobs_distribution_allowed": false,
-        "search_engine_indexing_allowed": false,
+        "search_engine_indexing_allowed": true,
         "source_attribution_required": true,
         "third_party_job_distribution_allowed": false,
         "web_catalog_allowed": true

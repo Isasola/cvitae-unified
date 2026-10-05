@@ -55,4 +55,13 @@ assert.ok(worker.includes('nextRetrievalSchedulerCursor') && worker.includes(".g
 const accounting = readFileSync(new URL('./account_matching_retrieval_funnel.ts', import.meta.url), 'utf8')
 assert.ok(accounting.includes('CURRENT_READONLY_PROD_${observationDate}') && !accounting.includes('CURRENT_READONLY_PROD_27SEP2026'), 'accounting label uses its runtime UTC observation date')
 
-console.log('PASS retrieval user scheduler: priority, idle skip, delta proof, cyclic fairness, resume cursor, signature reset, UTC label')
+for (const workflow of ['refresh_embeddings.yml', 'matching-retrieval.yml', 'scheduled-source-automation.yml', 'opportunity-universe-maintenance.yml']) {
+  const yaml = readFileSync(new URL(`../.github/workflows/${workflow}`, import.meta.url), 'utf8')
+  assert.match(yaml, /group: cvitae-opportunity-pipeline-maintenance/, `${workflow} serializes pipeline maintenance workers`)
+}
+for (const workflow of ['scheduled-source-automation.yml', 'opportunity-universe-maintenance.yml']) {
+  const yaml = readFileSync(new URL(`../.github/workflows/${workflow}`, import.meta.url), 'utf8')
+  assert.doesNotMatch(yaml, /^\s{2}schedule:/m, `${workflow} remains manual until authorized PROD validation`)
+}
+
+console.log('PASS retrieval user scheduler: priority, idle skip, delta proof, cyclic fairness, resume cursor, signature reset, UTC label, serialized workers')

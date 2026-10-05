@@ -472,6 +472,28 @@ def test_m_coverage_stop_reason_semantics() -> None:
               "M: schedule=10000 but source only 5000 --natural reason (no budget cut)")
 
 
+def test_trace_outcome_orthogonality() -> None:
+    print("\nFixture N: terminal outcome is independent from trace completeness")
+    item = _item(source="himalayas", reason="fixture outcome")
+    with patch.dict(os.environ, {"CVITAE_SCRAPER_ID": "fixture-producer", "CVITAE_SCRAPER_RUN_ID": "fixture-run"}):
+        for outcome in ("REJECTED", "BUDGET_SKIPPED", "PERSISTENCE_FAILED"):
+            sink = _sink_with_existing({})
+            sink._persist_ingestion_lineage([], [(item, outcome)], {})
+            event = sink._lineage_pending_events[0]
+            assert_eq(event["outcome"], outcome, f"N: {outcome} remains its terminal outcome")
+            assert_eq(event["trace_state"], "TRACED", f"N: factual {outcome} may be fully traced")
+            assert_eq(event["reason"], "fixture outcome", f"N: {outcome} reason stays independent")
+            assert_eq(event["trace_reason"], None, f"N: complete trace has no trace failure reason")
+        persisted = _sink_with_existing({})
+        persisted._persist_ingestion_lineage([(item, "UNCHANGED")], [], {item["application_url"]: {"id": "exact-row"}})
+        persisted_event = persisted._lineage_pending_events[0]
+        assert_eq(persisted_event["trace_state"], "TRACED", "N: persisted outcome requires and has exact opportunity identity")
+        assert_eq(persisted_event["opportunity_id"], "exact-row", "N: exact persisted row id is retained")
+        missing = _sink_with_existing({})
+        missing._persist_ingestion_lineage([], [({**item, "application_url": "not-a-url"}, "REJECTED")], {})
+        assert_eq(missing._lineage_pending_events[0]["trace_state"], "INCOMPLETE", "N: invalid/missing factual URL is trace incompleteness")
+
+
 # ─── Runner ───────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     for fn in [
@@ -491,6 +513,7 @@ if __name__ == "__main__":
         test_k_source_alias_stable,
         test_l_source_different_canonical,
         test_m_coverage_stop_reason_semantics,
+        test_trace_outcome_orthogonality,
     ]:
         fn()
 

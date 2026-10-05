@@ -327,7 +327,7 @@ def main():
             else:
                 new_jobs.append(job)
 
-    summary = OpportunitySink().upsert(new_jobs) if new_jobs else None
+    summary = OpportunitySink().upsert(new_jobs, adapter_version=ADAPTER_VERSION) if new_jobs else None
     metrics_lineage = RunLineageWriter(SUPABASE_URL, SUPABASE_KEY).record(detail_results) if SUPABASE_KEY else build_scan_lineage(detail_results, run_id=os.getenv("CVITAE_SCRAPER_RUN_ID"), scan_request_id=os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID"))
     inserted = (summary.inserted + summary.updated) if summary else 0
     metrics = {

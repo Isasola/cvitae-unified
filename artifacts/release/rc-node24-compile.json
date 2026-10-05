@@ -1,0 +1,80 @@
+{
+  "runtime": "v24.21.0",
+  "syntax_compiled": [
+    "netlify/functions/admin-data.ts",
+    "netlify/functions/application-workspace.ts",
+    "netlify/functions/gemini-courses.ts",
+    "netlify/functions/generate-cv-vivo.ts",
+    "netlify/functions/lib/public-opportunity-pagination.ts",
+    "netlify/functions/lib/seo-pipeline-runner.ts",
+    "netlify/functions/public-opportunities.ts",
+    "netlify/functions/send-high-match-alerts.ts",
+    "netlify/functions/sitemap.ts",
+    "scripts/generate_opportunity_universe_artifacts.ts",
+    "scripts/run_matching_retrieval_expansion.ts",
+    "scripts/verify-public-opportunity-pagination.ts",
+    "scripts/verify-source-intelligence-wiring.ts",
+    "scripts/verify-source-policy-snapshot.ts",
+    "scripts/verify-source-policy.ts",
+    "scripts/verify_admin_inventory_operations.ts",
+    "scripts/verify_canonical_robots_sitemap.ts",
+    "scripts/verify_distribution_truth.ts",
+    "scripts/verify_effective_routing_item24.ts",
+    "scripts/verify_effective_routing_repair.ts",
+    "scripts/verify_effective_source_policy.ts",
+    "scripts/verify_eight_gates.ts",
+    "scripts/verify_future_ingestion_e2e.ts",
+    "scripts/verify_intrinsic_routing_parity.ts",
+    "scripts/verify_inventory_reconciliation.ts",
+    "scripts/verify_matching_retrieval_expansion.ts",
+    "scripts/verify_matching_retrieval_scheduler.ts",
+    "scripts/verify_onward_distribution_item28.ts",
+    "scripts/verify_opportunity_pipeline_contract.ts",
+    "scripts/verify_opportunity_universe.ts",
+    "scripts/verify_opportunity_universe_permission_preflight.ts",
+    "scripts/verify_public_truth_item29.ts",
+    "scripts/verify_redirect_consistency_item32.ts",
+    "scripts/verify_seo_inventory.ts",
+    "scripts/verify_source_intelligence_item53.ts",
+    "shared/matching-retrieval.ts",
+    "src/lib/effective-source-policy.ts",
+    "src/lib/opportunity-universe.ts",
+    "src/lib/public-source-policy.ts",
+    "src/lib/source-permission-truth.ts",
+    "src/lib/temporary-legacy-seo-exception.ts",
+    "src/pages/Jobs.tsx",
+    "src/pages/MarketOpportunities.tsx",
+    "src/pages/Opportunities.tsx",
+    "supabase/functions/_shared/generated-source-registry.ts",
+    "supabase/functions/match-batch/index.ts",
+    "vite.config.ts",
+    "scripts/refresh_opportunity_universe_maintenance.ts",
+    "scripts/verify_b2c_pipeline_e2e.ts",
+    "scripts/verify_b2c_secondary_contracts.ts",
+    "scripts/verify_c20_alert_pages.ts",
+    "scripts/verify_release_automatic_gates.ts"
+  ],
+  "syntax_count": 52,
+  "typechecked": [
+    "netlify/functions/send-high-match-alerts.ts",
+    "shared/matching-retrieval.ts",
+    "scripts/verify_c20_alert_pages.ts",
+    "scripts/verify_release_automatic_gates.ts"
+  ],
+  "typecheck_errors": [],
+  "unchanged_dependency_diagnostics": [
+    {
+      "file": "supabase\\functions\\_shared\\matching-v2.ts",
+      "message": "Object literal may only specify known properties, and 'score' does not exist in type 'PreliminaryDecision'."
+    },
+    {
+      "file": "supabase\\functions\\_shared\\matching.ts",
+      "message": "No overload matches this call.\n  Overload 1 of 4, '(iterable?: Iterable<readonly [unknown, unknown]>): Map<unknown, unknown>', gave the following error.\n    Argument of type '(string | string[])[][]' is not assignable to parameter of type 'Iterable<readonly [unknown, unknown]>'.\n      The types returned by '[Symbol.iterator]().next(...)' are incompatible between these types.\n        Type 'IteratorResult<(string | string[])[], any>' is not assignable to type 'IteratorResult<readonly [unknown, unknown], any>'.\n          Type 'IteratorYieldResult<(string | string[])[]>' is not assignable to type 'IteratorResult<readonly [unknown, unknown], any>'.\n            Type 'IteratorYieldResult<(string | string[])[]>' is not assignable to type 'IteratorYieldResult<readonly [unknown, unknown]>'.\n              Type '(string | string[])[]' is not assignable to type 'readonly [unknown, unknown]'.\n                Target requires 2 element(s) but source may have fewer.\n  Overload 2 of 4, '(entries?: readonly (readonly [unknown, unknown])[]): Map<unknown, unknown>', gave the following error.\n    Argument of type '(string | string[])[][]' is not assignable to parameter of type 'readonly (readonly [unknown, unknown])[]'.\n      Type '(string | string[])[]' is not assignable to type 'readonly [unknown, unknown]'.\n        Target requires 2 element(s) but source may have fewer."
+    },
+    {
+      "file": "supabase\\functions\\_shared\\matching.ts",
+      "message": "Type 'unknown' must have a '[Symbol.iterator]()' method that returns an iterator."
+    }
+  ],
+  "scope": "RC TypeScript syntax; changed Alert entry point, existing shared helper and affected tests typecheck. No full-repo typecheck PASS claim."
+}

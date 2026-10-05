@@ -5,7 +5,7 @@ import re
 import os
 import json
 from collections import Counter
-from datetime import date
+from datetime import date, datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -55,6 +55,34 @@ class AdapterResult:
     missing_expected_fields: list[str] = field(default_factory=list); extraction_method: str = "html"
     source_status: int = 0; confidence: float = 0.0; evidence: dict[str, Any] = field(default_factory=dict)
     recommendation: str = "HUMAN_REVIEW"; recommendation_reasons: list[str] = field(default_factory=list)
+
+
+def factual_observation_candidate(result: AdapterResult, opportunity_id: str, run_id: str | None, observed_at: str):
+    """Build source-neutral factual observation only from AdapterResult evidence.
+
+    OpportunitySink receipts are deliberately not accepted here: the adapter
+    must report HTTP 200, exact source identity, both source/canonical URLs,
+    and the persisted opportunity ID.
+    """
+    from source_evidence import ObservationCandidate
+    from urllib.parse import urlparse
+
+    if not opportunity_id or result.source_status != 200 or not result.source_native_id:
+        return None
+    if not result.source_url or not result.canonical_url:
+        return None
+    if any(urlparse(value).scheme not in {"http", "https"} or not urlparse(value).netloc for value in (result.source_url, result.canonical_url)):
+        return None
+    return ObservationCandidate(
+        source=result.source, opportunity_id=str(opportunity_id), adapter_version=result.adapter_version,
+        identity_status="IDENTITY_CONFIRMED", identity_method="adapter_native_id_and_canonical_url",
+        identity_reason="ADAPTER_REPORTED_HTTP_200_EXACT_SOURCE_IDENTITY", http_status=200,
+        detail_url=result.source_url, canonical_url=result.canonical_url, run_id=run_id,
+        observed_at=observed_at,
+        evidence={"evidence_kind":"FACTUAL_ADAPTER_OBSERVATION","source_native_id":clean(result.source_native_id, 240),
+            "extraction_method":clean(result.extraction_method, 120),"extracted_fields":list(result.extracted_fields)[:40],
+            "confidence":result.confidence},
+    )
 
 
 def eligibility_evidence_payload(result: AdapterResult) -> dict[str, Any]:
@@ -408,6 +436,7 @@ def _lineage_identity(result: AdapterResult) -> str | None:
 def build_scan_lineage(
     details: list[AdapterResult], *, run_id: str | None, scan_request_id: str | None,
     persisted: dict[str, str] | None = None, lineage_errors: list[str] | None = None,
+    observation_states: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Build the compact, durable manifest for one monitored scraper run.
 
@@ -415,6 +444,7 @@ def build_scan_lineage(
     row is intentionally not attributed to a historical opportunity.
     """
     persisted = persisted or {}
+    observation_states = observation_states or {}
     items: list[dict[str, Any]] = []
     issue_groups: Counter[str] = Counter(lineage_errors or [])
     for result in details:
@@ -443,6 +473,7 @@ def build_scan_lineage(
             "source_url": result.source_url,
             "detail_status": result.source_status,
             "persistence": persistence,
+            "observation": observation_states.get(identity or "", {"state": "MISSING", "reason": "FACTUAL_ADAPTER_EVIDENCE_INSUFFICIENT"}),
             "reason_code": reason,
             "recommendation": result.recommendation,
         })
@@ -482,6 +513,8 @@ class RunLineageWriter:
         persisted: dict[str, str] = {}
         events: list[dict[str, Any]] = []
         lineage_errors: list[str] = []
+        observation_states: dict[str, dict[str, str]] = {}
+        observations: list[Any] = []
         for result in details:
             identity = _lineage_identity(result)
             if not identity:
@@ -494,6 +527,12 @@ class RunLineageWriter:
             if not opportunity_id:
                 continue
             persisted[identity] = opportunity_id
+            observation = factual_observation_candidate(result, opportunity_id, run_id, datetime.now(timezone.utc).isoformat())
+            if observation is None:
+                observation_states[identity] = {"state": "MISSING", "reason": "FACTUAL_ADAPTER_EVIDENCE_INSUFFICIENT"}
+            else:
+                observations.append(observation)
+                observation_states[identity] = {"state": "PENDING", "reason": "FACTUAL_ADAPTER_EVIDENCE_READY"}
             events.append({"opportunity_id": opportunity_id, "source": result.source, "adapter_version": result.adapter_version,
                 "source_url": result.source_url, "canonical_url": result.canonical_url, "changed_fields": [],
                 "before_fields": {}, "after_fields": {}, "evidence": {"event": "scan_lineage", "run_id": run_id,
@@ -509,7 +548,28 @@ class RunLineageWriter:
                 # Ingestion already completed. Preserve the run manifest with a
                 # durable diagnostic rather than silently losing reverse lineage.
                 lineage_errors.append("LINEAGE_EVENT_WRITE_FAILED")
-        return build_scan_lineage(details, run_id=run_id, scan_request_id=scan_request_id, persisted=persisted, lineage_errors=lineage_errors)
+        if observations:
+            try:
+                from observation_writer import write as write_observations
+                write_observations(observations, base_url=self.base_url, headers=self.headers, apply=True, session=self.session)
+                written_state = {"state": "PERSISTED", "reason": "FACTUAL_OBSERVATION_WRITTEN"}
+            except (requests.RequestException, ValueError):
+                lineage_errors.append("OBSERVATION_WRITE_FAILED")
+                written_state = {"state": "WRITE_FAILED", "reason": "FACTUAL_OBSERVATION_WRITE_FAILED"}
+            for result in details:
+                identity = _lineage_identity(result)
+                if identity and persisted.get(identity) in {item.opportunity_id for item in observations}:
+                    observation_states[identity] = written_state
+        # Manifest identity is the adapter's exact application/source URL.
+        normalized_observation_states = {}
+        for result in details:
+            identity = _lineage_identity(result)
+            if identity and identity not in observation_states:
+                observation_states[identity] = {"state": "MISSING", "reason": "FACTUAL_ADAPTER_EVIDENCE_INSUFFICIENT"}
+            if identity:
+                state = observation_states.get(identity)
+                normalized_observation_states[identity] = state or {"state": "MISSING", "reason": "FACTUAL_ADAPTER_EVIDENCE_INSUFFICIENT"}
+        return build_scan_lineage(details, run_id=run_id, scan_request_id=scan_request_id, persisted=persisted, lineage_errors=lineage_errors, observation_states=normalized_observation_states)
 
     @staticmethod
     def lineage_summary(manifest: dict[str, Any]) -> dict[str, Any]:

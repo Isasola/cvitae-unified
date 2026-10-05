@@ -32,8 +32,8 @@ with tempfile.TemporaryDirectory() as temp:
     entries = {item["canonical_source"]: item for item in projection["sources"]}
     h = entries["himalayas"]
     assert h["desired"]["matching_enabled"] is True and h["desired"]["alerts_enabled"] is True
-    assert h["desired"]["search_engine_indexing_allowed"] is False and h["desired"]["google_jobs_distribution_allowed"] is False
-    assert h["decision_state"] == "KEEP_DENIED"
+    assert h["desired"]["search_engine_indexing_allowed"] is True and h["desired"]["google_jobs_distribution_allowed"] is False
+    assert h["desired"]["search_engine_indexing_allowed"] is True and h["decision_state"] == "SAFE_LOCAL_PROJECTION"
     u = entries["unjobs"]
     assert u["desired"]["matching_enabled"] is True and u["desired"]["alerts_enabled"] is True
     assert u["desired"]["search_engine_indexing_allowed"] is None
@@ -43,4 +43,4 @@ with tempfile.TemporaryDirectory() as temp:
     assert c["decision_state"] == "NEEDS_PERMISSION_EVIDENCE"
     executable = [line.strip().lower() for line in (root / "out" / "effective-routing-policy-preview.sql").read_text(encoding="utf-8").splitlines() if not line.strip().startswith("--")]
     assert not any(line.startswith("update ") for line in executable)
-    print("verify_effective_routing_policy_projection: PASS sources=34 Himalayas=keep_denied UNJobs=config_not_contract Computrabajo=external_unknown")
+    print("verify_effective_routing_policy_projection: PASS sources=34 Himalayas=seo_allowed_job_distribution_denied UNJobs=config_not_contract Computrabajo=external_unknown")

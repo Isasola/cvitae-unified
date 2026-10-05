@@ -12,7 +12,7 @@ expected_triggers(name,table_name) as (values
 ('canonical_opportunity_source_policy','baca2c21fe3ed85acadf0db8080f62c8'),
 ('opportunity_deadline_state','c3d10422a80aeb0bf9dd6feed46f4525'),
 ('opportunity_requirements_text','0e49052c34b830f062f11982d25dd27b'),
-('opportunity_universe_decision','bf5b7822c9786f76153c2be67ec8c55e'),
+('opportunity_universe_decision','6a7db7560f0fc2bc50072e105b14172e'),
 ('refresh_opportunity_universe','346a3cccfc3ad9de092df4a98a108cf7'),
 ('opportunity_universe_after_write','4f9dbbd9a6447a1e83c7f0d5bbb06e20'),
 ('admin_update_source_policy_atomic','b986efa43491503e5dfd62580c30c9c5'),

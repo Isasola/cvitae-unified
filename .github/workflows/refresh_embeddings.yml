@@ -19,12 +19,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cvitae-opportunity-factory
+  group: cvitae-opportunity-pipeline-maintenance
   cancel-in-progress: false
 
 jobs:
   seal-and-embed:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: (github.event_name == 'workflow_dispatch' || vars.CVITAE_PROD_RELEASE_VALIDATED == 'true') && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:

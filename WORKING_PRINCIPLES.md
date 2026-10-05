@@ -314,3 +314,39 @@ N. **Leave an executable checkpoint.** Every session records
 `CURRENT_DENOMINATOR`, `LAST_PROVEN_GATE`, `CURRENT_BLOCKER_CLASS`,
 `NEXT_ACTION`, `EXACT_COMMAND/ARTIFACT`, and `DO_NOT_REOPEN`, so another session
 can continue without reconstructing prior weeks of reasoning.
+
+## CABLE CONNECTION CLOSURE CONTRACT
+
+Un cable NO está conectado porque compile, tenga un consumer, exista una
+función, pase un fixture o un test local, o su lógica teórica sea correcta.
+Para declarar un cable CLOSED deben demostrarse las cuatro condiciones:
+
+- **A. EXISTING DATA:** las filas históricas que ya cumplen el contrato llegan
+  al consumidor real.
+- **B. FUTURE DATA:** una fila nueva que cumpla el contrato atraviesa
+  automáticamente el mismo circuito sin intervención manual.
+- **C. NEGATIVE PATH:** una fila que no cumple queda afuera con reason code
+  explícito; UNKNOWN nunca se convierte silenciosamente en ALLOWED.
+- **D. EFFECTIVE STATE:** el estado consumido coincide con la política y
+  configuración vigentes. `permission=ALLOWED + row=READY + stale switch=DENIED`
+  exige una razón explícita de kill-switch/manual override; un default histórico
+  no constituye una decisión del operador.
+
+`LOCAL_TESTED != WIRED`. `WIRED != RUNNING`. `RUNNING != PROD_VALIDATED`.
+Para pedidos de conectar cables, el cierre exige evidencia end-to-end de las
+cuatro condiciones, no sólo implementación. Los resultados locales se registran
+como locales; no prueban aplicación, ejecución ni validación en PROD.
+
+## BOUNDED WORK != TRUNCATED PRODUCT
+
+Los límites controlan COSTO POR EJECUCIÓN. Nunca deben reducir silenciosamente
+la COBERTURA DEL PRODUCTO. Correcto: 100 filas, cursor, siguientes 100, hasta
+cobertura total. Incorrecto: mirar las primeras 1.000 y tratar el resto como
+inexistente. Los filtros y búsquedas deben consultar el conjunto canónico
+completo mediante predicados y paginación, sin cargarlo completo por request.
+
+Esta regla aplica a public opportunities, búsquedas/filtros, Matching candidate
+retrieval, sitemap, Factory, Automation, Observation recovery, Universe
+reconciliation, embeddings y Admin. Las muestras pueden limitarse; los totales
+deben ser aggregates exactos. Los workers deben conservar cursor y cobertura
+eventual; los sitemaps paginados deben cubrir todas las URLs elegibles.

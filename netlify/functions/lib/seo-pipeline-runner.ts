@@ -128,8 +128,20 @@ export async function runSeoPipeline(
 
     console.log('[seo-pipeline] ok', opportunityId, effectiveSeoStatus, effectiveJpValidity, classification.publicationDecision)
 
+    // Classifier output is not permission to index. The persisted canonical
+    // SEO universe is the single authority for URL_UPDATED.
+    const { data: seoReadyRow, error: seoReadyError } = await supabase
+      .from('opportunity_seo_universe')
+      .select('id')
+      .eq('id', opportunityId)
+      .maybeSingle()
+    if (seoReadyError) {
+      console.error('[seo-pipeline] canonical SEO state unavailable', opportunityId, seoReadyError.message)
+      return { ok: false, dryRun: false, opportunityId, seoStatus: effectiveSeoStatus, error: 'canonical_seo_state_unavailable' }
+    }
+
     // Enqueue indexing event — fire-and-forget, never blocks pipeline
-    if (effectiveSeoStatus === 'eligible' && (raw as any).slug) {
+    if (seoReadyRow && effectiveSeoStatus === 'eligible' && (raw as any).slug) {
       const oppType = (raw as any).opportunity_type
       const urlPrefix = ['job', 'internship', 'consultancy'].includes(oppType) ? 'empleos' : 'oportunidades'
       enqueueIndexingEvent({

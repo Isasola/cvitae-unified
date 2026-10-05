@@ -13,6 +13,7 @@ import { reconcileInventoryRows, reconciliationSummary, mergeReconciliationSumma
 import { indexRowsBySource, latestRowsByKey, rowsForAliases, scopedMetric, summarizeSourceHealth } from "../../src/lib/source-intelligence-contract"
 import { matchingProfileSignature } from "../../shared/matching-profile-signature"
 import { SOURCE_PERMISSION_DIMENSIONS, sourcePermissionDimensionTruth } from "../../src/lib/source-permission-truth"
+import { pipelineWithCurrentUniverse } from "../../src/lib/opportunity-universe"
 
 const SOURCE_SCAN_SCRAPERS: Record<string, string> = {
   unjobs: "unjobs_scraper", himalayas: "himalayas_scraper", talentcom: "talentcom_scraper", weworkremotely: "weworkremotely_scraper",
@@ -41,7 +42,13 @@ function sourceIntelligenceRegistry() {
 }
 
 function sourcePermissionSnapshot(source: string) {
-  return Object.fromEntries(SOURCE_PERMISSION_DIMENSIONS.map(dimension => [dimension, sourcePermissionDimensionTruth(source, dimension)]))
+  return Object.fromEntries(SOURCE_PERMISSION_DIMENSIONS.map(dimension => {
+    const truth = sourcePermissionDimensionTruth(source, dimension)
+    return [dimension, {
+      state: truth.state, reason: truth.reason, evidence_type: truth.evidence_type,
+      reference: truth.evidence_url_or_repo_reference, verified_at: truth.verified_at,
+    }]
+  }))
 }
 
 function scraperFieldSurvival() {
@@ -61,7 +68,11 @@ function scraperFieldSurvival() {
 const RECONCILIATION_FIELDS = "id,source,slug,title,organization,description,tags,opportunity_type,opportunity_kind,is_active,verification_status,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,seo_status,deleted_at,archived_at,embedding,embedding_error"
 const RECONCILIATION_POLICY_FIELDS = "source,is_enabled,catalog_enabled,matching_enabled,alerts_enabled,seo_enabled,web_catalog_allowed,search_engine_indexing_allowed,google_jobs_distribution_allowed,third_party_job_distribution_allowed,source_attribution_required"
 const RECONCILIATION_PAGE_SIZE = 250
-const SOURCE_DIAGNOSTIC_SAMPLE_LIMIT = 2000
+// Global Source Intelligence is an aggregate surface. Row examples are only
+// bounded inputs to Eight Gates; exact evidence stays in the on-demand row
+// inspector. Keep the fallback per-source sample small and explicit.
+const SOURCE_DIAGNOSTIC_SAMPLE_LIMIT = 100
+const SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT = 1000
 
 function reconciliationAliases(scope: string): string[] | null {
   if (!scope || scope === "all") return null
@@ -103,15 +114,22 @@ export async function loadMissingOpportunitySamples(supabase: any, profiles: any
     if (globalRows.length > 0) result.set(profile.canonical_source, { rows: globalRows.slice(0, SOURCE_DIAGNOSTIC_SAMPLE_LIMIT), status: 'GLOBAL_SAMPLE' })
   }
   let cursor = 0
+  let remainingSampleBudget = SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT
   const worker = async () => {
     while (cursor < missing.length) {
       const profile = missing[cursor++]
       const aliases = profile.emitted_aliases || [profile.canonical_source]
+      const sampleLimit = Math.min(SOURCE_DIAGNOSTIC_SAMPLE_LIMIT, remainingSampleBudget)
+      remainingSampleBudget -= sampleLimit
+      if (sampleLimit <= 0) {
+        result.set(profile.canonical_source, { rows: [], status: 'UNAVAILABLE' })
+        continue
+      }
       try {
         const response = await supabase.from("opportunities")
           .select("id,title,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope")
           .in("source", aliases).is("deleted_at", null).is("archived_at", null)
-          .order("id", { ascending: true }).limit(SOURCE_DIAGNOSTIC_SAMPLE_LIMIT)
+          .order("id", { ascending: true }).limit(sampleLimit)
         const rows = response.error ? [] : (response.data || [])
         result.set(profile.canonical_source, { rows, status: response.error ? 'UNAVAILABLE' : rows.length ? 'PER_SOURCE_SAMPLE' : 'EMPTY_FULL_DB' })
       } catch {
@@ -133,13 +151,13 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
   const survivalBySource = new Map((survival.sources || []).map((item: any) => [item.canonical_source, item]))
   const stats: Record<string, any> = dashboard?.sources || {}
   const [observationsRes, policyRes, runsRes, fingerprintsRes, enrichmentRes, sourceCapRes, qualityAggRes, telemetryAuditRes] = await Promise.all([
-    supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at").order("observed_at", { ascending: false }).limit(10000),
-    supabase.from("opportunity_source_policy_events").select("opportunity_id,source,action,created_at").order("created_at", { ascending: false }).limit(10000),
+    supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at").order("observed_at", { ascending: false }).limit(SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT),
+    supabase.from("opportunity_source_policy_events").select("opportunity_id,source,action,created_at").order("created_at", { ascending: false }).limit(SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT),
     supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,duration_seconds,error_count,found_count,valid_count,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,error_summary,adapter_version,extraction_metrics").order("started_at", { ascending: false }).limit(1000),
     // Do not read embedding vectors: source-level pending counts are only
     // exposed when their lightweight inputs are available.
-    supabase.from("opportunities").select("id,title,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope").is("deleted_at", null).is("archived_at", null).limit(10000),
-    supabase.from("opportunity_enrichment_events").select("opportunity_id,source,changed_fields,created_at").order("created_at", { ascending: false }).limit(10000),
+    supabase.from("opportunities").select("id,title,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope").is("deleted_at", null).is("archived_at", null).order("id", { ascending: true }).limit(SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT),
+    supabase.from("opportunity_enrichment_events").select("opportunity_id,source,changed_fields,created_at").order("created_at", { ascending: false }).limit(SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT),
     supabase.rpc("get_source_distribution_policy"),
     // P0.1: Full-DB fingerprint pending counts via server-side aggregate.
     supabase.rpc("admin_source_quality_aggregate"),
@@ -174,6 +192,8 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
   const unresolvedEmittedSources = Object.keys(stats).filter(source => !knownAliases.has(source.toLowerCase()))
   const now = Date.now()
   const sources = (registry.sources || []).map((profile: any) => {
+    const expectedAdapterVersion = profile.adapter_version
+    const expectedCleanerVersion = profile.cleaner_version
     const aliases = profile.emitted_aliases || [profile.canonical_source]
     const aliasSet = new Set<string>(aliases.map((value: string) => value.toLowerCase()))
     // Merge durable DB capability flags into profile for Gate 8 independent surface display
@@ -223,7 +243,10 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
     }, 0)
     const latestObservation = observations[0] || null
     const latestPolicyEvent = policyLatest[0] || null
-    const latestImpact = latestRun?.extraction_metrics?.reconciliation_impact || latestRun?.extraction_metrics?.impact || null
+    const latestImpactRaw = latestRun?.extraction_metrics?.reconciliation_impact || latestRun?.extraction_metrics?.impact || null
+    const latestImpact = latestImpactRaw && typeof latestImpactRaw === 'object'
+      ? Object.fromEntries(Object.entries(latestImpactRaw).filter(([key, value]) => !/(row|description|evidence|history|sample|items)/i.test(key) && (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string' || Array.isArray(value) && value.every(item => typeof item === 'string'))).map(([key, value]) => [key, Array.isArray(value) ? value.slice(0, 20) : typeof value === 'string' ? value.slice(0, 240) : value]))
+      : null
     const exceptionReasons = [
       ...(profile.blocking_requirements || []).map((reason: string) => `certification:${reason}`),
       ...(runFailed ? ["latest_run_degraded"] : []),
@@ -233,9 +256,27 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
     const diagnosticSampleStatus = sourceSample.status === 'EMPTY_FULL_DB' && pools.inventory > 0 ? 'UNAVAILABLE' : sourceSample.status
     const diagnosticSampleUnavailable = diagnosticSampleStatus === 'UNAVAILABLE'
     const enrichmentForSource = rowsForAliases(enrichmentBySource, aliases)
+    const fieldSurvivalRaw = survivalBySource.get(profile.canonical_source) as any
+    const fieldSurvivalSummary = fieldSurvivalRaw
+      ? { classification: fieldSurvivalRaw.classification, fields: fieldSurvivalRaw.fields || {} }
+      : { classification: 'UNKNOWN_SOURCE', fields: {} }
     const eightGates = diagnosticSampleUnavailable
       ? { gates: [], overall_health: 'UNKNOWN', reason_code: 'SOURCE_SAMPLE_UNAVAILABLE', scope: 'UNAVAILABLE' }
       : evaluateEightGates({ ...profile, ...capabilityFlags }, sourceRows, latestRun, observations, enrichmentForSource)
+    const eightGateSummary = {
+      overall_health: eightGates.overall_health, reason_code: eightGates.reason_code, scope: eightGates.scope,
+      gates: (eightGates.gates || []).map((gate: any) => {
+        const metrics = gate.metrics || {}
+        const summary: Record<string, any> = Object.fromEntries(Object.entries(metrics).filter(([key, value]) =>
+          ['found', 'total', 'rejected', 'valid', 'processed', 'inserted', 'updated', 'unchanged', 'failed', 'allowed', 'restricted', 'evaluated', 'promoted', 'human_review', 'hold', 'block', 'embedding_pending', 'runtime_health', 'data_health'].includes(key)
+          && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+        ))
+        if (metrics.surfaces && typeof metrics.surfaces === 'object') {
+          summary.surfaces = Object.fromEntries(Object.entries(metrics.surfaces).map(([key, value]: [string, any]) => [key, { state: value?.state, reason: value?.reason }]))
+        }
+        return { gate: gate.gate, status: gate.status, reason_code: gate.reason_code, metrics: summary }
+      }),
+    }
     const gateStatuses = eightGates.gates.map((gate: any) => gate.status)
     const gateEvidenceUnknown = gateStatuses.includes('NOT_EVALUATED')
     const gateDegraded = gateStatuses.includes('WARNING')
@@ -246,8 +287,31 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       : operationalHealth === "DEGRADED" || gateFailed ? "RED"
       : diagnosticSampleUnavailable || !profile.contract_covered || !profile.certified || operationalHealth === "UNKNOWN" || gateEvidenceUnknown || gateDegraded ? "YELLOW"
       : "GREEN"
-    const history = runsForSource.slice(0, 12)
-    const previousRun = history[1]
+    const rawHistory = runsForSource.slice(0, 12)
+    const history = rawHistory.map((run: any) => {
+      const metrics = run.extraction_metrics || {}
+      const lineage = metrics.scan_lineage || {}
+      const automation = metrics.automation_bridge || {}
+      return {
+        id: run.id, run_id: run.run_id, scraper_id: run.scraper_id, status: run.status,
+        started_at: run.started_at, finished_at: run.finished_at, duration_seconds: run.duration_seconds,
+        error_count: run.error_count, found_count: run.found_count, valid_count: run.valid_count,
+        inserted_count: run.inserted_count, updated_count: run.updated_count, unchanged_count: run.unchanged_count,
+        duplicate_count: run.duplicate_count, rejected_count: run.rejected_count,
+        error_summary: String(run.error_summary || '').slice(0, 300), adapter_version: run.adapter_version,
+        extraction_metrics: {
+          health: metrics.health ? { status: metrics.health.status, reasons: Array.isArray(metrics.health.reasons) ? metrics.health.reasons.slice(0, 12) : [] } : undefined,
+          coverage_state: metrics.coverage_state ? { complete: metrics.coverage_state.complete, stop_reason: metrics.coverage_state.stop_reason } : undefined,
+          row_quality: metrics.row_quality ? Object.fromEntries(Object.entries(metrics.row_quality).filter(([key, value]) => ['found', 'valid', 'processed', 'rejected'].includes(key) && typeof value === 'number')) : undefined,
+          scan_lineage: Object.keys(lineage).length ? {
+            counts: lineage.counts || {}, issue_groups: lineage.issue_groups || {},
+            lineage_evidence: lineage.lineage_evidence ? { status: lineage.lineage_evidence.status, reason_codes: (lineage.lineage_evidence.reason_codes || []).slice(0, 20) } : undefined,
+          } : undefined,
+          automation_bridge: Object.keys(automation).length ? Object.fromEntries(Object.entries(automation).filter(([key, value]) => ['status', 'evaluated', 'auto_promote', 'human_review', 'hold', 'block', 'promoted', 'promotion_failed', 'not_eligible', 'embedding_pending', 'runtime_seconds'].includes(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))) : undefined,
+        },
+      }
+    })
+    const previousRun = rawHistory[1]
     const latestMetrics = latestRun?.extraction_metrics || {}
     const previousMetrics = previousRun?.extraction_metrics || {}
     const driftFields = ["found", "parsed"]
@@ -258,18 +322,28 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       if (before > 0 && after < before * 0.5) driftSignals.push(`${field}_coverage`)
     }
     return {
-      ...profile, ...capabilityFlags, pools,
+      canonical_source: profile.canonical_source, source: profile.source,
+      emitted_aliases: aliases, display_name: profile.display_name,
+      source_family: profile.source_family, implementation_state: profile.implementation_state,
+      contract_covered: profile.contract_covered, active: profile.active,
+      certified: profile.certified, auto_enabled: profile.auto_enabled,
+      blocking_requirements: profile.blocking_requirements || [], operational_runner_ids: profile.operational_runner_ids || [],
+      freshness_ttl_hours: profile.freshness_ttl_hours,
+      expected_adapter_version: expectedAdapterVersion || 'NOT_REPORTED',
+      expected_cleaner_version: expectedCleanerVersion || 'NOT_REPORTED',
+      ...capabilityFlags, pools,
       source_permission_truth: sourcePermissionSnapshot(profile.canonical_source),
-      field_survival: survivalBySource.get(profile.canonical_source) || {
-        canonical_source: profile.canonical_source, classification: "UNKNOWN_SOURCE", fields: {}, persistence_transforms: {},
-      },
+      field_survival: fieldSurvivalSummary,
       effective_inventory: {
         catalog_flagged: pools.catalog,
         matching_flagged: pools.matching,
         seo_flagged: pools.seo,
         catalog_effective: Boolean(srcCap?.is_enabled && srcCap?.catalog_enabled && sourcePermissionDimensionTruth(profile.canonical_source, 'catalog').state === 'ALLOWED') ? pools.catalog : 0,
         matching_effective: Boolean(srcCap?.is_enabled && srcCap?.matching_enabled && sourcePermissionDimensionTruth(profile.canonical_source, 'matching').state === 'ALLOWED') ? pools.matching : 0,
-        seo_effective: Boolean(srcCap?.is_enabled && srcCap?.seo_enabled && sourcePermissionDimensionTruth(profile.canonical_source, 'seo_index').state === 'ALLOWED') ? pools.seo : 0,
+        // First-party SEO has no legacy positive allowlist. A global off,
+        // explicit consumer off, or explicit source deny blocks; UNKNOWN
+        // permission remains visible but is not converted to a veto.
+        seo_effective: Boolean(srcCap?.is_enabled && srcCap?.seo_enabled !== false && sourcePermissionDimensionTruth(profile.canonical_source, 'seo_index').state !== 'DENIED') ? pools.seo : 0,
       },
       operational_health: operationalHealth,
       source_status: sourceStatus,
@@ -294,16 +368,16 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       quality: { thin_description: pools.thin_description, missing_country: pools.missing_country },
       // P0.1: fingerprint_pending now comes from full-DB RPC (not client-side sample).
       semantic: { fingerprint_pending: qualityAggRes.error ? null : fingerprintPending, embedding_pending: null },
-      execution: { last_run: latestRun?.started_at || null, last_success: ["success", "healthy"].includes(String(latestRun?.status || "")) ? latestRun.finished_at || latestRun.started_at : null, last_failure: runFailed ? latestRun?.started_at || null : null, adapter_version: latestRun?.adapter_version || profile.adapter_version, circuit_breaker: latestRun?.extraction_metrics?.circuit_breaker || null, telemetry_status: latestTelemetry?.action === "maintenance_telemetry" && latestTelemetry?.result_status === "error" ? "FAILED" : null },
+      execution: { last_run: latestRun?.started_at || null, last_success: ["success", "healthy"].includes(String(latestRun?.status || "")) ? latestRun.finished_at || latestRun.started_at : null, last_failure: runFailed ? latestRun?.started_at || null : null, adapter_version: latestRun?.adapter_version || null, adapter_version_state: latestRun?.adapter_version ? 'EXECUTED' : 'NOT_REPORTED', cleaner_version: null, cleaner_version_state: 'NOT_REPORTED', circuit_breaker: latestRun?.extraction_metrics?.circuit_breaker || null, telemetry_status: latestTelemetry?.action === "maintenance_telemetry" && latestTelemetry?.result_status === "error" ? "FAILED" : null },
       history,
       drift: previousRun ? { status: driftSignals.length ? "POSSIBLE_SOURCE_DRIFT" : "NO_SIGNIFICANT_DRIFT", compared_run_id: previousRun.run_id, signals: driftSignals } : null,
-      recent_rows: sourceRows.slice(0, 20),
+      row_evidence: "ON_DEMAND_INSPECTOR",
       exceptions: exceptionReasons,
       latest_impact: latestImpact,
       maintenance_action: "DRY_RUN_ONLY", apply_enabled: false,
       // P0.6: Explicit scope markers so consumers know where each data section comes from.
-      _inventory_scope: { pools: "full_db_rpc", inventory_sampled: sourceRows.length, recent_rows: "client_sample", eight_gates_quality: "client_sample", inventory: "FULL_DB", sample: "SAMPLED", diagnostic_sample: diagnosticSampleStatus, observation_sample: observationSampleStatus },
-      eight_gates: eightGates,
+      _inventory_scope: { pools: "full_db_rpc", inventory_sampled: sourceRows.length, row_evidence: "ON_DEMAND_INSPECTOR", eight_gates_quality: "client_sample", inventory: "FULL_DB", sample: "SAMPLED", diagnostic_sample: diagnosticSampleStatus, observation_sample: observationSampleStatus },
+      eight_gates: eightGateSummary,
     }
   })
   const exceptionGroups: Record<string, { count: number, sources: string[] }> = {}
@@ -553,7 +627,7 @@ const handler: Handler = async (event) => {
       ])
       if (error) throw error
       if (pipelineResult.error) throw pipelineResult.error
-      return { statusCode: 200, body: JSON.stringify({ ...(data || { found: false }), pipeline: pipelineResult.data || null }) }
+      return { statusCode: 200, body: JSON.stringify({ ...(data || { found: false }), pipeline: pipelineWithCurrentUniverse(pipelineResult.data || null, data) }) }
     }
 
     if (action === "trigger_source_scan") {

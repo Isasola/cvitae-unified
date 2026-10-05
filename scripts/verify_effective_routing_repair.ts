@@ -10,7 +10,7 @@ const policy = (source: string, extra: Partial<SourcePolicyRow> = {}): SourcePol
   source, is_enabled: true,
   // Intentionally false legacy configuration: it is no longer misread as a
   // contractual prohibition for an ordinary source.
-  catalog_enabled: false, matching_enabled: false, alerts_enabled: false, seo_enabled: false,
+  catalog_enabled: false, matching_enabled: false, alerts_enabled: false, seo_enabled: true,
   web_catalog_allowed: false, search_engine_indexing_allowed: null, google_jobs_distribution_allowed: false,
   ...extra,
 })
@@ -23,7 +23,7 @@ const good = {
 
 // Ordinary active source: legacy switches/flags cannot permanently hide
 // intrinsic truth. Each consumer still evaluates independently.
-let result = evaluateOpportunityDistribution(good, [policy('jobicy', { catalog_enabled:true, matching_enabled:true, alerts_enabled:true, seo_enabled:false })])
+let result = evaluateOpportunityDistribution(good, [policy('jobicy', { catalog_enabled:true, matching_enabled:true, alerts_enabled:true, seo_enabled:true })])
 assert.equal(result.catalog.allowed, true); assert.equal(result.matching.allowed, true)
 assert.equal(result.alerts.allowed, true); assert.equal(result.seo.allowed, true)
 assert.equal(result.jobPosting.allowed, false); assert.equal(result.googleJobs.allowed, false, 'UNKNOWN external distribution permission remains fail-closed')
@@ -33,7 +33,7 @@ assert.equal(result.catalog.storedGateState, 'FALSE')
 // Explicit Himalayas search restriction affects only external search consumers.
 result = evaluateOpportunityDistribution({ ...good, source: 'himalayas' }, [policy('himalayas', { catalog_enabled:true, matching_enabled:true, alerts_enabled:true, seo_enabled:true })])
 assert.equal(result.catalog.allowed, true); assert.equal(result.matching.allowed, true); assert.equal(result.alerts.allowed, true)
-assert.equal(result.seo.allowed, true); assert.equal(result.jobPosting.allowed, false); assert.equal(result.googleJobs.allowed, false)
+assert.equal(result.seo.allowed, true); assert.equal(result.jobPosting.allowed, false); assert.equal(result.googleJobs.allowed, false); assert.equal(result.thirdParty.allowed,false)
 assert(result.googleJobs.reasons.includes('SOURCE_CAPABILITY_DENIED'))
 
 // A source kill switch remains a separate operational denial.
@@ -43,12 +43,12 @@ assert.equal(result.matching.allowed, false); assert.equal(result.alerts.allowed
 
 // Row requirements still deny only the affected consumer; they are not
 // compensated by source policy or inherited by unrelated consumers.
-result = evaluateOpportunityDistribution({ ...good, organization: '' }, [policy('jobicy', { catalog_enabled:true, matching_enabled:true, alerts_enabled:true, seo_enabled:false })])
+result = evaluateOpportunityDistribution({ ...good, organization: '' }, [policy('jobicy', { catalog_enabled:true, matching_enabled:true, alerts_enabled:true, seo_enabled:true })])
 assert.equal(result.matching.allowed, true); assert.equal(result.seo.allowed, false)
 assert(result.seo.reasons.includes('MISSING_ORGANIZATION'))
-result = evaluateOpportunityDistribution({ ...good, description: 'thin', tags: [] }, [policy('jobicy', { catalog_enabled:true, matching_enabled:true, alerts_enabled:true, seo_enabled:false })])
+result = evaluateOpportunityDistribution({ ...good, description: 'thin', tags: [] }, [policy('jobicy', { catalog_enabled:true, matching_enabled:true, alerts_enabled:true, seo_enabled:true })])
 assert.equal(result.catalog.allowed, true); assert.equal(result.matching.allowed, false); assert.equal(result.seo.allowed, false)
-result = evaluateOpportunityDistribution({ ...good, archived_at: '2026-09-01T00:00:00Z' }, [policy('jobicy', { catalog_enabled:true, matching_enabled:true, alerts_enabled:true, seo_enabled:false })])
+result = evaluateOpportunityDistribution({ ...good, archived_at: '2026-09-01T00:00:00Z' }, [policy('jobicy', { catalog_enabled:true, matching_enabled:true, alerts_enabled:true, seo_enabled:true })])
 assert.equal(result.catalog.allowed, false); assert(result.catalog.reasons.includes('ROW_DISABLED'))
 result = evaluateOpportunityDistribution({ ...good, source: 'unknown_future_source' }, [])
 assert.equal(result.catalog.allowed, false); assert(result.catalog.reasons.includes('SOURCE_POLICY_UNKNOWN'))
@@ -68,4 +68,4 @@ assert(migration.includes('new.alerts_eligible := v_matching_ready'))
 assert(migration.includes('new.seo_eligible := v_seo_ready'))
 assert(!migration.includes('source_policy.matching_enabled'), 'future gates must not inherit legacy source consumer switches')
 assert(!migration.includes('source_policy.seo_enabled'), 'future SEO row gate must remain intrinsic')
-console.log('verify_effective_routing_repair: PASS ordinary=automatic himalayas=internal_only stale=repairable future=trigger_contract')
+console.log('verify_effective_routing_repair: PASS ordinary=automatic himalayas=first_party_seo_allowed_job_distribution_denied stale=repairable future=trigger_contract')

@@ -32,7 +32,7 @@ const raw = [
   ...Array.from({ length: 300 }, (_, index) => ({ ...row, id:`job-${index}`, slug:`job-${index}`, opportunity_type:null, opportunity_kind:'job' })),
 ]
 const offsets:number[] = []
-const jobs = await collectAllowedPages({ target:300, pageSize:100, fetchPage:async (offset, size) => { offsets.push(offset); return raw.slice(offset, offset + size) }, allowed:item => matchesPublicOpportunityMode(item, 'jobs') })
+const jobs = await collectAllowedPages({ target:300, pageSize:100, maxPages:8, fetchPage:async (offset, size) => { offsets.push(offset); return raw.slice(offset, offset + size) }, allowed:item => matchesPublicOpportunityMode(item, 'jobs') })
 assert.equal(jobs.length, 300); assert.ok(offsets.at(-1)! >= 700, 'mode filtering must scan past opposite-family rows')
 assert.ok(jobs.every(item => matchesPublicOpportunityMode(item, 'jobs')))
 assert.equal(matchesPublicOpportunityMode({ ...row, opportunity_type:null, opportunity_kind:'job' }, 'jobs'), true)

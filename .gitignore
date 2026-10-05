@@ -45,3 +45,12 @@ test-results/
 *-dryrun.txt
 /item49-checkpoint/
 /netlify/functions/manifest.json
+/.cvitae-state/cable-sql-test/
+/.cvitae-state/npm-cache/
+/.cvitae-state/cable-build/
+/.cvitae-state/cable-recovery-test.json
+
+# Release freeze: local state and downloaded diagnostics; preserve on disk.
+/.cvitae-state/
+/artifacts/prod-match-download/
+/artifacts/prod-match-download-v18/

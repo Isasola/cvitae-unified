@@ -36,14 +36,14 @@ assert.match(sql, /to_jsonb\(o\)->'requirements'/, 'requirements are read throug
 assert.match(sql, /to_jsonb\(o\)->>'professional_family'/, 'optional professional_family is read through row JSON, not a column reference')
 assert.ok(/jsonb_typeof\(to_jsonb\(o\)->'requirements'\)/.test(sql) && /when 'array'/.test(sql) && /jsonb_array_elements\(to_jsonb\(o\)->'requirements'\)/.test(sql) && /item\.value->>'text'/.test(sql), 'preflight deterministically extracts JSONB text requirements')
 assert.doesNotMatch(sql, /trim\(coalesce\(x\.requirements,|trim\(coalesce\(x\.professional_family,/, 'old schema-unsafe expressions are absent')
-assert.match(sql,/TEMP_LEGACY_SEO_EXCEPTION_UNTIL_2026_10_09[\s\S]*current_date<=date '2026-10-09'/,'preflight presents the dated Computrabajo-only SEO exception')
+assert.match(sql,/TEMP_LEGACY_SEO_EXCEPTION_UNTIL_2026_10_09[\s\S]*\(now\(\) at time zone 'UTC'\)::date\s*<=\s*date '2026-10-09'/,'preflight presents the UTC-dated inclusive Computrabajo-only SEO exception')
 assert.match(sql,/greatest\(q\.current_catalog-q\.catalog,0\)/,'per-source catalog removals qualify both CTE aliases to avoid PostgreSQL current_catalog resolution')
 assert.match(sql,/greatest\(q\.catalog-q\.current_catalog,0\)/,'per-source catalog additions qualify both CTE aliases to avoid PostgreSQL current_catalog resolution')
 assert.doesNotMatch(sql,/(?<![.\w])current_catalog\s*-\s*catalog|(?<![.\w])catalog\s*-\s*current_catalog/i,'no ambiguous unqualified current_catalog arithmetic is generated')
 assert.match(sql,/'current_catalog',q\.current_catalog[\s\S]*'catalog_removed'[\s\S]*'catalog_added'/,'JSON output keys remain stable while internal references are qualified')
-assert.doesNotMatch(sql,/seo_permission='DENIED'[\s\S]{0,120}then 'NOT_READY'/,'canonical SEO permission denial is not a first-party routing blocker')
-assert.doesNotMatch(sql,/legacy_created_before|created_at<timestamptz '2026-10-01/,'preflight has no frozen creation-date cutoff')
-assert.match(sql,/TEMP_LEGACY_SEO_EXCEPTION[\s\S]*'permission_state','DENIED'[\s\S]*'expires_on','2026-10-09'/,'preflight keeps permission denial observable separately from exception')
+assert.match(sql,/temporary_legacy_seo_exception_applied[\s\S]{0,180}seo_permission='DENIED'[\s\S]{0,80}then 'NOT_READY'/,'only applied legacy rows bypass the explicit denial before expiry')
+assert.match(sql,/legacy_created_on_or_before[\s\S]*2026-10-03|created_at[\s\S]{0,120}2026-10-03/,'preflight limits the exception to legacy rows present at the correction cutoff')
+assert.match(sql,/TEMP_LEGACY_SEO_EXCEPTION[\s\S]*'permission_state','DENIED'[\s\S]*'expires_on_inclusive','2026-10-09'/,'preflight keeps permission denial observable separately from exception')
 assert.match(sql,/SEO_ROW_READY[\s\S]*SEO_ROW_NOT_READY[\s\S]*SEO_ROW_UNKNOWN[\s\S]*SEO_EFFECTIVE_READY[\s\S]*TOP_SEO_BLOCK_REASONS/,'preflight exposes SEO row/effective counts and actionable block reasons')
 assert.match(sql,/SEO_CONTENT_READY_WHILE_LIFECYCLE_UNRESOLVED[\s\S]*LIFECYCLE_UNRESOLVED_TOTAL[\s\S]*LIFECYCLE_RECOVERABLE_NOW[\s\S]*LIFECYCLE_REFRESH_REQUIRED[\s\S]*LIFECYCLE_CONTENT_NOT_READY[\s\S]*LIFECYCLE_SYSTEM_ERROR[\s\S]*TOP_LIFECYCLE_UNRESOLVED_REASONS[\s\S]*LIFECYCLE_RECOVERY_PER_SOURCE/,'preflight accounts unresolved lifecycle and SEO potential globally and per source')
 const splitSqlSelectList = (input:string) => {
@@ -228,10 +228,10 @@ assert.equal(canonicalPermissionSource('wwr'), canonicalPermissionSource('wework
 assert.equal(sourcePermissionDimensionTruth('wwr','matching').state, sourcePermissionDimensionTruth('weworkremotely','matching').state)
 assert.equal(sourcePermissionTruth('remotive', 'matching').state, 'ALLOWED')
 assert.equal(sourcePermissionTruth('remotive', 'seo').state, 'UNKNOWN')
-assert.equal(sourcePermissionTruth('himalayas', 'seo').state, 'ALLOWED')
 assert.equal(sourcePermissionTruth('himalayas', 'google_jobs').state, 'DENIED')
 assert.equal(sourcePermissionTruth('himalayas', 'third_party_distribution').state, 'DENIED')
-assert.equal(sourcePermissionDimensionTruth('himalayas','seo_index').verified_at,'2026-10-01')
+assert.equal(sourcePermissionTruth('himalayas', 'seo').state, 'ALLOWED')
+assert.equal(sourcePermissionDimensionTruth('himalayas','seo_index').verified_at,'2026-10-03')
 assert.equal(sourcePermissionDimensionTruth('computrabajo','collect').state,'DENIED')
 assert.equal(sourcePermissionDimensionTruth('computrabajo','matching').state,'UNKNOWN')
 assert.equal(sourcePermissionDimensionTruth('computrabajo','matching').verified_at,'2026-10-01')
@@ -258,6 +258,7 @@ assert.equal(adminUnknown.attribution_required.state,'UNKNOWN')
 const adminHimalayas = evaluateEightGates({canonical_source:'himalayas'},[],null,[],[]).gates[7].metrics.surfaces as any
 assert.equal(adminHimalayas.organic_seo.state,'ALLOWED')
 assert.equal(adminHimalayas.google_jobs.state,'DENIED')
+assert.equal(adminHimalayas.third_party_distribution.state,'DENIED')
 
 type Permission = (source: string, consumer: 'catalog'|'matching'|'alerts'|'seo') => { state: 'ALLOWED'|'DENIED'|'UNKNOWN'; reason: string; provenance: string }
 const now = new Date('2026-09-29T12:00:00.000Z')
@@ -275,6 +276,7 @@ function sqlEquivalent(row: Record<string, any>, policies: UniversePolicy[], obs
   const matchingAliasConflict = new Set(matchingRows.map((p:any) => p.matching_enabled === true ? 'true' : p.matching_enabled === false ? 'false' : 'unknown')).size > 1
   const catalogAliasConflict = new Set(matchingRows.map((p:any) => p.catalog_enabled === true ? 'true' : p.catalog_enabled === false ? 'false' : 'unknown')).size > 1
   const alertsAliasConflict = new Set(matchingRows.map((p:any) => p.alerts_enabled === true ? 'true' : p.alerts_enabled === false ? 'false' : 'unknown')).size > 1
+  const seoAliasConflict = new Set(matchingRows.map((p:any) => p.seo_enabled === true ? 'true' : p.seo_enabled === false ? 'false' : 'unknown')).size > 1
   const aliasConflict = globalAliasConflict || matchingAliasConflict
   const deadline = deadlineLifecycle(row.deadline, now)
   const observed = Date.parse(String(observation?.observed_at || ''))
@@ -311,12 +313,20 @@ function sqlEquivalent(row: Record<string, any>, policies: UniversePolicy[], obs
   const catalogState = consumer(catalogRow,'catalog','catalog_enabled',catalogAliasConflict)
   const alertsState = consumer(alertsRow,'alerts','alerts_enabled',alertsAliasConflict)
   const seoPermission = permission(src,'seo').state
+  const seoSwitch = boolState('seo_enabled')
+  const createdDate = String(row.created_at || '').slice(0,10)
+  const temporarySeoExceptionApplied = src === 'computrabajo'
+    && now.toISOString().slice(0,10) <= '2026-10-09'
+    && seoPermission === 'DENIED' && seoRow === 'READY'
+    && row.seo_eligible === true && row.seo_status === 'eligible'
+    && /^\d{4}-\d{2}-\d{2}$/.test(createdDate) && createdDate <= '2026-10-03'
+    && sourceState === 'ALLOWED' && seoSwitch === 'ALLOWED' && !seoAliasConflict
   const seoContentReason = !String(row.title || '').trim() ? 'MISSING_TITLE' : !String(row.slug || '').trim() ? 'MISSING_CANONICAL_IDENTITY' : String(row.description || '').trim().length < 100 ? 'THIN_CONTENT' : !String(row.organization || '').trim() ? 'MISSING_ORGANIZATION' : 'SEO_CONTENT_READY_INDEPENDENT_OF_LIFECYCLE'
   const lifecycleUnresolvedReason = !['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(lifecycle) ? null : lifecycle === 'STALE_DERIVED_STATE' ? lifecycleReason : deadline === 'INVALID' ? 'DEADLINE_INVALID_OR_TIMEZONE_UNKNOWN' : !observation?.id ? 'NO_OBSERVATION' : observation?.source && canonicalSource(observation.source) !== src ? 'OBSERVATION_SOURCE_MISMATCH' : observation?.identity_status === 'IDENTITY_UNRESOLVED' ? 'IDENTITY_UNRESOLVED' : observation?.identity_status === 'IDENTITY_MISMATCH' ? 'IDENTITY_MISMATCH' : [0,429].includes(Number(observation?.http_status)) || Number(observation?.http_status)>=500 ? 'TRANSIENT_HTTP_EVIDENCE' : observation?.identity_status === 'IDENTITY_CONFIRMED' && Number(observation?.http_status)===200 ? 'OBSERVATION_NOT_NEWER_THAN_ROW_UPDATE' : observation?.http_status == null ? 'HTTP_STATUS_UNKNOWN' : 'LIFECYCLE_EVIDENCE_INSUFFICIENT'
   const lifecycleRepair = lifecycle === 'STALE_DERIVED_STATE' && row.verification_status === 'verified' ? { is_active:true } : null
   const lifecycleRecoveryClass = !['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(lifecycle) ? ['EXPIRED','DELETED','ARCHIVED','HARD_DEAD','INACTIVE_VALID'].includes(lifecycle) ? 'EXPLICITLY_INACTIVE' : 'NOT_UNRESOLVED' : lifecycleRepair ? 'RECOVERABLE_NOW' : seoContentReason !== 'SEO_CONTENT_READY_INDEPENDENT_OF_LIFECYCLE' ? 'CONTENT_NOT_READY' : lifecycleUnresolvedReason === 'OBSERVATION_SOURCE_MISMATCH' ? 'SYSTEM_ERROR' : 'REFRESH_REQUIRED'
-  const seoState = seoRow !== 'READY' ? seoRow : sourceState === 'DENIED' ? 'NOT_READY' : sourceState === 'UNKNOWN' || globalAliasConflict ? 'UNKNOWN' : 'READY'
-  const seoEffectiveReason = seoRow !== 'READY' ? seoRowReason : sourceState === 'DENIED' ? 'SOURCE_DISABLED' : sourceState === 'UNKNOWN' || globalAliasConflict ? globalAliasConflict ? 'SOURCE_POLICY_ALIAS_CONFLICT' : 'SOURCE_OPERATIONAL_STATE_UNKNOWN' : 'SEO_EFFECTIVE_READY'
+  const seoState = seoRow !== 'READY' ? seoRow : temporarySeoExceptionApplied ? 'READY' : seoPermission === 'DENIED' || seoSwitch === 'DENIED' || sourceState === 'DENIED' ? 'NOT_READY' : sourceState === 'UNKNOWN' || globalAliasConflict || seoAliasConflict ? 'UNKNOWN' : 'READY'
+  const seoEffectiveReason = seoRow !== 'READY' ? seoRowReason : temporarySeoExceptionApplied ? 'TEMP_LEGACY_SEO_EXCEPTION_APPLIED' : seoPermission === 'DENIED' ? 'SOURCE_SEO_PERMISSION_DENIED' : seoSwitch === 'DENIED' ? 'SOURCE_SEO_OPERATOR_DISABLED' : sourceState === 'DENIED' ? 'SOURCE_DISABLED' : sourceState === 'UNKNOWN' || globalAliasConflict ? globalAliasConflict ? 'SOURCE_POLICY_ALIAS_CONFLICT' : 'SOURCE_OPERATIONAL_STATE_UNKNOWN' : seoAliasConflict ? 'SOURCE_POLICY_ALIAS_CONFLICT' : 'SEO_EFFECTIVE_READY'
   const unresolved: string[] = []
   if (['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(lifecycle)) unresolved.push('LIFECYCLE')
   if (rowState === 'UNKNOWN') unresolved.push('ROW_MATCH_READINESS')
@@ -368,9 +378,12 @@ for (const fixture of fixtures) {
 const unknownSeoFixture = fixtures.find(fixture => fixture.row.id==='seo-unknown-switch-off')!
 const unknownSeoDecision = classifyOpportunityUniverse(unknownSeoFixture.row,unknownSeoFixture.policies,null,now)
 assert.equal(unknownSeoDecision.provenance.consumer_permission_states && (unknownSeoDecision.provenance.consumer_permission_states as any).seo,'UNKNOWN')
-assert.equal(unknownSeoDecision.seo_state,'READY','permission UNKNOWN and legacy seo_enabled=false do not block a factual first-party page')
-assert.equal(unknownSeoDecision.seo_effective_reason,'SEO_EFFECTIVE_READY')
+assert.equal(unknownSeoDecision.seo_state,'NOT_READY','explicit consumer switch OFF blocks even while permission remains UNKNOWN')
+assert.equal(unknownSeoDecision.seo_effective_reason,'SOURCE_SEO_OPERATOR_DISABLED')
 assert(unknownSeoDecision.source_permission_unknown_dimensions.includes('seo_index'))
+const unknownPermissionReady = classifyOpportunityUniverse({...active,id:'seo-unknown-permission-switch-on',source:'jobicy'},[{source:'jobicy',is_enabled:true,catalog_enabled:true,alerts_enabled:true,seo_enabled:true}],null,now)
+assert.equal(unknownPermissionReady.provenance.consumer_permission_states && (unknownPermissionReady.provenance.consumer_permission_states as any).seo,'UNKNOWN')
+assert.equal(unknownPermissionReady.seo_state,'READY','unknown SEO permission alone is not converted to a veto on an explicitly enabled first-party route')
 
 const historical = { total:16405, inactive_or_unknown:9272, deadline_expired:91, source_matching_disabled:6460, match_eligibility_unexplained:429, source_allowed:153 }
 assert.equal(historical.inactive_or_unknown + historical.deadline_expired + historical.source_matching_disabled + historical.match_eligibility_unexplained + historical.source_allowed, historical.total)

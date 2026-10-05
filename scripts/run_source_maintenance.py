@@ -59,28 +59,45 @@ def assert_remote_apply() -> None:
         raise RuntimeError("source_maintenance_apply_requires_remote_supabase")
 
 
-def fetch_inventory(source: str, chunk_size: int, opportunity_id: str | None = None) -> list[dict[str, Any]]:
-    """Paginate a source inventory.  At most one source is held in memory."""
-    rows: list[dict[str, Any]] = []
-    offset = 0
-    while True:
-        params: dict[str, str] = {
-            "select": SELECT_FIELDS, "deleted_at": "is.null", "archived_at": "is.null",
-            "order": "updated_at.asc,id.asc", "limit": str(1 if opportunity_id else chunk_size),
-        }
-        if opportunity_id:
-            params["id"] = f"eq.{opportunity_id}"
-        else:
-            params["source"] = f"in.({','.join(emitted_ids_for(source))})"
-            params["offset"] = str(offset)
-        response = requests.get(f"{api_base()}/opportunities", headers=api_headers(), params=params, timeout=45)
-        response.raise_for_status()
-        page = response.json()
-        rows.extend(page)
-        if opportunity_id or len(page) < chunk_size:
-            break
-        offset += len(page)
+MAX_PAGE = 250
+
+
+class MaintenanceCheckpointError(RuntimeError):
+    def __init__(self, summary: dict[str, Any]):
+        super().__init__("maintenance_checkpoint_failed_retry_telemetry_only")
+        self.summary = summary
+
+
+def fetch_inventory(source: str, limit: int, opportunity_id: str | None = None, after_id: str | None = None) -> list[dict[str, Any]]:
+    """One keyset page, including at most one lookahead. Never accumulate a source."""
+    if not 1 <= limit <= MAX_PAGE + 1:
+        raise ValueError("maintenance_inventory_page_limit")
+    params = {"select": SELECT_FIELDS, "deleted_at": "is.null", "archived_at": "is.null",
+              "order": "id.asc", "limit": str(1 if opportunity_id else limit),
+              "source": f"in.({','.join(emitted_ids_for(source))})"}
+    if opportunity_id:
+        params["id"] = f"eq.{opportunity_id}"
+    elif after_id:
+        params["id"] = f"gt.{after_id}"
+    response = requests.get(f"{api_base()}/opportunities", headers=api_headers(), params=params, timeout=45)
+    response.raise_for_status()
+    rows = response.json()
+    if len(rows) > (1 if opportunity_id else limit):
+        raise RuntimeError("maintenance_inventory_page_overflow")
     return rows
+
+
+def load_maintenance_progress(source: str, observations_only: bool, opportunity_id: str | None = None) -> dict[str, Any]:
+    """Reuse durable run telemetry; directed recovery never overwrites the source walk."""
+    params = {"select": "extraction_metrics", "scraper_id": f"eq.maintenance_{source}",
+              "extraction_metrics->>maintenance_lane": f"eq.{'directed' if opportunity_id else 'observations' if observations_only else 'maintenance'}",
+              "order": "started_at.desc,finished_at.desc", "limit": "1"}
+    params["extraction_metrics->maintenance_progress->>opportunity_id"] = f"eq.{opportunity_id}" if opportunity_id else "is.null"
+    response = requests.get(f"{api_base()}/scraper_runs", headers=api_headers(), params=params, timeout=30)
+    response.raise_for_status()
+    rows = response.json()
+    state = rows[0].get("extraction_metrics", {}).get("maintenance_progress", {}) if rows else {}
+    return {} if state.get("complete") else state
 
 
 def diagnosis(rows: list[dict[str, Any]], source: str) -> dict[str, Any]:
@@ -232,24 +249,32 @@ def assert_apply_authorized(profile: Any) -> dict[str, Any]:
     return certificate
 
 
-def process_source(source: str, apply: bool, chunk_size: int, max_items: int | None, opportunity_id: str | None, explain: bool, diagnose_only: bool, verbose_items: bool = False, observations_only: bool = False) -> dict[str, Any]:
+def process_source(source: str, apply: bool, chunk_size: int, max_items: int | None, opportunity_id: str | None, explain: bool, diagnose_only: bool, verbose_items: bool = False, observations_only: bool = False, continuation: dict[str, Any] | None = None) -> dict[str, Any]:
     started = datetime.now(timezone.utc)
+    deadline = time.monotonic() + MAX_RUNTIME_SECONDS
     profile = get_profile(source)
     certificate = certification(profile)
     if apply:
         assert_apply_authorized(profile)
-    rows = fetch_inventory(source, chunk_size, opportunity_id)
+    work_budget = min(MAX_PAGE, profile.max_detail_fetches_per_run, max_items if max_items is not None else MAX_PAGE)
+    progress = continuation if continuation is not None else load_maintenance_progress(source, observations_only, opportunity_id) if apply else {}
+    lane = "directed" if opportunity_id else "observations" if observations_only else "maintenance"
+    if progress.get("lane") not in (None, lane) or progress.get("source") not in (None, source) or progress.get("opportunity_id") != opportunity_id:
+        raise ValueError("maintenance_continuation_context_mismatch")
+    if progress.get("page_size") and progress["page_size"] != work_budget:
+        raise ValueError("maintenance_resume_requires_same_page_size")
+    after_id = progress.get("after_id")
+    page = fetch_inventory(source, work_budget + 1, opportunity_id, after_id)
+    rows = page[:work_budget]
+    completed_ids = set(progress.get("completed_ids", []))
     source_payloads: dict[str, dict[str, Any]] = {}
     himalayas_inventory: dict[str, Any] | None = None
-    # Himalayas reconciles against one shared structured API inventory.  It
-    # never falls back to per-row HTML detail fetches or treats feed absence as
-    # death; unmatched historical rows remain visible in inventory diagnostics.
-    if source == "himalayas" and not diagnose_only:
-        resume_cursor = None if opportunity_id else latest_himalayas_deep_cursor()
-        pairs, himalayas_inventory = himalayas_current_rows(profile.max_detail_fetches_per_run, opportunity_id, start_cursor=resume_cursor)
-        rows = [row for row, _ in pairs]
-        source_payloads = {str(row["id"]): raw for row, raw in pairs}
-    summary: dict[str, Any] = {"source": source, "mode": "OBSERVATIONS_ONLY_APPLY" if apply and observations_only else "OBSERVATIONS_ONLY_DRY_RUN" if observations_only else "APPLY" if apply else "DRY_RUN", "adapter_version": profile.adapter_version, "telemetry_run_id": f"source-maintenance-{source}-{int(started.timestamp())}", "inventory": len(rows), "considered": 0, "fresh_skipped": 0, "processed": 0, "observations_persisted": 0, "live": 0, "removed": 0, "hard_dead_suppressed": 0, "rescued": 0, "failed": 0, "transient": 0, "mismatch": 0, "descriptions_restored": 0, "geo_corrected": 0, "eligibility_corrected": 0, "remote_scope_corrected": 0, "semantic_rows_changed": 0, "embeddings_invalidated": 0, "embeddings_regenerated": 0, "embeddings_failed": 0, "exceptions": [], "circuit_breaker": None}
+    pending_api_ids: set[str] = set()
+    summary: dict[str, Any] = {"source": source, "mode": "OBSERVATIONS_ONLY_APPLY" if apply and observations_only else "OBSERVATIONS_ONLY_DRY_RUN" if observations_only else "APPLY" if apply else "DRY_RUN", "adapter_version": profile.adapter_version, "telemetry_run_id": f"source-maintenance-{source}-{time.monotonic_ns()}", "inventory": len(rows), "considered": 0, "fresh_skipped": 0, "processed": 0, "observations_persisted": 0, "live": 0, "removed": 0, "hard_dead_suppressed": 0, "rescued": 0, "failed": 0, "transient": 0, "mismatch": 0, "descriptions_restored": 0, "geo_corrected": 0, "eligibility_corrected": 0, "remote_scope_corrected": 0, "semantic_rows_changed": 0, "embeddings_invalidated": 0, "embeddings_regenerated": 0, "embeddings_failed": 0, "exceptions": [], "circuit_breaker": None}
+    summary["maintenance_lane"] = "directed" if opportunity_id else "observations" if observations_only else "maintenance"
+    summary["inventory_scope"] = "CURRENT_PAGE"
+    summary["inventory_count_is_total"] = False
+    summary["batch_budget"] = work_budget
     # A scout is deliberately bounded and never declares a missing item dead.
     # It gives the run cheap current-source context before any detail fetch.
     snapshot = scout_source(source, profile.scout)
@@ -258,6 +283,10 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
     if himalayas_inventory is not None:
         summary["himalayas_inventory"] = himalayas_inventory
     if diagnose_only:
+        summary["maintenance_progress"] = {"source": source, "lane": lane, "opportunity_id": opportunity_id,
+            "page_size": work_budget, "after_id": str(rows[-1]["id"]) if rows else after_id,
+            "completed_ids": [], "api_cursor": None, "complete": len(page) <= work_budget,
+            "resumable": len(page) > work_budget, "reason": "DIAGNOSIS_PAGE_ONLY"}
         return summary
     if profile.adapter is None:
         summary["skipped"] = "adapter_not_validated"
@@ -267,20 +296,35 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
     # Dry diagnosis remains useful against a local schema that has not received
     # the append-only audit migrations.  APPLY still fails closed below.
     try:
-        enrichments = recent_enrichments(source, now)
+        enrichments = recent_enrichments(source, now, opportunity_ids=[str(row["id"]) for row in rows])
     except requests.HTTPError as exc:
         if apply or exc.response is None or exc.response.status_code != 404:
             raise
         enrichments = {}
         summary["exceptions"].append("enrichment_events_schema_unavailable")
-    observations, observations_available = recent_observations(source, now)
-    selected, selection, details = select_candidates(rows, len(rows), opportunity_id, enrichments, observations, now)
+    observations, observations_available = recent_observations(source, now, opportunity_ids=[str(row["id"]) for row in rows])
+    remaining_rows = [row for row in rows if str(row["id"]) not in completed_ids]
+    selected, selection, details = select_candidates(remaining_rows, len(remaining_rows), opportunity_id, enrichments, observations, now)
     summary["selection"] = selection
     summary["considered"] = selection["considered"]
     summary["fresh_skipped"] = selection["excluded"]["recent_enrichment"] + sum(value for key, value in selection["excluded"].items() if key.startswith("recent_"))
+    # TTL/safety exclusions are completed visits, never deleted inventory.
+    selected_ids = {str(row["id"]) for row in selected}
+    completed_ids.update(str(row["id"]) for row in remaining_rows if str(row["id"]) not in selected_ids)
+    if source == "himalayas" and selected:
+        pairs, himalayas_inventory = himalayas_current_rows(work_budget, opportunity_id,
+            start_cursor=progress.get("api_cursor"), max_pages=1, db_rows=selected)
+        source_payloads = {str(row["id"]): raw for row, raw in pairs}
+        unmatched_ids = selected_ids - set(source_payloads)
+        if himalayas_inventory["api_inventory_complete"]:
+            # Full factual feed traversal did not resolve these identities. MISSING, never DEAD.
+            completed_ids.update(unmatched_ids)
+            summary["observation_missing_ids"] = sorted(unmatched_ids)
+        else:
+            pending_api_ids = unmatched_ids
+        selected = [row for row, _ in pairs]
+        summary["himalayas_inventory"] = himalayas_inventory
     eligible_queue_count = len(selected)
-    work_budget = min(profile.max_detail_fetches_per_run, max_items if max_items is not None else profile.max_detail_fetches_per_run)
-    selected = selected[:work_budget]
     if not observations_available and apply:
         raise RuntimeError("source_observations_schema_required_for_apply")
     # Recent hard-dead observations are intentionally excluded from detail
@@ -289,12 +333,40 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
     # subsequent live observation arrived after our read.
     policy_candidates = [] if observations_only else [
         (row, classify_source_policy(row, observations.get(str(row["id"]))))
-        for row in rows
+        for row in remaining_rows
     ]
     summary["hard_dead_pending"] = sum(decision.action == "SUPPRESS" for _, decision in policy_candidates)
     all_plans: list[tuple[dict[str, Any], Any, dict[str, Any], Any]] = []
     enricher = AtomicEnricher(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"]) if apply and not observations_only else None
     policy = SourcePolicyApplier() if apply and not observations_only else None
+    def checkpoint(final: bool = False) -> None:
+        page_ids = {str(row["id"]) for row in rows}
+        page_done = page_ids <= completed_ids and not pending_api_ids
+        matched_failed = selected_ids & set(source_payloads) - completed_ids
+        summary["maintenance_progress"] = {
+            "source": source, "lane": lane, "opportunity_id": opportunity_id, "page_size": work_budget,
+            "after_id": str(rows[-1]["id"]) if page_done and rows else after_id,
+            "completed_ids": [] if page_done else sorted(completed_ids & page_ids),
+            "api_cursor": None if page_done else progress.get("api_cursor") if matched_failed else
+                (himalayas_inventory or {}).get("next_cursor_saved_expected", progress.get("api_cursor")),
+            "complete": page_done and len(page) <= work_budget,
+            "resumable": not (page_done and len(page) <= work_budget),
+            "reason": "PAGE_COMPLETE" if page_done else summary["circuit_breaker"] or "PENDING_EFFECTS_OR_API_IDENTITY",
+        }
+        if apply:
+            summary["processed"] = len(all_plans)
+            record = {**summary, "health": summary.get("health", {"status": "UNKNOWN"}),
+                "started_at": started.isoformat(), "finished_at": datetime.now(timezone.utc).isoformat(),
+                "duration_seconds": (datetime.now(timezone.utc) - started).total_seconds(),
+                "telemetry_run_id": summary["telemetry_run_id"] if final else f"{summary['telemetry_run_id']}-checkpoint-{time.monotonic_ns()}"}
+            result = persist_maintenance_run(record)
+            summary.update({key: result[key] for key in ("telemetry_status", "telemetry_error")})
+            if result["telemetry_status"] != "PERSISTED":
+                summary["telemetry_payload"] = result["telemetry_payload"]
+                summary["execution_status"] = "CHECKPOINT_PERSIST_FAILED"
+                raise MaintenanceCheckpointError(summary)
+
+    policy_failed_ids: set[str] = set()
     if apply:
         for row, decision in policy_candidates:
             if decision.action != "SUPPRESS":
@@ -305,7 +377,8 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
                     summary["hard_dead_suppressed"] += 1
             except requests.RequestException:
                 summary["failed"] += 1
-    deadline = time.monotonic() + MAX_RUNTIME_SECONDS
+                policy_failed_ids.add(str(row["id"]))
+                completed_ids.discard(str(row["id"]))
     workers = profile.min_workers
     max_workers_used = workers
     for index in range(0, len(selected), chunk_size):
@@ -316,10 +389,15 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
         plans: list[tuple[dict[str, Any], Any, dict[str, Any], Any]] = []
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix=f"cvitae-{source}") as pool:
             def fetch_row(row: dict[str, Any]) -> Any:
+                if time.monotonic() >= deadline:
+                    return None  # Unstarted rows remain pending, not failed/dead.
                 payload = source_payloads.get(str(row["id"]))
                 return retry_detail(source, row, payload) if payload is not None else retry_detail(source, row)
             results = list(pool.map(fetch_row, chunk))
         for row, result in zip(chunk, results):
+            if result is None:
+                summary["circuit_breaker"] = "runtime_ceiling"
+                continue
             identity = confirm_identity(source, row, result)
             patch = changed_patch(result, row, identity)
             plans.append((row, result, patch, identity))
@@ -345,10 +423,14 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
         elif explain:
             print(f"[{source}] {index + len(chunk)}/{len(selected)} processed | live {summary['live']} | removed {summary['removed']} | transient {summary['transient']} | remaining ~{max(0, len(selected) - index - len(chunk))}")
         if not apply:
+            completed_ids.update(str(row["id"]) for row, _, _, _ in plans)
             continue
         summary["observations_persisted"] += persist_observations(plans, run_id=summary["telemetry_run_id"])
         if observations_only:
+            completed_ids.update(str(row["id"]) for row, _, _, _ in plans if str(row["id"]) not in policy_failed_ids)
+            checkpoint()
             continue
+        chunk_failed_ids = set(policy_failed_ids)
         embedding_ids: list[str] = []
         for row, result, patch, identity in plans:
             decision = classify_source_policy(row, {"id": None, "identity_status": identity.status, "http_status": result.source_status})
@@ -359,6 +441,7 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
                         summary["hard_dead_suppressed"] += 1
                 except requests.RequestException:
                     summary["failed"] += 1
+                    chunk_failed_ids.add(str(row["id"]))
                 continue
             if not patch:
                 continue
@@ -369,9 +452,14 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
                     embedding_ids.append(str(row["id"]))
             elif outcome.status in {"failed", "stale"}:
                 summary["failed"] += 1
+                chunk_failed_ids.add(str(row["id"]))
         embedding = reconcile_embeddings(embedding_ids, apply=True)
         for key, value in embedding.items():
             summary[f"embeddings_{key}"] = summary.get(f"embeddings_{key}", 0) + value
+        if embedding["failed"]:
+            chunk_failed_ids.update(embedding_ids)
+        completed_ids.update(str(row["id"]) for row, _, _, _ in plans if str(row["id"]) not in chunk_failed_ids)
+        checkpoint()
         if summary["circuit_breaker"]:
             break
         successes = sum(result.source_status == 200 for _, result, _, _ in plans)
@@ -400,9 +488,7 @@ def process_source(source: str, apply: bool, chunk_size: int, max_items: int | N
     summary["execution_status"] = "SUCCESS" if summary["failed"] == 0 else "WARNING"
     summary["telemetry_status"] = "NOT_REQUESTED"
     summary["telemetry_error"] = None
-    if apply:
-        telemetry = persist_maintenance_run(summary)
-        summary.update({key: telemetry[key] for key in ("telemetry_status", "telemetry_error")})
+    checkpoint(final=True)
     return summary
 
 
@@ -412,9 +498,12 @@ def main() -> int:
     parser.add_argument("--apply", action="store_true"); parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--diagnose", action="store_true"); parser.add_argument("--explain", action="store_true"); parser.add_argument("--verbose-items", action="store_true")
     parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK); parser.add_argument("--max-items", type=int)
-    parser.add_argument("--id", dest="opportunity_id")
+    parser.add_argument("--id", "--opportunity-id", dest="opportunity_id")
     parser.add_argument("--observations-only", action="store_true", help="persiste exclusivamente evidencia factual del adapter; no aplica policy, enrichment ni embeddings")
+    parser.add_argument("--continuation-file", help="JSON maintenance_progress returned by the preceding bounded run")
     args = parser.parse_args(); load_local_env()
+    continuation = json.loads(Path(args.continuation_file).read_text(encoding="utf-8")) if args.continuation_file else None
+    if continuation is not None and args.source == "all": parser.error("continuation requires one source")
     if args.chunk_size < 1 or args.chunk_size > MAX_CHUNK: parser.error("--chunk-size debe estar entre 1 y 50")
     if args.max_items is not None and args.max_items < 1: parser.error("--max-items debe ser positivo")
     if args.apply: assert_remote_apply()
@@ -434,7 +523,11 @@ def main() -> int:
         if args.apply and args.source == "all" and (not get_profile(source).auto_enabled or not certification(get_profile(source))["certified"]):
             auto_skipped += 1
             continue
-        outputs.append(process_source(source, args.apply, args.chunk_size, args.max_items, args.opportunity_id, args.explain, args.diagnose, args.verbose_items, args.observations_only))
+        try:
+            outputs.append(process_source(source, args.apply, args.chunk_size, args.max_items, args.opportunity_id, args.explain, args.diagnose, args.verbose_items, args.observations_only, continuation))
+        except MaintenanceCheckpointError as exc:
+            print("CVITAE_SOURCE_MAINTENANCE=" + json.dumps(exc.summary, ensure_ascii=True, sort_keys=True))
+            return 1
     if args.source == "all" and args.diagnose:
         nonempty = [
             {"source": item["source"], "inventory": item["inventory"], "degraded": item["diagnosis"]["degraded"], "adapter": item["adapter_version"], "auto_enabled": get_profile(item["source"]).auto_enabled,
@@ -455,7 +548,9 @@ def main() -> int:
             "sources_skipped_auto_disabled": auto_skipped,
         }
         print("CVITAE_SOURCE_MAINTENANCE_REGISTRY=" + json.dumps(registry, ensure_ascii=True, sort_keys=True))
-    return 0
+    # Exact-ID recovery must not advance its parent cursor while evidence is pending.
+    return 1 if any(item.get("execution_status") == "CHECKPOINT_PERSIST_FAILED" or
+        (args.opportunity_id and item.get("maintenance_progress", {}).get("resumable")) for item in outputs) else 0
 
 
 if __name__ == "__main__":

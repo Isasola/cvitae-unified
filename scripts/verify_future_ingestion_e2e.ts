@@ -33,17 +33,18 @@ assert.equal(matchingReadiness(row).state, 'READY')
 assert.equal(seoReadiness(row).state, 'READY')
 const futureGates = intrinsicRoutingGates(row)
 assert.deepEqual(futureGates.proposed, { catalog_eligible: true, match_eligible: true, alerts_eligible: true, seo_eligible: true })
-const effective = evaluateOpportunityDistribution(row, [policy('computrabajo')])
-assert.equal(effective.canonicalSource, 'computrabajo')
+const effectiveRow = { ...row, source: 'himalayas' }
+const effective = evaluateOpportunityDistribution(effectiveRow, [policy('himalayas', { search_engine_indexing_allowed:true, source_attribution_required:true, google_jobs_distribution_allowed:false })])
+assert.equal(effective.canonicalSource, 'himalayas')
 assert.equal(effective.catalog.allowed, true)
 assert.equal(effective.matching.allowed, true)
 assert.equal(effective.alerts.allowed, true)
-assert.equal(effective.seo.allowed, true, 'SEO readiness is distinct from stale SEO status')
-assert.equal(effective.googleJobs.allowed, true, 'Google Jobs is an independent product-policy consumer')
+assert.equal(effective.seo.allowed, true, 'Himalayas ordinary first-party SEO is permitted')
+assert.equal(effective.googleJobs.allowed, false, 'Google Jobs permission remains independent from SEO')
 
-const oldFlagsFalse = { ...row, catalog_eligible: false, match_eligible: false, alerts_eligible: false, seo_eligible: false, seo_status: 'review' }
+const oldFlagsFalse = { ...effectiveRow, catalog_eligible: false, match_eligible: false, alerts_eligible: false, seo_eligible: false, seo_status: 'review' }
 assert.equal(matchingReadiness(oldFlagsFalse).state, 'READY', 'intrinsic readiness ignores stale row flags')
-const deniedByRow = evaluateOpportunityDistribution(oldFlagsFalse, [policy('computrabajo')])
+const deniedByRow = evaluateOpportunityDistribution(oldFlagsFalse, [policy('himalayas', { search_engine_indexing_allowed:true, source_attribution_required:true, google_jobs_distribution_allowed:false })])
 assert.equal(deniedByRow.matching.allowed, true, 'stale match flag is observable but not permanent routing truth')
 assert.equal(deniedByRow.alerts.allowed, true)
 assert.equal(deniedByRow.matching.storedGateState, 'FALSE')
@@ -56,10 +57,10 @@ assert.ok(seoReadiness(missingOrganization).reasons.includes('MISSING_ORGANIZATI
 assert.equal(evaluateOpportunityDistribution(missingOrganization, [policy('computrabajo')]).seo.allowed, false)
 
 const himalayas = { ...row, id: 'future-himalayas', source: 'himalayas' }
-const himalayasDecision = evaluateOpportunityDistribution(himalayas, [policy('himalayas', { search_engine_indexing_allowed: false, google_jobs_distribution_allowed: false })])
+const himalayasDecision = evaluateOpportunityDistribution(himalayas, [policy('himalayas', { search_engine_indexing_allowed: true, source_attribution_required:true, google_jobs_distribution_allowed: false })])
 assert.equal(himalayasDecision.matching.allowed, true, 'SEO restriction does not disable internal matching')
-assert.equal(himalayasDecision.seo.allowed, false)
-assert.ok(himalayasDecision.seo.reasons.includes('SOURCE_CAPABILITY_DENIED'))
+assert.equal(himalayasDecision.seo.allowed, true)
+assert.equal(himalayasDecision.googleJobs.allowed,false)
 
 const unknown = evaluateOpportunityDistribution({ ...row, id: 'future-unknown', source: 'unregistered_future_source' }, [])
 assert.equal(unknown.policyFound, false)
@@ -72,7 +73,7 @@ assert.ok(unknown.matching.reasons.includes('SOURCE_SWITCH_UNKNOWN'))
 console.log(JSON.stringify({
   verifier: 'future_ingestion_e2e',
   stages: ['OpportunitySink.normalize+dedupe', 'factory.queue+seal+commit', 'truth.readiness', 'effective.policy'],
-  cases: ['canonical permitted row', 'missing organization', 'Himalayas SEO denied/internal matching allowed', 'unknown source fail closed'],
+  cases: ['canonical permitted row', 'missing organization', 'Himalayas first-party SEO allowed/job distribution denied', 'unknown source fail closed'],
   embedding: matchingReadiness(row).state === 'READY' ? 'PENDING_AFTER_FUTURE_TRIGGER' : 'NOT_REQUIRED',
   reconciliation_used: false,
 }))

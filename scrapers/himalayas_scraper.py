@@ -317,7 +317,7 @@ def main() -> None:
                 if outcome.status in enrichment: enrichment[outcome.status] += 1
             else:
                 new_jobs.append(job)
-    summary = OpportunitySink().upsert(new_jobs) if new_jobs else None
+    summary = OpportunitySink().upsert(new_jobs, adapter_version=ADAPTER_VERSION) if new_jobs else None
     metrics_lineage = RunLineageWriter(SUPABASE_URL, SUPABASE_KEY).record(details) if SUPABASE_KEY else build_scan_lineage(details, run_id=os.getenv("CVITAE_SCRAPER_RUN_ID"), scan_request_id=os.getenv("CVITAE_SOURCE_SCAN_REQUEST_ID"))
     valid = sum(bool(item.title) for item in details)
     rejected = max(0, len(seen) - valid)

@@ -240,10 +240,9 @@ Cuando la brecha sea de AWS, Azure/Microsoft o Google Cloud, priorizá el catál
 
 async function corroborateGaps(supabase: any, profile: any, requestedSkills: string[], opportunityIds: string[], preferredIds = new Set<string>()) {
   if (!requestedSkills.length || !opportunityIds.length) return []
-  const { data, error } = await supabase.from('opportunities')
+  const { data, error } = await supabase.from('opportunity_final_matching_universe')
     .select('id,slug,title,organization,description,tags,updated_at')
-    .in('id', opportunityIds).eq('is_active', true).eq('verification_status', 'verified')
-    .eq('match_eligible', true).is('deleted_at', null).is('archived_at', null)
+    .in('id', opportunityIds)
   if (error) throw error
   const ownSkills = cleanList(profile.profile_data?.habilidades, 50).map(normalize)
   const opportunities = data || []

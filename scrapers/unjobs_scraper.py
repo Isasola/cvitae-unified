@@ -308,7 +308,7 @@ def main() -> None:
         else:
             new_jobs.append(job)
 
-    summary = OpportunitySink().upsert(new_jobs) if new_jobs else None
+    summary = OpportunitySink().upsert(new_jobs, adapter_version=ADAPTER_VERSION) if new_jobs else None
     metrics_lineage = (
         RunLineageWriter(SUPABASE_URL, SUPABASE_KEY).record(details)
         if SUPABASE_KEY

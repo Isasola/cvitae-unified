@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8')
 const migration = read('../supabase/migrations/202610020001_opportunity_pipeline_ledger.sql')
+const correctiveMigration = read('../supabase/migrations/202610030001_pipeline_trace_contract_v2.sql')
 const verifySql = read('../artifacts/opportunity-pipeline/verify-prod.sql')
 const sink = read('../scrapers/opportunity_sink.py')
 const runner = read('./run_scraper_monitored.py')
@@ -18,6 +19,10 @@ assert.match(migration, /left join public\.opportunity_factory_snapshots fs/i)
 assert.match(migration, /left join public\.opportunity_universe_state u/i)
 assert.match(migration, /grant select on public\.opportunity_pipeline_status to service_role/i)
 assert.match(migration, /create or replace function public\.admin_opportunity_pipeline_ledger/i)
+assert.match(correctiveMigration, /add column if not exists trace_contract_version/i)
+assert.match(correctiveMigration, /check \([\s\S]*trace_contract_version is distinct from 'v2'[\s\S]*identity_factual[\s\S]*\) not valid/i)
+assert.match(correctiveMigration, /trace_state='TRACED'[\s\S]*li\.trace_state/i)
+assert.doesNotMatch(correctiveMigration, /\bupdate\s+public\.opportunity_ingestion_events\b/i, 'historical receipts are not rewritten')
 for (const field of ['ingestion_state','adapter_lineage_state','normalized_fields_snapshot','factory_status','factory_reason','factory_pipeline_version','factory_rules_version','observation_state','verification_status','lifecycle_state','source_operational_reason','universe_provenance','catalog_state','final_matching_state','alerts_state','seo_state','pipeline_health','next_action','next_action_reason','next_actions']) {
   assert(migration.includes(field), `pipeline projection includes ${field}`)
 }

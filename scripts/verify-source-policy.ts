@@ -40,10 +40,10 @@ assert('A: search_engine_indexing_allowed field declared', base.includes('search
 assert('A: tri-state type (bool | None)', base.includes('bool | None'))
 assert('A: default is None', base.includes('search_engine_indexing_allowed: bool | None = None'))
 
-// B. All 4 V2 profiles declare search_engine_indexing_allowed=False
+// B. V2 profiles keep their own explicit first-party indexing contracts.
 console.log('\n[B] V2 profile declarations')
 assert('B: unjobs has search_engine_indexing_allowed=False', profiles.includes('source="unjobs"') && profiles.slice(profiles.indexOf('source="unjobs"'), profiles.indexOf('source="himalayas"')).includes('search_engine_indexing_allowed=False'))
-assert('B: himalayas has search_engine_indexing_allowed=False', profiles.includes('web_catalog_allowed=True') && profiles.slice(profiles.indexOf('web_catalog_allowed=True'), profiles.indexOf('source="talentcom"')).includes('search_engine_indexing_allowed=False'))
+assert('B: himalayas first-party organic SEO is allowed', profiles.includes('web_catalog_allowed=True') && profiles.slice(profiles.indexOf('web_catalog_allowed=True'), profiles.indexOf('source="talentcom"')).includes('search_engine_indexing_allowed=True'))
 assert('B: talentcom has search_engine_indexing_allowed=False', profiles.slice(profiles.indexOf('source="talentcom"'), profiles.indexOf('source="weworkremotely"')).includes('search_engine_indexing_allowed=False'))
 assert('B: weworkremotely has search_engine_indexing_allowed=False', profiles.slice(profiles.indexOf('source="weworkremotely"')).includes('search_engine_indexing_allowed=False'))
 
@@ -51,8 +51,8 @@ assert('B: weworkremotely has search_engine_indexing_allowed=False', profiles.sl
 console.log('\n[C] web_catalog_allowed vs search_engine_indexing_allowed separation')
 const himalayasBlock = profiles.slice(profiles.indexOf('"himalayas"'), profiles.indexOf('"talentcom"'))
 assert('C: Himalayas has web_catalog_allowed=True', himalayasBlock.includes('web_catalog_allowed=True'))
-assert('C: Himalayas also has search_engine_indexing_allowed=False', himalayasBlock.includes('search_engine_indexing_allowed=False'))
-assert('C: Both fields co-exist on same source', himalayasBlock.includes('web_catalog_allowed=True') && himalayasBlock.includes('search_engine_indexing_allowed=False'))
+assert('C: Himalayas also has search_engine_indexing_allowed=True', himalayasBlock.includes('search_engine_indexing_allowed=True'))
+assert('C: Both fields co-exist on same source', himalayasBlock.includes('web_catalog_allowed=True') && himalayasBlock.includes('search_engine_indexing_allowed=True'))
 
 // D. Gate 8 handles POLICY_DENIED state for search_engine_indexing_allowed=false
 console.log('\n[D] Gate 8 POLICY_DENIED')
@@ -65,7 +65,7 @@ assert('D: legacy path (null) falls through to seo_enabled', gates.includes('// 
 console.log('\n[E] Migration 202609160002')
 assert('E: ADD COLUMN search_engine_indexing_allowed', migration.includes('ADD COLUMN') && migration.includes('search_engine_indexing_allowed'))
 assert('E: BOOLEAN DEFAULT NULL', migration.includes('BOOLEAN DEFAULT NULL'))
-assert('E: UPDATE sets FALSE for 4 V2 sources', migration.includes("search_engine_indexing_allowed = FALSE") && migration.includes("IN ('unjobs', 'himalayas', 'talentcom', 'weworkremotely')"))
+assert('E: migration no longer blanket-denies Himalayas', !migration.includes("search_engine_indexing_allowed = FALSE") || !migration.includes("IN ('unjobs', 'himalayas', 'talentcom', 'weworkremotely')"))
 assert('E: No backfill comment present', migration.includes('NO backfill'))
 
 // F. AdminActionResult interface defined in admin-data.ts

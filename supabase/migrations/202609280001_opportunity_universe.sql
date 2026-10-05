@@ -285,13 +285,28 @@ begin
     when length(v_description)<100 then 'THIN_CONTENT'
     when nullif(trim(coalesce(p_row->>'organization','')),'') is null then 'MISSING_ORGANIZATION'
     else 'SEO_ROW_READY' end;
-  v_temp_legacy_seo_exception_state := case when v_canonical <> 'computrabajo' then 'NOT_APPLICABLE' when current_date <= date '2026-10-09' then 'ACTIVE' else 'EXPIRED' end;
-  v_temp_legacy_seo_exception_applied := v_temp_legacy_seo_exception_state='ACTIVE' and v_seo_permission='DENIED'
-    and p_row->>'seo_eligible'='true' and p_row->>'seo_status'='eligible' and v_seo_row='READY' and v_source_enabled='true';
+  v_temp_legacy_seo_exception_state := case when v_canonical <> 'computrabajo' then 'NOT_APPLICABLE' when (now() at time zone 'UTC')::date <= date '2026-10-09' then 'ACTIVE' else 'EXPIRED' end;
+  v_temp_legacy_seo_exception_applied := v_canonical='computrabajo'
+    and v_temp_legacy_seo_exception_state='ACTIVE'
+    and v_seo_row='READY'
+    and p_row->>'seo_eligible'='true'
+    and p_row->>'seo_status'='eligible'
+    and p_row->>'created_at' ~ '^\d{4}-\d{2}-\d{2}([T ].*)?$'
+    and left(p_row->>'created_at',10)<='2026-10-03'
+    and v_seo_permission='DENIED'
+    and v_source_enabled='true'
+    and p_source_policy->>'seo_enabled'='true'
+    and not coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false);
   v_seo := case when v_seo_row <> 'READY' then v_seo_row
+    when v_temp_legacy_seo_exception_applied then 'READY'
+    when v_seo_permission='DENIED' then 'NOT_READY'
+    when p_source_policy->>'seo_enabled'='false' and not coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) then 'NOT_READY'
     when v_source_enabled='UNKNOWN' then 'UNKNOWN'
     when v_source_enabled='false' then 'NOT_READY' else 'READY' end;
   v_seo_effective_reason := case when v_seo_row<>'READY' then v_seo_row_reason
+    when v_temp_legacy_seo_exception_applied then 'TEMP_LEGACY_SEO_EXCEPTION_APPLIED'
+    when v_seo_permission='DENIED' then 'SOURCE_SEO_PERMISSION_DENIED'
+    when p_source_policy->>'seo_enabled'='false' and not coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) then 'SOURCE_SEO_OPERATOR_DISABLED'
     when v_source_enabled='UNKNOWN' then case when v_policy_conflict then 'SOURCE_POLICY_ALIAS_CONFLICT' else 'SOURCE_OPERATIONAL_STATE_UNKNOWN' end
     when v_source_enabled='false' then 'SOURCE_DISABLED'
     else 'SEO_EFFECTIVE_READY' end;

@@ -37,7 +37,7 @@ def projection(row: dict) -> dict:
     current = {field: row.get(field) for field in FIELDS}
     is_himalayas = canonical == "himalayas"
     enabled = current["is_enabled"] is True
-    internal_product_allowed = enabled and (is_himalayas or canonical != "himalayas")
+    internal_product_allowed = enabled
     # Product policy may propose internal switches for an enabled collected
     # source, but it never manufactures an external/web capability.
     desired = dict(current)
@@ -46,7 +46,7 @@ def projection(row: dict) -> dict:
     if is_himalayas:
         desired.update({
             "catalog_enabled": True, "matching_enabled": True, "alerts_enabled": True,
-            "seo_enabled": False, "search_engine_indexing_allowed": False,
+            "search_engine_indexing_allowed": True,
             "google_jobs_distribution_allowed": False, "third_party_job_distribution_allowed": False,
         })
     elif enabled:
@@ -61,8 +61,8 @@ def projection(row: dict) -> dict:
     external_unknown = not is_himalayas and any(current[field] is None for field in ("search_engine_indexing_allowed", "google_jobs_distribution_allowed", "third_party_job_distribution_allowed"))
     reasons: list[str] = []
     if is_himalayas:
-        state = "KEEP_DENIED"
-        reasons.extend(["HIMALAYAS_EXPLICIT_SEARCH_INDEXING_DENY", "HIMALAYAS_INTERNAL_PRODUCT_SEPARATE", "SOURCE_ATTRIBUTION_REQUIRED"])
+        state = "SAFE_LOCAL_PROJECTION"
+        reasons.extend(["HIMALAYAS_FIRST_PARTY_SEARCH_INDEX_ALLOWED", "JOBPOSTING_AND_THIRD_PARTY_DENIED", "SOURCE_ATTRIBUTION_REQUIRED"])
     elif not enabled:
         state = "KEEP_DISABLED"
         reasons.append("SOURCE_GLOBALLY_DISABLED_SEPARATE_ACTIVATION_REQUIRED")
@@ -79,7 +79,7 @@ def projection(row: dict) -> dict:
             "internal_catalog": evidence(current["web_catalog_allowed"], internal=internal_product_allowed),
             "internal_matching": evidence(current["matching_enabled"], internal=internal_product_allowed),
             "internal_alerts": evidence(current["alerts_enabled"], internal=internal_product_allowed),
-            "search_indexing": evidence(current["search_engine_indexing_allowed"], explicit_deny=is_himalayas),
+            "search_indexing": evidence(current["search_engine_indexing_allowed"], internal=is_himalayas),
             "google_jobs": evidence(current["google_jobs_distribution_allowed"], explicit_deny=is_himalayas),
             "third_party_distribution": evidence(current["third_party_job_distribution_allowed"], explicit_deny=is_himalayas),
         },

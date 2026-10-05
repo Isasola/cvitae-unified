@@ -8,6 +8,7 @@ on:
 
 jobs:
   generate-blog:
+    if: github.event_name == 'workflow_dispatch' || vars.CVITAE_PROD_RELEASE_VALIDATED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 

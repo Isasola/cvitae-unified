@@ -287,13 +287,28 @@ begin
     when length(v_description)<100 then 'THIN_CONTENT'
     when nullif(trim(coalesce(p_row->>'organization','')),'') is null then 'MISSING_ORGANIZATION'
     else 'SEO_ROW_READY' end;
-  v_temp_legacy_seo_exception_state := case when v_canonical <> 'computrabajo' then 'NOT_APPLICABLE' when current_date <= date '2026-10-09' then 'ACTIVE' else 'EXPIRED' end;
-  v_temp_legacy_seo_exception_applied := v_temp_legacy_seo_exception_state='ACTIVE' and v_seo_permission='DENIED'
-    and p_row->>'seo_eligible'='true' and p_row->>'seo_status'='eligible' and v_seo_row='READY' and v_source_enabled='true';
+  v_temp_legacy_seo_exception_state := case when v_canonical <> 'computrabajo' then 'NOT_APPLICABLE' when (now() at time zone 'UTC')::date <= date '2026-10-09' then 'ACTIVE' else 'EXPIRED' end;
+  v_temp_legacy_seo_exception_applied := v_canonical='computrabajo'
+    and v_temp_legacy_seo_exception_state='ACTIVE'
+    and v_seo_row='READY'
+    and p_row->>'seo_eligible'='true'
+    and p_row->>'seo_status'='eligible'
+    and p_row->>'created_at' ~ '^\d{4}-\d{2}-\d{2}([T ].*)?$'
+    and left(p_row->>'created_at',10)<='2026-10-03'
+    and v_seo_permission='DENIED'
+    and v_source_enabled='true'
+    and p_source_policy->>'seo_enabled'='true'
+    and not coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false);
   v_seo := case when v_seo_row <> 'READY' then v_seo_row
+    when v_temp_legacy_seo_exception_applied then 'READY'
+    when v_seo_permission='DENIED' then 'NOT_READY'
+    when p_source_policy->>'seo_enabled'='false' and not coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) then 'NOT_READY'
     when v_source_enabled='UNKNOWN' then 'UNKNOWN'
     when v_source_enabled='false' then 'NOT_READY' else 'READY' end;
   v_seo_effective_reason := case when v_seo_row<>'READY' then v_seo_row_reason
+    when v_temp_legacy_seo_exception_applied then 'TEMP_LEGACY_SEO_EXCEPTION_APPLIED'
+    when v_seo_permission='DENIED' then 'SOURCE_SEO_PERMISSION_DENIED'
+    when p_source_policy->>'seo_enabled'='false' and not coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) then 'SOURCE_SEO_OPERATOR_DISABLED'
     when v_source_enabled='UNKNOWN' then case when v_policy_conflict then 'SOURCE_POLICY_ALIAS_CONFLICT' else 'SOURCE_OPERATIONAL_STATE_UNKNOWN' end
     when v_source_enabled='false' then 'SOURCE_DISABLED'
     else 'SEO_EFFECTIVE_READY' end;
@@ -1030,7 +1045,7 @@ permission_overrides(canonical_source,dimension,permission_state,reason,provenan
 ('himalayas','catalog','ALLOWED','FIRST_PARTY_PRODUCT_USE','https://himalayas.app/api','OFFICIAL_API_DOCUMENTATION','https://himalayas.app/api',DATE '2026-10-01','Official documentation allows listings to power job-search products and dashboards; Himalayas must remain the original source with linkback.'),
 ('himalayas','matching','ALLOWED','JOB_SEARCH_PRODUCT_USE','https://himalayas.app/api','OFFICIAL_API_DOCUMENTATION','https://himalayas.app/api',DATE '2026-10-01','Official documentation expressly permits job-search products, dashboards, AI agents, and automation; third-party republication remains separately prohibited.'),
 ('himalayas','alerts','ALLOWED','JOB_SEARCH_PRODUCT_USE','https://himalayas.app/api','OFFICIAL_API_DOCUMENTATION','https://himalayas.app/api',DATE '2026-10-01','Alerts are first-party job-search product use; preserve visible Himalayas attribution and the original listing link.'),
-('himalayas','seo_index','ALLOWED','FIRST_PARTY_ORGANIC_INDEXING','https://himalayas.app/api','OFFICIAL_API_DOCUMENTATION','https://himalayas.app/api',DATE '2026-10-01','First-party CVitae organic indexing is within permitted job-search product use; this does not permit Google Jobs or other third-party submission.'),
+('himalayas','seo_index','ALLOWED','FIRST_PARTY_ORGANIC_INDEXING_WITH_ATTRIBUTION','https://himalayas.app/api','OFFICIAL_API_DOCUMENTATION','https://himalayas.app/api',DATE '2026-10-03','A first-party CVitae public job-search page may be indexed with visible Himalayas attribution and linkback. JobPosting, Google Jobs and third-party distribution remain denied.'),
 ('himalayas','google_jobs','DENIED','THIRD_PARTY_JOB_AGGREGATOR_PROHIBITED','https://himalayas.app/api','OFFICIAL_API_DOCUMENTATION','https://himalayas.app/api',DATE '2026-10-01','Official documentation prohibits submitting Himalayas listings to third-party sites, explicitly including Google Jobs.'),
 ('himalayas','third_party_distribution','DENIED','THIRD_PARTY_JOB_AGGREGATOR_PROHIBITED','https://himalayas.app/api','OFFICIAL_API_DOCUMENTATION','https://himalayas.app/api',DATE '2026-10-01','Official documentation prohibits submission to third-party sites including Jooble, Neuvoo, Google Jobs, and LinkedIn Jobs.'),
 ('himalayas','application_routing','ALLOWED','PRESERVE_ORIGINAL_HIMALAYAS_LINK','https://himalayas.app/api','OFFICIAL_API_DOCUMENTATION','https://himalayas.app/api',DATE '2026-10-01','Keep and expose the original Himalayas listing/application link as the source destination.'),

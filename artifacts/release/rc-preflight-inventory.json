@@ -1,0 +1,2843 @@
+{
+  "scope": "C:\\Users\\isaso\\cvitae-item53-public-contracts",
+  "branch": "fix/item53-public-contracts-20260923",
+  "head": "88104a86cf0eae56d958e13954286b5485b3ff76",
+  "git_status": " M .github/workflows/matching-retrieval.yml\n M .github/workflows/refresh_embeddings.yml\n M .gitignore\n M WORKING_PRINCIPLES.md\n M artifacts/opportunity-universe/check-partial-schema-prod.sql\n M artifacts/opportunity-universe/preflight-prod.sql\n M artifacts/opportunity-universe/prod-apply-schema.sql\n M artifacts/opportunity-universe/prod-compile-transaction.sql\n M docs/GRAND_CHECKPOINT.md\n M docs/source-permission-matrix.md\n M netlify.toml\n M netlify/functions/admin-data.ts\n M netlify/functions/application-workspace.ts\n M netlify/functions/gemini-courses.ts\n M netlify/functions/generate-cv-vivo.ts\n M netlify/functions/lib/public-opportunity-pagination.ts\n M netlify/functions/lib/seo-pipeline-runner.ts\n M netlify/functions/public-opportunities.ts\n M netlify/functions/send-high-match-alerts.ts\n M netlify/functions/sitemap.ts\n M package.json\n M scrapers/himalayas_scraper.py\n M scrapers/opportunity_sink.py\n M scrapers/source_adapters.py\n M scrapers/source_cleaners/profiles.py\n M scrapers/talentcom_scraper.py\n M scrapers/unjobs_scraper.py\n M scrapers/weworkremotely_scraper.py\n M scripts/fixtures/seo-inventory.json\n M scripts/generate_effective_routing_audit.py\n M scripts/generate_effective_routing_policy_projection.py\n M scripts/generate_opportunity_universe_artifacts.ts\n M scripts/run_matching_retrieval_expansion.ts\n M scripts/run_observation_coverage_recovery.py\n M scripts/run_opportunity_enrichment_batch.py\n M scripts/run_scraper_monitored.py\n M scripts/run_source_maintenance.py\n M scripts/run_source_scan_automation_bridge.py\n M scripts/verify-public-opportunity-pagination.ts\n M scripts/verify-release-candidate.mjs\n M scripts/verify-source-intelligence-wiring.ts\n M scripts/verify-source-policy-snapshot.ts\n M scripts/verify-source-policy.ts\n M scripts/verify_admin_inventory_operations.ts\n M scripts/verify_canonical_robots_sitemap.ts\n M scripts/verify_distribution_truth.ts\n M scripts/verify_effective_routing_item24.ts\n M scripts/verify_effective_routing_policy_projection.py\n M scripts/verify_effective_routing_repair.ts\n M scripts/verify_effective_source_policy.ts\n M scripts/verify_eight_gates.ts\n M scripts/verify_factory_queue_fairness.py\n M scripts/verify_future_ingestion_e2e.ts\n M scripts/verify_ingestion_continuity.py\n M scripts/verify_intrinsic_routing_parity.ts\n M scripts/verify_inventory_reconciliation.ts\n M scripts/verify_matching_retrieval_expansion.ts\n M scripts/verify_matching_retrieval_scheduler.ts\n M scripts/verify_monitor_rejection_semantics.py\n M scripts/verify_observation_coverage_recovery.py\n M scripts/verify_onward_distribution_item28.ts\n M scripts/verify_opportunity_factory.py\n M scripts/verify_opportunity_pipeline_contract.ts\n M scripts/verify_opportunity_universe.ts\n M scripts/verify_opportunity_universe_permission_preflight.ts\n M scripts/verify_public_truth_item29.ts\n M scripts/verify_redirect_consistency_item32.ts\n M scripts/verify_seo_inventory.ts\n M scripts/verify_source_intelligence_item53.ts\n M scripts/verify_source_maintenance.py\n M scripts/verify_source_scan_lineage.py\n M shared/matching-retrieval.ts\n M src/generated/source-intelligence-registry.json\n M src/lib/effective-source-policy.ts\n M src/lib/opportunity-universe.ts\n M src/lib/public-source-policy.ts\n M src/lib/source-permission-truth.ts\n M src/lib/temporary-legacy-seo-exception.ts\n M src/pages/Jobs.tsx\n M src/pages/MarketOpportunities.tsx\n M src/pages/Opportunities.tsx\n M supabase/functions/_shared/generated-source-registry.ts\n M supabase/functions/match-batch/index.ts\n M supabase/migrations/202609280001_opportunity_universe.sql\n M supabase/migrations/202610020001_opportunity_pipeline_ledger.sql\n M vite.config.ts\n?? .github/workflows/opportunity-universe-maintenance.yml\n?? .github/workflows/scheduled-source-automation.yml\n?? artifacts/prod-match-download-v18/config.toml\n?? artifacts/prod-match-download-v18/supabase/.temp/linked-project.json\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/generated-source-registry.ts\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/match-readiness.ts\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/matching-v2.ts\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/matching.ts\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/vector.ts\n?? artifacts/prod-match-download-v18/supabase/functions/match-batch/index.ts\n?? artifacts/prod-match-download/config.toml\n?? artifacts/prod-match-download/supabase/.temp/cli-latest\n?? artifacts/prod-match-download/supabase/.temp/linked-project.json\n?? artifacts/prod-match-download/supabase/functions/_shared/matching.ts\n?? artifacts/prod-match-download/supabase/functions/_shared/vector.ts\n?? artifacts/prod-match-download/supabase/functions/match-batch/index.ts\n?? artifacts/release/cable-local-sql-evidence.json\n?? artifacts/release/final-cable-apply-plan.md\n?? artifacts/release/final-prod-readonly-diagnosis.sql\n?? artifacts/release/performance-prod-readonly.sql\n?? docs/POST_RELEASE_BACKLOG.md\n?? generated/effective-routing-audit.json\n?? scripts/refresh_opportunity_universe_maintenance.ts\n?? scripts/run_scheduled_source_automation.py\n?? scripts/verify_b2c_pipeline_e2e.ts\n?? scripts/verify_b2c_secondary_contracts.ts\n?? scripts/verify_c20_alert_pages.ts\n?? scripts/verify_c20_alert_sql.mjs\n?? scripts/verify_c20_maintenance_pages.py\n?? scripts/verify_cable_wiring_sql.mjs\n?? supabase/migrations/202610030001_pipeline_trace_contract_v2.sql\n?? supabase/migrations/202610030002_opportunity_universe_seo_permission.sql\n?? supabase/migrations/202610040001_source_switch_wiring.sql\n?? supabase/migrations/202610040002_public_catalog_coverage.sql\n?? supabase/migrations/202610050001_bounded_alert_progress.sql\n",
+  "files": [
+    {
+      "status": " M",
+      "path": ".github/workflows/matching-retrieval.yml",
+      "sha256": "9099072cdea1085cbce1a1130ec686d21ec7a2540434fcf5df481534b2b07267"
+    },
+    {
+      "status": " M",
+      "path": ".github/workflows/refresh_embeddings.yml",
+      "sha256": "63063ee5dd782060088eb5d13b836a4d3e1270e3a36c64cfcc4f2f2754fdaa1b"
+    },
+    {
+      "status": " M",
+      "path": ".gitignore",
+      "sha256": "271c21b0404f9a74b52fe03a4f4d13b7b94e61ea3dedfe1bfbb5ccad3a6875db"
+    },
+    {
+      "status": " M",
+      "path": "WORKING_PRINCIPLES.md",
+      "sha256": "180b444a981b713b0e6056eadfefcbe8c22daf6e769efec06ef168788468cbc6"
+    },
+    {
+      "status": " M",
+      "path": "artifacts/opportunity-universe/check-partial-schema-prod.sql",
+      "sha256": "25683447e60b22a02ff9c6259856ea9d253cd151cfd1b48e1b8bcb4ee88db49b"
+    },
+    {
+      "status": " M",
+      "path": "artifacts/opportunity-universe/preflight-prod.sql",
+      "sha256": "86ae889f58c4fd5bc967fd9ad485328f33b77b49683d3d4b9f8aecd492b60870"
+    },
+    {
+      "status": " M",
+      "path": "artifacts/opportunity-universe/prod-apply-schema.sql",
+      "sha256": "aa42bd2722f98c385b38abe3267aa55cc6eda2869b1eb950cdd186e269fd99be"
+    },
+    {
+      "status": " M",
+      "path": "artifacts/opportunity-universe/prod-compile-transaction.sql",
+      "sha256": "c48d6023d655be82c635e314fd2d4733257d60ba6a4d5cbeb7b111ed2e3d893c"
+    },
+    {
+      "status": " M",
+      "path": "docs/GRAND_CHECKPOINT.md",
+      "sha256": "1513c4681dc5117e103eea5a64b2d5634408aab26979f515cfac318350231c8f"
+    },
+    {
+      "status": " M",
+      "path": "docs/source-permission-matrix.md",
+      "sha256": "bba8ffa6c0ca2f1065f936161a6ec9b38e42e65900c7eaa96550da0da04d3045"
+    },
+    {
+      "status": " M",
+      "path": "netlify.toml",
+      "sha256": "12e4b365a05699c803413cacdb3c25f547b59afc9cbca2f2e3d0416cd0ac6206"
+    },
+    {
+      "status": " M",
+      "path": "netlify/functions/admin-data.ts",
+      "sha256": "d5fe10b6eebc567ef0ca0426c72c78f4c0b4bc88ebdbf2b6043ebbd494e749e0"
+    },
+    {
+      "status": " M",
+      "path": "netlify/functions/application-workspace.ts",
+      "sha256": "84808f2c7228fc335630b4019219fca1178356ea8a93de975af3d2f92dc13df3"
+    },
+    {
+      "status": " M",
+      "path": "netlify/functions/gemini-courses.ts",
+      "sha256": "2e55d9b5c2b521aa2eb529de66d05d0f33bef923c5630bf2a1e998ee450ad99c"
+    },
+    {
+      "status": " M",
+      "path": "netlify/functions/generate-cv-vivo.ts",
+      "sha256": "177a77b2b0842589853196c9a0bb51102ed33643989836c6d508bf5a490bb1ef"
+    },
+    {
+      "status": " M",
+      "path": "netlify/functions/lib/public-opportunity-pagination.ts",
+      "sha256": "11f2f3692e8d4aee4a7c7579c081d6bed9df077d7ceb62341b403fb7e101137d"
+    },
+    {
+      "status": " M",
+      "path": "netlify/functions/lib/seo-pipeline-runner.ts",
+      "sha256": "4822d69b154a627857bfcdcc1fd3772b5be84be13f928a3cda03afdc30df8a05"
+    },
+    {
+      "status": " M",
+      "path": "netlify/functions/public-opportunities.ts",
+      "sha256": "3ced54e9c589427bbf018f30539e80759696d0bf85f5f901106ddadea6e62c9f"
+    },
+    {
+      "status": " M",
+      "path": "netlify/functions/send-high-match-alerts.ts",
+      "sha256": "c401d017c055b0e226ccad3eb9896aac58ab09ea8c49a1e18b98a5c846bfe90e"
+    },
+    {
+      "status": " M",
+      "path": "netlify/functions/sitemap.ts",
+      "sha256": "a21422caf3f1dc5f38c745bad2602310ddaf0e7847ccc84e0a3b5192a3675f97"
+    },
+    {
+      "status": " M",
+      "path": "package.json",
+      "sha256": "b05fba5c1508e8fdf60eea4f532b48c8d8e395599cf20a2f56e85b59655d510e"
+    },
+    {
+      "status": " M",
+      "path": "scrapers/himalayas_scraper.py",
+      "sha256": "1489ac0a13008ea0ab82cad4eb9bdb5601f3c3f6ae621d5da6f5de49b9976b43"
+    },
+    {
+      "status": " M",
+      "path": "scrapers/opportunity_sink.py",
+      "sha256": "49227b2f0b1e2f4ac3e9417004288574aede7bed2abe95e403d534be0a6be812"
+    },
+    {
+      "status": " M",
+      "path": "scrapers/source_adapters.py",
+      "sha256": "7e9732e6f40e1bb50bb0114e9b034b2514898b9313a649132eddd190700f959f"
+    },
+    {
+      "status": " M",
+      "path": "scrapers/source_cleaners/profiles.py",
+      "sha256": "9b6b4ead6f3ce29efea974a25f6940113632502cc8dc1798d2b8dd4e92c1caa6"
+    },
+    {
+      "status": " M",
+      "path": "scrapers/talentcom_scraper.py",
+      "sha256": "aa4e421ec504ac5db84fb9e740ed507182bd59c0491717e1689df03fc320e980"
+    },
+    {
+      "status": " M",
+      "path": "scrapers/unjobs_scraper.py",
+      "sha256": "358078a5d7d84b7a09e9d17c016f827d72d7bcee162d2cfcbc3bec4d504a5807"
+    },
+    {
+      "status": " M",
+      "path": "scrapers/weworkremotely_scraper.py",
+      "sha256": "35b1b67753e4e1c5a7b7257ee65114bc0fed7ce9f83c8784ccf558184b9e59db"
+    },
+    {
+      "status": " M",
+      "path": "scripts/fixtures/seo-inventory.json",
+      "sha256": "39efedd7845fa324be68bc3fb67aa9a4fbf7eabdb78f9d979216cad7a90ed389"
+    },
+    {
+      "status": " M",
+      "path": "scripts/generate_effective_routing_audit.py",
+      "sha256": "44b26e1e4629ec04cd473111f794375403eca25061d3bcbfb47fd6e0c869c628"
+    },
+    {
+      "status": " M",
+      "path": "scripts/generate_effective_routing_policy_projection.py",
+      "sha256": "13de43f5fb2253a082fb7d11fbaaad2c4bfd6518e0ba435ca338d784418000e0"
+    },
+    {
+      "status": " M",
+      "path": "scripts/generate_opportunity_universe_artifacts.ts",
+      "sha256": "a9ec73e11b06eee309c87a3d7edf452d1fe221c9088835aca9d00f7f45af8d53"
+    },
+    {
+      "status": " M",
+      "path": "scripts/run_matching_retrieval_expansion.ts",
+      "sha256": "720664abfacfda6cbc4d13d86185bba7aa013f1240bb9759f0b3d9d2f00c0f00"
+    },
+    {
+      "status": " M",
+      "path": "scripts/run_observation_coverage_recovery.py",
+      "sha256": "a4037b062bb7713718fd2399b2769559870ede23220e329943cc5f36f8919ef5"
+    },
+    {
+      "status": " M",
+      "path": "scripts/run_opportunity_enrichment_batch.py",
+      "sha256": "5a899841e3b35133b4696395d810a9171f86280cc4ea169e697ef660f7f5fdc0"
+    },
+    {
+      "status": " M",
+      "path": "scripts/run_scraper_monitored.py",
+      "sha256": "fefbd68c6983d52b8040f592fa04c3432add820dd36ff4808d1c5373882a0ff8"
+    },
+    {
+      "status": " M",
+      "path": "scripts/run_source_maintenance.py",
+      "sha256": "c85e3bf4f9dd60b03cb16768afdead5ef3afc738efc4c09a14809d1be8c7dd78"
+    },
+    {
+      "status": " M",
+      "path": "scripts/run_source_scan_automation_bridge.py",
+      "sha256": "96a9def2cffaf1c998133a4fe4758bee9fcd21d723864a2b34d9c24e7f83cfa9"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify-public-opportunity-pagination.ts",
+      "sha256": "318c9d5969bbe80706d0fcb9e85ce041beb71fd328122e24b0dc3570b8ebfdca"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify-release-candidate.mjs",
+      "sha256": "01c50675f069c290bf0d0c01682696490af53a2fe35cc642fe7057bad1797696"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify-source-intelligence-wiring.ts",
+      "sha256": "c0f753f33fa40c417b87ad5342691da6f75a6f00183deae3f7d38ac95050de8c"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify-source-policy-snapshot.ts",
+      "sha256": "446041157f0ab5e329df19d5f5bed69dfe3a30b2c83f70ee76bd2269a44668f8"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify-source-policy.ts",
+      "sha256": "5437d2817cdf6cf644a736aa77f010de7e6bad7cf6dae49b691415bd5179834f"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_admin_inventory_operations.ts",
+      "sha256": "a2ec3c382e22721fda526a47f0bf9850d4e347f92afac0bbb4aa2c7be6373d92"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_canonical_robots_sitemap.ts",
+      "sha256": "eacd63c054154798caa457bed00a833caaa7611e4f18ae461c5e05f221a13a23"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_distribution_truth.ts",
+      "sha256": "422413d1d8caa036b39359d839993de053521292d3ff84179427e78d101acad0"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_effective_routing_item24.ts",
+      "sha256": "e8466375b4857f2939d9306b9c8ada623fd20e75b86e37f859906526fbf1728f"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_effective_routing_policy_projection.py",
+      "sha256": "784fa363997cee467572bda01e5e7153a38610e454409e6cdc95ada6a95ba285"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_effective_routing_repair.ts",
+      "sha256": "3b4e6c5b6ce3eba8256c79d7275213deac640bccd1f1a921b09091c859125d8c"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_effective_source_policy.ts",
+      "sha256": "84e9e4922849b3a8137ea66e571546f959ef5d783fce95ce391c31e62a238d20"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_eight_gates.ts",
+      "sha256": "6c2b5a372ccd44836b33d2b5afe91963909cc9fa03b6714f1fa13d4789622297"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_factory_queue_fairness.py",
+      "sha256": "ef87329b1100deb8b970eb2013947e9919ca8f6a27f62316f1bf0497730d317d"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_future_ingestion_e2e.ts",
+      "sha256": "966936dcd1ef5862f6eba7775d286a25bea684f5e7b405c96a3e2d7578d2d0cf"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_ingestion_continuity.py",
+      "sha256": "98f281a80fc57b24ff4069e9c5bbcd0fb987d689f69d9f384e6055c4f4910c91"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_intrinsic_routing_parity.ts",
+      "sha256": "50c71c114c1f80629527350ded61bc772f931e51fa148681f695b146281b134d"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_inventory_reconciliation.ts",
+      "sha256": "14634d5e4c4e7fafbd9a82a9b1e9a7d196a19a290c29c31f62362187d39f47e6"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_matching_retrieval_expansion.ts",
+      "sha256": "8b36752984daaa4199af558d1a12e6b41685a94f613a142dc8a7bd6370f1ce4d"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_matching_retrieval_scheduler.ts",
+      "sha256": "2b852446b6c0e26591236f804a78f2c4b8b9b8abc271c379f731eb73ed391510"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_monitor_rejection_semantics.py",
+      "sha256": "e578e395c987a34b491aab7e268e759740fc369c991304e44fe9019966b247f0"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_observation_coverage_recovery.py",
+      "sha256": "05c61828fd1dc5d818d42a87118391cd382a69fd4793a5e95e4bf65d08fda4c4"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_onward_distribution_item28.ts",
+      "sha256": "e4f5c7cbbfa0f0fdcc00ccf52e46672f56162211ee2a1ffdb4b5396625720ece"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_opportunity_factory.py",
+      "sha256": "b04315dbd1fd04cf945ec95c29cc6627abd7e8fb3ecefda0a8eb2da410705ee6"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_opportunity_pipeline_contract.ts",
+      "sha256": "73c7ed74acbaf42d2f16f84541048ba9e70789af65168eaa0d5ad04d1f547564"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_opportunity_universe.ts",
+      "sha256": "91fa3a0ca712255b9453887baf94d4a79b355785702a7b0af4b26ef0f912758d"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_opportunity_universe_permission_preflight.ts",
+      "sha256": "27c9901471425147315d5523bfe2ac2790ee1ac0452c452563507f9bf28c057b"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_public_truth_item29.ts",
+      "sha256": "75094e407192703ae46caa4af3f196888d6dedd82f2c92974a5de3eb42e58e49"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_redirect_consistency_item32.ts",
+      "sha256": "75f8c7e943706bae86e58cee98525237e6242de7addd8ab6a84a8eb16bd0c096"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_seo_inventory.ts",
+      "sha256": "092ef1d37c796b840a9b330120c269c1c5f7e60c12ae4b0e511694f0b806552e"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_source_intelligence_item53.ts",
+      "sha256": "8361c7220a5bf369aebc4831472698d5a282baa4d35398e6b52ad41727db6ca5"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_source_maintenance.py",
+      "sha256": "37d547c5f08aa3751cb9875007d03a4220b0cd42199c8df026f49147fafbc580"
+    },
+    {
+      "status": " M",
+      "path": "scripts/verify_source_scan_lineage.py",
+      "sha256": "99c93907bd4038497651074f5b010a78f8e9bc38250260ae6840af1a82eeb1b2"
+    },
+    {
+      "status": " M",
+      "path": "shared/matching-retrieval.ts",
+      "sha256": "f9d8419539f39b8d0304f14c9dbf5fb9b5fb4de427dc15588bf19972601ad224"
+    },
+    {
+      "status": " M",
+      "path": "src/generated/source-intelligence-registry.json",
+      "sha256": "5e1826502a566ad0921492b2b6a057ec0c459f4c6f2ec744fd8e1c79a20c20e1"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/effective-source-policy.ts",
+      "sha256": "6a084811763aedd9439962d24bf86d0046f50468b05e2f3c502742ea183b4276"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/opportunity-universe.ts",
+      "sha256": "bdb6a8e4f06e6a9551f4b3a3fd1908ec8e03891ffb1d24baf5b99d778d593903"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/public-source-policy.ts",
+      "sha256": "9dd7e77dfaa813b3dd47e457d617e56337180634dd3ef017825c585a19dbcb23"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/source-permission-truth.ts",
+      "sha256": "624340efc83650cb691c88e4f0184c48fe15d8a9710f07b1db81527f05bfd0bb"
+    },
+    {
+      "status": " M",
+      "path": "src/lib/temporary-legacy-seo-exception.ts",
+      "sha256": "a9d3f7a1fe21e28f0b35bd8d298fdfccc6987d14f1d3bfc040ee8ab4aab3b9bc"
+    },
+    {
+      "status": " M",
+      "path": "src/pages/Jobs.tsx",
+      "sha256": "06817ad70af6467108e60e934684b1b2faf36bcfecb1d0bd26adb3604f137a78"
+    },
+    {
+      "status": " M",
+      "path": "src/pages/MarketOpportunities.tsx",
+      "sha256": "dc5a17a7b6c4dd65e27d4bc200e9a1a884cc9b15fc2b533f803c52eff778278c"
+    },
+    {
+      "status": " M",
+      "path": "src/pages/Opportunities.tsx",
+      "sha256": "87f49cd232ade43d0f866a9a408902be3dbc17ca1110e8c37907094ab0b4d074"
+    },
+    {
+      "status": " M",
+      "path": "supabase/functions/_shared/generated-source-registry.ts",
+      "sha256": "d10a7c7f501ad642ebbe085a6080eca6fd3a96b40a66523c91df1acc2df2e727"
+    },
+    {
+      "status": " M",
+      "path": "supabase/functions/match-batch/index.ts",
+      "sha256": "01139daad680dc20c5d12a92be2c61c7fd7d728d80e7dd14a0b5288fa5fe31b1"
+    },
+    {
+      "status": " M",
+      "path": "supabase/migrations/202609280001_opportunity_universe.sql",
+      "sha256": "a91e7d046acecc707c926f93c787386bce3c4b5dbafc5d4b773401aadf612319"
+    },
+    {
+      "status": " M",
+      "path": "supabase/migrations/202610020001_opportunity_pipeline_ledger.sql",
+      "sha256": "6cac1017b353344104fd86f62797fff4ca69075d12dbf10f55765782661c9bb5"
+    },
+    {
+      "status": " M",
+      "path": "vite.config.ts",
+      "sha256": "e454f7e92632d6aa35e3af213a8816b9591077a2d72c958e071c8d6f3d5d9ec0"
+    },
+    {
+      "status": "??",
+      "path": ".github/workflows/opportunity-universe-maintenance.yml",
+      "sha256": "24081adc3679b5febf1654490a472b38329ecf5e16d70921379f0d78a3a1b26b"
+    },
+    {
+      "status": "??",
+      "path": ".github/workflows/scheduled-source-automation.yml",
+      "sha256": "aa2620169abddad7039285b2312ee46ed95411377d0b51f52834dfa9a5becedc"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download-v18/config.toml",
+      "sha256": "df198bd1482abd201e434b6e088bd9e33028d1bf45449a3223fbc1980bf8c201"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download-v18/supabase/.temp/linked-project.json",
+      "sha256": "072d2cd1e344477362c6e8064935e8f5de1e14f453c0deb5212b61a53972eeb3"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/generated-source-registry.ts",
+      "sha256": "270c8ad075f8c26708495fcdd1fb0499b5ee1872e965df208d36e4336b19f1d5"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/match-readiness.ts",
+      "sha256": "59d73258bdc00d874d1ff14d4a58473c5f5a09290f17df64c90baedc912837cb"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/matching-v2.ts",
+      "sha256": "dec49c3fdcbdd4aed85db93accd3038d38ba3fde3780471ed20c578de053ea3b"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/matching.ts",
+      "sha256": "56a47b7b5b1fe2b5ae58ba335dd57fb3e7ab77ecc5160b08ed9978d2abebef69"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/vector.ts",
+      "sha256": "8e0ff97e58339f76213176e264cf9987e3525893dc5d3adcdf82aff6acfcd074"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download-v18/supabase/functions/match-batch/index.ts",
+      "sha256": "f30f5e5215e5f9dd5b4d83a4e9bdcea05dd28afe93f334d886532920a3a2cdab"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download/config.toml",
+      "sha256": "df198bd1482abd201e434b6e088bd9e33028d1bf45449a3223fbc1980bf8c201"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download/supabase/.temp/cli-latest",
+      "sha256": "103e9d7a97f9a66c28586ffae6f8d81a90630d5cb2c537b23ed886a5e0e5ff01"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download/supabase/.temp/linked-project.json",
+      "sha256": "072d2cd1e344477362c6e8064935e8f5de1e14f453c0deb5212b61a53972eeb3"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download/supabase/functions/_shared/matching.ts",
+      "sha256": "ec1a09aa9904b1270b2f13ccdeaf213e295f277380c6b795e0eba60683cd1ab4"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download/supabase/functions/_shared/vector.ts",
+      "sha256": "ba3ac82f72849f8f683c79d523acb3e5313c084e4ce3d37ffdc108510310ad78"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/prod-match-download/supabase/functions/match-batch/index.ts",
+      "sha256": "60ecb4d98e3b314a20d4f0c872e57ec80d920925fea2d9da06ddde43df270961"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/release/cable-local-sql-evidence.json",
+      "sha256": "35643e5a17579ea7ff82b870c5cf2a9f6ffd908890d7481092fa9f8ff61fd88e"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/release/final-cable-apply-plan.md",
+      "sha256": "7a4956474cdb34986715c15cdc260e3ac00c1fbe2a2f4da86ab53f6a3e69984a"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/release/final-prod-readonly-diagnosis.sql",
+      "sha256": "43679a1c42eee55bd5d3d3625408cfcfdceebbbd5f461afd2fab7814ac457309"
+    },
+    {
+      "status": "??",
+      "path": "artifacts/release/performance-prod-readonly.sql",
+      "sha256": "b2e4de4dee8461af8767d50087a44409f1558afd0e04c858753f1a3be218da00"
+    },
+    {
+      "status": "??",
+      "path": "docs/POST_RELEASE_BACKLOG.md",
+      "sha256": "f931281362582cc23cae1fc3f56460dfe9c372a1b304fd9e37ca2e06cede388b"
+    },
+    {
+      "status": "??",
+      "path": "generated/effective-routing-audit.json",
+      "sha256": "d56fc094067337bfdb444f2635edf564794adf588a5d9d945308849cdc018ebb"
+    },
+    {
+      "status": "??",
+      "path": "scripts/refresh_opportunity_universe_maintenance.ts",
+      "sha256": "c4bf6f6f8cd27ef3fc25a2dd9f75411d68751639e2aa26ac1e75137e0303b95a"
+    },
+    {
+      "status": "??",
+      "path": "scripts/run_scheduled_source_automation.py",
+      "sha256": "b123c08aa9b39a24e788edad49cbd990499b64c2969e9c1571b6294bd3c6fd9d"
+    },
+    {
+      "status": "??",
+      "path": "scripts/verify_b2c_pipeline_e2e.ts",
+      "sha256": "b2b869e00b71b7293b4f6973483c27b004ff72a9be0ea6c3a82b94ee5a4eece6"
+    },
+    {
+      "status": "??",
+      "path": "scripts/verify_b2c_secondary_contracts.ts",
+      "sha256": "4512519bd4c84b309c3dfc02009c7310591d8d81085b44b8d23268355f6be394"
+    },
+    {
+      "status": "??",
+      "path": "scripts/verify_c20_alert_pages.ts",
+      "sha256": "2f2e94931da9accf444f5d51f5a278d263ef4b5c52ec05947198bb81632ee791"
+    },
+    {
+      "status": "??",
+      "path": "scripts/verify_c20_alert_sql.mjs",
+      "sha256": "5a2d5837a1f094b3fb3e93a28a9725f199c13ad55046608076e80fe2312c108a"
+    },
+    {
+      "status": "??",
+      "path": "scripts/verify_c20_maintenance_pages.py",
+      "sha256": "bf18ac02242a7229c0c46e189c326131902f6c106b050e6d0e3b1cbe738549af"
+    },
+    {
+      "status": "??",
+      "path": "scripts/verify_cable_wiring_sql.mjs",
+      "sha256": "82eae097aa5cd1c46bdbe879975d4c9a650474a6bfdd19fd6dd848718ab05fcb"
+    },
+    {
+      "status": "??",
+      "path": "supabase/migrations/202610030001_pipeline_trace_contract_v2.sql",
+      "sha256": "2c8821c9eed913f01194034a9ae41f780bb7c783449abc4c823b0f4123ada5bb"
+    },
+    {
+      "status": "??",
+      "path": "supabase/migrations/202610030002_opportunity_universe_seo_permission.sql",
+      "sha256": "69865635e94fcd123f54c9af14fbb6f67ae4bfecce5295c62903ebb39cf7f5d3"
+    },
+    {
+      "status": "??",
+      "path": "supabase/migrations/202610040001_source_switch_wiring.sql",
+      "sha256": "097da537854b98f17ec3905dab96e3e378258adb829bd3f04f8dd02b16bfc483"
+    },
+    {
+      "status": "??",
+      "path": "supabase/migrations/202610040002_public_catalog_coverage.sql",
+      "sha256": "9f0889763d551eeb9426540a945267239d351c84054b23e526c499b753c8c307"
+    },
+    {
+      "status": "??",
+      "path": "supabase/migrations/202610050001_bounded_alert_progress.sql",
+      "sha256": "226b98260def21532aebf30eec8f8a749efe8067fddb393fb60a62d32e796c5e"
+    }
+  ],
+  "modified_count": 86,
+  "new_count": 35,
+  "release_artifacts": [
+    "artifacts/release/cable-local-sql-evidence.json",
+    "artifacts/release/final-cable-apply-plan.md",
+    "artifacts/release/final-prod-readonly-diagnosis.sql",
+    "artifacts/release/final-prod-verify.sql",
+    "artifacts/release/performance-prod-readonly.sql"
+  ],
+  "pending_migrations": [
+    "supabase/migrations/202610030001_pipeline_trace_contract_v2.sql",
+    "supabase/migrations/202610030002_opportunity_universe_seo_permission.sql",
+    "supabase/migrations/202610040001_source_switch_wiring.sql",
+    "supabase/migrations/202610040002_public_catalog_coverage.sql",
+    "supabase/migrations/202610050001_bounded_alert_progress.sql"
+  ],
+  "master_normalized_sha256": "32ec188c859eb156cb02d1bac34651de5d208c36fc7f236a278688a90eacb19e",
+  "backlog_sha256": "f931281362582cc23cae1fc3f56460dfe9c372a1b304fd9e37ca2e06cede388b",
+  "AFTER_DEPLOY_AUTOMATIC_TRIGGERS": [
+    {
+      "NAME": "Matching retrieval cron",
+      "AUTOMATIC_AFTER_DEPLOY": "YES",
+      "CADENCE": "17 * * * * UTC",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "YES",
+      "HEAVY_OR_BOUNDED": "BOUNDED: 2 profiles x4 pages x250",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Automatic job requires vars.CVITAE_PROD_RELEASE_VALIDATED exactly true; absent/false skips. Existing explicit dispatch preserved. Cron belongs to GitHub default branch; remote branch/flag not consulted."
+    },
+    {
+      "NAME": "Factory / embeddings cron",
+      "AUTOMATIC_AFTER_DEPLOY": "YES",
+      "CADENCE": "0 * * * * UTC",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "YES",
+      "HEAVY_OR_BOUNDED": "BOUNDED: 250 structural /20 embeddings",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Automatic job requires vars.CVITAE_PROD_RELEASE_VALIDATED exactly true; absent/false skips. Existing explicit dispatch preserved. Cron belongs to GitHub default branch; remote branch/flag not consulted."
+    },
+    {
+      "NAME": "Factory / embeddings workflow_run",
+      "AUTOMATIC_AFTER_DEPLOY": "YES",
+      "CADENCE": "CVitae Scrapers completion, success only",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "YES",
+      "HEAVY_OR_BOUNDED": "BOUNDED: same job budget/concurrency",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Automatic job requires vars.CVITAE_PROD_RELEASE_VALIDATED exactly true; absent/false skips. Existing explicit dispatch preserved. Cron belongs to GitHub default branch; remote branch/flag not consulted. Failure completion stays blocked even when validated."
+    },
+    {
+      "NAME": "Source maintenance cron",
+      "AUTOMATIC_AFTER_DEPLOY": "YES",
+      "CADENCE": "17 */6 * * * UTC",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "YES",
+      "HEAVY_OR_BOUNDED": "BOUNDED: page<=250, durable source/lane continuation; 55min timeout",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Automatic job requires vars.CVITAE_PROD_RELEASE_VALIDATED exactly true; absent/false skips. Existing explicit dispatch preserved. Cron belongs to GitHub default branch; remote branch/flag not consulted."
+    },
+    {
+      "NAME": "Scrapers cron",
+      "AUTOMATIC_AFTER_DEPLOY": "YES",
+      "CADENCE": "0 10 * * * UTC",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "YES",
+      "HEAVY_OR_BOUNDED": "HEAVY: multi-source ingestion/cleanup; 60min timeout",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Automatic job requires vars.CVITAE_PROD_RELEASE_VALIDATED exactly true; absent/false skips. Existing explicit dispatch preserved. Cron belongs to GitHub default branch; remote branch/flag not consulted."
+    },
+    {
+      "NAME": "Blog generator cron",
+      "AUTOMATIC_AFTER_DEPLOY": "YES",
+      "CADENCE": "0 11 * * 0 UTC",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "YES",
+      "HEAVY_OR_BOUNDED": "HEAVY: external generation/write; 10min timeout; budget not re-audited",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Automatic job requires vars.CVITAE_PROD_RELEASE_VALIDATED exactly true; absent/false skips. Existing explicit dispatch preserved. Cron belongs to GitHub default branch; remote branch/flag not consulted."
+    },
+    {
+      "NAME": "LinkedIn poster cron",
+      "AUTOMATIC_AFTER_DEPLOY": "YES",
+      "CADENCE": "0 12-23,0,1,2 * * * UTC",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "YES",
+      "HEAVY_OR_BOUNDED": "HEAVY: external publishing; 10min timeout; budget not re-audited",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Automatic job requires vars.CVITAE_PROD_RELEASE_VALIDATED exactly true; absent/false skips. Existing explicit dispatch preserved. Cron belongs to GitHub default branch; remote branch/flag not consulted."
+    },
+    {
+      "NAME": "Notify signups cron",
+      "AUTOMATIC_AFTER_DEPLOY": "YES",
+      "CADENCE": "0 12 * * * UTC",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "YES",
+      "HEAVY_OR_BOUNDED": "HEAVY: database/mail; 5min timeout; budget not re-audited",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Automatic job requires vars.CVITAE_PROD_RELEASE_VALIDATED exactly true; absent/false skips. Existing explicit dispatch preserved. Cron belongs to GitHub default branch; remote branch/flag not consulted."
+    },
+    {
+      "NAME": "Netlify high-match alerts",
+      "AUTOMATIC_AFTER_DEPLOY": "YES",
+      "CADENCE": "0 */2 * * * UTC",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "YES",
+      "HEAVY_OR_BOUNDED": "BOUNDED: one profile; <=5x100 rows; <=20 effects; 20s/30s",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Wrapper checks process.env.CVITAE_PROD_RELEASE_VALIDATED exactly true before existing DB/email handler; remote flag not consulted."
+    },
+    {
+      "NAME": "Opportunity Universe maintenance",
+      "AUTOMATIC_AFTER_DEPLOY": "NO",
+      "CADENCE": "workflow_dispatch only; no cron",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "YES",
+      "HEAVY_OR_BOUNDED": "BOUNDED: <=500 due rows /1 source x10 pages x250",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Existing manual-only workflow requires input YES AND gate true. No automatic owner starts."
+    },
+    {
+      "NAME": "Scheduled source automation",
+      "AUTOMATIC_AFTER_DEPLOY": "NO",
+      "CADENCE": "workflow_dispatch only; no cron",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "YES",
+      "HEAVY_OR_BOUNDED": "BOUNDED: 1 run, batch10, 1 batch",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Existing manual-only workflow requires input YES AND gate true. No automatic owner starts."
+    },
+    {
+      "NAME": "Source policy DB trigger replacement",
+      "AUTOMATIC_AFTER_DEPLOY": "NO",
+      "CADENCE": "Source INSERT/UPDATE; not deploy/time",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "NO",
+      "HEAVY_OR_BOUNDED": "BOUNDED: source dirty queue",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Replaced existing trigger function only queues canonical source when an authorized write occurs."
+    },
+    {
+      "NAME": "Permission DB trigger replacement",
+      "AUTOMATIC_AFTER_DEPLOY": "NO",
+      "CADENCE": "Permission INSERT/UPDATE; not deploy/time",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "NO",
+      "HEAVY_OR_BOUNDED": "BOUNDED: existence lookup and source dirty queue",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Replaced existing trigger function; no timer. UNKNOWN/DENIED authority preserved."
+    },
+    {
+      "NAME": "Universe deadline DB trigger",
+      "AUTOMATIC_AFTER_DEPLOY": "NO",
+      "CADENCE": "Universe BEFORE INSERT/UPDATE; not deploy/time",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "NO",
+      "HEAVY_OR_BOUNDED": "BOUNDED: exact opportunity deadline lookup",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "New trigger sets current row metadata, does not invoke maintenance or reconciliation."
+    },
+    {
+      "NAME": "Producer Universe DB trigger (existing)",
+      "AUTOMATIC_AFTER_DEPLOY": "NO",
+      "CADENCE": "Opportunity INSERT/UPDATE; not deploy/time",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "NO",
+      "HEAVY_OR_BOUNDED": "BOUNDED: same exact-row reducer",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Unchanged attachment; catalog preflight checks enabled binding. No C09 re-audit."
+    },
+    {
+      "NAME": "Observation Universe DB trigger (existing)",
+      "AUTOMATIC_AFTER_DEPLOY": "NO",
+      "CADENCE": "Observation INSERT; not deploy/time",
+      "REQUIRES_RELEASE_VALIDATED_GATE": "NO",
+      "HEAVY_OR_BOUNDED": "BOUNDED: same exact-row reducer",
+      "SAFE_BEFORE_CANARY": "YES",
+      "WHY": "Unchanged attachment; catalog preflight checks enabled binding. No C09 re-audit."
+    }
+  ],
+  "automatic_trigger_count": 9,
+  "unsafe_automatic_triggers_in_rc": [],
+  "remote_automatic_trigger_state": "NOT_QUERIED. Confirm false flags/default branch/site, suspend legacy/in-flight workers before apply/canary. RC gates cannot stop old published code.",
+  "migration_static_review": [
+    {
+      "transactional_safety": "Transactional DDL, no own BEGIN/COMMIT; existing mechanism must wrap EACH file atomically. Not applied.",
+      "target_compatibility": "Pending metadata preflight; unrecorded history is not proof SQL was not applied manually.",
+      "full_table_destructive_rewrite": false,
+      "rollback": "Keep additive schema/index/checkpoints; plan I stored switches + prior runtime by real deploy ID + dedicated rollback cursor. Backups/actual ID required before authorized apply.",
+      "version": "202610030001",
+      "status": "STATIC_PASS / LOCAL_PREFIX_FIXED / PROD_PREFLIGHT_RERUN_REQUIRED",
+      "idempotence": "IF NOT EXISTS columns; drop/re-add named CHECK NOT VALID; compatible view/function replacements.",
+      "dependencies": "Ingestion, Opportunity, Observation, Factory, Universe, source identity; vector_dims(public.vector); role grants.",
+      "grants": "Ledger view SELECT/admin ledger EXECUTE service only; PUBLIC/anon/authenticated revoked.",
+      "indexes": "NONE",
+      "apply_cost": "Metadata/default additions, table locks; no historical constraint validation/reconstruction/rewrite."
+    },
+    {
+      "transactional_safety": "Transactional DDL, no own BEGIN/COMMIT; existing mechanism must wrap EACH file atomically. Not applied.",
+      "target_compatibility": "Pending metadata preflight; unrecorded history is not proof SQL was not applied manually.",
+      "full_table_destructive_rewrite": false,
+      "rollback": "Keep additive schema/index/checkpoints; plan I stored switches + prior runtime by real deploy ID + dedicated rollback cursor. Backups/actual ID required before authorized apply.",
+      "version": "202610030002",
+      "status": "STATIC_PASS / TARGET_SIGNATURE_PENDING",
+      "idempotence": "Same four-JSONB reducer; source dirty queue upsert coalesces.",
+      "dependencies": "Permission/identity/deadline/requirements authorities; dirty queue unique key.",
+      "grants": "Replacement retains ACL; target EXECUTE checked separately.",
+      "indexes": "NONE",
+      "apply_cost": "Small source-level DISTINCT/upsert; no opportunity scan/recompute."
+    },
+    {
+      "transactional_safety": "Transactional DDL, no own BEGIN/COMMIT; existing mechanism must wrap EACH file atomically. Not applied.",
+      "target_compatibility": "Pending metadata preflight; unrecorded history is not proof SQL was not applied manually.",
+      "full_table_destructive_rewrite": false,
+      "rollback": "Keep additive schema/index/checkpoints; plan I stored switches + prior runtime by real deploy ID + dedicated rollback cursor. Backups/actual ID required before authorized apply.",
+      "version": "202610040001",
+      "status": "STATIC_PASS / TARGET_DROP_DEPENDENCIES_PENDING / INDEX_IO_BUDGET_REQUIRED",
+      "idempotence": "IF NOT EXISTS columns/indexes; deadline trigger drop/create. DROP zero-arg get_source_distribution_policy requires target present and no normal dependants; no CASCADE.",
+      "dependencies": "Source/permission/identity, audit ledger, Opportunity/Universe/Observation/dirty queue; existing refresh helper and compatible view prefixes.",
+      "grants": "Stored/canonical policy service only; minimal distribution RPC anon/auth/service; baseline service-only RPC ACLs require target check.",
+      "indexes": "Audit lookup; Opportunity lower(source)/text-ID; Opportunity updated_at/id; partial Universe next-check.",
+      "apply_cost": "If missing, synchronous full index scans of opportunities twice, Universe once, audit once; sorting/locks/IO budget. No bulk source switch update/backfill."
+    },
+    {
+      "transactional_safety": "Transactional DDL, no own BEGIN/COMMIT; existing mechanism must wrap EACH file atomically. Not applied.",
+      "target_compatibility": "Pending metadata preflight; unrecorded history is not proof SQL was not applied manually.",
+      "full_table_destructive_rewrite": false,
+      "rollback": "Keep additive schema/index/checkpoints; plan I stored switches + prior runtime by real deploy ID + dedicated rollback cursor. Backups/actual ID required before authorized apply.",
+      "version": "202610040002",
+      "status": "STATIC_PASS / PG_TRGM_SCHEMA_PENDING / INDEX_IO_BUDGET_REQUIRED",
+      "idempotence": "Extension/index IF NOT EXISTS, compatible function replace. Existing pg_trgm outside extensions BLOCKS.",
+      "dependencies": "extensions schema/gin_trgm_ops; factual text columns, canonical Catalog view and keyset fields.",
+      "grants": "Search EXECUTE service only; PUBLIC/anon/authenticated revoked.",
+      "indexes": "Synchronous GIN expression search + area/updated_at/id btree.",
+      "apply_cost": "If missing, two full opportunities index scans, expression evaluation/sort and locks; no data rewrite."
+    },
+    {
+      "transactional_safety": "Transactional DDL, no own BEGIN/COMMIT; existing mechanism must wrap EACH file atomically. Not applied.",
+      "target_compatibility": "Pending metadata preflight; unrecorded history is not proof SQL was not applied manually.",
+      "full_table_destructive_rewrite": false,
+      "rollback": "Keep additive schema/index/checkpoints; plan I stored switches + prior runtime by real deploy ID + dedicated rollback cursor. Backups/actual ID required before authorized apply.",
+      "version": "202610050001",
+      "status": "STATIC_PASS / TARGET_PREREQUISITES_PENDING / INDEX_IO_BUDGET_REQUIRED",
+      "idempotence": "IF NOT EXISTS scheduler column/progress table/indexes; compatible function replacements; wrong-shaped existing objects fail metadata.",
+      "dependencies": "user_master_profiles UUID unique ID/preferences, scheduler, candidates, scraper_runs JSONB metrics, enrichment exact-ID index, opportunities, auth.role(), gen_random_uuid(). Singleton contents not read; canary required.",
+      "grants": "Private progress table/RLS and continuation/evidence RPCs service only; PUBLIC/anon/authenticated revoked.",
+      "indexes": "Partial profile walk; scraper lane/progress/time; candidates user/time/ID; partial Opportunity source/ID.",
+      "apply_cost": "If missing, synchronous profile/run/candidate/opportunity scans/builds. New progress table empty. No email/recipient processing on apply."
+    }
+  ],
+  "node24_local_evidence": {
+    "runtime": "v24.21.0",
+    "package_manager": "11.8.0",
+    "frozen_install": "PASS --frozen-lockfile --offline; unchanged package/lock/config",
+    "build": "PASS pnpm build with scripts/fixtures/seo-inventory.json; no PROD; sitemap14 URLs /prerender3 jobs+1 opportunity",
+    "critical_verifiers_pass": [
+      "verify_release_automatic_gates.ts",
+      "verify_opportunity_pipeline_contract.ts",
+      "verify_c20_alert_pages.ts",
+      "verify_matching_b2c_consumers.ts",
+      "verify_b2c_secondary_contracts.ts",
+      "verify_source_intelligence_item53.ts",
+      "verify_shared_b2c_item57.ts",
+      "verify_seo_inventory.ts",
+      "verify_release_preflight_readonly.mjs"
+    ],
+    "failed_verifiers": [],
+    "compile_artifact": "artifacts/release/rc-node24-compile.json",
+    "full_repository_typecheck": "NOT_CLAIMED: 3 diagnostics in unchanged Matching dependencies recorded, empty diff against HEAD. No scoring change.",
+    "git_diff_check": "PASS (current worktree line-ending policy; global Git config unchanged)",
+    "build_server_environment_present": false,
+    "build_network_scope": "Generator uses local fixture; sitemap/prerender have no inherited Supabase server variables, so no database client queries."
+  },
+  "netlify_repo_config": {
+    "production_branch": "feature/aws-migration",
+    "push_triggers_deploy": true,
+    "build": "pnpm build",
+    "publish": "dist",
+    "functions": "netlify/functions",
+    "node": "24",
+    "pnpm": "11.8.0",
+    "bundler": "esbuild",
+    "redirects": "Dynamic sitemaps, detail404s, auth callback and SPA fallback preserved",
+    "remote_account_config": "NOT_QUERIED; PD-005 BACKLOG"
+  },
+  "integrity": {
+    "single_bible_C01_C21": true,
+    "master_1_67_unchanged": true,
+    "backlog_unchanged": true,
+    "C09": "LOCAL_WIRING_COMPLETE / PROD_APPLY_PENDING",
+    "C20": "LOCAL_BOUNDED_CONTRACT_PASS / PROD_VALIDATION_PENDING",
+    "apply_plan_present": true
+  },
+  "rollback": {
+    "code_ready": true,
+    "deploy_id_required": true,
+    "actual_id": "NOT_RESOLVED",
+    "source_switch": "Plan I exact stored-policy function + source dirty queue",
+    "runtime": "Prior published functional deploy ID from chosen account REQUIRED; never invented",
+    "reconciliation": "Keep checkpoints; dedicated new rollback state-file; never clear delivery ledger/cursors"
+  },
+  "final_rc_snapshot": {
+    "git_status": " M .github/workflows/blog_generator.yml\n M .github/workflows/linkedin_poster.yml\n M .github/workflows/matching-retrieval.yml\n M .github/workflows/notify_signups.yml\n M .github/workflows/refresh_embeddings.yml\n M .github/workflows/scrapers.yml\n M .github/workflows/source-maintenance.yml\n M .gitignore\n M WORKING_PRINCIPLES.md\n M artifacts/opportunity-universe/check-partial-schema-prod.sql\n M artifacts/opportunity-universe/preflight-prod.sql\n M artifacts/opportunity-universe/prod-apply-schema.sql\n M artifacts/opportunity-universe/prod-compile-transaction.sql\n M docs/GRAND_CHECKPOINT.md\n M docs/source-permission-matrix.md\n M netlify.toml\n M netlify/functions/admin-data.ts\n M netlify/functions/application-workspace.ts\n M netlify/functions/gemini-courses.ts\n M netlify/functions/generate-cv-vivo.ts\n M netlify/functions/lib/public-opportunity-pagination.ts\n M netlify/functions/lib/seo-pipeline-runner.ts\n M netlify/functions/public-opportunities.ts\n M netlify/functions/send-high-match-alerts.ts\n M netlify/functions/sitemap.ts\n M package.json\n M scrapers/himalayas_scraper.py\n M scrapers/opportunity_sink.py\n M scrapers/source_adapters.py\n M scrapers/source_cleaners/profiles.py\n M scrapers/talentcom_scraper.py\n M scrapers/unjobs_scraper.py\n M scrapers/weworkremotely_scraper.py\n M scripts/fixtures/seo-inventory.json\n M scripts/generate_effective_routing_audit.py\n M scripts/generate_effective_routing_policy_projection.py\n M scripts/generate_opportunity_universe_artifacts.ts\n M scripts/run_matching_retrieval_expansion.ts\n M scripts/run_observation_coverage_recovery.py\n M scripts/run_opportunity_enrichment_batch.py\n M scripts/run_scraper_monitored.py\n M scripts/run_source_maintenance.py\n M scripts/run_source_scan_automation_bridge.py\n M scripts/verify-public-opportunity-pagination.ts\n M scripts/verify-release-candidate.mjs\n M scripts/verify-source-intelligence-wiring.ts\n M scripts/verify-source-policy-snapshot.ts\n M scripts/verify-source-policy.ts\n M scripts/verify_admin_inventory_operations.ts\n M scripts/verify_canonical_robots_sitemap.ts\n M scripts/verify_distribution_truth.ts\n M scripts/verify_effective_routing_item24.ts\n M scripts/verify_effective_routing_policy_projection.py\n M scripts/verify_effective_routing_repair.ts\n M scripts/verify_effective_source_policy.ts\n M scripts/verify_eight_gates.ts\n M scripts/verify_factory_queue_fairness.py\n M scripts/verify_future_ingestion_e2e.ts\n M scripts/verify_ingestion_continuity.py\n M scripts/verify_intrinsic_routing_parity.ts\n M scripts/verify_inventory_reconciliation.ts\n M scripts/verify_matching_retrieval_expansion.ts\n M scripts/verify_matching_retrieval_scheduler.ts\n M scripts/verify_monitor_rejection_semantics.py\n M scripts/verify_observation_coverage_recovery.py\n M scripts/verify_onward_distribution_item28.ts\n M scripts/verify_opportunity_factory.py\n M scripts/verify_opportunity_pipeline_contract.ts\n M scripts/verify_opportunity_universe.ts\n M scripts/verify_opportunity_universe_permission_preflight.ts\n M scripts/verify_public_truth_item29.ts\n M scripts/verify_redirect_consistency_item32.ts\n M scripts/verify_seo_inventory.ts\n M scripts/verify_source_intelligence_item53.ts\n M scripts/verify_source_maintenance.py\n M scripts/verify_source_scan_lineage.py\n M shared/matching-retrieval.ts\n M src/generated/source-intelligence-registry.json\n M src/lib/effective-source-policy.ts\n M src/lib/opportunity-universe.ts\n M src/lib/public-source-policy.ts\n M src/lib/source-permission-truth.ts\n M src/lib/temporary-legacy-seo-exception.ts\n M src/pages/Jobs.tsx\n M src/pages/MarketOpportunities.tsx\n M src/pages/Opportunities.tsx\n M supabase/functions/_shared/generated-source-registry.ts\n M supabase/functions/match-batch/index.ts\n M supabase/migrations/202609280001_opportunity_universe.sql\n M supabase/migrations/202610020001_opportunity_pipeline_ledger.sql\n M vite.config.ts\n?? .github/workflows/opportunity-universe-maintenance.yml\n?? .github/workflows/scheduled-source-automation.yml\n?? artifacts/prod-match-download-v18/config.toml\n?? artifacts/prod-match-download-v18/supabase/.temp/linked-project.json\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/generated-source-registry.ts\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/match-readiness.ts\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/matching-v2.ts\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/matching.ts\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/vector.ts\n?? artifacts/prod-match-download-v18/supabase/functions/match-batch/index.ts\n?? artifacts/prod-match-download/config.toml\n?? artifacts/prod-match-download/supabase/.temp/cli-latest\n?? artifacts/prod-match-download/supabase/.temp/linked-project.json\n?? artifacts/prod-match-download/supabase/functions/_shared/matching.ts\n?? artifacts/prod-match-download/supabase/functions/_shared/vector.ts\n?? artifacts/prod-match-download/supabase/functions/match-batch/index.ts\n?? artifacts/release/cable-local-sql-evidence.json\n?? artifacts/release/final-cable-apply-plan.md\n?? artifacts/release/final-prod-readonly-diagnosis.sql\n?? artifacts/release/final-release-preflight-readonly.sql\n?? artifacts/release/performance-prod-readonly.sql\n?? artifacts/release/rc-node24-compile.json\n?? artifacts/release/rc-preflight-inventory.json\n?? docs/POST_RELEASE_BACKLOG.md\n?? generated/effective-routing-audit.json\n?? scripts/refresh_opportunity_universe_maintenance.ts\n?? scripts/run_scheduled_source_automation.py\n?? scripts/verify_b2c_pipeline_e2e.ts\n?? scripts/verify_b2c_secondary_contracts.ts\n?? scripts/verify_c20_alert_pages.ts\n?? scripts/verify_c20_alert_sql.mjs\n?? scripts/verify_c20_maintenance_pages.py\n?? scripts/verify_cable_wiring_sql.mjs\n?? scripts/verify_release_automatic_gates.ts\n?? scripts/verify_release_preflight_readonly.mjs\n?? supabase/migrations/202610030001_pipeline_trace_contract_v2.sql\n?? supabase/migrations/202610030002_opportunity_universe_seo_permission.sql\n?? supabase/migrations/202610040001_source_switch_wiring.sql\n?? supabase/migrations/202610040002_public_catalog_coverage.sql\n?? supabase/migrations/202610050001_bounded_alert_progress.sql\n",
+    "files": [
+      {
+        "status": " M",
+        "path": ".github/workflows/blog_generator.yml",
+        "sha256": "666ba1c8dc7dde82d45b8452dc9850ff844a15a7282a3675de8dc808643bf0c4"
+      },
+      {
+        "status": " M",
+        "path": ".github/workflows/linkedin_poster.yml",
+        "sha256": "e9d436716db6d34880a368b8f4f55048cc6a86e23e20a5634c3cfd83b10f9e17"
+      },
+      {
+        "status": " M",
+        "path": ".github/workflows/matching-retrieval.yml",
+        "sha256": "a41b4a936b77ee8cd9d2337ce2f252cf1c3d0ea18c30cacdb0b659bb8b3b444c"
+      },
+      {
+        "status": " M",
+        "path": ".github/workflows/notify_signups.yml",
+        "sha256": "7119068def1a0efa51e0d1a2659a21199081570ad7b7044f19040c3506dd7568"
+      },
+      {
+        "status": " M",
+        "path": ".github/workflows/refresh_embeddings.yml",
+        "sha256": "d1c67a2bab3e6576d1c26f979673583787f3a68087e697141d41650fcffc2f14"
+      },
+      {
+        "status": " M",
+        "path": ".github/workflows/scrapers.yml",
+        "sha256": "fc15a26061bedca118405fea97b0c84b6f7aef7f0c9f5822cbb6645bbbd27bb8"
+      },
+      {
+        "status": " M",
+        "path": ".github/workflows/source-maintenance.yml",
+        "sha256": "3b90cbe41cd5883d2d0503ea01d6b00eb5ab1a9d807860a5bee5d3e273861311"
+      },
+      {
+        "status": " M",
+        "path": ".gitignore",
+        "sha256": "271c21b0404f9a74b52fe03a4f4d13b7b94e61ea3dedfe1bfbb5ccad3a6875db"
+      },
+      {
+        "status": " M",
+        "path": "WORKING_PRINCIPLES.md",
+        "sha256": "180b444a981b713b0e6056eadfefcbe8c22daf6e769efec06ef168788468cbc6"
+      },
+      {
+        "status": " M",
+        "path": "artifacts/opportunity-universe/check-partial-schema-prod.sql",
+        "sha256": "25683447e60b22a02ff9c6259856ea9d253cd151cfd1b48e1b8bcb4ee88db49b"
+      },
+      {
+        "status": " M",
+        "path": "artifacts/opportunity-universe/preflight-prod.sql",
+        "sha256": "86ae889f58c4fd5bc967fd9ad485328f33b77b49683d3d4b9f8aecd492b60870"
+      },
+      {
+        "status": " M",
+        "path": "artifacts/opportunity-universe/prod-apply-schema.sql",
+        "sha256": "aa42bd2722f98c385b38abe3267aa55cc6eda2869b1eb950cdd186e269fd99be"
+      },
+      {
+        "status": " M",
+        "path": "artifacts/opportunity-universe/prod-compile-transaction.sql",
+        "sha256": "c48d6023d655be82c635e314fd2d4733257d60ba6a4d5cbeb7b111ed2e3d893c"
+      },
+      {
+        "status": " M",
+        "path": "docs/GRAND_CHECKPOINT.md",
+        "sha256": "68ec837e6a1a1b8149dbe68fedbd2dae923ac4c7aa06e08cc535860d71e8b99b"
+      },
+      {
+        "status": " M",
+        "path": "docs/source-permission-matrix.md",
+        "sha256": "bba8ffa6c0ca2f1065f936161a6ec9b38e42e65900c7eaa96550da0da04d3045"
+      },
+      {
+        "status": " M",
+        "path": "netlify.toml",
+        "sha256": "12e4b365a05699c803413cacdb3c25f547b59afc9cbca2f2e3d0416cd0ac6206"
+      },
+      {
+        "status": " M",
+        "path": "netlify/functions/admin-data.ts",
+        "sha256": "d5fe10b6eebc567ef0ca0426c72c78f4c0b4bc88ebdbf2b6043ebbd494e749e0"
+      },
+      {
+        "status": " M",
+        "path": "netlify/functions/application-workspace.ts",
+        "sha256": "84808f2c7228fc335630b4019219fca1178356ea8a93de975af3d2f92dc13df3"
+      },
+      {
+        "status": " M",
+        "path": "netlify/functions/gemini-courses.ts",
+        "sha256": "2e55d9b5c2b521aa2eb529de66d05d0f33bef923c5630bf2a1e998ee450ad99c"
+      },
+      {
+        "status": " M",
+        "path": "netlify/functions/generate-cv-vivo.ts",
+        "sha256": "177a77b2b0842589853196c9a0bb51102ed33643989836c6d508bf5a490bb1ef"
+      },
+      {
+        "status": " M",
+        "path": "netlify/functions/lib/public-opportunity-pagination.ts",
+        "sha256": "11f2f3692e8d4aee4a7c7579c081d6bed9df077d7ceb62341b403fb7e101137d"
+      },
+      {
+        "status": " M",
+        "path": "netlify/functions/lib/seo-pipeline-runner.ts",
+        "sha256": "4822d69b154a627857bfcdcc1fd3772b5be84be13f928a3cda03afdc30df8a05"
+      },
+      {
+        "status": " M",
+        "path": "netlify/functions/public-opportunities.ts",
+        "sha256": "3ced54e9c589427bbf018f30539e80759696d0bf85f5f901106ddadea6e62c9f"
+      },
+      {
+        "status": " M",
+        "path": "netlify/functions/send-high-match-alerts.ts",
+        "sha256": "281dd028c3b313c57c8634ad9817852fa1fd77267d2cbab92b78645ca3ead07a"
+      },
+      {
+        "status": " M",
+        "path": "netlify/functions/sitemap.ts",
+        "sha256": "a21422caf3f1dc5f38c745bad2602310ddaf0e7847ccc84e0a3b5192a3675f97"
+      },
+      {
+        "status": " M",
+        "path": "package.json",
+        "sha256": "b05fba5c1508e8fdf60eea4f532b48c8d8e395599cf20a2f56e85b59655d510e"
+      },
+      {
+        "status": " M",
+        "path": "scrapers/himalayas_scraper.py",
+        "sha256": "1489ac0a13008ea0ab82cad4eb9bdb5601f3c3f6ae621d5da6f5de49b9976b43"
+      },
+      {
+        "status": " M",
+        "path": "scrapers/opportunity_sink.py",
+        "sha256": "49227b2f0b1e2f4ac3e9417004288574aede7bed2abe95e403d534be0a6be812"
+      },
+      {
+        "status": " M",
+        "path": "scrapers/source_adapters.py",
+        "sha256": "7e9732e6f40e1bb50bb0114e9b034b2514898b9313a649132eddd190700f959f"
+      },
+      {
+        "status": " M",
+        "path": "scrapers/source_cleaners/profiles.py",
+        "sha256": "9b6b4ead6f3ce29efea974a25f6940113632502cc8dc1798d2b8dd4e92c1caa6"
+      },
+      {
+        "status": " M",
+        "path": "scrapers/talentcom_scraper.py",
+        "sha256": "aa4e421ec504ac5db84fb9e740ed507182bd59c0491717e1689df03fc320e980"
+      },
+      {
+        "status": " M",
+        "path": "scrapers/unjobs_scraper.py",
+        "sha256": "358078a5d7d84b7a09e9d17c016f827d72d7bcee162d2cfcbc3bec4d504a5807"
+      },
+      {
+        "status": " M",
+        "path": "scrapers/weworkremotely_scraper.py",
+        "sha256": "35b1b67753e4e1c5a7b7257ee65114bc0fed7ce9f83c8784ccf558184b9e59db"
+      },
+      {
+        "status": " M",
+        "path": "scripts/fixtures/seo-inventory.json",
+        "sha256": "39efedd7845fa324be68bc3fb67aa9a4fbf7eabdb78f9d979216cad7a90ed389"
+      },
+      {
+        "status": " M",
+        "path": "scripts/generate_effective_routing_audit.py",
+        "sha256": "44b26e1e4629ec04cd473111f794375403eca25061d3bcbfb47fd6e0c869c628"
+      },
+      {
+        "status": " M",
+        "path": "scripts/generate_effective_routing_policy_projection.py",
+        "sha256": "13de43f5fb2253a082fb7d11fbaaad2c4bfd6518e0ba435ca338d784418000e0"
+      },
+      {
+        "status": " M",
+        "path": "scripts/generate_opportunity_universe_artifacts.ts",
+        "sha256": "a9ec73e11b06eee309c87a3d7edf452d1fe221c9088835aca9d00f7f45af8d53"
+      },
+      {
+        "status": " M",
+        "path": "scripts/run_matching_retrieval_expansion.ts",
+        "sha256": "720664abfacfda6cbc4d13d86185bba7aa013f1240bb9759f0b3d9d2f00c0f00"
+      },
+      {
+        "status": " M",
+        "path": "scripts/run_observation_coverage_recovery.py",
+        "sha256": "a4037b062bb7713718fd2399b2769559870ede23220e329943cc5f36f8919ef5"
+      },
+      {
+        "status": " M",
+        "path": "scripts/run_opportunity_enrichment_batch.py",
+        "sha256": "5a899841e3b35133b4696395d810a9171f86280cc4ea169e697ef660f7f5fdc0"
+      },
+      {
+        "status": " M",
+        "path": "scripts/run_scraper_monitored.py",
+        "sha256": "fefbd68c6983d52b8040f592fa04c3432add820dd36ff4808d1c5373882a0ff8"
+      },
+      {
+        "status": " M",
+        "path": "scripts/run_source_maintenance.py",
+        "sha256": "c85e3bf4f9dd60b03cb16768afdead5ef3afc738efc4c09a14809d1be8c7dd78"
+      },
+      {
+        "status": " M",
+        "path": "scripts/run_source_scan_automation_bridge.py",
+        "sha256": "96a9def2cffaf1c998133a4fe4758bee9fcd21d723864a2b34d9c24e7f83cfa9"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify-public-opportunity-pagination.ts",
+        "sha256": "318c9d5969bbe80706d0fcb9e85ce041beb71fd328122e24b0dc3570b8ebfdca"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify-release-candidate.mjs",
+        "sha256": "01c50675f069c290bf0d0c01682696490af53a2fe35cc642fe7057bad1797696"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify-source-intelligence-wiring.ts",
+        "sha256": "c0f753f33fa40c417b87ad5342691da6f75a6f00183deae3f7d38ac95050de8c"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify-source-policy-snapshot.ts",
+        "sha256": "446041157f0ab5e329df19d5f5bed69dfe3a30b2c83f70ee76bd2269a44668f8"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify-source-policy.ts",
+        "sha256": "5437d2817cdf6cf644a736aa77f010de7e6bad7cf6dae49b691415bd5179834f"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_admin_inventory_operations.ts",
+        "sha256": "a2ec3c382e22721fda526a47f0bf9850d4e347f92afac0bbb4aa2c7be6373d92"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_canonical_robots_sitemap.ts",
+        "sha256": "eacd63c054154798caa457bed00a833caaa7611e4f18ae461c5e05f221a13a23"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_distribution_truth.ts",
+        "sha256": "422413d1d8caa036b39359d839993de053521292d3ff84179427e78d101acad0"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_effective_routing_item24.ts",
+        "sha256": "e8466375b4857f2939d9306b9c8ada623fd20e75b86e37f859906526fbf1728f"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_effective_routing_policy_projection.py",
+        "sha256": "784fa363997cee467572bda01e5e7153a38610e454409e6cdc95ada6a95ba285"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_effective_routing_repair.ts",
+        "sha256": "3b4e6c5b6ce3eba8256c79d7275213deac640bccd1f1a921b09091c859125d8c"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_effective_source_policy.ts",
+        "sha256": "84e9e4922849b3a8137ea66e571546f959ef5d783fce95ce391c31e62a238d20"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_eight_gates.ts",
+        "sha256": "6c2b5a372ccd44836b33d2b5afe91963909cc9fa03b6714f1fa13d4789622297"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_factory_queue_fairness.py",
+        "sha256": "ef87329b1100deb8b970eb2013947e9919ca8f6a27f62316f1bf0497730d317d"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_future_ingestion_e2e.ts",
+        "sha256": "966936dcd1ef5862f6eba7775d286a25bea684f5e7b405c96a3e2d7578d2d0cf"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_ingestion_continuity.py",
+        "sha256": "98f281a80fc57b24ff4069e9c5bbcd0fb987d689f69d9f384e6055c4f4910c91"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_intrinsic_routing_parity.ts",
+        "sha256": "50c71c114c1f80629527350ded61bc772f931e51fa148681f695b146281b134d"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_inventory_reconciliation.ts",
+        "sha256": "14634d5e4c4e7fafbd9a82a9b1e9a7d196a19a290c29c31f62362187d39f47e6"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_matching_retrieval_expansion.ts",
+        "sha256": "8b36752984daaa4199af558d1a12e6b41685a94f613a142dc8a7bd6370f1ce4d"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_matching_retrieval_scheduler.ts",
+        "sha256": "2b852446b6c0e26591236f804a78f2c4b8b9b8abc271c379f731eb73ed391510"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_monitor_rejection_semantics.py",
+        "sha256": "e578e395c987a34b491aab7e268e759740fc369c991304e44fe9019966b247f0"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_observation_coverage_recovery.py",
+        "sha256": "05c61828fd1dc5d818d42a87118391cd382a69fd4793a5e95e4bf65d08fda4c4"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_onward_distribution_item28.ts",
+        "sha256": "e4f5c7cbbfa0f0fdcc00ccf52e46672f56162211ee2a1ffdb4b5396625720ece"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_opportunity_factory.py",
+        "sha256": "b04315dbd1fd04cf945ec95c29cc6627abd7e8fb3ecefda0a8eb2da410705ee6"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_opportunity_pipeline_contract.ts",
+        "sha256": "73c7ed74acbaf42d2f16f84541048ba9e70789af65168eaa0d5ad04d1f547564"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_opportunity_universe.ts",
+        "sha256": "91fa3a0ca712255b9453887baf94d4a79b355785702a7b0af4b26ef0f912758d"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_opportunity_universe_permission_preflight.ts",
+        "sha256": "27c9901471425147315d5523bfe2ac2790ee1ac0452c452563507f9bf28c057b"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_public_truth_item29.ts",
+        "sha256": "75094e407192703ae46caa4af3f196888d6dedd82f2c92974a5de3eb42e58e49"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_redirect_consistency_item32.ts",
+        "sha256": "75f8c7e943706bae86e58cee98525237e6242de7addd8ab6a84a8eb16bd0c096"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_seo_inventory.ts",
+        "sha256": "092ef1d37c796b840a9b330120c269c1c5f7e60c12ae4b0e511694f0b806552e"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_source_intelligence_item53.ts",
+        "sha256": "8361c7220a5bf369aebc4831472698d5a282baa4d35398e6b52ad41727db6ca5"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_source_maintenance.py",
+        "sha256": "37d547c5f08aa3751cb9875007d03a4220b0cd42199c8df026f49147fafbc580"
+      },
+      {
+        "status": " M",
+        "path": "scripts/verify_source_scan_lineage.py",
+        "sha256": "99c93907bd4038497651074f5b010a78f8e9bc38250260ae6840af1a82eeb1b2"
+      },
+      {
+        "status": " M",
+        "path": "shared/matching-retrieval.ts",
+        "sha256": "f9d8419539f39b8d0304f14c9dbf5fb9b5fb4de427dc15588bf19972601ad224"
+      },
+      {
+        "status": " M",
+        "path": "src/generated/source-intelligence-registry.json",
+        "sha256": "5e1826502a566ad0921492b2b6a057ec0c459f4c6f2ec744fd8e1c79a20c20e1"
+      },
+      {
+        "status": " M",
+        "path": "src/lib/effective-source-policy.ts",
+        "sha256": "6a084811763aedd9439962d24bf86d0046f50468b05e2f3c502742ea183b4276"
+      },
+      {
+        "status": " M",
+        "path": "src/lib/opportunity-universe.ts",
+        "sha256": "bdb6a8e4f06e6a9551f4b3a3fd1908ec8e03891ffb1d24baf5b99d778d593903"
+      },
+      {
+        "status": " M",
+        "path": "src/lib/public-source-policy.ts",
+        "sha256": "9dd7e77dfaa813b3dd47e457d617e56337180634dd3ef017825c585a19dbcb23"
+      },
+      {
+        "status": " M",
+        "path": "src/lib/source-permission-truth.ts",
+        "sha256": "624340efc83650cb691c88e4f0184c48fe15d8a9710f07b1db81527f05bfd0bb"
+      },
+      {
+        "status": " M",
+        "path": "src/lib/temporary-legacy-seo-exception.ts",
+        "sha256": "a9d3f7a1fe21e28f0b35bd8d298fdfccc6987d14f1d3bfc040ee8ab4aab3b9bc"
+      },
+      {
+        "status": " M",
+        "path": "src/pages/Jobs.tsx",
+        "sha256": "06817ad70af6467108e60e934684b1b2faf36bcfecb1d0bd26adb3604f137a78"
+      },
+      {
+        "status": " M",
+        "path": "src/pages/MarketOpportunities.tsx",
+        "sha256": "dc5a17a7b6c4dd65e27d4bc200e9a1a884cc9b15fc2b533f803c52eff778278c"
+      },
+      {
+        "status": " M",
+        "path": "src/pages/Opportunities.tsx",
+        "sha256": "87f49cd232ade43d0f866a9a408902be3dbc17ca1110e8c37907094ab0b4d074"
+      },
+      {
+        "status": " M",
+        "path": "supabase/functions/_shared/generated-source-registry.ts",
+        "sha256": "d10a7c7f501ad642ebbe085a6080eca6fd3a96b40a66523c91df1acc2df2e727"
+      },
+      {
+        "status": " M",
+        "path": "supabase/functions/match-batch/index.ts",
+        "sha256": "01139daad680dc20c5d12a92be2c61c7fd7d728d80e7dd14a0b5288fa5fe31b1"
+      },
+      {
+        "status": " M",
+        "path": "supabase/migrations/202609280001_opportunity_universe.sql",
+        "sha256": "a91e7d046acecc707c926f93c787386bce3c4b5dbafc5d4b773401aadf612319"
+      },
+      {
+        "status": " M",
+        "path": "supabase/migrations/202610020001_opportunity_pipeline_ledger.sql",
+        "sha256": "6cac1017b353344104fd86f62797fff4ca69075d12dbf10f55765782661c9bb5"
+      },
+      {
+        "status": " M",
+        "path": "vite.config.ts",
+        "sha256": "e454f7e92632d6aa35e3af213a8816b9591077a2d72c958e071c8d6f3d5d9ec0"
+      },
+      {
+        "status": "??",
+        "path": ".github/workflows/opportunity-universe-maintenance.yml",
+        "sha256": "24081adc3679b5febf1654490a472b38329ecf5e16d70921379f0d78a3a1b26b"
+      },
+      {
+        "status": "??",
+        "path": ".github/workflows/scheduled-source-automation.yml",
+        "sha256": "aa2620169abddad7039285b2312ee46ed95411377d0b51f52834dfa9a5becedc"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download-v18/config.toml",
+        "sha256": "df198bd1482abd201e434b6e088bd9e33028d1bf45449a3223fbc1980bf8c201"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download-v18/supabase/.temp/linked-project.json",
+        "sha256": "072d2cd1e344477362c6e8064935e8f5de1e14f453c0deb5212b61a53972eeb3"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/generated-source-registry.ts",
+        "sha256": "270c8ad075f8c26708495fcdd1fb0499b5ee1872e965df208d36e4336b19f1d5"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/match-readiness.ts",
+        "sha256": "59d73258bdc00d874d1ff14d4a58473c5f5a09290f17df64c90baedc912837cb"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/matching-v2.ts",
+        "sha256": "dec49c3fdcbdd4aed85db93accd3038d38ba3fde3780471ed20c578de053ea3b"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/matching.ts",
+        "sha256": "56a47b7b5b1fe2b5ae58ba335dd57fb3e7ab77ecc5160b08ed9978d2abebef69"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/vector.ts",
+        "sha256": "8e0ff97e58339f76213176e264cf9987e3525893dc5d3adcdf82aff6acfcd074"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download-v18/supabase/functions/match-batch/index.ts",
+        "sha256": "f30f5e5215e5f9dd5b4d83a4e9bdcea05dd28afe93f334d886532920a3a2cdab"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download/config.toml",
+        "sha256": "df198bd1482abd201e434b6e088bd9e33028d1bf45449a3223fbc1980bf8c201"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download/supabase/.temp/cli-latest",
+        "sha256": "103e9d7a97f9a66c28586ffae6f8d81a90630d5cb2c537b23ed886a5e0e5ff01"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download/supabase/.temp/linked-project.json",
+        "sha256": "072d2cd1e344477362c6e8064935e8f5de1e14f453c0deb5212b61a53972eeb3"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download/supabase/functions/_shared/matching.ts",
+        "sha256": "ec1a09aa9904b1270b2f13ccdeaf213e295f277380c6b795e0eba60683cd1ab4"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download/supabase/functions/_shared/vector.ts",
+        "sha256": "ba3ac82f72849f8f683c79d523acb3e5313c084e4ce3d37ffdc108510310ad78"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/prod-match-download/supabase/functions/match-batch/index.ts",
+        "sha256": "60ecb4d98e3b314a20d4f0c872e57ec80d920925fea2d9da06ddde43df270961"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/release/cable-local-sql-evidence.json",
+        "sha256": "35643e5a17579ea7ff82b870c5cf2a9f6ffd908890d7481092fa9f8ff61fd88e"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/release/final-cable-apply-plan.md",
+        "sha256": "3774a184038980c99d73bb08bf3036692eb819f9b09747178b70e257c50278a5"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/release/final-prod-readonly-diagnosis.sql",
+        "sha256": "43679a1c42eee55bd5d3d3625408cfcfdceebbbd5f461afd2fab7814ac457309"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/release/final-release-preflight-readonly.sql",
+        "sha256": "652eb4423a3ea0f709cf8d7f24c4b479f1072cdfd40ea1606377d47badb32343"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/release/performance-prod-readonly.sql",
+        "sha256": "b2e4de4dee8461af8767d50087a44409f1558afd0e04c858753f1a3be218da00"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/release/rc-node24-compile.json",
+        "sha256": "26802c949ec0b8f43c37aaf0837636e69b682f70704811e038cb421d549fb905"
+      },
+      {
+        "status": "??",
+        "path": "artifacts/release/rc-preflight-inventory.json",
+        "sha256": "SELF_MANIFEST"
+      },
+      {
+        "status": "??",
+        "path": "docs/POST_RELEASE_BACKLOG.md",
+        "sha256": "f931281362582cc23cae1fc3f56460dfe9c372a1b304fd9e37ca2e06cede388b"
+      },
+      {
+        "status": "??",
+        "path": "generated/effective-routing-audit.json",
+        "sha256": "d56fc094067337bfdb444f2635edf564794adf588a5d9d945308849cdc018ebb"
+      },
+      {
+        "status": "??",
+        "path": "scripts/refresh_opportunity_universe_maintenance.ts",
+        "sha256": "c4bf6f6f8cd27ef3fc25a2dd9f75411d68751639e2aa26ac1e75137e0303b95a"
+      },
+      {
+        "status": "??",
+        "path": "scripts/run_scheduled_source_automation.py",
+        "sha256": "b123c08aa9b39a24e788edad49cbd990499b64c2969e9c1571b6294bd3c6fd9d"
+      },
+      {
+        "status": "??",
+        "path": "scripts/verify_b2c_pipeline_e2e.ts",
+        "sha256": "b2b869e00b71b7293b4f6973483c27b004ff72a9be0ea6c3a82b94ee5a4eece6"
+      },
+      {
+        "status": "??",
+        "path": "scripts/verify_b2c_secondary_contracts.ts",
+        "sha256": "4512519bd4c84b309c3dfc02009c7310591d8d81085b44b8d23268355f6be394"
+      },
+      {
+        "status": "??",
+        "path": "scripts/verify_c20_alert_pages.ts",
+        "sha256": "2f2e94931da9accf444f5d51f5a278d263ef4b5c52ec05947198bb81632ee791"
+      },
+      {
+        "status": "??",
+        "path": "scripts/verify_c20_alert_sql.mjs",
+        "sha256": "5a2d5837a1f094b3fb3e93a28a9725f199c13ad55046608076e80fe2312c108a"
+      },
+      {
+        "status": "??",
+        "path": "scripts/verify_c20_maintenance_pages.py",
+        "sha256": "bf18ac02242a7229c0c46e189c326131902f6c106b050e6d0e3b1cbe738549af"
+      },
+      {
+        "status": "??",
+        "path": "scripts/verify_cable_wiring_sql.mjs",
+        "sha256": "82eae097aa5cd1c46bdbe879975d4c9a650474a6bfdd19fd6dd848718ab05fcb"
+      },
+      {
+        "status": "??",
+        "path": "scripts/verify_release_automatic_gates.ts",
+        "sha256": "b88e159fd093be62abb858f3fc76404dd9a924d56b8836311e1db9c6227c2595"
+      },
+      {
+        "status": "??",
+        "path": "scripts/verify_release_preflight_readonly.mjs",
+        "sha256": "1c224c5cd2f5b675ae8cb4258f0e31c06379559fea9a2bebc9338731c1f97e02"
+      },
+      {
+        "status": "??",
+        "path": "supabase/migrations/202610030001_pipeline_trace_contract_v2.sql",
+        "sha256": "2c8821c9eed913f01194034a9ae41f780bb7c783449abc4c823b0f4123ada5bb"
+      },
+      {
+        "status": "??",
+        "path": "supabase/migrations/202610030002_opportunity_universe_seo_permission.sql",
+        "sha256": "69865635e94fcd123f54c9af14fbb6f67ae4bfecce5295c62903ebb39cf7f5d3"
+      },
+      {
+        "status": "??",
+        "path": "supabase/migrations/202610040001_source_switch_wiring.sql",
+        "sha256": "097da537854b98f17ec3905dab96e3e378258adb829bd3f04f8dd02b16bfc483"
+      },
+      {
+        "status": "??",
+        "path": "supabase/migrations/202610040002_public_catalog_coverage.sql",
+        "sha256": "9f0889763d551eeb9426540a945267239d351c84054b23e526c499b753c8c307"
+      },
+      {
+        "status": "??",
+        "path": "supabase/migrations/202610050001_bounded_alert_progress.sql",
+        "sha256": "226b98260def21532aebf30eec8f8a749efe8067fddb393fb60a62d32e796c5e"
+      }
+    ],
+    "modified": 91,
+    "new": 40,
+    "files_changed_this_pass": [
+      ".github/workflows/blog_generator.yml",
+      ".github/workflows/linkedin_poster.yml",
+      ".github/workflows/matching-retrieval.yml",
+      ".github/workflows/notify_signups.yml",
+      ".github/workflows/refresh_embeddings.yml",
+      ".github/workflows/scrapers.yml",
+      ".github/workflows/source-maintenance.yml",
+      "docs/GRAND_CHECKPOINT.md",
+      "netlify/functions/send-high-match-alerts.ts",
+      "artifacts/release/final-cable-apply-plan.md",
+      "artifacts/release/final-release-preflight-readonly.sql",
+      "artifacts/release/rc-node24-compile.json",
+      "artifacts/release/rc-preflight-inventory.json",
+      "scripts/verify_release_automatic_gates.ts",
+      "scripts/verify_release_preflight_readonly.mjs"
+    ],
+    "release_artifacts": [
+      "artifacts/release/cable-local-sql-evidence.json",
+      "artifacts/release/final-cable-apply-plan.md",
+      "artifacts/release/final-prod-readonly-diagnosis.sql",
+      "artifacts/release/final-prod-verify.sql",
+      "artifacts/release/final-release-preflight-readonly.sql",
+      "artifacts/release/performance-prod-readonly.sql",
+      "artifacts/release/rc-node24-compile.json",
+      "artifacts/release/rc-preflight-inventory.json"
+    ],
+    "snapshot_utc": "2026-10-05T19:03:09.000119+00:00",
+    "hashes_revalidated": true,
+    "superseded_by": "final_freeze_20261005"
+  },
+  "build_derived_files": "Two previously clean tracked SEO build outputs were restored to their exact pre-build Git blob contents through read-only diff reconstruction; no user changes/files deleted. Fixture dist is local only.",
+  "view_prefix_correction_20261005": {
+    "prod_evidence": "Operator reports exactly one blocker: opportunity_pipeline_status BLOCKER_VIEW_PREFIX_OR_TYPE. Anchors ordinal17 ingestion_reason text, ordinal18 provenance_certainty text.",
+    "status": "LOCAL_FIXED / PROD_PREFLIGHT_RERUN_REQUIRED",
+    "fixture_provenance": "Original pre-v2 migration Git blob 474aae22922b48fceb939cf9ada81cb245740221 from HEAD of this same worktree; matches supplied anchors. Complete current PROD metadata not invented; rerun required.",
+    "legacy_columns_preserved": 72,
+    "appended_fields": [
+      "ingestion_outcome",
+      "ingestion_trace_contract_version",
+      "ingestion_outcome_reason"
+    ],
+    "local_postgres_evidence": "Old mid-prefix variant fails with real PG error; corrected migration keeps view OID/dependency and all names/types/ordinals; fresh+repeat install PASS; unchanged historical receipts; all outcomes/trace dimensions/counts/ledger/inspector/accounting PASS; preflight view BLOCKER -> PASS.",
+    "tests_pass": [
+      "verify_pipeline_view_prefix.ts",
+      "verify_opportunity_pipeline_contract.ts",
+      "verify_release_preflight_readonly.mjs"
+    ],
+    "runtime": "Node 24.21.0",
+    "local_preflight_blockers": [],
+    "pg_trgm": "Operator-reported NOT_INSTALLED_PLANNED_IN_EXTENSIONS / compatible=true, not a blocker; local assertion retained.",
+    "index_strategy": "UNCHANGED; no PROD index executed. New synchronous builds require authorized IO budget.",
+    "C09": "UNCHANGED",
+    "C20": "UNCHANGED",
+    "master_1_67": "UNCHANGED",
+    "backlog": "UNCHANGED",
+    "files_changed_this_pass": [
+      {
+        "path": "artifacts/release/final-cable-apply-plan.md",
+        "sha256": "80896018feb490bc949a7e0ffedd62babfa71d3bd1fadb6df8dba1f988e03368"
+      },
+      {
+        "path": "artifacts/release/final-release-preflight-readonly.sql",
+        "sha256": "f99db0bac5ff482e8b37206a8968b074d9dfb8040adfe299e18e8c03d5357d2c"
+      },
+      {
+        "path": "artifacts/release/rc-preflight-inventory.json",
+        "sha256": "SELF_MANIFEST"
+      },
+      {
+        "path": "docs/GRAND_CHECKPOINT.md",
+        "sha256": "38a6552d0678bbe36105ec8ddd81bdfd0502452d08f35ffab8a6ba874ab276ba"
+      },
+      {
+        "path": "scripts/fixtures/pipeline-prod-prefix-20261005.sql",
+        "sha256": "383dc37a0435f2e44c51e5e6c27f4cee6758ce40a5491c4465ae0e21655a1d62"
+      },
+      {
+        "path": "scripts/verify_pipeline_view_prefix.ts",
+        "sha256": "d1ac4cc08f888334bbb5dbc2ed21b5e634eff8ced9359d2ba9aaf6af0f9569eb"
+      },
+      {
+        "path": "scripts/verify_release_preflight_readonly.mjs",
+        "sha256": "0edcd6a3c6d8278b7aa8a5cbddce9b0d123e62ca3c764cb912073562e8486452"
+      },
+      {
+        "path": "supabase/migrations/202610020001_opportunity_pipeline_ledger.sql",
+        "sha256": "b1d590e45a62840682d4d542c9228a290eb24d3e7bccbb0de9e8660211a038c7"
+      },
+      {
+        "path": "supabase/migrations/202610030001_pipeline_trace_contract_v2.sql",
+        "sha256": "b7b647864b6a3818f96b4103e06b99d77eb2d25118db6a1719885c9898363be7"
+      }
+    ],
+    "prod_write": "NONE",
+    "migration_apply_prod": "NONE",
+    "commit": "NONE",
+    "push": "NONE",
+    "deploy": "NONE"
+  },
+  "final_freeze_20261005": {
+    "date": "2026-10-05",
+    "scope": "C:\\Users\\isaso\\cvitae-item53-public-contracts",
+    "branch": "## fix/item53-public-contracts-20260923",
+    "head": "88104a86cf0eae56d958e13954286b5485b3ff76",
+    "status_before_excluding_local_snapshots": " M .github/workflows/blog_generator.yml\n M .github/workflows/linkedin_poster.yml\n M .github/workflows/matching-retrieval.yml\n M .github/workflows/notify_signups.yml\n M .github/workflows/refresh_embeddings.yml\n M .github/workflows/scrapers.yml\n M .github/workflows/source-maintenance.yml\n M .gitignore\n M WORKING_PRINCIPLES.md\n M artifacts/opportunity-universe/check-partial-schema-prod.sql\n M artifacts/opportunity-universe/preflight-prod.sql\n M artifacts/opportunity-universe/prod-apply-schema.sql\n M artifacts/opportunity-universe/prod-compile-transaction.sql\n M docs/GRAND_CHECKPOINT.md\n M docs/source-permission-matrix.md\n M netlify.toml\n M netlify/functions/admin-data.ts\n M netlify/functions/application-workspace.ts\n M netlify/functions/gemini-courses.ts\n M netlify/functions/generate-cv-vivo.ts\n M netlify/functions/lib/public-opportunity-pagination.ts\n M netlify/functions/lib/seo-pipeline-runner.ts\n M netlify/functions/public-opportunities.ts\n M netlify/functions/send-high-match-alerts.ts\n M netlify/functions/sitemap.ts\n M package.json\n M scrapers/himalayas_scraper.py\n M scrapers/opportunity_sink.py\n M scrapers/source_adapters.py\n M scrapers/source_cleaners/profiles.py\n M scrapers/talentcom_scraper.py\n M scrapers/unjobs_scraper.py\n M scrapers/weworkremotely_scraper.py\n M scripts/fixtures/seo-inventory.json\n M scripts/generate_effective_routing_audit.py\n M scripts/generate_effective_routing_policy_projection.py\n M scripts/generate_opportunity_universe_artifacts.ts\n M scripts/run_matching_retrieval_expansion.ts\n M scripts/run_observation_coverage_recovery.py\n M scripts/run_opportunity_enrichment_batch.py\n M scripts/run_scraper_monitored.py\n M scripts/run_source_maintenance.py\n M scripts/run_source_scan_automation_bridge.py\n M scripts/verify-public-opportunity-pagination.ts\n M scripts/verify-release-candidate.mjs\n M scripts/verify-source-intelligence-wiring.ts\n M scripts/verify-source-policy-snapshot.ts\n M scripts/verify-source-policy.ts\n M scripts/verify_admin_inventory_operations.ts\n M scripts/verify_canonical_robots_sitemap.ts\n M scripts/verify_distribution_truth.ts\n M scripts/verify_effective_routing_item24.ts\n M scripts/verify_effective_routing_policy_projection.py\n M scripts/verify_effective_routing_repair.ts\n M scripts/verify_effective_source_policy.ts\n M scripts/verify_eight_gates.ts\n M scripts/verify_factory_queue_fairness.py\n M scripts/verify_future_ingestion_e2e.ts\n M scripts/verify_ingestion_continuity.py\n M scripts/verify_intrinsic_routing_parity.ts\n M scripts/verify_inventory_reconciliation.ts\n M scripts/verify_matching_retrieval_expansion.ts\n M scripts/verify_matching_retrieval_scheduler.ts\n M scripts/verify_monitor_rejection_semantics.py\n M scripts/verify_observation_coverage_recovery.py\n M scripts/verify_onward_distribution_item28.ts\n M scripts/verify_opportunity_factory.py\n M scripts/verify_opportunity_pipeline_contract.ts\n M scripts/verify_opportunity_universe.ts\n M scripts/verify_opportunity_universe_permission_preflight.ts\n M scripts/verify_public_truth_item29.ts\n M scripts/verify_redirect_consistency_item32.ts\n M scripts/verify_seo_inventory.ts\n M scripts/verify_source_intelligence_item53.ts\n M scripts/verify_source_maintenance.py\n M scripts/verify_source_scan_lineage.py\n M shared/matching-retrieval.ts\n M src/generated/source-intelligence-registry.json\n M src/lib/effective-source-policy.ts\n M src/lib/opportunity-universe.ts\n M src/lib/public-source-policy.ts\n M src/lib/source-permission-truth.ts\n M src/lib/temporary-legacy-seo-exception.ts\n M src/pages/Jobs.tsx\n M src/pages/MarketOpportunities.tsx\n M src/pages/Opportunities.tsx\n M supabase/functions/_shared/generated-source-registry.ts\n M supabase/functions/match-batch/index.ts\n M supabase/migrations/202609280001_opportunity_universe.sql\n M supabase/migrations/202610020001_opportunity_pipeline_ledger.sql\n M vite.config.ts\n?? .github/workflows/opportunity-universe-maintenance.yml\n?? .github/workflows/scheduled-source-automation.yml\n?? artifacts/prod-match-download-v18/config.toml\n?? artifacts/prod-match-download-v18/supabase/.temp/linked-project.json\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/generated-source-registry.ts\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/match-readiness.ts\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/matching-v2.ts\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/matching.ts\n?? artifacts/prod-match-download-v18/supabase/functions/_shared/vector.ts\n?? artifacts/prod-match-download-v18/supabase/functions/match-batch/index.ts\n?? artifacts/prod-match-download/config.toml\n?? artifacts/prod-match-download/supabase/.temp/cli-latest\n?? artifacts/prod-match-download/supabase/.temp/linked-project.json\n?? artifacts/prod-match-download/supabase/functions/_shared/matching.ts\n?? artifacts/prod-match-download/supabase/functions/_shared/vector.ts\n?? artifacts/prod-match-download/supabase/functions/match-batch/index.ts\n?? artifacts/release/cable-local-sql-evidence.json\n?? artifacts/release/final-cable-apply-plan.md\n?? artifacts/release/final-prod-readonly-diagnosis.sql\n?? artifacts/release/final-release-preflight-readonly.sql\n?? artifacts/release/performance-prod-readonly.sql\n?? artifacts/release/rc-node24-compile.json\n?? artifacts/release/rc-preflight-inventory.json\n?? docs/POST_RELEASE_BACKLOG.md\n?? generated/effective-routing-audit.json\n?? scripts/fixtures/pipeline-prod-prefix-20261005.sql\n?? scripts/refresh_opportunity_universe_maintenance.ts\n?? scripts/run_scheduled_source_automation.py\n?? scripts/verify_b2c_pipeline_e2e.ts\n?? scripts/verify_b2c_secondary_contracts.ts\n?? scripts/verify_c20_alert_pages.ts\n?? scripts/verify_c20_alert_sql.mjs\n?? scripts/verify_c20_maintenance_pages.py\n?? scripts/verify_cable_wiring_sql.mjs\n?? scripts/verify_pipeline_view_prefix.ts\n?? scripts/verify_release_automatic_gates.ts\n?? scripts/verify_release_preflight_readonly.mjs\n?? supabase/migrations/202610030001_pipeline_trace_contract_v2.sql\n?? supabase/migrations/202610030002_opportunity_universe_seo_permission.sql\n?? supabase/migrations/202610040001_source_switch_wiring.sql\n?? supabase/migrations/202610040002_public_catalog_coverage.sql\n?? supabase/migrations/202610050001_bounded_alert_progress.sql\n",
+    "status_after_exclusion": " M .github/workflows/blog_generator.yml\n M .github/workflows/linkedin_poster.yml\n M .github/workflows/matching-retrieval.yml\n M .github/workflows/notify_signups.yml\n M .github/workflows/refresh_embeddings.yml\n M .github/workflows/scrapers.yml\n M .github/workflows/source-maintenance.yml\n M .gitignore\n M WORKING_PRINCIPLES.md\n M artifacts/opportunity-universe/check-partial-schema-prod.sql\n M artifacts/opportunity-universe/preflight-prod.sql\n M artifacts/opportunity-universe/prod-apply-schema.sql\n M artifacts/opportunity-universe/prod-compile-transaction.sql\n M docs/GRAND_CHECKPOINT.md\n M docs/source-permission-matrix.md\n M netlify.toml\n M netlify/functions/admin-data.ts\n M netlify/functions/application-workspace.ts\n M netlify/functions/gemini-courses.ts\n M netlify/functions/generate-cv-vivo.ts\n M netlify/functions/lib/public-opportunity-pagination.ts\n M netlify/functions/lib/seo-pipeline-runner.ts\n M netlify/functions/public-opportunities.ts\n M netlify/functions/send-high-match-alerts.ts\n M netlify/functions/sitemap.ts\n M package.json\n M scrapers/himalayas_scraper.py\n M scrapers/opportunity_sink.py\n M scrapers/source_adapters.py\n M scrapers/source_cleaners/profiles.py\n M scrapers/talentcom_scraper.py\n M scrapers/unjobs_scraper.py\n M scrapers/weworkremotely_scraper.py\n M scripts/fixtures/seo-inventory.json\n M scripts/generate_effective_routing_audit.py\n M scripts/generate_effective_routing_policy_projection.py\n M scripts/generate_opportunity_universe_artifacts.ts\n M scripts/run_matching_retrieval_expansion.ts\n M scripts/run_observation_coverage_recovery.py\n M scripts/run_opportunity_enrichment_batch.py\n M scripts/run_scraper_monitored.py\n M scripts/run_source_maintenance.py\n M scripts/run_source_scan_automation_bridge.py\n M scripts/verify-public-opportunity-pagination.ts\n M scripts/verify-release-candidate.mjs\n M scripts/verify-source-intelligence-wiring.ts\n M scripts/verify-source-policy-snapshot.ts\n M scripts/verify-source-policy.ts\n M scripts/verify_admin_inventory_operations.ts\n M scripts/verify_canonical_robots_sitemap.ts\n M scripts/verify_distribution_truth.ts\n M scripts/verify_effective_routing_item24.ts\n M scripts/verify_effective_routing_policy_projection.py\n M scripts/verify_effective_routing_repair.ts\n M scripts/verify_effective_source_policy.ts\n M scripts/verify_eight_gates.ts\n M scripts/verify_factory_queue_fairness.py\n M scripts/verify_future_ingestion_e2e.ts\n M scripts/verify_ingestion_continuity.py\n M scripts/verify_intrinsic_routing_parity.ts\n M scripts/verify_inventory_reconciliation.ts\n M scripts/verify_matching_retrieval_expansion.ts\n M scripts/verify_matching_retrieval_scheduler.ts\n M scripts/verify_monitor_rejection_semantics.py\n M scripts/verify_observation_coverage_recovery.py\n M scripts/verify_onward_distribution_item28.ts\n M scripts/verify_opportunity_factory.py\n M scripts/verify_opportunity_pipeline_contract.ts\n M scripts/verify_opportunity_universe.ts\n M scripts/verify_opportunity_universe_permission_preflight.ts\n M scripts/verify_public_truth_item29.ts\n M scripts/verify_redirect_consistency_item32.ts\n M scripts/verify_seo_inventory.ts\n M scripts/verify_source_intelligence_item53.ts\n M scripts/verify_source_maintenance.py\n M scripts/verify_source_scan_lineage.py\n M shared/matching-retrieval.ts\n M src/generated/source-intelligence-registry.json\n M src/lib/effective-source-policy.ts\n M src/lib/opportunity-universe.ts\n M src/lib/public-source-policy.ts\n M src/lib/source-permission-truth.ts\n M src/lib/temporary-legacy-seo-exception.ts\n M src/pages/Jobs.tsx\n M src/pages/MarketOpportunities.tsx\n M src/pages/Opportunities.tsx\n M supabase/functions/_shared/generated-source-registry.ts\n M supabase/functions/match-batch/index.ts\n M supabase/migrations/202609280001_opportunity_universe.sql\n M supabase/migrations/202610020001_opportunity_pipeline_ledger.sql\n M vite.config.ts\n?? .github/workflows/opportunity-universe-maintenance.yml\n?? .github/workflows/scheduled-source-automation.yml\n?? artifacts/release/cable-local-sql-evidence.json\n?? artifacts/release/final-cable-apply-plan.md\n?? artifacts/release/final-prod-readonly-diagnosis.sql\n?? artifacts/release/final-release-preflight-readonly.sql\n?? artifacts/release/performance-prod-readonly.sql\n?? artifacts/release/rc-node24-compile.json\n?? artifacts/release/rc-preflight-inventory.json\n?? docs/POST_RELEASE_BACKLOG.md\n?? generated/effective-routing-audit.json\n?? scripts/fixtures/pipeline-prod-prefix-20261005.sql\n?? scripts/refresh_opportunity_universe_maintenance.ts\n?? scripts/run_scheduled_source_automation.py\n?? scripts/verify_b2c_pipeline_e2e.ts\n?? scripts/verify_b2c_secondary_contracts.ts\n?? scripts/verify_c20_alert_pages.ts\n?? scripts/verify_c20_alert_sql.mjs\n?? scripts/verify_c20_maintenance_pages.py\n?? scripts/verify_cable_wiring_sql.mjs\n?? scripts/verify_pipeline_view_prefix.ts\n?? scripts/verify_release_automatic_gates.ts\n?? scripts/verify_release_preflight_readonly.mjs\n?? supabase/migrations/202610030001_pipeline_trace_contract_v2.sql\n?? supabase/migrations/202610030002_opportunity_universe_seo_permission.sql\n?? supabase/migrations/202610040001_source_switch_wiring.sql\n?? supabase/migrations/202610040002_public_catalog_coverage.sql\n?? supabase/migrations/202610050001_bounded_alert_progress.sql\n",
+    "counts": {
+      "RELEASE_REQUIRED": 103,
+      "DOCUMENTATION_REQUIRED": 5,
+      "RELEASE_EVIDENCE": 11,
+      "LOCAL_TEMPORARY": 14
+    },
+    "candidate_commit_path_count": 119,
+    "classified_paths": [
+      {
+        "path": ".github/workflows/blog_generator.yml",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "666ba1c8dc7dde82d45b8452dc9850ff844a15a7282a3675de8dc808643bf0c4"
+      },
+      {
+        "path": ".github/workflows/linkedin_poster.yml",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "e9d436716db6d34880a368b8f4f55048cc6a86e23e20a5634c3cfd83b10f9e17"
+      },
+      {
+        "path": ".github/workflows/matching-retrieval.yml",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "a41b4a936b77ee8cd9d2337ce2f252cf1c3d0ea18c30cacdb0b659bb8b3b444c"
+      },
+      {
+        "path": ".github/workflows/notify_signups.yml",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "7119068def1a0efa51e0d1a2659a21199081570ad7b7044f19040c3506dd7568"
+      },
+      {
+        "path": ".github/workflows/refresh_embeddings.yml",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "d1c67a2bab3e6576d1c26f979673583787f3a68087e697141d41650fcffc2f14"
+      },
+      {
+        "path": ".github/workflows/scrapers.yml",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "fc15a26061bedca118405fea97b0c84b6f7aef7f0c9f5822cbb6645bbbd27bb8"
+      },
+      {
+        "path": ".github/workflows/source-maintenance.yml",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "3b90cbe41cd5883d2d0503ea01d6b00eb5ab1a9d807860a5bee5d3e273861311"
+      },
+      {
+        "path": ".gitignore",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "c7dc417826e6a738b7c90a0541b1bccb7a4ed223271d3386e3549f24eb3c82a0"
+      },
+      {
+        "path": "WORKING_PRINCIPLES.md",
+        "status_before_freeze": " M",
+        "category": "DOCUMENTATION_REQUIRED",
+        "reason": "Permanent operating contract, release plan or deferred backlog; preserve as release documentation.",
+        "sha256": "180b444a981b713b0e6056eadfefcbe8c22daf6e769efec06ef168788468cbc6"
+      },
+      {
+        "path": "artifacts/opportunity-universe/check-partial-schema-prod.sql",
+        "status_before_freeze": " M",
+        "category": "RELEASE_EVIDENCE",
+        "reason": "Reviewed release SQL or bounded local evidence/inventory; version for provenance, not a command to execute every SQL artifact in PROD.",
+        "sha256": "25683447e60b22a02ff9c6259856ea9d253cd151cfd1b48e1b8bcb4ee88db49b",
+        "sha256_lf": "25683447e60b22a02ff9c6259856ea9d253cd151cfd1b48e1b8bcb4ee88db49b"
+      },
+      {
+        "path": "artifacts/opportunity-universe/preflight-prod.sql",
+        "status_before_freeze": " M",
+        "category": "RELEASE_EVIDENCE",
+        "reason": "Reviewed release SQL or bounded local evidence/inventory; version for provenance, not a command to execute every SQL artifact in PROD.",
+        "sha256": "86ae889f58c4fd5bc967fd9ad485328f33b77b49683d3d4b9f8aecd492b60870",
+        "sha256_lf": "86ae889f58c4fd5bc967fd9ad485328f33b77b49683d3d4b9f8aecd492b60870"
+      },
+      {
+        "path": "artifacts/opportunity-universe/prod-apply-schema.sql",
+        "status_before_freeze": " M",
+        "category": "RELEASE_EVIDENCE",
+        "reason": "Reviewed release SQL or bounded local evidence/inventory; version for provenance, not a command to execute every SQL artifact in PROD.",
+        "sha256": "aa42bd2722f98c385b38abe3267aa55cc6eda2869b1eb950cdd186e269fd99be",
+        "sha256_lf": "aa42bd2722f98c385b38abe3267aa55cc6eda2869b1eb950cdd186e269fd99be"
+      },
+      {
+        "path": "artifacts/opportunity-universe/prod-compile-transaction.sql",
+        "status_before_freeze": " M",
+        "category": "RELEASE_EVIDENCE",
+        "reason": "Reviewed release SQL or bounded local evidence/inventory; version for provenance, not a command to execute every SQL artifact in PROD.",
+        "sha256": "c48d6023d655be82c635e314fd2d4733257d60ba6a4d5cbeb7b111ed2e3d893c",
+        "sha256_lf": "c48d6023d655be82c635e314fd2d4733257d60ba6a4d5cbeb7b111ed2e3d893c"
+      },
+      {
+        "path": "docs/GRAND_CHECKPOINT.md",
+        "status_before_freeze": " M",
+        "category": "DOCUMENTATION_REQUIRED",
+        "reason": "Permanent operating contract, release plan or deferred backlog; preserve as release documentation.",
+        "sha256": "2ddcac079be64fb2d12ec22c4069dd30327d5ae24751725631a81844a278c694"
+      },
+      {
+        "path": "docs/source-permission-matrix.md",
+        "status_before_freeze": " M",
+        "category": "DOCUMENTATION_REQUIRED",
+        "reason": "Permanent operating contract, release plan or deferred backlog; preserve as release documentation.",
+        "sha256": "bba8ffa6c0ca2f1065f936161a6ec9b38e42e65900c7eaa96550da0da04d3045"
+      },
+      {
+        "path": "netlify.toml",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "12e4b365a05699c803413cacdb3c25f547b59afc9cbca2f2e3d0416cd0ac6206"
+      },
+      {
+        "path": "netlify/functions/admin-data.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "d5fe10b6eebc567ef0ca0426c72c78f4c0b4bc88ebdbf2b6043ebbd494e749e0"
+      },
+      {
+        "path": "netlify/functions/application-workspace.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "84808f2c7228fc335630b4019219fca1178356ea8a93de975af3d2f92dc13df3"
+      },
+      {
+        "path": "netlify/functions/gemini-courses.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "2e55d9b5c2b521aa2eb529de66d05d0f33bef923c5630bf2a1e998ee450ad99c"
+      },
+      {
+        "path": "netlify/functions/generate-cv-vivo.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "177a77b2b0842589853196c9a0bb51102ed33643989836c6d508bf5a490bb1ef"
+      },
+      {
+        "path": "netlify/functions/lib/public-opportunity-pagination.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "11f2f3692e8d4aee4a7c7579c081d6bed9df077d7ceb62341b403fb7e101137d"
+      },
+      {
+        "path": "netlify/functions/lib/seo-pipeline-runner.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "4822d69b154a627857bfcdcc1fd3772b5be84be13f928a3cda03afdc30df8a05"
+      },
+      {
+        "path": "netlify/functions/public-opportunities.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "3ced54e9c589427bbf018f30539e80759696d0bf85f5f901106ddadea6e62c9f"
+      },
+      {
+        "path": "netlify/functions/send-high-match-alerts.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "281dd028c3b313c57c8634ad9817852fa1fd77267d2cbab92b78645ca3ead07a"
+      },
+      {
+        "path": "netlify/functions/sitemap.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "a21422caf3f1dc5f38c745bad2602310ddaf0e7847ccc84e0a3b5192a3675f97"
+      },
+      {
+        "path": "package.json",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "b05fba5c1508e8fdf60eea4f532b48c8d8e395599cf20a2f56e85b59655d510e"
+      },
+      {
+        "path": "scrapers/himalayas_scraper.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "1489ac0a13008ea0ab82cad4eb9bdb5601f3c3f6ae621d5da6f5de49b9976b43"
+      },
+      {
+        "path": "scrapers/opportunity_sink.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "49227b2f0b1e2f4ac3e9417004288574aede7bed2abe95e403d534be0a6be812"
+      },
+      {
+        "path": "scrapers/source_adapters.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "7e9732e6f40e1bb50bb0114e9b034b2514898b9313a649132eddd190700f959f"
+      },
+      {
+        "path": "scrapers/source_cleaners/profiles.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "9b6b4ead6f3ce29efea974a25f6940113632502cc8dc1798d2b8dd4e92c1caa6"
+      },
+      {
+        "path": "scrapers/talentcom_scraper.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "aa4e421ec504ac5db84fb9e740ed507182bd59c0491717e1689df03fc320e980"
+      },
+      {
+        "path": "scrapers/unjobs_scraper.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "358078a5d7d84b7a09e9d17c016f827d72d7bcee162d2cfcbc3bec4d504a5807"
+      },
+      {
+        "path": "scrapers/weworkremotely_scraper.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "35b1b67753e4e1c5a7b7257ee65114bc0fed7ce9f83c8784ccf558184b9e59db"
+      },
+      {
+        "path": "scripts/fixtures/seo-inventory.json",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "39efedd7845fa324be68bc3fb67aa9a4fbf7eabdb78f9d979216cad7a90ed389"
+      },
+      {
+        "path": "scripts/generate_effective_routing_audit.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "44b26e1e4629ec04cd473111f794375403eca25061d3bcbfb47fd6e0c869c628"
+      },
+      {
+        "path": "scripts/generate_effective_routing_policy_projection.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "13de43f5fb2253a082fb7d11fbaaad2c4bfd6518e0ba435ca338d784418000e0"
+      },
+      {
+        "path": "scripts/generate_opportunity_universe_artifacts.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "a9ec73e11b06eee309c87a3d7edf452d1fe221c9088835aca9d00f7f45af8d53"
+      },
+      {
+        "path": "scripts/run_matching_retrieval_expansion.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "720664abfacfda6cbc4d13d86185bba7aa013f1240bb9759f0b3d9d2f00c0f00"
+      },
+      {
+        "path": "scripts/run_observation_coverage_recovery.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "a4037b062bb7713718fd2399b2769559870ede23220e329943cc5f36f8919ef5"
+      },
+      {
+        "path": "scripts/run_opportunity_enrichment_batch.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "5a899841e3b35133b4696395d810a9171f86280cc4ea169e697ef660f7f5fdc0"
+      },
+      {
+        "path": "scripts/run_scraper_monitored.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "fefbd68c6983d52b8040f592fa04c3432add820dd36ff4808d1c5373882a0ff8"
+      },
+      {
+        "path": "scripts/run_source_maintenance.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "c85e3bf4f9dd60b03cb16768afdead5ef3afc738efc4c09a14809d1be8c7dd78"
+      },
+      {
+        "path": "scripts/run_source_scan_automation_bridge.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "96a9def2cffaf1c998133a4fe4758bee9fcd21d723864a2b34d9c24e7f83cfa9"
+      },
+      {
+        "path": "scripts/verify-public-opportunity-pagination.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "318c9d5969bbe80706d0fcb9e85ce041beb71fd328122e24b0dc3570b8ebfdca"
+      },
+      {
+        "path": "scripts/verify-release-candidate.mjs",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "01c50675f069c290bf0d0c01682696490af53a2fe35cc642fe7057bad1797696"
+      },
+      {
+        "path": "scripts/verify-source-intelligence-wiring.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "c0f753f33fa40c417b87ad5342691da6f75a6f00183deae3f7d38ac95050de8c"
+      },
+      {
+        "path": "scripts/verify-source-policy-snapshot.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "446041157f0ab5e329df19d5f5bed69dfe3a30b2c83f70ee76bd2269a44668f8"
+      },
+      {
+        "path": "scripts/verify-source-policy.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "5437d2817cdf6cf644a736aa77f010de7e6bad7cf6dae49b691415bd5179834f"
+      },
+      {
+        "path": "scripts/verify_admin_inventory_operations.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "a2ec3c382e22721fda526a47f0bf9850d4e347f92afac0bbb4aa2c7be6373d92"
+      },
+      {
+        "path": "scripts/verify_canonical_robots_sitemap.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "eacd63c054154798caa457bed00a833caaa7611e4f18ae461c5e05f221a13a23"
+      },
+      {
+        "path": "scripts/verify_distribution_truth.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "422413d1d8caa036b39359d839993de053521292d3ff84179427e78d101acad0"
+      },
+      {
+        "path": "scripts/verify_effective_routing_item24.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "e8466375b4857f2939d9306b9c8ada623fd20e75b86e37f859906526fbf1728f"
+      },
+      {
+        "path": "scripts/verify_effective_routing_policy_projection.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "784fa363997cee467572bda01e5e7153a38610e454409e6cdc95ada6a95ba285"
+      },
+      {
+        "path": "scripts/verify_effective_routing_repair.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "3b4e6c5b6ce3eba8256c79d7275213deac640bccd1f1a921b09091c859125d8c"
+      },
+      {
+        "path": "scripts/verify_effective_source_policy.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "84e9e4922849b3a8137ea66e571546f959ef5d783fce95ce391c31e62a238d20"
+      },
+      {
+        "path": "scripts/verify_eight_gates.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "6c2b5a372ccd44836b33d2b5afe91963909cc9fa03b6714f1fa13d4789622297"
+      },
+      {
+        "path": "scripts/verify_factory_queue_fairness.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "ef87329b1100deb8b970eb2013947e9919ca8f6a27f62316f1bf0497730d317d"
+      },
+      {
+        "path": "scripts/verify_future_ingestion_e2e.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "966936dcd1ef5862f6eba7775d286a25bea684f5e7b405c96a3e2d7578d2d0cf"
+      },
+      {
+        "path": "scripts/verify_ingestion_continuity.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "98f281a80fc57b24ff4069e9c5bbcd0fb987d689f69d9f384e6055c4f4910c91"
+      },
+      {
+        "path": "scripts/verify_intrinsic_routing_parity.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "50c71c114c1f80629527350ded61bc772f931e51fa148681f695b146281b134d"
+      },
+      {
+        "path": "scripts/verify_inventory_reconciliation.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "14634d5e4c4e7fafbd9a82a9b1e9a7d196a19a290c29c31f62362187d39f47e6"
+      },
+      {
+        "path": "scripts/verify_matching_retrieval_expansion.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "8b36752984daaa4199af558d1a12e6b41685a94f613a142dc8a7bd6370f1ce4d"
+      },
+      {
+        "path": "scripts/verify_matching_retrieval_scheduler.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "2b852446b6c0e26591236f804a78f2c4b8b9b8abc271c379f731eb73ed391510"
+      },
+      {
+        "path": "scripts/verify_monitor_rejection_semantics.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "e578e395c987a34b491aab7e268e759740fc369c991304e44fe9019966b247f0"
+      },
+      {
+        "path": "scripts/verify_observation_coverage_recovery.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "05c61828fd1dc5d818d42a87118391cd382a69fd4793a5e95e4bf65d08fda4c4"
+      },
+      {
+        "path": "scripts/verify_onward_distribution_item28.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "e4f5c7cbbfa0f0fdcc00ccf52e46672f56162211ee2a1ffdb4b5396625720ece"
+      },
+      {
+        "path": "scripts/verify_opportunity_factory.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "b04315dbd1fd04cf945ec95c29cc6627abd7e8fb3ecefda0a8eb2da410705ee6"
+      },
+      {
+        "path": "scripts/verify_opportunity_pipeline_contract.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "73c7ed74acbaf42d2f16f84541048ba9e70789af65168eaa0d5ad04d1f547564"
+      },
+      {
+        "path": "scripts/verify_opportunity_universe.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "91fa3a0ca712255b9453887baf94d4a79b355785702a7b0af4b26ef0f912758d"
+      },
+      {
+        "path": "scripts/verify_opportunity_universe_permission_preflight.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "27c9901471425147315d5523bfe2ac2790ee1ac0452c452563507f9bf28c057b"
+      },
+      {
+        "path": "scripts/verify_public_truth_item29.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "75094e407192703ae46caa4af3f196888d6dedd82f2c92974a5de3eb42e58e49"
+      },
+      {
+        "path": "scripts/verify_redirect_consistency_item32.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "75f8c7e943706bae86e58cee98525237e6242de7addd8ab6a84a8eb16bd0c096"
+      },
+      {
+        "path": "scripts/verify_seo_inventory.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "092ef1d37c796b840a9b330120c269c1c5f7e60c12ae4b0e511694f0b806552e"
+      },
+      {
+        "path": "scripts/verify_source_intelligence_item53.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "8361c7220a5bf369aebc4831472698d5a282baa4d35398e6b52ad41727db6ca5"
+      },
+      {
+        "path": "scripts/verify_source_maintenance.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "37d547c5f08aa3751cb9875007d03a4220b0cd42199c8df026f49147fafbc580"
+      },
+      {
+        "path": "scripts/verify_source_scan_lineage.py",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "99c93907bd4038497651074f5b010a78f8e9bc38250260ae6840af1a82eeb1b2"
+      },
+      {
+        "path": "shared/matching-retrieval.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "f9d8419539f39b8d0304f14c9dbf5fb9b5fb4de427dc15588bf19972601ad224"
+      },
+      {
+        "path": "src/generated/source-intelligence-registry.json",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Generated canonical runtime projection; required source, not disposable build output.",
+        "sha256": "5e1826502a566ad0921492b2b6a057ec0c459f4c6f2ec744fd8e1c79a20c20e1"
+      },
+      {
+        "path": "src/lib/effective-source-policy.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "6a084811763aedd9439962d24bf86d0046f50468b05e2f3c502742ea183b4276"
+      },
+      {
+        "path": "src/lib/opportunity-universe.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "bdb6a8e4f06e6a9551f4b3a3fd1908ec8e03891ffb1d24baf5b99d778d593903"
+      },
+      {
+        "path": "src/lib/public-source-policy.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "9dd7e77dfaa813b3dd47e457d617e56337180634dd3ef017825c585a19dbcb23"
+      },
+      {
+        "path": "src/lib/source-permission-truth.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "624340efc83650cb691c88e4f0184c48fe15d8a9710f07b1db81527f05bfd0bb"
+      },
+      {
+        "path": "src/lib/temporary-legacy-seo-exception.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "a9d3f7a1fe21e28f0b35bd8d298fdfccc6987d14f1d3bfc040ee8ab4aab3b9bc"
+      },
+      {
+        "path": "src/pages/Jobs.tsx",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "06817ad70af6467108e60e934684b1b2faf36bcfecb1d0bd26adb3604f137a78"
+      },
+      {
+        "path": "src/pages/MarketOpportunities.tsx",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "dc5a17a7b6c4dd65e27d4bc200e9a1a884cc9b15fc2b533f803c52eff778278c"
+      },
+      {
+        "path": "src/pages/Opportunities.tsx",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "87f49cd232ade43d0f866a9a408902be3dbc17ca1110e8c37907094ab0b4d074"
+      },
+      {
+        "path": "supabase/functions/_shared/generated-source-registry.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Generated canonical runtime projection; required source, not disposable build output.",
+        "sha256": "d10a7c7f501ad642ebbe085a6080eca6fd3a96b40a66523c91df1acc2df2e727"
+      },
+      {
+        "path": "supabase/functions/match-batch/index.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "01139daad680dc20c5d12a92be2c61c7fd7d728d80e7dd14a0b5288fa5fe31b1"
+      },
+      {
+        "path": "supabase/migrations/202609280001_opportunity_universe.sql",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Corrected fresh-install source; version, but excluded from the five-migration PROD apply plan.",
+        "sha256": "a91e7d046acecc707c926f93c787386bce3c4b5dbafc5d4b773401aadf612319",
+        "sha256_lf": "a91e7d046acecc707c926f93c787386bce3c4b5dbafc5d4b773401aadf612319"
+      },
+      {
+        "path": "supabase/migrations/202610020001_opportunity_pipeline_ledger.sql",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Corrected fresh-install source; version, but excluded from the five-migration PROD apply plan.",
+        "sha256": "b1d590e45a62840682d4d542c9228a290eb24d3e7bccbb0de9e8660211a038c7",
+        "sha256_lf": "b1d590e45a62840682d4d542c9228a290eb24d3e7bccbb0de9e8660211a038c7"
+      },
+      {
+        "path": "vite.config.ts",
+        "status_before_freeze": " M",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "e454f7e92632d6aa35e3af213a8816b9591077a2d72c958e071c8d6f3d5d9ec0"
+      },
+      {
+        "path": ".github/workflows/opportunity-universe-maintenance.yml",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "24081adc3679b5febf1654490a472b38329ecf5e16d70921379f0d78a3a1b26b"
+      },
+      {
+        "path": ".github/workflows/scheduled-source-automation.yml",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "aa2620169abddad7039285b2312ee46ed95411377d0b51f52834dfa9a5becedc"
+      },
+      {
+        "path": "artifacts/prod-match-download-v18/config.toml",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "df198bd1482abd201e434b6e088bd9e33028d1bf45449a3223fbc1980bf8c201"
+      },
+      {
+        "path": "artifacts/prod-match-download-v18/supabase/.temp/linked-project.json",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "072d2cd1e344477362c6e8064935e8f5de1e14f453c0deb5212b61a53972eeb3"
+      },
+      {
+        "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/generated-source-registry.ts",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "270c8ad075f8c26708495fcdd1fb0499b5ee1872e965df208d36e4336b19f1d5"
+      },
+      {
+        "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/match-readiness.ts",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "59d73258bdc00d874d1ff14d4a58473c5f5a09290f17df64c90baedc912837cb"
+      },
+      {
+        "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/matching-v2.ts",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "dec49c3fdcbdd4aed85db93accd3038d38ba3fde3780471ed20c578de053ea3b"
+      },
+      {
+        "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/matching.ts",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "56a47b7b5b1fe2b5ae58ba335dd57fb3e7ab77ecc5160b08ed9978d2abebef69"
+      },
+      {
+        "path": "artifacts/prod-match-download-v18/supabase/functions/_shared/vector.ts",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "8e0ff97e58339f76213176e264cf9987e3525893dc5d3adcdf82aff6acfcd074"
+      },
+      {
+        "path": "artifacts/prod-match-download-v18/supabase/functions/match-batch/index.ts",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "f30f5e5215e5f9dd5b4d83a4e9bdcea05dd28afe93f334d886532920a3a2cdab"
+      },
+      {
+        "path": "artifacts/prod-match-download/config.toml",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "df198bd1482abd201e434b6e088bd9e33028d1bf45449a3223fbc1980bf8c201"
+      },
+      {
+        "path": "artifacts/prod-match-download/supabase/.temp/cli-latest",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "103e9d7a97f9a66c28586ffae6f8d81a90630d5cb2c537b23ed886a5e0e5ff01"
+      },
+      {
+        "path": "artifacts/prod-match-download/supabase/.temp/linked-project.json",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "072d2cd1e344477362c6e8064935e8f5de1e14f453c0deb5212b61a53972eeb3"
+      },
+      {
+        "path": "artifacts/prod-match-download/supabase/functions/_shared/matching.ts",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "ec1a09aa9904b1270b2f13ccdeaf213e295f277380c6b795e0eba60683cd1ab4"
+      },
+      {
+        "path": "artifacts/prod-match-download/supabase/functions/_shared/vector.ts",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "ba3ac82f72849f8f683c79d523acb3e5313c084e4ce3d37ffdc108510310ad78"
+      },
+      {
+        "path": "artifacts/prod-match-download/supabase/functions/match-batch/index.ts",
+        "status_before_freeze": "??",
+        "category": "LOCAL_TEMPORARY",
+        "reason": "Downloaded diagnostic snapshot/local linked-project state; duplicate code is not release authority. Preserve locally, ignore, do not stage.",
+        "sha256": "60ecb4d98e3b314a20d4f0c872e57ec80d920925fea2d9da06ddde43df270961"
+      },
+      {
+        "path": "artifacts/release/cable-local-sql-evidence.json",
+        "status_before_freeze": "??",
+        "category": "RELEASE_EVIDENCE",
+        "reason": "Reviewed release SQL or bounded local evidence/inventory; version for provenance, not a command to execute every SQL artifact in PROD.",
+        "sha256": "35643e5a17579ea7ff82b870c5cf2a9f6ffd908890d7481092fa9f8ff61fd88e"
+      },
+      {
+        "path": "artifacts/release/final-cable-apply-plan.md",
+        "status_before_freeze": "??",
+        "category": "DOCUMENTATION_REQUIRED",
+        "reason": "Permanent operating contract, release plan or deferred backlog; preserve as release documentation.",
+        "sha256": "d82bd5aa0da8f1e53b67d308a4be38812515829752ee0d5fbd3c7ef2bd04a860"
+      },
+      {
+        "path": "artifacts/release/final-prod-readonly-diagnosis.sql",
+        "status_before_freeze": "??",
+        "category": "RELEASE_EVIDENCE",
+        "reason": "Reviewed release SQL or bounded local evidence/inventory; version for provenance, not a command to execute every SQL artifact in PROD.",
+        "sha256": "43679a1c42eee55bd5d3d3625408cfcfdceebbbd5f461afd2fab7814ac457309",
+        "sha256_lf": "43679a1c42eee55bd5d3d3625408cfcfdceebbbd5f461afd2fab7814ac457309"
+      },
+      {
+        "path": "artifacts/release/final-release-preflight-readonly.sql",
+        "status_before_freeze": "??",
+        "category": "RELEASE_EVIDENCE",
+        "reason": "Reviewed release SQL or bounded local evidence/inventory; version for provenance, not a command to execute every SQL artifact in PROD.",
+        "sha256": "f99db0bac5ff482e8b37206a8968b074d9dfb8040adfe299e18e8c03d5357d2c",
+        "sha256_lf": "f99db0bac5ff482e8b37206a8968b074d9dfb8040adfe299e18e8c03d5357d2c"
+      },
+      {
+        "path": "artifacts/release/performance-prod-readonly.sql",
+        "status_before_freeze": "??",
+        "category": "RELEASE_EVIDENCE",
+        "reason": "Reviewed release SQL or bounded local evidence/inventory; version for provenance, not a command to execute every SQL artifact in PROD.",
+        "sha256": "b2e4de4dee8461af8767d50087a44409f1558afd0e04c858753f1a3be218da00",
+        "sha256_lf": "b2e4de4dee8461af8767d50087a44409f1558afd0e04c858753f1a3be218da00"
+      },
+      {
+        "path": "artifacts/release/rc-node24-compile.json",
+        "status_before_freeze": "??",
+        "category": "RELEASE_EVIDENCE",
+        "reason": "Reviewed release SQL or bounded local evidence/inventory; version for provenance, not a command to execute every SQL artifact in PROD.",
+        "sha256": "26802c949ec0b8f43c37aaf0837636e69b682f70704811e038cb421d549fb905"
+      },
+      {
+        "path": "artifacts/release/rc-preflight-inventory.json",
+        "status_before_freeze": "??",
+        "category": "RELEASE_EVIDENCE",
+        "reason": "Reviewed release SQL or bounded local evidence/inventory; version for provenance, not a command to execute every SQL artifact in PROD.",
+        "sha256": null,
+        "hash_note": "Self manifest: no recursive self hash; freeze other paths by exact SHA256."
+      },
+      {
+        "path": "docs/POST_RELEASE_BACKLOG.md",
+        "status_before_freeze": "??",
+        "category": "DOCUMENTATION_REQUIRED",
+        "reason": "Permanent operating contract, release plan or deferred backlog; preserve as release documentation.",
+        "sha256": "f931281362582cc23cae1fc3f56460dfe9c372a1b304fd9e37ca2e06cede388b"
+      },
+      {
+        "path": "generated/effective-routing-audit.json",
+        "status_before_freeze": "??",
+        "category": "RELEASE_EVIDENCE",
+        "reason": "Reviewed release SQL or bounded local evidence/inventory; version for provenance, not a command to execute every SQL artifact in PROD.",
+        "sha256": "d56fc094067337bfdb444f2635edf564794adf588a5d9d945308849cdc018ebb"
+      },
+      {
+        "path": "scripts/fixtures/pipeline-prod-prefix-20261005.sql",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "383dc37a0435f2e44c51e5e6c27f4cee6758ce40a5491c4465ae0e21655a1d62",
+        "sha256_lf": "383dc37a0435f2e44c51e5e6c27f4cee6758ce40a5491c4465ae0e21655a1d62"
+      },
+      {
+        "path": "scripts/refresh_opportunity_universe_maintenance.ts",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "c4bf6f6f8cd27ef3fc25a2dd9f75411d68751639e2aa26ac1e75137e0303b95a"
+      },
+      {
+        "path": "scripts/run_scheduled_source_automation.py",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Release implementation, configuration or canonical generator/worker source; required in commit.",
+        "sha256": "b123c08aa9b39a24e788edad49cbd990499b64c2969e9c1571b6294bd3c6fd9d"
+      },
+      {
+        "path": "scripts/verify_b2c_pipeline_e2e.ts",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "b2b869e00b71b7293b4f6973483c27b004ff72a9be0ea6c3a82b94ee5a4eece6"
+      },
+      {
+        "path": "scripts/verify_b2c_secondary_contracts.ts",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "4512519bd4c84b309c3dfc02009c7310591d8d81085b44b8d23268355f6be394"
+      },
+      {
+        "path": "scripts/verify_c20_alert_pages.ts",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "2f2e94931da9accf444f5d51f5a278d263ef4b5c52ec05947198bb81632ee791"
+      },
+      {
+        "path": "scripts/verify_c20_alert_sql.mjs",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "5a2d5837a1f094b3fb3e93a28a9725f199c13ad55046608076e80fe2312c108a"
+      },
+      {
+        "path": "scripts/verify_c20_maintenance_pages.py",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "bf18ac02242a7229c0c46e189c326131902f6c106b050e6d0e3b1cbe738549af"
+      },
+      {
+        "path": "scripts/verify_cable_wiring_sql.mjs",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "82eae097aa5cd1c46bdbe879975d4c9a650474a6bfdd19fd6dd848718ab05fcb"
+      },
+      {
+        "path": "scripts/verify_pipeline_view_prefix.ts",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "d1ac4cc08f888334bbb5dbc2ed21b5e634eff8ced9359d2ba9aaf6af0f9569eb"
+      },
+      {
+        "path": "scripts/verify_release_automatic_gates.ts",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "b88e159fd093be62abb858f3fc76404dd9a924d56b8836311e1db9c6227c2595"
+      },
+      {
+        "path": "scripts/verify_release_preflight_readonly.mjs",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Permanent verifier/fixture required to reproduce the release contracts.",
+        "sha256": "0edcd6a3c6d8278b7aa8a5cbddce9b0d123e62ca3c764cb912073562e8486452"
+      },
+      {
+        "path": "supabase/migrations/202610030001_pipeline_trace_contract_v2.sql",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Final pending PROD migration; fingerprint must match the metadata preflight manifest.",
+        "sha256": "b7b647864b6a3818f96b4103e06b99d77eb2d25118db6a1719885c9898363be7",
+        "sha256_lf": "b7b647864b6a3818f96b4103e06b99d77eb2d25118db6a1719885c9898363be7"
+      },
+      {
+        "path": "supabase/migrations/202610030002_opportunity_universe_seo_permission.sql",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Final pending PROD migration; fingerprint must match the metadata preflight manifest.",
+        "sha256": "69865635e94fcd123f54c9af14fbb6f67ae4bfecce5295c62903ebb39cf7f5d3",
+        "sha256_lf": "f4f67041c67b9f23fd86f165c8c4a7aecb929ac8e99111975fb7a8007d3c3048"
+      },
+      {
+        "path": "supabase/migrations/202610040001_source_switch_wiring.sql",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Final pending PROD migration; fingerprint must match the metadata preflight manifest.",
+        "sha256": "097da537854b98f17ec3905dab96e3e378258adb829bd3f04f8dd02b16bfc483",
+        "sha256_lf": "782806f595b491d114591b321ac5e51d23421e7a47b79412f95eaddbffabe383"
+      },
+      {
+        "path": "supabase/migrations/202610040002_public_catalog_coverage.sql",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Final pending PROD migration; fingerprint must match the metadata preflight manifest.",
+        "sha256": "9f0889763d551eeb9426540a945267239d351c84054b23e526c499b753c8c307",
+        "sha256_lf": "865e368098e929d4cec06c3504344ef10d5f5f4e214c881fd6039f03c232772f"
+      },
+      {
+        "path": "supabase/migrations/202610050001_bounded_alert_progress.sql",
+        "status_before_freeze": "??",
+        "category": "RELEASE_REQUIRED",
+        "reason": "Final pending PROD migration; fingerprint must match the metadata preflight manifest.",
+        "sha256": "226b98260def21532aebf30eec8f8a749efe8067fddb393fb60a62d32e796c5e",
+        "sha256_lf": "abbe29082ef6eec5fd394484f2680a656c745602aa83dbcebacf0da544700de6"
+      }
+    ],
+    "commit_allowlist": [
+      ".github/workflows/blog_generator.yml",
+      ".github/workflows/linkedin_poster.yml",
+      ".github/workflows/matching-retrieval.yml",
+      ".github/workflows/notify_signups.yml",
+      ".github/workflows/opportunity-universe-maintenance.yml",
+      ".github/workflows/refresh_embeddings.yml",
+      ".github/workflows/scheduled-source-automation.yml",
+      ".github/workflows/scrapers.yml",
+      ".github/workflows/source-maintenance.yml",
+      ".gitignore",
+      "WORKING_PRINCIPLES.md",
+      "artifacts/opportunity-universe/check-partial-schema-prod.sql",
+      "artifacts/opportunity-universe/preflight-prod.sql",
+      "artifacts/opportunity-universe/prod-apply-schema.sql",
+      "artifacts/opportunity-universe/prod-compile-transaction.sql",
+      "artifacts/release/cable-local-sql-evidence.json",
+      "artifacts/release/final-cable-apply-plan.md",
+      "artifacts/release/final-prod-readonly-diagnosis.sql",
+      "artifacts/release/final-release-preflight-readonly.sql",
+      "artifacts/release/performance-prod-readonly.sql",
+      "artifacts/release/rc-node24-compile.json",
+      "artifacts/release/rc-preflight-inventory.json",
+      "docs/GRAND_CHECKPOINT.md",
+      "docs/POST_RELEASE_BACKLOG.md",
+      "docs/source-permission-matrix.md",
+      "generated/effective-routing-audit.json",
+      "netlify.toml",
+      "netlify/functions/admin-data.ts",
+      "netlify/functions/application-workspace.ts",
+      "netlify/functions/gemini-courses.ts",
+      "netlify/functions/generate-cv-vivo.ts",
+      "netlify/functions/lib/public-opportunity-pagination.ts",
+      "netlify/functions/lib/seo-pipeline-runner.ts",
+      "netlify/functions/public-opportunities.ts",
+      "netlify/functions/send-high-match-alerts.ts",
+      "netlify/functions/sitemap.ts",
+      "package.json",
+      "scrapers/himalayas_scraper.py",
+      "scrapers/opportunity_sink.py",
+      "scrapers/source_adapters.py",
+      "scrapers/source_cleaners/profiles.py",
+      "scrapers/talentcom_scraper.py",
+      "scrapers/unjobs_scraper.py",
+      "scrapers/weworkremotely_scraper.py",
+      "scripts/fixtures/pipeline-prod-prefix-20261005.sql",
+      "scripts/fixtures/seo-inventory.json",
+      "scripts/generate_effective_routing_audit.py",
+      "scripts/generate_effective_routing_policy_projection.py",
+      "scripts/generate_opportunity_universe_artifacts.ts",
+      "scripts/refresh_opportunity_universe_maintenance.ts",
+      "scripts/run_matching_retrieval_expansion.ts",
+      "scripts/run_observation_coverage_recovery.py",
+      "scripts/run_opportunity_enrichment_batch.py",
+      "scripts/run_scheduled_source_automation.py",
+      "scripts/run_scraper_monitored.py",
+      "scripts/run_source_maintenance.py",
+      "scripts/run_source_scan_automation_bridge.py",
+      "scripts/verify-public-opportunity-pagination.ts",
+      "scripts/verify-release-candidate.mjs",
+      "scripts/verify-source-intelligence-wiring.ts",
+      "scripts/verify-source-policy-snapshot.ts",
+      "scripts/verify-source-policy.ts",
+      "scripts/verify_admin_inventory_operations.ts",
+      "scripts/verify_b2c_pipeline_e2e.ts",
+      "scripts/verify_b2c_secondary_contracts.ts",
+      "scripts/verify_c20_alert_pages.ts",
+      "scripts/verify_c20_alert_sql.mjs",
+      "scripts/verify_c20_maintenance_pages.py",
+      "scripts/verify_cable_wiring_sql.mjs",
+      "scripts/verify_canonical_robots_sitemap.ts",
+      "scripts/verify_distribution_truth.ts",
+      "scripts/verify_effective_routing_item24.ts",
+      "scripts/verify_effective_routing_policy_projection.py",
+      "scripts/verify_effective_routing_repair.ts",
+      "scripts/verify_effective_source_policy.ts",
+      "scripts/verify_eight_gates.ts",
+      "scripts/verify_factory_queue_fairness.py",
+      "scripts/verify_future_ingestion_e2e.ts",
+      "scripts/verify_ingestion_continuity.py",
+      "scripts/verify_intrinsic_routing_parity.ts",
+      "scripts/verify_inventory_reconciliation.ts",
+      "scripts/verify_matching_retrieval_expansion.ts",
+      "scripts/verify_matching_retrieval_scheduler.ts",
+      "scripts/verify_monitor_rejection_semantics.py",
+      "scripts/verify_observation_coverage_recovery.py",
+      "scripts/verify_onward_distribution_item28.ts",
+      "scripts/verify_opportunity_factory.py",
+      "scripts/verify_opportunity_pipeline_contract.ts",
+      "scripts/verify_opportunity_universe.ts",
+      "scripts/verify_opportunity_universe_permission_preflight.ts",
+      "scripts/verify_pipeline_view_prefix.ts",
+      "scripts/verify_public_truth_item29.ts",
+      "scripts/verify_redirect_consistency_item32.ts",
+      "scripts/verify_release_automatic_gates.ts",
+      "scripts/verify_release_preflight_readonly.mjs",
+      "scripts/verify_seo_inventory.ts",
+      "scripts/verify_source_intelligence_item53.ts",
+      "scripts/verify_source_maintenance.py",
+      "scripts/verify_source_scan_lineage.py",
+      "shared/matching-retrieval.ts",
+      "src/generated/source-intelligence-registry.json",
+      "src/lib/effective-source-policy.ts",
+      "src/lib/opportunity-universe.ts",
+      "src/lib/public-source-policy.ts",
+      "src/lib/source-permission-truth.ts",
+      "src/lib/temporary-legacy-seo-exception.ts",
+      "src/pages/Jobs.tsx",
+      "src/pages/MarketOpportunities.tsx",
+      "src/pages/Opportunities.tsx",
+      "supabase/functions/_shared/generated-source-registry.ts",
+      "supabase/functions/match-batch/index.ts",
+      "supabase/migrations/202609280001_opportunity_universe.sql",
+      "supabase/migrations/202610020001_opportunity_pipeline_ledger.sql",
+      "supabase/migrations/202610030001_pipeline_trace_contract_v2.sql",
+      "supabase/migrations/202610030002_opportunity_universe_seo_permission.sql",
+      "supabase/migrations/202610040001_source_switch_wiring.sql",
+      "supabase/migrations/202610040002_public_catalog_coverage.sql",
+      "supabase/migrations/202610050001_bounded_alert_progress.sql",
+      "vite.config.ts"
+    ],
+    "excluded_untracked_snapshots": [
+      "artifacts/prod-match-download-v18/config.toml",
+      "artifacts/prod-match-download-v18/supabase/.temp/linked-project.json",
+      "artifacts/prod-match-download-v18/supabase/functions/_shared/generated-source-registry.ts",
+      "artifacts/prod-match-download-v18/supabase/functions/_shared/match-readiness.ts",
+      "artifacts/prod-match-download-v18/supabase/functions/_shared/matching-v2.ts",
+      "artifacts/prod-match-download-v18/supabase/functions/_shared/matching.ts",
+      "artifacts/prod-match-download-v18/supabase/functions/_shared/vector.ts",
+      "artifacts/prod-match-download-v18/supabase/functions/match-batch/index.ts",
+      "artifacts/prod-match-download/config.toml",
+      "artifacts/prod-match-download/supabase/.temp/cli-latest",
+      "artifacts/prod-match-download/supabase/.temp/linked-project.json",
+      "artifacts/prod-match-download/supabase/functions/_shared/matching.ts",
+      "artifacts/prod-match-download/supabase/functions/_shared/vector.ts",
+      "artifacts/prod-match-download/supabase/functions/match-batch/index.ts"
+    ],
+    "ignored_status": "!! .cvitae-state/\n!! .netlify/\n!! artifacts/prod-match-download-v18/\n!! artifacts/prod-match-download/\n!! dist/\n!! node_modules/\n",
+    "excluded_local_directories": [
+      ".cvitae-state/",
+      "node_modules/",
+      "dist/",
+      ".netlify/",
+      "artifacts/prod-match-download/",
+      "artifacts/prod-match-download-v18/"
+    ],
+    "ignored_local_tools": "PGlite dependencies, Node/pnpm caches, local SQL generation helpers and temporary test harnesses under .cvitae-state/ remain local. Permanent fixtures/verifiers and final generated SQL are in the allowlist.",
+    "tracked_generated_runtime_projections": [
+      "src/generated/source-intelligence-registry.json",
+      "supabase/functions/_shared/generated-source-registry.ts"
+    ],
+    "prod_preflight_operator_report": {
+      "blockers": [],
+      "opportunity_pipeline_status": "PASS",
+      "five_migrations": "COMPATIBLE_WITH_KNOWN_PROD_STRUCTURE",
+      "origin": "User confirmation; no remote execution by this agent; no full result invented."
+    },
+    "final_prod_migrations": [
+      "supabase/migrations/202610030001_pipeline_trace_contract_v2.sql",
+      "supabase/migrations/202610030002_opportunity_universe_seo_permission.sql",
+      "supabase/migrations/202610040001_source_switch_wiring.sql",
+      "supabase/migrations/202610040002_public_catalog_coverage.sql",
+      "supabase/migrations/202610050001_bounded_alert_progress.sql"
+    ],
+    "historical_migrations_apply_to_prod": {
+      "202610020001_opportunity_pipeline_ledger.sql": false,
+      "202609280001_opportunity_universe.sql": false
+    },
+    "integrity": {
+      "single_bible_C01_C21": true,
+      "master_1_67_normalized_sha256": "32ec188c859eb156cb02d1bac34651de5d208c36fc7f236a278688a90eacb19e",
+      "backlog_byte_sha256": "f931281362582cc23cae1fc3f56460dfe9c372a1b304fd9e37ca2e06cede388b",
+      "C01": "LOCAL_NODE24_PASS / CI_PROD_PENDING",
+      "C09": "LOCAL_WIRING_COMPLETE / PROD_APPLY_PENDING",
+      "C20": "LOCAL_BOUNDED_CONTRACT_PASS / PROD_VALIDATION_PENDING",
+      "C01_C09_C20_sections_unchanged_this_freeze": true
+    },
+    "files_changed_this_freeze": [
+      ".gitignore",
+      "docs/GRAND_CHECKPOINT.md",
+      "artifacts/release/final-cable-apply-plan.md",
+      "artifacts/release/rc-preflight-inventory.json"
+    ],
+    "functional_code_changed_this_freeze": false,
+    "files_deleted": false,
+    "staging_performed": false,
+    "validation": "PASS_QUICK_STATIC_AND_DIFF_CHECK",
+    "prod_write": "NONE",
+    "migration_apply": "NONE",
+    "commit": "NONE",
+    "push": "NONE",
+    "deploy": "NONE",
+    "quick_static_checks": [
+      {
+        "check": "scripts/verify_opportunity_pipeline_contract.ts",
+        "exit_code": 0,
+        "stdout": "verify_opportunity_pipeline_contract: PASS projection=matrix ingestion_lineage=append_only verify=read_only",
+        "stderr": "",
+        "runtime": "v24.21.0"
+      },
+      {
+        "check": "scripts/verify_b2c_secondary_contracts.ts",
+        "exit_code": 0,
+        "stdout": "verify_b2c_secondary_contracts: PASS canonical consumers, private CV snapshot, SEO queue, bounded Universe owner and scheduled Automation Core owner",
+        "stderr": "",
+        "runtime": "v24.21.0"
+      },
+      {
+        "check": "scripts/verify_release_preflight_readonly.mjs (existing static section only; no PostgreSQL execution)",
+        "exit_code": 0,
+        "stdout": "PASS static: one SELECT/JSONB; metadata only; guarded optional history; five migration fingerprints and public dependency coverage",
+        "stderr": "",
+        "runtime": "v24.21.0"
+      }
+    ],
+    "git_diff_check": "PASS",
+    "safe_to_commit_local": "YES_USING_EXACT_COMMIT_ALLOWLIST_ONLY",
+    "blockers_for_local_freeze": [],
+    "release_implementation_unchanged_this_freeze": true,
+    "no_long_suites_build_or_postgres_execution_this_freeze": true
+  }
+}

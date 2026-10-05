@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link } from 'wouter'
 import { ArrowRight, CalendarDays, Clock, Filter, MapPin, Search, ShieldCheck, Sparkles, Zap } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { Eyebrow } from '@/components/cv/visuals'
-import { loadPublicOpportunities } from '@/lib/public-source-policy'
+import { loadPublicOpportunityPage } from '@/lib/public-source-policy'
 import { AdSlot } from '@/components/cv/AdSlot'
 import { PageEmptyState, PageErrorState, PageLoadingState } from '@/components/cv/PublicState'
 import { canonicalOpportunityPathForRow } from '@/lib/opportunity-truth'
@@ -88,19 +88,26 @@ export default function Opportunities() {
   const [items, setItems] = useState<Opportunity[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const requestSequence = useRef(0)
   const [category, setCategory] = useState<Category>('Todas')
   const [query, setQuery] = useState('')
 
-  const loadOpportunities = () => {
+  const loadOpportunities = (append = false) => {
+    const request = ++requestSequence.current
+    if (!append) setNextCursor(null)
     setLoading(true)
     setError('')
-    void loadPublicOpportunities<Opportunity[]>('all')
-      .then(data => setItems((data || []) as Opportunity[]))
-      .catch(() => setError('No pudimos cargar las oportunidades. Revisá tu conexión e intentá de nuevo.'))
-      .finally(() => setLoading(false))
+    void loadPublicOpportunityPage<Opportunity>('all', { ...{ q: query, types: category === 'Todas' ? undefined : [...CATEGORY_TYPES[category], ...(category === 'Programas' ? ['programa'] : [])] }, cursor: append ? nextCursor || undefined : undefined })
+      .then(page => { if (request !== requestSequence.current) return; setItems(current => append ? [...current, ...page.rows] : page.rows); setNextCursor(page.nextCursor) })
+      .catch(() => { if (request === requestSequence.current) setError('No pudimos cargar las oportunidades. Revisá tu conexión e intentá de nuevo.') })
+      .finally(() => { if (request === requestSequence.current) setLoading(false) })
   }
 
-  useEffect(() => { loadOpportunities() }, [])
+  useEffect(() => {
+    const timer = window.setTimeout(() => loadOpportunities(), 300)
+    return () => { window.clearTimeout(timer); requestSequence.current++ }
+  }, [query, category])
 
   const filtered = useMemo(() => {
     const needle = clean(query).toLocaleLowerCase('es')
@@ -299,6 +306,7 @@ export default function Opportunities() {
             </div>
           </nav>
 
+          {nextCursor && !error && <button disabled={loading} onClick={() => loadOpportunities(true)} className="mt-6 text-sm text-[#c9a84c] hover:underline disabled:opacity-50">Ver más resultados</button>}
           <AdSlot placement="opportunities-feed" />
         </main>
       </SiteShell>

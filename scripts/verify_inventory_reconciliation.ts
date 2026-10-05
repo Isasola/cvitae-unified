@@ -5,7 +5,7 @@ const policy = [{ source: 'computrabajo', is_enabled: true, catalog_enabled: tru
 const base = { source: 'computrabajo', is_active: true, verification_status: 'verified', catalog_eligible: true, match_eligible: true, alerts_eligible: true, seo_eligible: true, seo_status: 'eligible', opportunity_type: 'job', title: 'Programme Officer', organization: 'UN', slug: 'programme-officer', description: 'Programme responsibilities and requirements for international development delivery. '.repeat(2) }
 const decisions = reconcileInventoryRows([{ ...base, id: 'rich', embedding: [1] }, { ...base, id: 'thin', slug: 'thin', description: '', embedding: null }, { ...base, id: 'archived', slug: 'archived', archived_at: '2026-01-01T00:00:00Z' }], policy)
 assert.equal(decisions[0].catalog.allowed, false, 'row readiness cannot manufacture catalog permission when the canonical source contract is UNKNOWN')
-assert.ok(decisions[0].catalog.reasons.includes('SOURCE_CAPABILITY_UNKNOWN'))
+assert.ok(decisions[0].catalog.reasons.includes('SOURCE_CAPABILITY_DENIED'))
 assert.equal(decisions[0].embedding, 'READY')
 assert.equal(decisions[1].matching.state, 'NOT_READY')
 assert.ok(decisions[1].matching.reasons.includes('INSUFFICIENT_PROFESSIONAL_EVIDENCE'))

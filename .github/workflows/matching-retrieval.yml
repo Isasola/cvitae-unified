@@ -18,18 +18,23 @@ on:
         required: false
         default: '4'
 
+concurrency:
+  group: cvitae-opportunity-pipeline-maintenance
+  cancel-in-progress: false
+
 jobs:
   expand:
+    if: github.event_name == 'workflow_dispatch' || vars.CVITAE_PROD_RELEASE_VALIDATED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11.8.0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec tsx scripts/run_matching_retrieval_expansion.ts --max-users "${{ inputs.max_users || '2' }}" --page-size "${{ inputs.page_size || '250' }}" --max-pages "${{ inputs.max_pages || '4' }}"

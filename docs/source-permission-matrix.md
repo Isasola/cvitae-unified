@@ -6,7 +6,7 @@ permission evidence, not a current DB toggle.
 
 | Source | Collect | Detail | Catalog/match/alerts | SEO/index | Google Jobs/third-party | Application/attribution | Evidence / state |
 |---|---|---|---|---|---|---|---|
-| Himalayas | API confirmed | API confirmed | catalog/match contract modelled | DENIED | DENIED | attribution required | STATIC_CONFIRMED |
+| Himalayas | API confirmed | API confirmed | catalog/match/alerts allowed for first-party product use | ALLOWED for ordinary CVitae public WebPage/search indexing with visible source attribution and original-link linkback | JobPosting, Google Jobs, and third-party distribution DENIED | original Himalayas URL required; attribution required | STATIC_CONFIRMED; SEO is separate from structured job distribution |
 | WWR | DENIED for CVitae job-search use | DENIED for detail HTML | DENIED for job-search use | DENIED for search destination | UNKNOWN | applications must route through WWR | OFFICIAL API terms: https://weworkremotely.com/api-terms-and-guidelines; no separate official RSS grant for CVitae's exact use evidenced (2026-09-29) |
 | Remotive | API confirmed | n/a API record | attribution/linkback required | UNKNOWN | DENIED | source link required | STATIC_CONFIRMED_EXTERNAL / local policy pending |
 | Jobicy | ALLOWED normal public API integration | n/a API record | ALLOWED own-product listings | UNKNOWN | UNKNOWN | preserve canonical URL + attribution; polling <= hourly | Official API docs updated 2026-09-16: https://jobicy.com/jobs-rss-feed; STATIC_CONFIRMED_EXTERNAL |

@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link, useParams } from 'wouter'
 import { ArrowRight, CalendarDays, Filter, MapPin, Search, ShieldCheck } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { Eyebrow } from '@/components/cv/visuals'
-import { loadPublicOpportunities } from '@/lib/public-source-policy'
+import { loadPublicOpportunityPage } from '@/lib/public-source-policy'
 import { AdSlot } from '@/components/cv/AdSlot'
 import { canonicalOpportunityPathForRow } from '@/lib/opportunity-truth'
 
@@ -94,18 +94,27 @@ export default function MarketOpportunities() {
   const [items, setItems] = useState<Opportunity[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const requestSequence = useRef(0)
   const [query, setQuery] = useState('')
 
   const isValid = VALID_MARKETS.includes(market)
   const meta = MARKET_META[market] ?? MARKET_META['paraguay']
 
-  useEffect(() => {
+  const loadPage = (append = false) => {
     if (!isValid) { setLoading(false); return }
-    void loadPublicOpportunities<Opportunity[]>('all')
-      .then(data => setItems((data || []) as Opportunity[]))
-      .catch(() => setError('Public source policy unavailable.'))
-      .finally(() => setLoading(false))
-  }, [market, isValid])
+    const request = ++requestSequence.current
+    setLoading(true); setError('')
+    if (!append) setNextCursor(null)
+    void loadPublicOpportunityPage<Opportunity>('all', { q: query, cursor: append ? nextCursor || undefined : undefined })
+      .then(page => { if (request !== requestSequence.current) return; setItems(current => append ? [...current, ...page.rows] : page.rows); setNextCursor(page.nextCursor) })
+      .catch(() => { if (request === requestSequence.current) setError('Public source policy unavailable.') })
+      .finally(() => { if (request === requestSequence.current) setLoading(false) })
+  }
+  useEffect(() => {
+    const timer = window.setTimeout(() => loadPage(), 300)
+    return () => { window.clearTimeout(timer); requestSequence.current++ }
+  }, [market, isValid, query])
 
   const filtered = useMemo(() => {
     const needle = clean(query).toLocaleLowerCase('es')
@@ -203,6 +212,7 @@ export default function MarketOpportunities() {
 
           <div className="mt-8">
             <AdSlot placement="opportunities-feed" />
+            {nextCursor && !error && <button disabled={loading} onClick={() => loadPage(true)} className="mt-6 text-sm text-[#c9a84c] hover:underline disabled:opacity-50">Ver más resultados</button>}
           </div>
         </main>
       </SiteShell>

@@ -96,12 +96,9 @@ export const handler = async (event: any) => {
         const vacancyId = String(requestedVacancy.id || '').trim().slice(0, 200)
         if (!vacancyId) return jsonResponse(event, 400, { error: 'Vacante inválida' })
         const { data: storedVacancy, error: vacancyError } = await supabase
-          .from('opportunities')
-          .select('id,title,description,rubro,location,tags,verification_status,is_active,match_eligible')
+          .from('opportunity_final_matching_universe')
+          .select('id,title,description,rubro,location,tags')
           .eq('id', vacancyId)
-          .eq('is_active', true)
-          .eq('verification_status', 'verified')
-          .eq('match_eligible', true)
           .maybeSingle()
         if (vacancyError) throw vacancyError
         if (!storedVacancy) {
@@ -234,26 +231,12 @@ Respondé ÚNICAMENTE con el CV en markdown, sin explicaciones ni texto adiciona
 
     const cvMarkdown = await invokeModel(prompt, 1500)
 
-    // Si es vacante externa (pegada por el candidato), guardarla en opportunities para enriquecer el pool
-    if (!isBaseCV && vacancy?.id === 'custom' && vacancy?.cuerpo?.length > 20) {
-      await supabase.from('opportunities').insert({
-        title: vacancy.titulo || 'Vacante sin título',
-        organization: 'Empresa externa',
-        description: vacancy.cuerpo,
-        rubro: 'General',
-        type: 'Tiempo completo',
-        source: 'imported_b2c',
-        is_active: false, // no aparece en el matching público hasta que un admin la valide
-      }).then(({ error }) => {
-        if (error) console.error("import external vacancy failed:", error.message)
-      })
-    }
-
     const vacancySnapshot = vacancy ? {
       id: vacancy.id,
       title: vacancy.titulo,
       category: vacancy.categoria,
       location: vacancy.ubicacion,
+      ...(vacancy.id === 'custom' ? { description: vacancy.cuerpo } : {}),
     } : {}
     const { data: versionRows, error: versionError } = await supabase.rpc('create_cv_version', {
       p_user_id: user.id,

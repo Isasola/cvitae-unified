@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -34,20 +35,14 @@ def api_base() -> str:
     return os.environ["SUPABASE_URL"].rstrip("/") + "/rest/v1"
 
 
-def pages(table: str, params: dict[str, str], page_size: int = 1000) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    offset = 0
-    while True:
-        response = requests.get(
-            f"{api_base()}/{table}", headers=api_headers(),
-            params={**params, "limit": str(page_size), "offset": str(offset)}, timeout=45,
-        )
-        response.raise_for_status()
-        page = response.json()
-        rows.extend(page)
-        if len(page) < page_size:
-            return rows
-        offset += len(page)
+def fetch_page(table: str, params: dict[str, str], *, page_size: int, after_id: str | None) -> list[dict[str, Any]]:
+    """Read one stable keyset page; never enumerate a whole source in memory."""
+    query = {**params, "limit": str(page_size), "order": "id.asc"}
+    if after_id:
+        query["id"] = f"gt.{after_id}"
+    response = requests.get(f"{api_base()}/{table}", headers=api_headers(), params=query, timeout=45)
+    response.raise_for_status()
+    return response.json()
 
 
 def capability(profile: Any) -> str:
@@ -59,23 +54,49 @@ def capability(profile: Any) -> str:
     return "NO_REFRESH_CAPABILITY"
 
 
-def build_plan() -> list[dict[str, Any]]:
+def build_plan(*, cursor: dict[str, Any], max_sources: int, page_size: int) -> list[dict[str, Any]]:
+    """Plan bounded opportunity pages and exact observation lookups for their IDs."""
     plan: list[dict[str, Any]] = []
-    for source, profile in PROFILES.items():
+    completed = set(cursor.get("completed_sources") or [])
+    sources = [source for source in sorted(PROFILES) if source not in completed]
+    if not sources:
+        return plan
+    last_source = cursor.get("last_source")
+    if last_source in sources:
+        start = (sources.index(last_source) + 1) % len(sources)
+        sources = sources[start:] + sources[:start]
+    source_cursors = cursor.get("source_cursors") or {}
+    for source in sources[:max_sources]:
+        profile = PROFILES[source]
         aliases = emitted_ids_for(source)
         values = ",".join(quote(alias, safe="") for alias in aliases)
-        inventory = pages("opportunities", {"select": "id,match_eligible,seo_eligible", "source": f"in.({values})", "deleted_at": "is.null", "archived_at": "is.null", "order": "id.asc"})
-        seen: set[str] = set()
-        for offset in range(0, len(aliases), 50):
-            source_values = ",".join(quote(alias, safe="") for alias in aliases[offset:offset + 50])
-            observations = pages("opportunity_source_observations", {"select": "opportunity_id", "source": f"in.({source_values})"})
-            seen.update(str(row["opportunity_id"]) for row in observations if row.get("opportunity_id"))
+        after_id = source_cursors.get(source)
+        inventory = fetch_page("opportunities", {
+            "select": "id,match_eligible,seo_eligible", "source": f"in.({values})",
+            "deleted_at": "is.null", "archived_at": "is.null",
+        }, page_size=page_size, after_id=after_id)
+        ids = [str(row["id"]) for row in inventory if row.get("id")]
+        if ids:
+            observation_response = requests.post(
+                f"{api_base()}/rpc/latest_opportunity_universe_observations", headers={**api_headers(), "Content-Type": "application/json"},
+                json={"p_opportunity_ids": ids}, timeout=45,
+            )
+            observation_response.raise_for_status()
+            seen = {str(row["opportunity_id"]) for row in observation_response.json() if row.get("opportunity_id")}
+        else:
+            seen = set()
         missing = [row for row in inventory if str(row.get("id")) not in seen]
+        next_after_id = ids[-1] if len(inventory) == page_size and ids else None
         cap = capability(profile)
         cert = certification(profile)
         plan.append({
             "source": source,
+            "after_id": after_id,
+            "next_after_id": next_after_id,
+            "page_rows_examined": len(inventory),
+            "page_complete": len(inventory) < page_size,
             "unresolved": len(missing),
+            "missing_ids": [str(row["id"]) for row in missing],
             "content_or_consumer_ready_potential": sum(bool(row.get("match_eligible") or row.get("seo_eligible")) for row in missing),
             "refresh_mechanism": cap,
             "can_enumerate_current_feed": bool(cap == "API_ENUMERATION"),
@@ -96,52 +117,72 @@ def build_plan() -> list[dict[str, Any]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="persiste sólo observaciones factuales; requiere fuente AUTO certificada")
-    parser.add_argument("--max-sources", type=int)
+    parser.add_argument("--max-sources", type=int, default=10)
     parser.add_argument("--cursor-file", default=str(ROOT / ".cvitae-state" / "observation-coverage-recovery.json"))
     parser.add_argument("--max-items-per-source", type=int, default=250)
+    parser.add_argument("--page-size", type=int, default=100)
+    parser.add_argument("--max-runtime-seconds", type=int, default=1800)
     args = parser.parse_args()
     if args.max_items_per_source < 1 or args.max_items_per_source > 250:
         parser.error("--max-items-per-source debe estar entre 1 y 250")
-    plan = build_plan()
-    if args.max_sources:
-        plan = plan[:max(1, args.max_sources)]
+    if args.max_sources < 1 or args.max_sources > 10:
+        parser.error("--max-sources debe estar entre 1 y 10")
+    if args.page_size < 1 or args.page_size > 100:
+        parser.error("--page-size debe estar entre 1 y 100")
+    if args.max_runtime_seconds < 1 or args.max_runtime_seconds > 3600:
+        parser.error("--max-runtime-seconds debe estar entre 1 and 3600")
     cursor_path = Path(args.cursor_file)
-    checkpoint = json.loads(cursor_path.read_text(encoding="utf-8")) if cursor_path.exists() else {"last_completed_source": None, "completed_sources": []}
-    completed = set(checkpoint.get("completed_sources") or [])
-    if checkpoint.get("last_completed_source") in {item["source"] for item in plan}:
-        start = next(i + 1 for i, item in enumerate(plan) if item["source"] == checkpoint["last_completed_source"])
-        plan = plan[start:] + plan[:start]
-    print("CVITAE_OBSERVATION_RECOVERY_PLAN=" + json.dumps({"mode": "APPLY" if args.apply else "DRY_RUN", "cursor": checkpoint, "total_targets": sum(i["unresolved"] for i in plan), "content_ready_targets": sum(i["content_or_consumer_ready_potential"] for i in plan), "estimated_external_requests": sum(i["expected_external_requests_approx"] for i in plan), "sources": plan}, ensure_ascii=True, sort_keys=True))
+    checkpoint = json.loads(cursor_path.read_text(encoding="utf-8")) if cursor_path.exists() else {"last_source": None, "source_cursors": {}}
+    if "source_cursors" not in checkpoint:
+        checkpoint = {"last_source": checkpoint.get("last_completed_source"), "source_cursors": {}}
+    plan = build_plan(cursor=checkpoint, max_sources=args.max_sources, page_size=args.page_size)
+    print("CVITAE_OBSERVATION_RECOVERY_PLAN=" + json.dumps({"mode": "APPLY" if args.apply else "DRY_RUN", "cursor": checkpoint, "max_sources": args.max_sources, "page_size": args.page_size, "max_items_per_source": args.max_items_per_source, "max_runtime_seconds": args.max_runtime_seconds, "rows_examined": sum(i["page_rows_examined"] for i in plan), "total_targets": sum(i["unresolved"] for i in plan), "content_ready_targets": sum(i["content_or_consumer_ready_potential"] for i in plan), "estimated_external_requests": sum(i["expected_external_requests_approx"] for i in plan), "sources": plan}, ensure_ascii=True, sort_keys=True))
     if not args.apply:
         return 0
     runner = ROOT / "scripts" / "run_source_maintenance.py"
+    started = time.monotonic()
     for item in plan:
         source = item["source"]
-        if item["unresolved"] == 0 or source in completed:
-            continue
         profile = PROFILES[source]
         cert = certification(profile)
-        if not profile.auto_enabled or not cert["certified"] or not profile.adapter:
-            continue
-        result = subprocess.run([
-            sys.executable, str(runner), "--source", source, "--apply", "--observations-only",
-            "--max-items", str(min(args.max_items_per_source, profile.max_detail_fetches_per_run)),
-        ], cwd=ROOT, check=False)
-        if result.returncode != 0:
-            print(f"STOP_ON_ERROR source={source} returncode={result.returncode}", file=sys.stderr)
-            return result.returncode or 1
-        completed.add(source)
+        if time.monotonic() - started >= args.max_runtime_seconds:
+            print("STOP_ON_BUDGET runtime_budget_reached", file=sys.stderr)
+            return 1
+        missing_processed = not item["unresolved"]
+        if item["unresolved"] and profile.auto_enabled and cert["certified"] and profile.adapter:
+            selected_ids = item["missing_ids"][:args.max_items_per_source]
+            missing_processed = len(selected_ids) == len(item["missing_ids"])
+            for opportunity_id in selected_ids:
+                remaining = args.max_runtime_seconds - int(time.monotonic() - started)
+                if remaining <= 0:
+                    print(f"STOP_ON_BUDGET source={source} runtime_budget_reached", file=sys.stderr)
+                    return 1
+                try:
+                    result = subprocess.run([
+                        sys.executable, str(runner), "--source", source, "--opportunity-id", opportunity_id,
+                        "--apply", "--observations-only", "--max-items", "1",
+                    ], cwd=ROOT, check=False, timeout=remaining)
+                except subprocess.TimeoutExpired:
+                    print(f"STOP_ON_ERROR source={source} opportunity_id={opportunity_id} reason=runtime_timeout", file=sys.stderr)
+                    return 1
+                if result.returncode != 0:
+                    print(f"STOP_ON_ERROR source={source} opportunity_id={opportunity_id} returncode={result.returncode}", file=sys.stderr)
+                    return result.returncode or 1
+        if item["unresolved"] and not (profile.auto_enabled and cert["certified"] and profile.adapter):
+            print(f"RECOVERY_PENDING source={source} reason=AUTHORIZED_CERTIFIED_ADAPTER_REQUIRED", file=sys.stderr)
+        source_cursors = dict(checkpoint.get("source_cursors") or {})
+        completed_sources = set(checkpoint.get("completed_sources") or [])
+        if not missing_processed:
+            source_cursors[source] = item["after_id"]
+        elif item["page_complete"]:
+            source_cursors.pop(source, None)
+            completed_sources.add(source)
+        elif item["next_after_id"]:
+            source_cursors[source] = item["next_after_id"]
+        checkpoint = {"last_source": source, "source_cursors": source_cursors, "completed_sources": sorted(completed_sources)}
         cursor_path.parent.mkdir(parents=True, exist_ok=True)
         temporary = cursor_path.with_suffix(cursor_path.suffix + ".tmp")
-        temporary.write_text(json.dumps({"last_completed_source": source, "completed_sources": sorted(completed)}, indent=2), encoding="utf-8")
-        temporary.replace(cursor_path)
-    if plan and all(item["source"] in completed or item["unresolved"] == 0 for item in plan):
-        # A completed pass begins a fresh idempotent cycle next time; recent
-        # durable observations prevent duplicate fetches while newly missing
-        # rows remain eligible for the next cycle.
-        cursor_path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = cursor_path.with_suffix(cursor_path.suffix + ".tmp")
-        temporary.write_text(json.dumps({"last_completed_source": None, "completed_sources": []}, indent=2), encoding="utf-8")
+        temporary.write_text(json.dumps(checkpoint, indent=2), encoding="utf-8")
         temporary.replace(cursor_path)
     return 0
 

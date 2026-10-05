@@ -1,0 +1,38 @@
+name: CVitae - Opportunity Universe maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_prod_release_validated:
+        description: 'Confirm an authorized release and bounded PROD validation passed'
+        type: choice
+        options: ['NO', 'YES']
+        default: 'NO'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cvitae-opportunity-pipeline-maintenance
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    if: inputs.confirm_prod_release_validated == 'YES' && vars.CVITAE_PROD_RELEASE_VALIDATED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsx scripts/refresh_opportunity_universe_maintenance.ts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

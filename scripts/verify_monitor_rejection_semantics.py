@@ -20,6 +20,20 @@ def main() -> int:
 
     lines, warnings, errors, status = execution_outcome(1, "normal output", {"rejected": 0, "errors": []})
     assert errors == 1 and status == "failed" and lines
+
+    lines, warnings, errors, status = execution_outcome(0, "CVITAE_INGESTION_SUMMARY={}", {
+        "rejected": 3, "budget_skipped": 4, "unchanged": 2, "errors": [], "technical_failure": False,
+    })
+    assert status == "success" and errors == 0
+
+    lines, warnings, errors, status = execution_outcome(0, "CVITAE_INGESTION_SUMMARY={}", {
+        "inserted": 2, "errors": [], "technical_failure": True, "lineage_failed": 1,
+    })
+    assert status == "failed" and errors >= 1 and "INGESTION_TECHNICAL_FAILURE" in lines
+
+    adapter_output = 'CVITAE_ADAPTER_METRICS={"extraction_metrics":{"scan_lineage":{"counts":{"PERSISTED":1},"lineage_evidence":{"status":"WARNING","reason_codes":["LINEAGE_EVENT_WRITE_FAILED"]}}}}'
+    lines, warnings, errors, status = execution_outcome(0, adapter_output, {"errors": []})
+    assert status == "failed" and "LINEAGE_EVENT_WRITE_FAILED" in lines
     print("verify_monitor_rejection_semantics: PASS")
     return 0
 

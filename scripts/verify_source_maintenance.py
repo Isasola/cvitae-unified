@@ -39,7 +39,7 @@ def offline_scout(source: str = "unjobs") -> source_scouts.ScoutSnapshot:
 
 def test_loop_and_breakers() -> None:
     rows = [row(index) for index in range(120)]
-    with patch.object(maintenance, "fetch_inventory", return_value=rows), patch.object(maintenance, "recent_enrichments", return_value={}), patch.object(maintenance, "recent_observations", return_value=({}, True)), patch.object(maintenance, "scout_source", side_effect=lambda source, strategy: offline_scout(source)), patch.object(maintenance, "retry_detail", side_effect=lambda source, item: result_for(item)):
+    with patch.object(maintenance, "fetch_inventory", side_effect=lambda source, limit, *args: rows[:limit]), patch.object(maintenance, "recent_enrichments", return_value={}), patch.object(maintenance, "recent_observations", return_value=({}, True)), patch.object(maintenance, "scout_source", side_effect=lambda source, strategy: offline_scout(source)), patch.object(maintenance, "retry_detail", side_effect=lambda source, item: result_for(item)):
         summary = maintenance.process_source("unjobs", False, 50, None, None, False, False)
     assert summary["processed"] == 120 and summary["queue_remaining"] == 0
     assert summary["selection"]["p0"] == 120
@@ -50,9 +50,9 @@ def test_loop_and_breakers() -> None:
     for _, item, _, _ in failed_plans:
         item.title = None
     assert maintenance.circuit_breaker(profile, failed_plans) == "parser_failure_rate"
-    with patch.object(maintenance, "fetch_inventory", return_value=rows), patch.object(maintenance, "recent_enrichments", return_value={}), patch.object(maintenance, "recent_observations", return_value=({}, True)), patch.object(maintenance, "scout_source", side_effect=lambda source, strategy: offline_scout(source)), patch.object(maintenance, "retry_detail", side_effect=lambda source, item: result_for(item)):
+    with patch.object(maintenance, "fetch_inventory", side_effect=lambda source, limit, *args: rows[:limit]), patch.object(maintenance, "recent_enrichments", return_value={}), patch.object(maintenance, "recent_observations", return_value=({}, True)), patch.object(maintenance, "scout_source", side_effect=lambda source, strategy: offline_scout(source)), patch.object(maintenance, "retry_detail", side_effect=lambda source, item: result_for(item)):
         partial = maintenance.process_source("unjobs", False, 50, 75, None, False, False)
-    assert partial["processed"] == 75 and partial["queue_remaining"] == 45
+    assert partial["processed"] == 75 and partial["maintenance_progress"]["resumable"] and not partial["maintenance_progress"]["complete"]
 
 
 def test_profiles_and_embedding_plan() -> None:

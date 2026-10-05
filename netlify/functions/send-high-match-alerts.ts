@@ -15,7 +15,7 @@ const MAX_EMAILS_PER_RUN = 20
 
 function canonicalSource(raw: unknown): string {
   const source = String(raw || '').trim().toLowerCase()
-  const profile = EDGE_SOURCE_IDENTITIES.find((item) => item.canonical_source === source || item.emitted_aliases.includes(source))
+  const profile = EDGE_SOURCE_IDENTITIES.find((item) => item.canonical_source === source || item.emitted_aliases.some(alias => alias === source))
   return profile?.canonical_source || source
 }
 
@@ -82,139 +82,179 @@ function emailHtml(profile: any, opp: any, matched: string[]): string {
   return `<!doctype html><html lang="es"><body style="margin:0;background:#0a0a0a;color:#f5f4f0;font-family:Arial,sans-serif"><table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px"><tr><td align="center"><table width="100%" style="max-width:560px;background:#111110;border:1px solid #292929"><tr><td style="padding:30px"><p style="margin:0 0 24px;color:#c9a84c;font-size:22px;font-weight:800">CVitae</p><p style="color:#999;font-size:12px;letter-spacing:.12em;text-transform:uppercase">Match muy alto</p><h1 style="font-size:25px;line-height:1.25">${escapeHtml(firstName)}, encontramos una oportunidad que encaja mucho con tu perfil.</h1><h2 style="margin:28px 0 6px;font-size:20px">${escapeHtml(opp.title)}</h2><p style="margin:0 0 18px;color:#aaa">${escapeHtml(opp.organization)} · ${escapeHtml(opp.location)}</p>${matched.length ? `<p style="color:#aaa;line-height:1.6">Coincidencias: ${matched.map(escapeHtml).join(", ")}</p>` : ""}<a href="${url}" style="display:inline-block;margin-top:20px;padding:12px 20px;border-radius:999px;background:#c9a84c;color:#0a0a0a;text-decoration:none;font-weight:700">Ver oportunidad</a><p style="margin-top:30px;color:#777;font-size:12px;line-height:1.5">Recibís este correo porque activaste las alertas en CVitae. Podés desactivarlas desde Mi carrera → Alertas.</p></td></tr></table></td></tr></table></body></html>`
 }
 
-const handler: Handler = async () => {
-  if (!RESEND_KEY) return { statusCode: 503, body: JSON.stringify({ error: "RESEND_API_KEY no configurada" }) }
-  const supabase = makeSupabaseAdmin()
-  const alertCacheCutoff = new Date()
-  const alertCacheFreshnessStart = new Date(alertCacheCutoff.getTime() - 36 * 60 * 60 * 1000)
-  const since = alertCacheFreshnessStart.toISOString()
-  const [{ data: profiles, error: profilesError }, { data: skillRows, error: skillsError }, { data: allSourcePolicies, error: sourcePolicyError }, { data: permissionRows, error: permissionError }] = await Promise.all([
-    supabase.from("user_master_profiles").select("id,user_id,email,full_name,professional_title,summary,cv_text,profile_data,match_alerts_enabled,match_alert_threshold,is_test").eq("match_alerts_enabled", true).not("email", "is", null).not("user_id", "is", null).or("is_test.is.null,is_test.eq.false").limit(250),
-    supabase.from("skill_dictionary").select("canonical_name,variants"),
-    supabase.from("opportunity_sources").select("source,is_enabled,matching_enabled"),
-    supabase.from("opportunity_source_consumer_permissions").select("canonical_source,consumer,permission_state").eq("consumer", "matching"),
-  ])
-  if (profilesError || skillsError || sourcePolicyError || permissionError) return { statusCode: 500, body: JSON.stringify({ error: profilesError?.message || skillsError?.message || sourcePolicyError?.message || permissionError?.message }) }
-  const alertOpportunities: any[] = []
-  let alertCursor: { updated_at: string; id: string } | null = null
-  try {
-    for (;;) {
-      let query = supabase.from("opportunity_alert_universe").select("id,source,slug,title,organization,location,rubro,type,description,tags,opportunity_kind,opportunity_type,remote,remote_scope,eligible_countries,eligible_regions,citizenship_requirement,residency_requirement,deadline,created_at,updated_at,is_active,verification_status,match_eligible,alerts_eligible,archived_at,deleted_at,content_fingerprint")
-        .gte("updated_at", since).lte("updated_at", alertCacheCutoff.toISOString()).order("updated_at", { ascending: true }).order("id", { ascending: true }).limit(500)
-      if (alertCursor) query = query.or(`updated_at.gt.${alertCursor.updated_at},and(updated_at.eq.${alertCursor.updated_at},id.gt.${alertCursor.id})`)
-      const page = await query
-      if (page.error) throw new Error(page.error.message)
-      const rows = page.data || []
-      alertOpportunities.push(...rows)
-      if (rows.length < 500) break
-      const last = rows[rows.length - 1]
-      const next = { updated_at: String(last.updated_at), id: String(last.id) }
-      if (alertCursor && (next.updated_at < alertCursor.updated_at || (next.updated_at === alertCursor.updated_at && next.id <= alertCursor.id))) throw new Error("ALERT_UNIVERSE_CURSOR_DID_NOT_ADVANCE")
-      alertCursor = next
-    }
-  } catch (error: any) {
-    return { statusCode: 500, body: JSON.stringify({ error: error?.message || "ALERT_UNIVERSE_PAGE_FAILED" }) }
-  }
-  const sourceRows = (allSourcePolicies || []).map(normalizeSourcePolicyRow)
-  const sourceSignature = await sourcePolicySignature(sourceRows, canonicalSource, permissionRows || [])
-  const recentDecisionOpportunities = alertOpportunities.map((opp: any) => ({ ...opp, source_match_state: 'ALLOWED' }))
-  const userIds = (profiles || []).map((profile: any) => String(profile.user_id))
-  const cacheRows: any[] = []
-  try {
-    for (let offset = 0; offset < userIds.length; offset += 50) {
-      const userChunk = userIds.slice(offset, offset + 50)
-      const rows = await collectAlertCandidateSnapshot(async (cursor, limit) => {
-        let query = supabase.from('matching_retrieval_candidates')
-          .select('user_id,opportunity_id,profile_signature,opportunity_content_fingerprint,candidate_class,semantic_similarity,evaluation_lane,evaluated_at')
-          .in('user_id', userChunk).eq('candidate_class', 'MATCH')
-          .gte('evaluated_at', alertCacheFreshnessStart.toISOString()).lte('evaluated_at', alertCacheCutoff.toISOString())
-          .order('evaluated_at', { ascending: true }).order('user_id', { ascending: true }).order('opportunity_id', { ascending: true }).limit(limit)
-        if (cursor) query = query.or(`evaluated_at.gt.${cursor.evaluated_at},and(evaluated_at.eq.${cursor.evaluated_at},user_id.gt.${cursor.user_id}),and(evaluated_at.eq.${cursor.evaluated_at},user_id.eq.${cursor.user_id},opportunity_id.gt.${cursor.opportunity_id})`)
-        const result = await query
-        if (result.error) throw new Error(result.error.message)
-        return result.data || []
-      }, 500)
-      cacheRows.push(...rows)
-    }
-  } catch (error: any) {
-    return { statusCode: 500, body: JSON.stringify({ error: error?.message || 'ALERT_CACHE_PAGE_FAILED' }) }
-  }
-  const stateResult = userIds.length ? await supabase.from('matching_retrieval_states').select('user_id,profile_signature,source_policy_signature').in('user_id', userIds) : { data: [], error: null }
-  if (stateResult.error) return { statusCode: 500, body: JSON.stringify({ error: stateResult.error.message }) }
-  const states = new Map((stateResult.data || []).map((state: any) => [String(state.user_id), state]))
-  const profilesByUser = new Map((profiles || []).map((profile: any) => [String(profile.user_id), profile]))
-  const validCacheRows = cacheRows.filter((candidate: any) => {
-    const profile: any = profilesByUser.get(String(candidate.user_id))
-    const state: any = states.get(String(candidate.user_id))
-    return profile && state
-      && candidate.profile_signature === matchingProfileSignature(profile)
-      && state.profile_signature === candidate.profile_signature
-      && state.source_policy_signature === sourceSignature
-  })
-  const cachedIds = [...new Set(validCacheRows.map((candidate: any) => String(candidate.opportunity_id)))]
-  const hydratedRows: any[] = []
-  for (let offset = 0; offset < cachedIds.length; offset += 500) {
-    const result = await supabase.from('opportunity_alert_universe')
-      .select("id,source,slug,title,organization,location,rubro,type,description,tags,opportunity_kind,opportunity_type,remote,remote_scope,eligible_countries,eligible_regions,citizenship_requirement,residency_requirement,deadline,created_at,updated_at,is_active,verification_status,match_eligible,alerts_eligible,archived_at,deleted_at,content_fingerprint")
-      .in('id', cachedIds.slice(offset, offset + 500))
-    if (result.error) return { statusCode: 500, body: JSON.stringify({ error: result.error.message }) }
-    hydratedRows.push(...(result.data || []))
-  }
-  const hydratedById = new Map(hydratedRows.map((row: any) => [String(row.id), row]))
-  const cachedByUser = new Map<string, any[]>()
-  for (const candidate of validCacheRows) {
-    const opp = hydratedById.get(String(candidate.opportunity_id))
-    if (!opp || !opportunityCacheIsCurrent(candidate, opp) || !cacheCandidateAlertEligible(candidate, opp, since)) continue
-    const rows = cachedByUser.get(String(candidate.user_id)) || []
-    rows.push({ ...opp, source_match_state: 'ALLOWED', _cached_similarity: candidate.semantic_similarity })
-    cachedByUser.set(String(candidate.user_id), rows)
-  }
-  const dictionary = buildDictionary((skillRows || []).map((row: any) => [
-    String(row.canonical_name || '').trim(),
-    Array.isArray(row.variants) ? row.variants.map(String) : [],
-  ]).filter(([canonical]: [string, string[]]) => canonical))
+const ALERT_FIELDS = "id,source,slug,title,organization,location,rubro,type,description,tags,opportunity_kind,opportunity_type,remote,remote_scope,eligible_countries,eligible_regions,citizenship_requirement,residency_requirement,deadline,created_at,updated_at,is_active,verification_status,match_eligible,alerts_eligible,archived_at,deleted_at,content_fingerprint"
+const CACHE_FIELDS = "user_id,opportunity_id,profile_signature,opportunity_content_fingerprint,candidate_class,semantic_similarity,evaluation_lane,evaluated_at"
+const PAGE_SIZE = 100
+const MAX_PAGES = 5
+const RUNTIME_MS = 20_000
 
-  let sent = 0; let failed = 0; let claimed = 0; let eligible = 0
-  for (const profile of profiles || []) {
-    if (sent + failed >= MAX_EMAILS_PER_RUN) break
-    const threshold = Number(profile.match_alert_threshold || 85)
-    const cache = cachedByUser.get(String(profile.user_id)) || []
-    const byId = new Map<string, any>()
-    for (const opp of [...recentDecisionOpportunities, ...cache]) if (!byId.has(String(opp.id))) byId.set(String(opp.id), opp)
-    const decisionOpportunities = [...byId.values()]
-    const similarities = new Map<string, number>(cache.flatMap((opp: any) => Number.isFinite(Number(opp._cached_similarity)) ? [[String(opp.id), Number(opp._cached_similarity)] as [string, number]] : []))
-    const { rankedV2 } = rankOpportunitiesV2(canonicalCandidateProfile(profile), decisionOpportunities, dictionary, V2_PRESET_FULL, similarities)
-    for (const { opp, decision } of rankedV2) {
-      if (sent + failed >= MAX_EMAILS_PER_RUN) break
-      if (!isHighMatchAlertDecision(decision)) continue
-      const match = { value: decision.score ?? 0, matched: decision.matched_skills }
-      if (match.value < threshold) continue
-      eligible++
-      const { data: rows, error: claimError } = await supabase.rpc("claim_match_alert_delivery", {
-        p_user_id: profile.user_id, p_profile_id: profile.id, p_opportunity_id: opp.id,
-        p_recipient_email: profile.email, p_match_score: match.value, p_matched_skills: match.matched,
-      })
-      if (claimError || !rows?.[0]) continue
-      claimed++
-      const delivery = rows[0]
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json", "Idempotency-Key": `high-match/${profile.user_id}/${opp.id}`.slice(0, 256) },
-        body: JSON.stringify({ from: "CVitae <contacto@cvitae.lat>", to: [profile.email], subject: `Match muy alto: ${opp.title}`, html: emailHtml(profile, opp, match.matched) }),
-      })
-      const responseBody = await response.text()
-      if (response.ok) {
-        let messageId: string | null = null
-        try { messageId = JSON.parse(responseBody).id || null } catch { /* provider response is still auditable */ }
-        await supabase.from("match_alert_deliveries").update({ status: "sent", provider_message_id: messageId, sent_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", delivery.id).eq("status", "processing")
-        sent++
-      } else {
-        await supabase.from("match_alert_deliveries").update({ status: "failed", last_error: `${response.status}: ${responseBody}`.slice(0, 1000), updated_at: new Date().toISOString() }).eq("id", delivery.id).eq("status", "processing")
-        failed++
+type Dependencies = {
+  database?: () => any; send?: typeof fetch; rank?: typeof rankOpportunitiesV2
+  now?: () => number; resendKey?: string; pageSize?: number; maxPages?: number; maxEmails?: number
+}
+/** Production handler and local fixtures share the same bounded orchestration. */
+export function createHighMatchAlertsHandler(deps: Dependencies = {}): Handler {
+  return async () => {
+    const resendKey = deps.resendKey ?? RESEND_KEY
+    if (!resendKey) return { statusCode: 503, body: JSON.stringify({ error: "RESEND_API_KEY no configurada" }) }
+    const db = (deps.database || makeSupabaseAdmin)()
+    const now = deps.now || Date.now
+    const deadline = now() + RUNTIME_MS
+    const pageSize = Math.min(PAGE_SIZE, Math.max(1, deps.pageSize || PAGE_SIZE))
+    const maxPages = Math.min(MAX_PAGES, Math.max(1, deps.maxPages || MAX_PAGES))
+    const emailBudget = Math.min(MAX_EMAILS_PER_RUN, Math.max(1, deps.maxEmails || MAX_EMAILS_PER_RUN))
+    const checked = async (query: any): Promise<any> => {
+      const result = await (query.abortSignal ? query.abortSignal(AbortSignal.timeout(Math.max(1, deadline - now()))) : query)
+      if (result.error) throw new Error(result.error.message)
+      return result.data
+    }
+    let profile: any; let token: string; let progress: any
+    let sent = 0; let failed = 0; let claimed = 0; let eligible = 0; let pages = 0; let opportunities = 0
+    const save = (release = false) => checked(db.rpc('save_match_alert_scan', {
+      p_profile_id: profile.id, p_lease_token: token, p_checkpoint: progress, p_release: release,
+    }))
+    try {
+      const scan = await checked(db.rpc('claim_match_alert_scan'))
+      if (!scan?.profile) return { statusCode: 200, body: JSON.stringify({ profiles: 0, continuation: scan }) }
+      profile = scan.profile; token = scan.lease_token; progress = scan.checkpoint || {}
+      const [skillRows, allSourcePolicies, permissionRows, stateRows] = await Promise.all([
+        checked(db.from('skill_dictionary').select('canonical_name,variants')),
+        checked(db.rpc('get_source_distribution_policy')),
+        checked(db.from('opportunity_source_consumer_permissions').select('canonical_source,consumer,permission_state').eq('consumer', 'matching')),
+        checked(db.from('matching_retrieval_states').select('user_id,profile_signature,source_policy_signature').eq('user_id', profile.user_id).limit(1)),
+      ])
+      const signature = matchingProfileSignature(profile)
+      const sourceSignature = await sourcePolicySignature((allSourcePolicies || []).map(normalizeSourcePolicyRow), canonicalSource, permissionRows || [])
+      // Invalidation metadata only: the canonical Alert view remains the eligibility authority.
+      const policyStamp = JSON.stringify([sourceSignature, (allSourcePolicies || []).map((p: any) => [p.source, p.is_enabled, p.alerts_enabled])])
+      const profileStamp = JSON.stringify([signature, profile.match_alert_threshold])
+      const state = stateRows?.[0]
+      const validCache = (c: any) => state?.source_policy_signature === sourceSignature && state?.profile_signature === signature && c.profile_signature === signature
+      if (!progress.cutoff || progress.complete || progress.policyStamp !== policyStamp || progress.profileStamp !== profileStamp) {
+        const cutoff = new Date(now()).toISOString()
+        const unchanged = progress.policyStamp === policyStamp && progress.profileStamp === profileStamp
+        const lower = unchanged && progress.complete ? progress.cutoff : new Date(Math.min(progress.complete ? now() : Date.parse(progress.lower || new Date(now()).toISOString()), now() - 36 * 3600_000)).toISOString()
+        progress = { cutoff, lower, since: new Date(Math.min(Date.parse(lower), now() - 36 * 3600_000)).toISOString(),
+          policyStamp, profileStamp, delta: unchanged && progress.complete === true, recentCursor: null, cacheCursor: null, recentDone: false, cacheDone: false, pending: [], complete: false }
+        await save()
       }
+      const dictionary = buildDictionary((skillRows || []).map((r: any) => [String(r.canonical_name || '').trim(), Array.isArray(r.variants) ? r.variants.map(String) : []]).filter(([name]: any) => name))
+      const rank = deps.rank || rankOpportunitiesV2
+      const ranked = (rows: any[], similarities = new Map<string, number>()) => rank(canonicalCandidateProfile(profile), rows.map(r => ({ ...r, source_match_state: 'ALLOWED' })), dictionary, V2_PRESET_FULL, similarities).rankedV2
+      const hydrate = (ids: string[]) => ids.length ? checked(db.from("opportunity_alert_universe").select(ALERT_FIELDS).in('id', ids).limit(pageSize)) : Promise.resolve([])
+      while (now() < deadline && sent + failed < emailBudget) {
+        if (progress.pending.length) {
+          // Re-read preferences and canonical rows before effects; no raw opportunities fallback.
+          const prefs = await checked(db.from('user_master_profiles').select('match_alerts_enabled,email,match_alert_threshold').eq('id', profile.id).limit(1))
+          if (!prefs?.[0]?.match_alerts_enabled) break
+          profile.email = prefs[0].email
+          const rows = await hydrate(progress.pending.map((p: any) => p.id))
+          const byId = new Map<string, any>(rows.map((r: any) => [String(r.id), r]))
+          while (progress.pending.length && now() < deadline && sent + failed < emailBudget) {
+            const pending = progress.pending[0]; const opp = byId.get(pending.id)
+            const decision = opp ? ranked([opp], pending.similarity == null ? new Map() : new Map([[pending.id, pending.similarity]]))[0]?.decision : null
+            if (!opp || !isHighMatchAlertDecision(decision) || (decision?.score ?? 0) < Number(prefs[0].match_alert_threshold || 85)) {
+              progress.pending.shift(); await save(); continue
+            }
+            const deliveries = await checked(db.rpc('claim_match_alert_delivery', {
+              p_user_id: profile.user_id, p_profile_id: profile.id, p_opportunity_id: opp.id,
+              p_recipient_email: profile.email, p_match_score: decision.score ?? 0, p_matched_skills: decision.matched_skills,
+            }))
+            if (!deliveries?.[0]) {
+              const ledger = await checked(db.from('match_alert_deliveries').select('status,attempts').eq('user_id', profile.user_id).eq('opportunity_id', opp.id).limit(1))
+              if (!ledger?.[0] || !(['sent', 'suppressed'].includes(ledger[0].status) || ledger[0].attempts >= 3)) break
+              progress.pending.shift(); await save(); continue
+            }
+            const delivery = deliveries[0]; claimed++
+            let response: Response
+            try {
+              response = await (deps.send || fetch)('https://api.resend.com/emails', {
+                method: 'POST', signal: AbortSignal.timeout(Math.max(1, Math.min(5000, deadline - now()))),
+                headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': `high-match/${profile.user_id}/${opp.id}`.slice(0, 256) },
+                body: JSON.stringify({ from: 'CVitae <contacto@cvitae.lat>', to: [profile.email], subject: `Match muy alto: ${opp.title}`, html: emailHtml(profile, opp, decision.matched_skills) }),
+              })
+            } catch (error: any) {
+              await checked(db.from('match_alert_deliveries').update({ status: 'failed', last_error: String(error?.message).slice(0, 1000), updated_at: new Date(now()).toISOString() }).eq('id', delivery.id).eq('status', 'processing'))
+              failed++; break
+            }
+            const body = await response.text()
+            let messageId: string | null = null
+            try { messageId = JSON.parse(body).id || null } catch { /* retain provider result */ }
+            await checked(db.from('match_alert_deliveries').update(response.ok
+              ? { status: 'sent', provider_message_id: messageId, sent_at: new Date(now()).toISOString(), updated_at: new Date(now()).toISOString() }
+              : { status: 'failed', last_error: `${response.status}: ${body}`.slice(0, 1000), updated_at: new Date(now()).toISOString() }).eq('id', delivery.id).eq('status', 'processing'))
+            if (!response.ok) { failed++; break }
+            sent++; progress.pending.shift(); await save()
+          }
+          if (progress.pending.length) break // Pending retries/budget retain the page; never leap over it.
+        }
+        if (progress.recentDone && progress.cacheDone) { progress.complete = true; break }
+        if (pages >= maxPages || now() >= deadline || sent + failed >= emailBudget) break
+        let rows: any[] = []; let candidates: any[] = []
+        // Stage progress separately. Failed reads/ranking must leave the preceding cursor intact.
+        const nextProgress = { ...progress, pending: [] }
+        if (!progress.recentDone) {
+          let query = db.from("opportunity_alert_universe").select(ALERT_FIELDS).lte('updated_at', progress.cutoff)
+            .order('updated_at', { ascending: true }).order('id', { ascending: true }).limit(pageSize)
+          query = progress.delta ? query.gt('updated_at', progress.lower) : query.gte('updated_at', progress.lower)
+          const cursor = progress.recentCursor
+          if (cursor) query = query.or(`updated_at.gt.${cursor.updated_at},and(updated_at.eq.${cursor.updated_at},id.gt.${cursor.id})`)
+          rows = await checked(query) || []
+          if (rows.length > pageSize) throw new Error('ALERT_PAGE_OVERFLOW')
+          const last = rows[rows.length - 1]
+          if (last) {
+            if (cursor && (last.updated_at < cursor.updated_at || (last.updated_at === cursor.updated_at && String(last.id) <= cursor.id))) throw new Error('ALERT_CURSOR_DID_NOT_ADVANCE')
+            nextProgress.recentCursor = { updated_at: last.updated_at, id: String(last.id) }
+          }
+          nextProgress.recentDone = rows.length < pageSize
+          if (rows.length) candidates = await checked(db.from('matching_retrieval_candidates').select(CACHE_FIELDS).eq('user_id', profile.user_id).in('opportunity_id', rows.map(r => String(r.id)))
+            .eq('candidate_class', 'MATCH').gte('evaluated_at', progress.since).lte('evaluated_at', progress.cutoff).limit(pageSize)) || []
+        } else {
+          const page = await collectAlertCandidateSnapshot(async (cursor, limit) => {
+            let query = db.from('matching_retrieval_candidates').select(CACHE_FIELDS).eq('user_id', profile.user_id).eq('candidate_class', 'MATCH')
+              .lte('evaluated_at', progress.cutoff)
+              .order('evaluated_at', { ascending: true }).order('user_id', { ascending: true }).order('opportunity_id', { ascending: true }).limit(limit)
+            query = progress.delta ? query.gt('evaluated_at', progress.lower) : query.gte('evaluated_at', progress.lower)
+            if (cursor) query = query.or(`evaluated_at.gt.${cursor.evaluated_at},and(evaluated_at.eq.${cursor.evaluated_at},opportunity_id.gt.${cursor.opportunity_id})`)
+            return await checked(query) || []
+          }, pageSize, progress.cacheCursor)
+          candidates = page.rows.filter(validCache)
+          nextProgress.cacheCursor = page.cursor; nextProgress.cacheDone = page.complete
+          rows = await hydrate(candidates.map(c => String(c.opportunity_id)))
+          const byId = new Map<string, any>(rows.map(r => [String(r.id), r]))
+          rows = candidates.flatMap(c => {
+            const opp = byId.get(String(c.opportunity_id))
+            // Recent lane already used this exact cache score in this snapshot.
+            return opp && opportunityCacheIsCurrent(c, opp) && cacheCandidateAlertEligible(c, opp, progress.since)
+              && !(Date.parse(opp.updated_at) >= Date.parse(progress.lower) && Date.parse(opp.updated_at) <= Date.parse(progress.cutoff)) ? [opp] : []
+          })
+        }
+        pages++; opportunities += rows.length
+        const byId = new Map<string, any>(rows.map(r => [String(r.id), r]))
+        const similarities = new Map<string, number>(candidates.filter(c => validCache(c) && opportunityCacheIsCurrent(c, byId.get(String(c.opportunity_id)) || {}) && cacheCandidateAlertEligible(c, byId.get(String(c.opportunity_id)) || {}, progress.since))
+          .flatMap(c => Number.isFinite(Number(c.semantic_similarity)) ? [[String(c.opportunity_id), Number(c.semantic_similarity)] as [string, number]] : []))
+        nextProgress.pending = ranked(rows, similarities).filter(({ decision }: any) => isHighMatchAlertDecision(decision) && (decision.score ?? 0) >= Number(profile.match_alert_threshold || 85))
+          .map(({ opp }: any) => ({ id: String(opp.id), similarity: similarities.get(String(opp.id)) ?? null }))
+        progress = nextProgress
+        eligible += progress.pending.length
+        await save() // Atomic cursor + unattempted effects, BEFORE sending.
+      }
+      await save(true)
+      return { statusCode: 200, body: JSON.stringify({ profiles: 1, pages, opportunities, eligible, claimed, sent, failed, limit: emailBudget,
+        continuation: { profile_id: profile.id, resumable: !progress.complete, complete: progress.complete, cutoff: progress.cutoff, recentCursor: progress.recentCursor, cacheCursor: progress.cacheCursor, pending: progress.pending.length } }) }
+    } catch (error: any) {
+      if (profile && progress) { try { await save(true) } catch { /* durable last checkpoint and lease expiry allow retry */ } }
+      return { statusCode: 500, body: JSON.stringify({ error: error?.message || 'ALERT_SCAN_FAILED', resumable: true }) }
     }
   }
-  return { statusCode: 200, body: JSON.stringify({ profiles: profiles?.length || 0, opportunities: alertOpportunities.length, eligible, claimed, sent, failed, limit: MAX_EMAILS_PER_RUN }) }
+}
+const boundedHandler = createHighMatchAlertsHandler()
+// Reuse the release gate: automatic delivery must not precede the authorized canary.
+const handler: Handler = (event, context, callback) => {
+  if (process.env.CVITAE_PROD_RELEASE_VALIDATED !== 'true') {
+    return Promise.resolve({ statusCode: 200, body: JSON.stringify({ skipped: true, reason: 'PROD_RELEASE_NOT_VALIDATED' }) })
+  }
+  return boundedHandler(event, context, callback)
 }
 
 export const config = { schedule: "0 */2 * * *" }

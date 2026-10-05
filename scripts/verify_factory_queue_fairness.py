@@ -111,7 +111,7 @@ assert "fresh-failed" in lanes["fresh"] and "fresh-aggregator" in lanes["fresh"]
 assert "embed-inactive" not in lanes["embedding"] and "embed-unmatched" not in lanes["embedding"]
 aggregator = next(row for row in rows if row["id"] == "fresh-aggregator")
 status, _stamps, _evidence = seal(aggregator, NOW)
-assert aggregator["verification_status"] == "in_review" and aggregator["is_active"] is False and status == "ready"
+assert aggregator["verification_status"] == "in_review" and aggregator["is_active"] is False and status == "review", {"row": aggregator, "status": status}
 assert not should_generate_embedding(aggregator, status, dry_run=False)
 assert should_generate_embedding(next(row for row in rows if row["id"] == "embed-000"), "ready", dry_run=False)
 
@@ -124,20 +124,17 @@ lifecycle_client, first_cycle = select([lifecycle], now=NOW)
 assert [row["id"] for row in first_cycle] == ["lifecycle-row"]
 assert lifecycle_client.last_lane_selection["fresh"] == ["lifecycle-row"]
 lifecycle_status, _stamps, _evidence = seal(lifecycle, NOW)
-assert lifecycle_status == "ready"
+assert lifecycle_status == "review", "missing factual geographic evidence remains review, not a fabricated ready row"
 assert not should_generate_embedding_in_run(lifecycle, lifecycle_status, dry_run=False, embedding_lane_ids=set())
-lifecycle["factory_status"] = "ready"  # successful structural atomic commit
+lifecycle["factory_status"] = "review"  # successful structural review commit
 second_client, second_cycle = select([lifecycle], now=NOW + timedelta(hours=1))
-assert [row["id"] for row in second_cycle] == ["lifecycle-row"]
-assert second_client.last_lane_selection["embedding"] == ["lifecycle-row"]
-assert should_generate_embedding_in_run(lifecycle, "ready", dry_run=False, embedding_lane_ids={"lifecycle-row"})
-lifecycle["embedding"] = [0.0]  # successful embedding atomic commit
+assert not second_cycle and not second_client.last_lane_selection["embedding"], "review rows without matching readiness never enter embedding work"
 third_client, third_cycle = select([lifecycle], now=NOW + timedelta(hours=2))
 assert not third_cycle and all(not values for values in third_client.last_lane_selection.values())
 lifecycle_accounting = {
     "structural_unique_rows_processed": 1,
-    "embedding_unique_rows_processed": 1,
-    "rows_processed_in_both_stages": 1,
+    "embedding_unique_rows_processed": 0,
+    "rows_processed_in_both_stages": 0,
     "illegal_same_stage_reprocess": 0,
     "never_selected_structural_pending": 0,
     "never_selected_embedding_pending": 0,

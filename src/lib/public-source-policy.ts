@@ -23,9 +23,22 @@ export async function publicCatalogRow<T extends Record<string, any>>(row: T | n
   return (await publicCatalogRows([row]))[0] || null
 }
 
-/** The browser consumes this server projection for catalog data; it never receives denied rows. */
+export type PublicCatalogFilters = { q?: string; area?: string; types?: string[]; cursor?: string }
+export async function loadPublicOpportunityPage<T = Record<string, any>>(mode: 'all' | 'jobs' | 'non_jobs' = 'all', filters: PublicCatalogFilters = {}) {
+  const params = new URLSearchParams({ mode })
+  if (filters.q) params.set('q', filters.q)
+  if (filters.area) params.set('area', filters.area)
+  if (filters.types?.length) params.set('types', JSON.stringify(filters.types))
+  if (filters.cursor) params.set('cursor', filters.cursor)
+  const response = await fetch(`/.netlify/functions/public-opportunities?${params.toString()}`)
+  const rows = await decodePublicOpportunityResponse<T[]>(response)
+  return { rows: (rows || []) as T[], nextCursor: response.headers.get('X-Next-Cursor') }
+}
+
+/** Detail stays exact-ID; lists page through the full canonical result set. */
 export async function loadPublicOpportunities<T = Record<string, any>>(mode: 'all' | 'jobs' | 'non_jobs' = 'all', slug?: string): Promise<T[] | T | null> {
-  const params = new URLSearchParams({ mode }); if (slug) params.set('slug', slug)
+  if (!slug) return (await loadPublicOpportunityPage(mode)).rows as T[]
+  const params = new URLSearchParams({ mode, slug })
   const response = await fetch(`/.netlify/functions/public-opportunities?${params.toString()}`)
   return decodePublicOpportunityResponse<T>(response, slug)
 }

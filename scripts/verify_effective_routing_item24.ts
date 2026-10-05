@@ -4,7 +4,7 @@ import { catalogReadiness, matchingReadiness, seoReadiness } from '../src/lib/op
 import { canonicalSource, evaluateOpportunityDistribution, type SourcePolicyRow } from '../src/lib/effective-source-policy.ts'
 
 const good = {
-  source: 'computrabajo', slug: 'programme-officer', title: 'Programme Officer', organization: 'Acme',
+  source: 'jobicy', slug: 'programme-officer', title: 'Programme Officer', organization: 'Acme',
   description: 'Coordinate programmes, monitor results, prepare reports and collaborate with partners. '.repeat(2),
   tags: ['programme management', 'monitoring'], opportunity_type: 'job', is_active: true,
   verification_status: 'verified', catalog_eligible: true, match_eligible: true, alerts_eligible: true,
@@ -21,25 +21,25 @@ const deny = (result: ReturnType<typeof evaluateOpportunityDistribution>, consum
 
 // A: source permission + intrinsic truth align; stored gates are telemetry/
 // repair inputs and do not permanently override current truth.
-let result = evaluateOpportunityDistribution(good, [policy('computrabajo')])
+let result = evaluateOpportunityDistribution(good, [policy('jobicy')])
 assert.equal(catalogReadiness(good).state, 'READY'); assert.equal(matchingReadiness(good).state, 'READY'); assert.equal(seoReadiness(good).state, 'READY')
 assert.equal(result.catalog.allowed, true); assert.equal(result.matching.allowed, true); assert.equal(result.alerts.allowed, true); assert.equal(result.seo.allowed, true)
 
 // B/I: missing organization is an SEO fact gap, not a matching gap.
-result = evaluateOpportunityDistribution({ ...good, organization: '' }, [policy('computrabajo')])
+result = evaluateOpportunityDistribution({ ...good, organization: '' }, [policy('jobicy')])
 assert.equal(result.matching.allowed, true); deny(result, 'seo', 'MISSING_ORGANIZATION')
 
-// C/G: Himalayas is internally usable when allowed but search distribution is explicitly denied.
-result = evaluateOpportunityDistribution({ ...good, source: 'himalayas' }, [policy('himalayas', { web_catalog_allowed: true, search_engine_indexing_allowed: false, google_jobs_distribution_allowed: false })])
+// C/G: Himalayas first-party web SEO is allowed; job distribution remains denied.
+result = evaluateOpportunityDistribution({ ...good, source: 'himalayas', source_url:'https://himalayas.app/jobs/123' }, [policy('himalayas', { web_catalog_allowed: true, search_engine_indexing_allowed: true, source_attribution_required:true, google_jobs_distribution_allowed: false })])
 assert.equal(result.catalog.allowed, true); assert.equal(result.matching.allowed, true); assert.equal(result.alerts.allowed, true)
-deny(result, 'seo', 'SOURCE_CAPABILITY_DENIED'); deny(result, 'googleJobs', 'SOURCE_CAPABILITY_DENIED')
+assert.equal(result.seo.allowed,true); deny(result, 'googleJobs', 'SOURCE_CAPABILITY_DENIED'); assert.equal(result.jobPosting.allowed,false); assert.equal(result.thirdParty.allowed,false)
 
 // D: operational source disable wins over otherwise-good intrinsic truth.
-result = evaluateOpportunityDistribution(good, [policy('computrabajo', { is_enabled: false })])
+result = evaluateOpportunityDistribution(good, [policy('jobicy', { is_enabled: false })])
 deny(result, 'catalog', 'SOURCE_DISABLED'); deny(result, 'matching', 'SOURCE_DISABLED'); deny(result, 'alerts', 'SOURCE_DISABLED'); deny(result, 'seo', 'SOURCE_DISABLED')
 
 // E: raw unknown stays unknown and cannot inherit a nearby source's permissions.
-result = evaluateOpportunityDistribution({ ...good, source: 'unregistered_future_source' }, [policy('computrabajo')])
+result = evaluateOpportunityDistribution({ ...good, source: 'unregistered_future_source' }, [policy('jobicy')])
 assert.equal(result.policyFound, false); assert.equal(result.canonicalSource, 'unregistered_future_source')
 deny(result, 'catalog', 'SOURCE_POLICY_UNKNOWN'); deny(result, 'matching', 'SOURCE_POLICY_UNKNOWN'); deny(result, 'seo', 'SOURCE_POLICY_UNKNOWN')
 
@@ -47,17 +47,17 @@ deny(result, 'catalog', 'SOURCE_POLICY_UNKNOWN'); deny(result, 'matching', 'SOUR
 // for reconciliation but do not block an otherwise-ready ordinary source.
 const staleFlags = { ...good, catalog_eligible: false, match_eligible: false, alerts_eligible: false, seo_eligible: false, seo_status: 'review' }
 assert.equal(catalogReadiness(staleFlags).state, 'READY'); assert.equal(matchingReadiness(staleFlags).state, 'READY'); assert.equal(seoReadiness(staleFlags).state, 'READY')
-result = evaluateOpportunityDistribution(staleFlags, [policy('computrabajo')])
+result = evaluateOpportunityDistribution(staleFlags, [policy('jobicy')])
 assert.equal(result.catalog.allowed, true); assert.equal(result.matching.allowed, true); assert.equal(result.alerts.allowed, true); assert.equal(result.seo.allowed, true)
 assert.equal(result.catalog.storedGateState, 'FALSE'); assert.equal(result.matching.storedGateState, 'FALSE')
 
 // H: source SEO permission cannot compensate for thin source truth.
-result = evaluateOpportunityDistribution({ ...good, description: 'thin' }, [policy('computrabajo')])
-assert.equal(result.matching.allowed, true); deny(result, 'seo', 'THIN_CONTENT')
+result = evaluateOpportunityDistribution({ ...good, description: 'thin' }, [policy('jobicy')])
+assert.equal(result.matching.allowed, false); deny(result, 'seo', 'THIN_CONTENT')
 
 // J: alert truth is evaluated independently and a stale stored alert gate does
 // not spill into matching or become a permanent alert denial.
-result = evaluateOpportunityDistribution({ ...good, alerts_eligible: false }, [policy('computrabajo')])
+result = evaluateOpportunityDistribution({ ...good, alerts_eligible: false }, [policy('jobicy')])
 assert.equal(result.matching.allowed, true); assert.equal(result.alerts.allowed, true); assert.equal(result.alerts.storedGateState, 'FALSE')
 
 // Registry identity remains the only alias authority.
@@ -67,9 +67,9 @@ const audit = JSON.parse(readFileSync(new URL('../generated/effective-routing-au
 assert.equal(audit.registry_profiles, 105)
 const himalayasAudit = audit.sources.find((entry: any) => entry.canonical_source === 'himalayas')
 const unjobsAudit = audit.sources.find((entry: any) => entry.canonical_source === 'unjobs')
-assert.equal(himalayasAudit.seo_source_state, 'EXPLICIT_RESTRICTION')
+assert.equal(himalayasAudit.seo_source_state, 'ALLOWED')
 assert.equal(himalayasAudit.google_jobs_source_state, 'EXPLICIT_RESTRICTION')
 assert.equal(unjobsAudit.seo_source_state, 'CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE')
 assert.equal(unjobsAudit.matching_source_state, 'UNKNOWN')
 
-console.log('verify_effective_routing_item24: PASS consumers=distinct Himalayas=internal_allowed_seo_denied UNJobs=config_not_contract unknown=fail_closed')
+console.log('verify_effective_routing_item24: PASS consumers=distinct Himalayas=first_party_seo_allowed_job_distribution_denied UNJobs=config_not_contract unknown=fail_closed')

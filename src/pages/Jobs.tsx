@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link } from 'wouter'
 import { MapPin, Search, SlidersHorizontal } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { Eyebrow } from '@/components/cv/visuals'
-import { loadPublicOpportunities } from '@/lib/public-source-policy'
+import { loadPublicOpportunityPage } from '@/lib/public-source-policy'
 import { AdSlot } from '@/components/cv/AdSlot'
 import { PageEmptyState, PageErrorState, PageLoadingState } from '@/components/cv/PublicState'
 import { canonicalOpportunityPathForRow } from '@/lib/opportunity-truth'
@@ -32,19 +32,26 @@ export default function Jobs() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const requestSequence = useRef(0)
   const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get('q') || '')
   const [area, setArea] = useState('Todas')
 
-  const loadJobs = () => {
+  const loadJobs = (append = false) => {
+    const request = ++requestSequence.current
+    if (!append) setNextCursor(null)
     setLoading(true)
     setError('')
-    void loadPublicOpportunities<Job[]>('jobs')
-      .then(data => setJobs((data || []) as Job[]))
-      .catch(() => setError('No pudimos cargar los empleos. Revisá tu conexión e intentá de nuevo.'))
-      .finally(() => setLoading(false))
+    void loadPublicOpportunityPage<Job>('jobs', { ...{ q: query, area: area === 'Todas' ? undefined : area }, cursor: append ? nextCursor || undefined : undefined })
+      .then(page => { if (request !== requestSequence.current) return; setJobs(current => append ? [...current, ...page.rows] : page.rows); setNextCursor(page.nextCursor) })
+      .catch(() => { if (request === requestSequence.current) setError('No pudimos cargar los empleos. Revisá tu conexión e intentá de nuevo.') })
+      .finally(() => { if (request === requestSequence.current) setLoading(false) })
   }
 
-  useEffect(() => { loadJobs() }, [])
+  useEffect(() => {
+    const timer = window.setTimeout(() => loadJobs(), 300)
+    return () => { window.clearTimeout(timer); requestSequence.current++ }
+  }, [query, area])
 
   const areas = useMemo(() => ['Todas', ...Array.from(new Set(jobs.map(job => clean(job.rubro)).filter(Boolean))).sort()], [jobs])
   const filtered = useMemo(() => {
@@ -129,6 +136,7 @@ export default function Jobs() {
               ))}
             </section>
           )}
+          {nextCursor && !error && <button disabled={loading} onClick={() => loadJobs(true)} className="mt-6 text-sm text-[#c9a84c] hover:underline disabled:opacity-50">Ver más resultados</button>}
           <AdSlot placement="jobs-feed" />
         </main>
       </SiteShell>

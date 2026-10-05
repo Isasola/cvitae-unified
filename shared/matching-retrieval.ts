@@ -2,7 +2,7 @@ export type RetrievalClass = 'MATCH' | 'POTENTIAL'
 export type RetrievalStateStatus = 'PENDING' | 'SCANNING' | 'COMPLETE' | 'ERROR'
 export type RetrievalLane = 'RECENT' | 'SEMANTIC' | 'BACKGROUND_MATCH' | 'BACKGROUND_POTENTIAL'
 
-export type SourceIdentity = { canonical_source: string; emitted_aliases: string[] }
+export type SourceIdentity = { canonical_source: string; emitted_aliases: readonly string[] }
 export type SourcePolicy = { source: string; is_enabled: boolean | null; matching_enabled: boolean | null }
 export type CanonicalSourcePolicyIndex = {
   canonical: Map<string, SourcePolicy>
@@ -16,7 +16,7 @@ export function normalizeSourcePolicyRow(row: any): SourcePolicy {
   return { source: String(row?.source ?? ''), is_enabled: explicitBoolean(row?.is_enabled), matching_enabled: explicitBoolean(row?.matching_enabled) }
 }
 
-function canonicalPolicyName(source: unknown, identities: SourceIdentity[], canonicalSource?: (source: unknown) => string) {
+function canonicalPolicyName(source: unknown, identities: readonly SourceIdentity[], canonicalSource?: (source: unknown) => string) {
   const emitter = normalized(source)
   const identity = identities.find((item) => normalized(item.canonical_source) === emitter || item.emitted_aliases.some((alias) => normalized(alias) === emitter))
   return normalized(identity?.canonical_source ?? canonicalSource?.(emitter) ?? emitter)
@@ -54,7 +54,7 @@ export async function sourcePolicySignature(rows: SourcePolicy[], canonicalSourc
 
 export function buildCanonicalSourcePolicyIndex(
   rows: SourcePolicy[],
-  identities: SourceIdentity[],
+  identities: readonly SourceIdentity[],
   canonicalSource?: (source: unknown) => string,
 ): CanonicalSourcePolicyIndex {
   const canonical = new Map<string, SourcePolicy>()
@@ -84,7 +84,7 @@ export function sourceMatchingAllowed(policy: Pick<SourcePolicy, 'is_enabled' | 
   return policy?.is_enabled === true && policy.matching_enabled === true
 }
 
-export function expandEnabledSourceEmitters(index: CanonicalSourcePolicyIndex, identities: SourceIdentity[]) {
+export function expandEnabledSourceEmitters(index: CanonicalSourcePolicyIndex, identities: readonly SourceIdentity[]) {
   const emitters = new Map<string, string>()
   for (const [source, policy] of index.canonical) {
     if (!sourceMatchingAllowed(policy)) continue
@@ -142,23 +142,19 @@ export function cacheCandidateAlertEligible(candidate: any, opportunity: any, al
 
 export type AlertCacheCursor = { evaluated_at: string; user_id: string; opportunity_id: string }
 
+/** Read one page only. The caller persists its cursor with pending delivery effects. */
 export async function collectAlertCandidateSnapshot(
   fetchPage: (after: AlertCacheCursor | null, limit: number) => Promise<any[]>,
-  pageSize = 500,
+  pageSize = 100,
+  cursor: AlertCacheCursor | null = null,
 ) {
   if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 500) throw new Error('INVALID_ALERT_CACHE_PAGE_SIZE')
-  const candidates: any[] = []
-  let cursor: AlertCacheCursor | null = null
-  for (;;) {
-    const page = await fetchPage(cursor, pageSize)
-    if (page.length > pageSize) throw new Error('ALERT_CACHE_PAGE_OVERFLOW')
-    candidates.push(...page)
-    if (page.length < pageSize) return candidates
-    const last = page[page.length - 1]
-    const next = { evaluated_at: String(last.evaluated_at), user_id: String(last.user_id), opportunity_id: String(last.opportunity_id) }
-    if (cursor && (next.evaluated_at < cursor.evaluated_at || (next.evaluated_at === cursor.evaluated_at && next.user_id < cursor.user_id) || (next.evaluated_at === cursor.evaluated_at && next.user_id === cursor.user_id && next.opportunity_id <= cursor.opportunity_id))) throw new Error('ALERT_CACHE_CURSOR_DID_NOT_ADVANCE')
-    cursor = next
-  }
+  const rows = await fetchPage(cursor, pageSize)
+  if (rows.length > pageSize) throw new Error('ALERT_CACHE_PAGE_OVERFLOW')
+  const last = rows[rows.length - 1]
+  const next = last ? { evaluated_at: String(last.evaluated_at), user_id: String(last.user_id), opportunity_id: String(last.opportunity_id) } : cursor
+  if (last && cursor && (next!.evaluated_at < cursor.evaluated_at || (next!.evaluated_at === cursor.evaluated_at && next!.user_id < cursor.user_id) || (next!.evaluated_at === cursor.evaluated_at && next!.user_id === cursor.user_id && next!.opportunity_id <= cursor.opportunity_id))) throw new Error('ALERT_CACHE_CURSOR_DID_NOT_ADVANCE')
+  return { rows, cursor: next, complete: rows.length < pageSize }
 }
 
 export function cursorAfterPage(rows: any[], timestampField: 'created_at' | 'updated_at') {

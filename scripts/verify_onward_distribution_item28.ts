@@ -4,26 +4,26 @@ import { publicDistributionProjection, type SourcePolicyRow } from '../src/lib/e
 import { buildEffectiveSeoInventory } from '../src/lib/seo-inventory.ts'
 import { publicOpportunitySchemaType } from '../src/lib/opportunity-truth.ts'
 
-const rich = { source:'computrabajo', slug:'programme-officer', title:'Programme Officer', organization:'Acme', description:'Programme delivery, monitoring, stakeholder coordination and reporting responsibilities. '.repeat(2), tags:['programme','monitoring'], opportunity_type:'job', is_active:true, verification_status:'verified', catalog_eligible:true, match_eligible:true, alerts_eligible:true, seo_eligible:true, seo_status:'eligible' }
-const policy = (source: string, extra: Partial<SourcePolicyRow> = {}): SourcePolicyRow => ({ source, is_enabled:true, catalog_enabled:false, matching_enabled:false, alerts_enabled:false, seo_enabled:false, web_catalog_allowed:false, search_engine_indexing_allowed:null, google_jobs_distribution_allowed:false, third_party_job_distribution_allowed:false, ...extra })
+const rich = { source:'jobicy', slug:'programme-officer', title:'Programme Officer', organization:'Acme', description:'Programme delivery, monitoring, stakeholder coordination and reporting responsibilities. '.repeat(2), tags:['programme','monitoring'], opportunity_type:'job', is_active:true, verification_status:'verified', catalog_eligible:true, match_eligible:true, alerts_eligible:true, seo_eligible:true, seo_status:'eligible' }
+const policy = (source: string, extra: Partial<SourcePolicyRow> = {}): SourcePolicyRow => ({ source, is_enabled:true, catalog_enabled:true, matching_enabled:true, alerts_enabled:true, seo_enabled:true, web_catalog_allowed:true, search_engine_indexing_allowed:null, google_jobs_distribution_allowed:false, third_party_job_distribution_allowed:false, ...extra })
 
-const ordinary = publicDistributionProjection(rich, [policy('computrabajo')])
+const ordinary = publicDistributionProjection(rich, [policy('jobicy')])
 assert.equal(ordinary.seo.capabilityState, 'UNKNOWN'); assert.equal(ordinary.jobPosting.capabilityState, 'UNKNOWN'); assert.equal(ordinary.googleJobs.capabilityState, 'UNKNOWN')
 assert.equal(ordinary.thirdParty.allowed, false); assert(ordinary.thirdParty.reasons.includes('THIRD_PARTY_DELIVERY_UNAVAILABLE'))
 assert.equal(publicDistributionProjection({ ...rich, source:'remotive' }, [policy('remotive', { source_attribution_required:false })]).sourceAttributionRequired, true)
-assert.equal(publicDistributionProjection(rich, [policy('computrabajo', { source_attribution_required:true })]).sourceAttributionState, 'UNKNOWN')
+assert.equal(publicDistributionProjection({ ...rich, source:'remotive' }, [policy('remotive', { source_attribution_required:true })]).sourceAttributionState, 'ALLOWED')
 const thirdPartyPermitted = publicDistributionProjection(rich, [policy('remotive', { third_party_job_distribution_allowed:true })])
 assert.equal(thirdPartyPermitted.thirdParty.allowed, false); assert(thirdPartyPermitted.thirdParty.reasons.includes('THIRD_PARTY_DELIVERY_UNAVAILABLE'))
-const himalayas = publicDistributionProjection({ ...rich, source:'himalayas' }, [policy('himalayas', { web_catalog_allowed:true, search_engine_indexing_allowed:false })])
-assert.equal(himalayas.seo.allowed, false); assert.equal(himalayas.jobPosting.allowed, false); assert.equal(himalayas.googleJobs.allowed, false); assert.equal(himalayas.thirdParty.allowed, false)
-assert.equal(publicDistributionProjection({ ...rich, opportunity_type:'scholarship' }, [policy('computrabajo')]).jobPosting.allowed, false)
-assert.equal(publicDistributionProjection({ ...rich, opportunity_type:'training' }, [policy('computrabajo')]).jobPosting.allowed, false)
-assert.equal(publicDistributionProjection({ ...rich, description:'thin' }, [policy('computrabajo')]).jobPosting.allowed, false)
+const himalayas = publicDistributionProjection({ ...rich, source:'himalayas', source_url:'https://himalayas.app/jobs/123' }, [policy('himalayas', { web_catalog_allowed:true, search_engine_indexing_allowed:true, source_attribution_required:true })])
+assert.equal(himalayas.seo.allowed, true); assert.equal(himalayas.sourceAttributionRequired,true); assert.equal(himalayas.jobPosting.allowed, false); assert.equal(himalayas.googleJobs.allowed, false); assert.equal(himalayas.thirdParty.allowed, false)
+assert.equal(publicDistributionProjection({ ...rich, opportunity_type:'scholarship' }, [policy('jobicy')]).jobPosting.allowed, false)
+assert.equal(publicDistributionProjection({ ...rich, opportunity_type:'training' }, [policy('jobicy')]).jobPosting.allowed, false)
+assert.equal(publicDistributionProjection({ ...rich, description:'thin' }, [policy('jobicy')]).jobPosting.allowed, false)
 assert.equal(publicOpportunitySchemaType({ ...rich, opportunity_type:'training' }, false), 'WebPage')
 assert.equal(publicOpportunitySchemaType({ ...rich, opportunity_type:'training' }, true), 'WebPage')
 assert.equal(publicOpportunitySchemaType({ ...rich, opportunity_type:'scholarship' }, false), 'Scholarship')
-const inventory = buildEffectiveSeoInventory([rich, { ...rich, source:'himalayas', slug:'himalayas-job' }], [policy('computrabajo'), policy('himalayas', { web_catalog_allowed:true, search_engine_indexing_allowed:false })])
-assert.equal(inventory.length, 0, 'UNKNOWN index permission must not enter the SEO inventory')
+const inventory = buildEffectiveSeoInventory([rich, { ...rich, source:'himalayas', slug:'himalayas-job' }], [policy('jobicy'), policy('himalayas', { web_catalog_allowed:true, search_engine_indexing_allowed:true, source_attribution_required:true })])
+assert.equal(inventory.length, 2, 'first-party SEO includes explicitly allowed Himalayas public pages')
 const pageJob = fs.readFileSync('src/pages/JobDetail.tsx', 'utf8'), pageOpportunity = fs.readFileSync('src/pages/OpportunityDetail.tsx', 'utf8'), prerender = fs.readFileSync('scripts/prerender.mjs', 'utf8'), truth = fs.readFileSync('src/lib/opportunity-truth.ts', 'utf8')
 assert.match(pageJob, /sourceAttributionRequired:job\.distribution\?\.sourceAttributionRequired/); assert.match(pageJob, /source_url:job\.source_url/); assert.match(pageJob, /fuente original/i); assert.ok(!pageJob.includes('sourceRegistry'))
 assert.match(pageOpportunity, /publicOpportunitySchemaType\(item,factual\.state==='READY'\)/); assert.match(pageOpportunity, /schemaType==='Scholarship'/)

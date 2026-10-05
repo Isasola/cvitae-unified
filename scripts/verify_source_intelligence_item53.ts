@@ -65,18 +65,22 @@ process.env.ADMIN_PASSWORD = 'fixture-only'
 const { loadMissingOpportunitySamples, sourceIntelligenceSnapshot } = await import('../netlify/functions/admin-data.ts')
 const sourceA = Array.from({ length: 10_001 }, (_, index) => ({ source: 'source-a', id: `a-${index}` }))
 const globalFirstPage = indexRowsBySource(sourceA)
-const sourceBFixture = Array.from({ length: 2_000 }, (_, index) => ({ source: 'source-b', id: `b-${index}` }))
+const sourceBFixture = Array.from({ length: 100 }, (_, index) => ({ source: 'source-b', id: `b-${index}` }))
 const sourceScopedSamples = await loadMissingOpportunitySamples({ from: () => ({ select() { return this }, in() { return this }, is() { return this }, order() { return this }, limit() { return Promise.resolve({ data: sourceBFixture, error: null }) } }) }, [{ canonical_source: 'source-a', emitted_aliases: ['source-a'] }, { canonical_source: 'source-b', emitted_aliases: ['source-b'] }], globalFirstPage)
 assert.equal(sourceScopedSamples.get('source-a')?.status, 'GLOBAL_SAMPLE')
 assert.equal(sourceScopedSamples.get('source-b')?.status, 'PER_SOURCE_SAMPLE')
-assert.equal(sourceScopedSamples.get('source-b')?.rows.length, 2_000)
-const fixtureRows = Array.from({ length: 10_000 }, (_, index) => ({ source: sourceNames[index % sourceNames.length], opportunity_id: `fixture-${index}`, observed_at: new Date(1_700_000_000_000 + index).toISOString() }))
+assert.equal(sourceScopedSamples.get('source-b')?.rows.length, 100)
+const fixtureRows = Array.from({ length: 1_000 }, (_, index) => ({ source: sourceNames[index % sourceNames.length], opportunity_id: `fixture-${index}`, observed_at: new Date(1_700_000_000_000 + index).toISOString() }))
 const fixtureDashboard = { sources: Object.fromEntries(sourceNames.map(source => [source, { total: 5_000, catalog: 4_000, matching: 3_000, seo: 2_000 }])) }
 const fixtureSupabase = {
   from(table: string) {
     if (table === 'opportunity_source_observations' || table === 'opportunity_source_policy_events' || table === 'opportunity_enrichment_events') return new FixtureQuery(fixtureRows)
     if (table === 'opportunities') return new FixtureQuery([], 5_000)
-    if (table === 'scraper_runs') return new FixtureQuery([])
+    if (table === 'scraper_runs') return new FixtureQuery([{
+      id: 'run-fixture', run_id: 'run-fixture', scraper_id: 'unjobs_scraper', status: 'healthy',
+      started_at: '2026-10-03T00:00:00Z', finished_at: '2026-10-03T00:01:00Z', adapter_version: 'executed:v3',
+      extraction_metrics: { scan_lineage: { items: [{ title: 'PRIVATE_ROW_SENTINEL', description: 'PRIVATE_DESCRIPTION_SENTINEL'.repeat(1000), evidence: ['PRIVATE_EVIDENCE_SENTINEL'] }], counts: { PERSISTED: 1 }, issue_groups: {} } },
+    }])
     if (table === 'opportunity_sources' || table === 'source_control_audit_log') return new FixtureQuery([])
     return new FixtureQuery([])
   },
@@ -88,11 +92,24 @@ const snapshot = await sourceIntelligenceSnapshot(fixtureSupabase, fixtureDashbo
 assert.equal(snapshot._observability.source_count, 105)
 assert.equal(snapshot.sources.length, 105)
 assert.equal(snapshot.sources[0]._inventory_scope.inventory, 'FULL_DB')
-assert.equal(snapshot.sources[0]._inventory_scope.recent_rows, 'client_sample')
+assert.equal(snapshot.sources[0]._inventory_scope.row_evidence, 'ON_DEMAND_INSPECTOR')
+const unjobsSnapshot = snapshot.sources.find((source: any) => source.canonical_source === 'unjobs')
+assert.equal(unjobsSnapshot.execution.adapter_version, 'executed:v3')
+assert.ok(unjobsSnapshot.expected_adapter_version && unjobsSnapshot.expected_adapter_version !== 'executed:v3')
+assert.equal(unjobsSnapshot.execution.adapter_version_state, 'EXECUTED')
+assert.equal(unjobsSnapshot.history[0].extraction_metrics.scan_lineage.items, undefined)
 assert.equal(snapshot.registry.profiles, undefined)
 assert.equal(snapshot.registry.profile_count, 105)
-assert.equal(snapshot._observability.sample_sizes.observations, 10_000)
+assert.equal(snapshot._observability.sample_sizes.observations, 1_000)
+assert.match(adminDataSource, /SOURCE_DIAGNOSTIC_SAMPLE_LIMIT = 100/)
+assert.match(adminDataSource, /SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT = 1000/)
+assert.doesNotMatch(adminDataSource, /\.limit\(10000\)/, 'global Admin source snapshot must not fetch 10k row samples')
 const fixtureSnapshotBytes = Buffer.byteLength(JSON.stringify(snapshot), 'utf8')
+const snapshotSectionBytes = Object.fromEntries(Object.entries(snapshot).map(([key, value]) => [key, Buffer.byteLength(JSON.stringify(value), 'utf8')]))
+const sourceSectionBytes = Object.fromEntries(Object.entries(snapshot.sources[0]).map(([key, value]) => [key, Buffer.byteLength(JSON.stringify(value) || '', 'utf8')]))
 assert.ok(fixtureSnapshotBytes > 0)
+assert.ok(fixtureSnapshotBytes < 1_000_000, `source snapshot must remain below the 1 MB target (got ${fixtureSnapshotBytes}; sections=${JSON.stringify(snapshotSectionBytes)}; source=${JSON.stringify(sourceSectionBytes)})`)
+assert.ok(fixtureSnapshotBytes < 2_000_000, `source snapshot must fail before the 2 MB hard limit (got ${fixtureSnapshotBytes})`)
+assert.doesNotMatch(JSON.stringify(snapshot), /PRIVATE_ROW_SENTINEL|PRIVATE_DESCRIPTION_SENTINEL|PRIVATE_EVIDENCE_SENTINEL/)
 
 console.log(`verify_source_intelligence_item53: PASS sources=119 rows=10000 old_filter_ops=${oldFilterOperations} indexed_ops=${indexedOperations} fresh_wins=1 source_switch_invalidates=1 totals_scoped=1 optional_degraded=1 payload_deduped=1 payload_before=${beforeBytes} payload_after=${afterBytes} fixture_snapshot_bytes=${fixtureSnapshotBytes}`)

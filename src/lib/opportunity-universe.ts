@@ -1,4 +1,4 @@
-import { canonicalSource } from './effective-source-policy'
+import { canonicalSource, effectiveSourceSwitches } from './effective-source-policy'
 import { catalogReadiness, deadlineLifecycle, seoContentReadinessIndependentOfLifecycle, seoReadiness } from './opportunity-truth'
 import { hasProfessionalEvidence } from '../../shared/professional-evidence'
 import { SOURCE_PERMISSION_DIMENSIONS, sourcePermissionDimensionTruth, sourcePermissionTruth } from './source-permission-truth'
@@ -7,7 +7,7 @@ import { isQualifyingTemporaryLegacySeoRow, temporaryLegacySeoExceptionState } f
 export type UniverseState = 'READY' | 'NOT_READY' | 'UNKNOWN'
 export type LifecycleState = 'ACTIVE_VALID' | 'EXPIRED' | 'DELETED' | 'ARCHIVED' | 'HARD_DEAD' | 'SUPERSEDED_DUPLICATE' | 'INACTIVE_VALID' | 'STALE_DERIVED_STATE' | 'LIFECYCLE_UNKNOWN'
 export type PermissionState = 'ALLOWED' | 'DENIED' | 'UNKNOWN'
-export type UniversePolicy = { source: string; is_enabled?: boolean | null; matching_enabled?: boolean | null; catalog_enabled?: boolean | null; alerts_enabled?: boolean | null; seo_enabled?: boolean | null }
+export type UniversePolicy = import('./effective-source-policy').SourcePolicyRow
 
 const permission = sourcePermissionTruth
 
@@ -61,7 +61,7 @@ export function opportunitySourcePermission(rawSource: string | null | undefined
 
 export function classifyOpportunityUniverse(row: Record<string, any>, policyRows: UniversePolicy[], observation?: Record<string, any> | null, now = new Date(), permissionResolver = permission, priorDecision?: Record<string, any> | null): OpportunityUniverseDecision {
   const source = canonicalSource(row.source)
-  const sourcePolicies = policyRows.filter(item => canonicalSource(item.source) === source)
+  const sourcePolicies = policyRows.filter(item => canonicalSource(item.source) === source).map(item => effectiveSourceSwitches(item, permissionResolver))
   const enabledValues = new Set(sourcePolicies.map(item => item.is_enabled === true ? 'true' : item.is_enabled === false ? 'false' : 'unknown'))
   const matchingValues = new Set(sourcePolicies.map(item => item.matching_enabled === true ? 'true' : item.matching_enabled === false ? 'false' : 'unknown'))
   const catalogValues = new Set(sourcePolicies.map(item => item.catalog_enabled === true ? 'true' : item.catalog_enabled === false ? 'false' : 'unknown'))
@@ -126,12 +126,24 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
   const legacySeoException = temporaryLegacySeoExceptionState(source, now)
   const seo_row_state: UniverseState = !lifecycleReady ? (lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE' ? 'UNKNOWN' : 'NOT_READY') : seoRow.state === 'READY' ? 'READY' : 'NOT_READY'
   const seo_row_reason = !lifecycleReady ? lifecycle_reason : seoRow.state === 'READY' ? 'SEO_ROW_READY' : seoRow.reasons[0] || 'SEO_ROW_NOT_READY'
-  const legacySeoExceptionApplied = legacySeoException.state === 'ACTIVE' && seoPermission.state === 'DENIED' && isQualifyingTemporaryLegacySeoRow(row) && seo_row_state === 'READY' && source_operational_state === 'ENABLED' && !globalPolicyConflict
+  const legacySeoExceptionApplied = source === 'computrabajo'
+    && legacySeoException.state === 'ACTIVE'
+    && seoPermission.state === 'DENIED'
+    && seo_row_state === 'READY'
+    && isQualifyingTemporaryLegacySeoRow(row, source)
+    && source_operational_state === 'ENABLED'
+    && !aliasConflicts.includes('seo_enabled')
+    && !seoValues.has('false')
   const seo_state: UniverseState = seo_row_state !== 'READY' ? seo_row_state
+    : seoPermission.state === 'DENIED' && !legacySeoExceptionApplied ? 'NOT_READY'
+    : seoValues.size === 1 && seoValues.has('false') ? 'NOT_READY'
     : source_operational_state === 'UNKNOWN' || source_operational_state === 'CONFLICT' ? 'UNKNOWN'
     : source_operational_state === 'DISABLED' ? 'NOT_READY'
     : 'READY'
   const seo_effective_reason = seo_row_state !== 'READY' ? seo_row_reason
+    : legacySeoExceptionApplied ? 'TEMP_LEGACY_SEO_EXCEPTION_APPLIED'
+    : seoPermission.state === 'DENIED' ? 'SOURCE_SEO_PERMISSION_DENIED'
+    : seoValues.size === 1 && seoValues.has('false') ? 'SOURCE_SEO_OPERATOR_DISABLED'
     : source_operational_state === 'CONFLICT' ? 'SOURCE_POLICY_ALIAS_CONFLICT'
     : source_operational_state === 'UNKNOWN' ? 'SOURCE_OPERATIONAL_STATE_UNKNOWN'
     : source_operational_state === 'DISABLED' ? 'SOURCE_DISABLED'
@@ -180,11 +192,51 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
     provenance: {
       source, observation_id: observation?.id ?? null, observation_status: observation?.identity_status ?? null, observation_http_status: observation?.http_status ?? null, observation_at: observation?.observed_at ?? null,
       source_policy_rows: sourcePolicies.map(item => item.source), source_policy_alias_conflicts: aliasConflicts, source_permission: sourcePermission.provenance,
+      consumer_switch_overrides: policy?.consumer_switch_overrides || {},
+      switch_authority: 'CANONICAL_PERMISSION_WITH_ADMIN_POLICY_EVENTS',
       consumer_permission_states: { catalog: permissionResolver(source, 'catalog').state, matching: sourcePermission.state, alerts: permissionResolver(source, 'alerts').state, seo: permissionResolver(source, 'seo').state },
       consumer_switch_states: { catalog: catalogOperational, matching: source_matching_operational_state, alerts: alertsOperational, seo: seoOperational },
-      temporary_legacy_seo_exception: source === 'computrabajo' ? { ...legacySeoException, applied: legacySeoExceptionApplied, permission_state: seoPermission.state } : null,
+      temporary_legacy_seo_exception: source === 'computrabajo' ? { ...legacySeoException, applied: legacySeoExceptionApplied, permission_state: seoPermission.state, disposition: legacySeoExceptionApplied ? 'QUALIFYING_LEGACY_SEO_ROW_ONLY' : 'NOT_APPLIED' } : null,
     },
   }
+}
+
+/** Exact-row Admin presentation uses the current canonical RPC, preserving the
+ * persisted ledger as evidence. This copies decisions; it never recomputes gates. */
+export function pipelineWithCurrentUniverse(pipeline: Record<string, any> | null, universe: Record<string, any> | null) {
+  if (!pipeline || !universe?.consumer_diagnostics) return pipeline
+  const fields = { CATALOG: 'catalog_state', MATCHING: 'final_matching_state', ALERTS: 'alerts_state', SEO: 'seo_state' } as const
+  const result = { ...pipeline, state_authority: 'CANONICAL_UNIVERSE_ROW_RPC',
+    policy_reconciliation_pending: universe.policy_reconciliation_pending === true,
+    persisted_consumer_states: Object.fromEntries(Object.entries(fields).map(([consumer, field]) => [consumer, pipeline[field]])),
+    next_actions: { ...pipeline.next_actions }, source_permission_states: {}, consumer_switch_states: {},
+  } as Record<string, any>
+  for (const [consumer, field] of Object.entries(fields)) {
+    const diagnostic = universe.consumer_diagnostics[consumer]
+    const state = diagnostic?.effective_state || 'UNKNOWN'
+    const reason = diagnostic?.first_unresolved_or_blocking_reason || (state === 'READY' ? 'READY' : 'UNIVERSE_STATE_NOT_RECONCILED')
+    result[field] = state
+    result[`${consumer.toLowerCase()}_reason`] = reason
+    result.source_permission_states[consumer.toLowerCase()] = diagnostic?.permission_state || 'UNKNOWN'
+    result.consumer_switch_states[consumer.toLowerCase()] = diagnostic?.consumer_switch_state || 'UNKNOWN'
+    result.next_actions[consumer] = { ...result.next_actions[consumer], state, reason,
+      next_action: state === 'READY' ? 'NONE' : `INSPECT_${consumer}_REASON` }
+  }
+  for (const field of ['lifecycle_state', 'lifecycle_reason', 'source_operational_reason', 'source_matching_state', 'source_matching_reason',
+    'source_matching_operational_state', 'source_matching_operational_reason']) result[field] = universe[field] ?? pipeline[field]
+  result.universe_provenance = universe.provenance
+  result.source_operational_state = universe.consumer_diagnostics.CATALOG?.source_global_state || 'UNKNOWN'
+  result.next_actions.LIFECYCLE = { ...result.next_actions.LIFECYCLE, state: result.lifecycle_state,
+    reason: result.lifecycle_reason,
+    next_action: ['LIFECYCLE_UNKNOWN', 'STALE_DERIVED_STATE'].includes(result.lifecycle_state) ? (pipeline.next_actions?.LIFECYCLE?.next_action || 'REVIEW_LIFECYCLE_EVIDENCE') : 'NONE' }
+  const excluded = Object.keys(fields).filter(consumer => result.next_actions[consumer].state !== 'READY')
+  result.blocking_phases = [...(pipeline.blocking_phases || []).filter((phase: string) => !(phase in fields)), ...excluded]
+  if (['ROUTED', 'ROUTED_WITH_EXCLUSIONS'].includes(pipeline.pipeline_health)) result.pipeline_health = excluded.length ? 'ROUTED_WITH_EXCLUSIONS' : 'ROUTED'
+  if (['NO_ACTION', 'INSPECT_CONSUMER_REASON'].includes(pipeline.next_action)) {
+    result.next_action = excluded.length ? 'INSPECT_CONSUMER_REASON' : 'NO_ACTION'
+    result.next_action_reason = excluded.length ? `${excluded[0]}: ${result.next_actions[excluded[0]].reason}` : 'ALL_ROUTING_STATES_READY'
+  }
+  return result
 }
 
 export function summarizeOpportunityUniverse(decisions: OpportunityUniverseDecision[]) {

@@ -155,7 +155,7 @@ def _parse_observed_at(value: str | None) -> datetime | None:
         return None
 
 
-def recent_enrichments(source: str, now: datetime | None = None) -> dict[str, datetime]:
+def recent_enrichments(source: str, now: datetime | None = None, opportunity_ids: list[str] | None = None) -> dict[str, datetime]:
     """One bounded read for successful recent patches, never one request per row."""
     now = now or datetime.now(timezone.utc)
     params = {
@@ -163,10 +163,15 @@ def recent_enrichments(source: str, now: datetime | None = None) -> dict[str, da
         "created_at": f"gte.{(now - SUCCESSFUL_ENRICHMENT_TTL).isoformat()}",
         "order": "created_at.desc", "limit": "1000",
     }
-    response = requests.get(f"{api_base()}/opportunity_enrichment_events", headers=api_headers(), params=params, timeout=30)
+    if opportunity_ids is not None:
+        if len(opportunity_ids) > 250:
+            raise ValueError("maintenance_evidence_page_overflow")
+        response = requests.post(f"{api_base()}/rpc/latest_maintenance_enrichments", headers=api_headers(), json={"p_opportunity_ids": opportunity_ids}, timeout=30)
+    else:
+        response = requests.get(f"{api_base()}/opportunity_enrichment_events", headers=api_headers(), params=params, timeout=30)
     # Dry-run diagnostics remain useful against a local schema that does not
     # materialize the append-only event table. APPLY still requires it later.
-    if response.status_code == 404:
+    if response.status_code == 404 and opportunity_ids is None:
         return {}
     response.raise_for_status()
     latest: dict[str, datetime] = {}
@@ -177,7 +182,7 @@ def recent_enrichments(source: str, now: datetime | None = None) -> dict[str, da
     return latest
 
 
-def recent_observations(source: str, now: datetime | None = None) -> tuple[dict[str, dict[str, Any]], bool]:
+def recent_observations(source: str, now: datetime | None = None, opportunity_ids: list[str] | None = None) -> tuple[dict[str, dict[str, Any]], bool]:
     """Schema absence is non-fatal in dry-run until the local migration is applied."""
     now = now or datetime.now(timezone.utc)
     params = {
@@ -185,7 +190,12 @@ def recent_observations(source: str, now: datetime | None = None) -> tuple[dict[
         "observed_at": f"gte.{(now - max(OBSERVATION_TTLS.values())).isoformat()}",
         "order": "observed_at.desc", "limit": "1000",
     }
-    response = requests.get(f"{api_base()}/opportunity_source_observations", headers=api_headers(), params=params, timeout=30)
+    if opportunity_ids is not None:
+        if len(opportunity_ids) > 250:
+            raise ValueError("maintenance_evidence_page_overflow")
+        response = requests.post(f"{api_base()}/rpc/latest_opportunity_universe_observations", headers=api_headers(), json={"p_opportunity_ids": opportunity_ids}, timeout=30)
+    else:
+        response = requests.get(f"{api_base()}/opportunity_source_observations", headers=api_headers(), params=params, timeout=30)
     if response.status_code == 404:
         return {}, False
     response.raise_for_status()
@@ -297,13 +307,13 @@ def latest_himalayas_deep_cursor() -> str | None:
         return None
 
 
-def himalayas_current_rows(limit: int, opportunity_id: str | None = None, session: requests.Session | None = None, start_cursor: str | None = None, max_pages: int = 200) -> tuple[list[tuple[dict[str, Any], dict[str, Any]]], dict[str, Any]]:
+def himalayas_current_rows(limit: int, opportunity_id: str | None = None, session: requests.Session | None = None, start_cursor: str | None = None, max_pages: int = 200, db_rows: list[dict[str, Any]] | None = None) -> tuple[list[tuple[dict[str, Any], dict[str, Any]]], dict[str, Any]]:
     """Reconcile the full structured API inventory against legacy URL evidence.
 
     ``limit`` applies only after exact identity matching, never to API discovery.
     API absence remains an explicit unresolved historical state, never death.
     """
-    db_rows = himalayas_db_inventory(opportunity_id)
+    db_rows = himalayas_db_inventory(opportunity_id) if db_rows is None else db_rows
     inventory = fetch_api_inventory(page_size=100, max_pages=max_pages, start_cursor=start_cursor, session=session)
     # An opaque cursor may expire upstream. Restarting from HEAD is safe; feed
     # absence remains unresolved rather than death either way.

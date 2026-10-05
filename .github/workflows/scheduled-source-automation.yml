@@ -1,0 +1,38 @@
+name: CVitae - Scheduled source automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_prod_release_validated:
+        description: 'Confirm an authorized release and bounded PROD validation passed'
+        type: choice
+        options: ['NO', 'YES']
+        default: 'NO'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cvitae-opportunity-pipeline-maintenance
+  cancel-in-progress: false
+
+jobs:
+  automate:
+    if: inputs.confirm_prod_release_validated == 'YES' && vars.CVITAE_PROD_RELEASE_VALIDATED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: scripts/requirements-opportunity-factory.txt
+      - name: Install bounded worker dependencies
+        run: pip install --requirement scripts/requirements-opportunity-factory.txt
+      - name: Run bounded, certified and explicitly enabled manual canary
+        run: python scripts/run_scheduled_source_automation.py --max-runs 1 --batch-size 10 --max-batches-per-run 1

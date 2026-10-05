@@ -12,7 +12,7 @@ import { EDGE_SOURCE_IDENTITIES } from '../supabase/functions/_shared/generated-
 const inventory = Array.from({ length: 700 }, (_, i) => ({ id: String(i).padStart(4, '0'), created_at: new Date(i * 1000).toISOString() }))
 const canonicalSource = (raw: unknown) => {
   const source = String(raw ?? '').trim().toLowerCase()
-  const identity = EDGE_SOURCE_IDENTITIES.find(item => item.canonical_source === source || item.emitted_aliases.includes(source))
+  const identity = EDGE_SOURCE_IDENTITIES.find(item => item.canonical_source === source || item.emitted_aliases.some(alias => alias === source))
   return identity?.canonical_source || source
 }
 const aliasRows = [
@@ -109,13 +109,22 @@ assert.equal(cacheCandidateAlertEligible({ candidate_class: 'MATCH', evaluation_
 assert.equal(cacheCandidateAlertEligible({ candidate_class: 'POTENTIAL', evaluation_lane: 'INCREMENTAL' }, {}, '2025-01-01'), false)
 const alertFixtureRows = Array.from({ length: 1203 }, (_, i) => ({ evaluated_at: new Date(i * 1000).toISOString(), user_id: `u${String(Math.floor(i / 7)).padStart(4, '0')}`, opportunity_id: `o${String(i).padStart(5, '0')}` }))
 let alertPageCalls = 0
-const pagedAlertRows = await collectAlertCandidateSnapshot(async (cursor, limit) => {
-  alertPageCalls++
-  const remaining = cursor ? alertFixtureRows.filter((row) => row.evaluated_at > cursor.evaluated_at || (row.evaluated_at === cursor.evaluated_at && (row.user_id > cursor.user_id || (row.user_id === cursor.user_id && row.opportunity_id > cursor.opportunity_id)))) : alertFixtureRows
-  return remaining.slice(0, limit)
-}, 500)
-assert.equal(pagedAlertRows.length, 1203, 'alert cache pagination exhausts a >1000-row bounded snapshot')
-assert.equal(alertPageCalls, 3, 'alert pagination continues through full pages and terminates on exhaustion')
+const pagedAlertRows: any[] = []
+let alertCursor: any = null
+for (;;) {
+  const page = await collectAlertCandidateSnapshot(async (cursor, limit) => {
+    alertPageCalls++
+    const remaining = cursor ? alertFixtureRows.filter((row) => row.evaluated_at > cursor.evaluated_at || (row.evaluated_at === cursor.evaluated_at && (row.user_id > cursor.user_id || (row.user_id === cursor.user_id && row.opportunity_id > cursor.opportunity_id)))) : alertFixtureRows
+    return remaining.slice(0, limit)
+  }, 500, alertCursor)
+  assert.ok(page.rows.length <= 500, 'one invocation retains at most its batch')
+  pagedAlertRows.push(...page.rows) // Fixture accounting only; production persists cursor + effects.
+  alertCursor = page.cursor
+  if (page.complete) break
+}
+assert.equal(pagedAlertRows.length, 1203, 'resumable alert pages eventually cover every candidate')
+assert.equal(new Set(pagedAlertRows.map(r => r.opportunity_id)).size, 1203, 'no cursor replay')
+assert.equal(alertPageCalls, 3)
 
 const candidate = {
   professional_title: 'Software Backend Developer', summary: 'Backend developer with Python SQL Docker and APIs.',
@@ -149,12 +158,12 @@ assert.ok(workerSource.includes('rankOpportunitiesV2(') && workerSource.includes
 assert.ok(workerSource.includes("from('matching_retrieval_candidates').delete") && workerSource.includes('scan_examined_count'), 'changed rows are removed/replaced and cursor progress is persisted')
 assert.ok(!accountingSource.includes(".eq('match_eligible', true)"), 'inventory accounting begins with unfiltered total inventory')
 assert.ok(liveSource.includes('unionRetrievalLanes(') && liveSource.includes('match_count: 120') && liveSource.includes('.limit(300)'), 'live recent, semantic, and background lanes remain bounded and unified')
-assert.ok(liveSource.includes("select('source,is_enabled,matching_enabled')") && liveSource.includes('sourceMatchingAllowed(sourcePolicyFor(sourcePolicyIndex, item.source))'), 'live Matching rejects globally enabled sources with matching disabled')
-assert.ok(alertSource.includes(".eq('candidate_class', 'MATCH')") && alertSource.includes('evaluation_lane') && alertSource.includes('cacheCandidateAlertEligible') && alertSource.includes('rankOpportunitiesV2('), 'alerts gate candidate class/lane/window and rerank current V2')
+assert.ok(liveSource.includes("rpc('get_source_distribution_policy')") && liveSource.includes('sourceMatchingAllowed(sourcePolicyFor(sourcePolicyIndex, item.source))'), 'live Matching consumes effective switches and preserves explicit operator disables')
+assert.ok(alertSource.includes(".eq('candidate_class', 'MATCH')") && alertSource.includes('evaluation_lane') && alertSource.includes('cacheCandidateAlertEligible') && alertSource.includes('deps.rank || rankOpportunitiesV2'), 'alerts gate candidate class/lane/window and rerank current V2')
 assert.ok(alertSource.includes('from("opportunity_alert_universe")') && !alertSource.includes('sourceMatchingAllowed('), 'Alerts use alert-universe routing, independent of Matching operational switch')
 assert.ok(workerSource.includes("rpc('refresh_dirty_opportunity_universe_sources'") && workerSource.includes('OPPORTUNITY_UNIVERSE_DIRTY_SOURCE_QUEUE_NOT_DRAINED'), 'worker drains coalesced policy invalidations before reading the canonical universe')
 assert.ok(workerSource.includes("from('opportunity_final_matching_universe')") && workerSource.includes("from('opportunities')") && workerSource.includes("from('opportunity_universe_state')") && workerSource.includes("String(row.universe_final_matching_state || 'READY')"), 'FULL targets consume the canonical final universe and DELTA removes rows that leave it')
-assert.ok(alertSource.includes('collectAlertCandidateSnapshot') && alertSource.includes('offset += 50') && alertSource.includes('.gte(\'evaluated_at\', alertCacheFreshnessStart.toISOString())') && alertSource.includes('.lte(\'evaluated_at\', alertCacheCutoff.toISOString())') && !alertSource.includes('.limit(1000)'), 'alert cache uses user chunks and keyset pages over one freshness snapshot without global 1000 truncation')
+assert.ok(alertSource.includes('collectAlertCandidateSnapshot') && alertSource.includes('claim_match_alert_scan') && alertSource.includes('save_match_alert_scan') && alertSource.includes(".gte('evaluated_at', progress.lower)") && alertSource.includes(".lte('evaluated_at', progress.cutoff)") && !alertSource.includes('.limit(1000)'), 'alert cache pages use a durable profile cursor and frozen freshness cutoff, without snapshot accumulation')
 const pruneFunction = migrationSource.slice(migrationSource.indexOf('create or replace function public.prune_matching_retrieval_candidates()'), migrationSource.indexOf('revoke all on function public.prune_matching_retrieval_candidates()'))
 assert.ok(pruneFunction.includes('u.final_matching_state is distinct from \'READY\'') && pruneFunction.includes('c.opportunity_content_fingerprint') && !pruneFunction.includes('opportunity_sources'), 'cache prune follows canonical universe state/fingerprint without raw source-policy joins')
 assert.ok(migrationSource.includes('create table if not exists public.matching_retrieval_states') && migrationSource.includes('create table if not exists public.matching_retrieval_candidates'), 'additive local migration defines retrieval state and shortlist')

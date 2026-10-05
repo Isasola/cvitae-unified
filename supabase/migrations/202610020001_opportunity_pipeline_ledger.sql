@@ -18,6 +18,9 @@ create table if not exists public.opportunity_ingestion_events (
   scan_request_id text,
   outcome text not null check (outcome in ('INSERTED','UPDATED','UNCHANGED','DUPLICATE_IN_RUN','BUDGET_SKIPPED','REJECTED','PERSISTENCE_FAILED')),
   trace_state text not null check (trace_state in ('TRACED','INCOMPLETE')),
+  trace_contract_version text,
+  identity_factual boolean not null default false,
+  trace_reason text,
   reason text,
   identity_sha256 text not null,
   content_fingerprint text,
@@ -25,7 +28,11 @@ create table if not exists public.opportunity_ingestion_events (
   evidence jsonb not null default '{}'::jsonb,
   received_at timestamptz not null default now(),
   check ((trace_state = 'TRACED' and canonical_source is not null and producer_id is not null and run_id is not null)
-      or trace_state = 'INCOMPLETE')
+      or trace_state = 'INCOMPLETE'),
+  check (trace_contract_version is distinct from 'v2' or trace_state <> 'TRACED' or
+      (canonical_source is not null and producer_id is not null and run_id is not null and identity_factual)),
+  check (trace_contract_version is distinct from 'v2' or trace_state <> 'TRACED' or
+      outcome not in ('INSERTED','UPDATED','UNCHANGED','DUPLICATE_IN_RUN') or opportunity_id is not null)
 );
 
 create index if not exists opportunity_ingestion_events_opportunity_received_idx
@@ -44,6 +51,7 @@ with latest_ingestion as (
     e.opportunity_id, e.id, e.emitted_source, e.canonical_source, e.producer_id,
     e.adapter_id, e.cleaner_id, e.normalizer_version, e.normalized_fields,
     e.run_id, e.scraper_run_id, e.scan_request_id, e.outcome, e.trace_state,
+    e.trace_contract_version, e.identity_factual, e.trace_reason,
     e.reason, e.received_at
   from public.opportunity_ingestion_events e
   where e.opportunity_id is not null
@@ -73,8 +81,13 @@ select
   li.received_at as ingestion_received_at,
   o.created_at,
   o.updated_at,
-  case when li.id is not null then 'TRACED' else 'HISTORICAL_DB_PRESENCE' end as ingestion_state,
-  coalesce(li.reason, case when li.id is null then 'HISTORICAL_LINEAGE_NOT_RECONSTRUCTED' else 'INGESTION_RECEIPT_RECORDED' end) as ingestion_reason,
+  case when li.id is null then 'HISTORICAL_DB_PRESENCE'
+       when li.trace_contract_version='v2' then li.trace_state
+       else 'LEGACY_TRACE_STATE_UNVERIFIED' end as ingestion_state,
+  coalesce(li.trace_reason, case when li.id is null then 'HISTORICAL_LINEAGE_NOT_RECONSTRUCTED'
+       when li.trace_contract_version='v2' and li.trace_state='TRACED' then 'TRACE_REQUIREMENTS_SATISFIED'
+       when li.trace_contract_version='v2' then 'TRACE_REQUIREMENT_MISSING'
+       else 'LEGACY_TRACE_SEMANTICS_NOT_RECONSTRUCTED' end) as ingestion_reason,
   case when li.id is null then 'RECONSTRUCTED' else 'FACTUAL_RUN_LINKED' end as provenance_certainty,
   jsonb_build_object('title',to_jsonb(o)->>'title','organization',to_jsonb(o)->>'organization','location',to_jsonb(o)->>'location','country_code',to_jsonb(o)->>'country_code','description_length',length(coalesce(to_jsonb(o)->>'description','')),'application_url_present',nullif(to_jsonb(o)->>'application_url','') is not null) as normalized_fields_snapshot,
   coalesce(fs.status, o.factory_status, 'UNKNOWN') as factory_status,
@@ -151,13 +164,15 @@ select
        when coalesce(fs.status, o.factory_status) = 'pending' and now() - coalesce(fs.checked_at, o.updated_at, o.created_at) > interval '24 hours' then 'PENDING_OVERDUE'
        when coalesce(fs.status, o.factory_status) = 'pending' then 'PENDING_FRESH'
        else 'NOT_PENDING' end as factory_sla_state,
-  case when li.id is null then 'TRACE_INCOMPLETE'
+  case when li.trace_contract_version='v2' and li.trace_state='INCOMPLETE' then 'TRACE_INCOMPLETE'
+       when li.id is not null and li.trace_contract_version is distinct from 'v2' then 'TRACE_SEMANTICS_UNVERIFIED'
+       when li.id is null then 'HISTORICAL_LINEAGE_UNAVAILABLE'
        when lo.id is null then 'OBSERVATION_MISSING'
        when u.opportunity_id is null then 'CLASSIFICATION_PENDING'
        when u.catalog_state='READY' and u.final_matching_state='READY' and u.alerts_state='READY' and u.seo_state='READY' then 'ROUTED'
        else 'ROUTED_WITH_EXCLUSIONS' end as pipeline_health,
   array_remove(array[
-    case when li.id is null then 'INGESTION_LINEAGE' end,
+    case when li.id is null or (li.trace_contract_version='v2' and li.trace_state='INCOMPLETE') or li.trace_contract_version is distinct from 'v2' then 'INGESTION_LINEAGE' end,
     case when lo.id is null then 'OBSERVATION' end,
     case when coalesce(fs.status, o.factory_status) not in ('ready','review','blocked') then 'FACTORY' end,
     case when u.opportunity_id is null then 'UNIVERSE' end,
@@ -166,7 +181,10 @@ select
     case when u.alerts_state is distinct from 'READY' then 'ALERTS' end,
     case when u.seo_state is distinct from 'READY' then 'SEO' end
   ], null) as blocking_phases,
-  case when u.opportunity_id is null then 'RUN_UNIVERSE_RECONCILIATION'
+  case when li.trace_contract_version='v2' and li.trace_state='INCOMPLETE' then 'REPAIR_INGESTION_TRACE'
+       when li.id is not null and li.trace_contract_version is distinct from 'v2' then 'REVIEW_LEGACY_TRACE_SEMANTICS'
+       when li.id is null then 'NO_RUN_RECONSTRUCTION_WITHOUT_EVIDENCE'
+       when u.opportunity_id is null then 'RUN_UNIVERSE_RECONCILIATION'
        when lo.id is null then 'SOURCE_REFRESH'
        when coalesce(fs.status, o.factory_status) in ('pending','failed') then 'FACTORY_DRAIN'
        when u.lifecycle_state in ('LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE') then 'REVIEW_LIFECYCLE_EVIDENCE'
@@ -174,7 +192,10 @@ select
        when o.verification_status in ('pending','in_review') then 'EXISTING_VERIFICATION_AUTOMATION_OR_REVIEW'
        when u.catalog_state <> 'READY' or u.final_matching_state <> 'READY' or u.alerts_state <> 'READY' or u.seo_state <> 'READY' then 'INSPECT_CONSUMER_REASON'
        else 'NO_ACTION' end as next_action,
-  case when u.opportunity_id is null then 'UNIVERSE_STATE_NOT_RECONCILED'
+  case when li.trace_contract_version='v2' and li.trace_state='INCOMPLETE' then coalesce(li.trace_reason,'INGESTION_TRACE_INCOMPLETE')
+       when li.id is not null and li.trace_contract_version is distinct from 'v2' then 'LEGACY_TRACE_SEMANTICS_NOT_RECONSTRUCTED'
+       when li.id is null then 'HISTORICAL_LINEAGE_NOT_RECONSTRUCTED'
+       when u.opportunity_id is null then 'UNIVERSE_STATE_NOT_RECONCILED'
        when lo.id is null then 'NO_FACTUAL_OBSERVATION_FROM_PRODUCER'
        when coalesce(fs.status, o.factory_status) in ('pending','failed') then 'FACTORY_' || upper(coalesce(fs.status, o.factory_status))
        when u.lifecycle_state in ('LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE') then u.lifecycle_reason
@@ -191,7 +212,7 @@ select
        when u.seo_state <> 'READY' then 'SEO: ' || coalesce(u.seo_effective_reason, u.seo_row_reason)
        else 'ALL_ROUTING_STATES_READY' end as next_action_reason,
   jsonb_build_object(
-    'INGESTION',jsonb_build_object('state',case when li.id is null then 'HISTORICAL_DB_PRESENCE' else li.trace_state end,'reason',coalesce(li.reason,'HISTORICAL_LINEAGE_NOT_RECONSTRUCTED'),'next_action',case when li.id is null then 'NO_RUN_RECONSTRUCTION_WITHOUT_EVIDENCE' else 'NONE' end),
+    'INGESTION',jsonb_build_object('state',case when li.id is null then 'HISTORICAL_DB_PRESENCE' when li.trace_contract_version='v2' then li.trace_state else 'LEGACY_TRACE_STATE_UNVERIFIED' end,'outcome',li.outcome,'reason',coalesce(li.trace_reason,li.reason,'HISTORICAL_LINEAGE_NOT_RECONSTRUCTED'),'next_action',case when li.id is null then 'NO_RUN_RECONSTRUCTION_WITHOUT_EVIDENCE' when li.trace_contract_version is distinct from 'v2' then 'REVIEW_LEGACY_TRACE_SEMANTICS' when li.trace_state='INCOMPLETE' then 'REPAIR_INGESTION_TRACE' else 'NONE' end),
     'NORMALIZATION',jsonb_build_object('state',case when li.id is null then 'UNKNOWN' when li.adapter_id is null or li.cleaner_id is null then 'PARTIAL_LINEAGE' else 'RECORDED' end,'reason',case when li.id is null then 'NO_FUTURE_INGESTION_EVENT' when li.adapter_id is null or li.cleaner_id is null then 'ADAPTER_OR_CLEANER_NOT_REPORTED' else 'NORMALIZER_AND_ADAPTER_RECORDED' end,'next_action',case when li.id is not null and (li.adapter_id is null or li.cleaner_id is null) then 'REPORT_ADAPTER_CLEANER_VERSION' else 'NONE' end),
     'FACTORY',jsonb_build_object('state',coalesce(fs.status,o.factory_status,'UNKNOWN'),'reason',case when fs.opportunity_id is null then 'FACTORY_SNAPSHOT_NOT_PRESENT' when fs.status='ready' then 'FACTORY_READY' else coalesce(nullif(fs.evidence->>'reason',''),'FACTORY_STATUS_'||upper(fs.status)) end,'next_action',case when coalesce(fs.status,o.factory_status) in ('pending','failed') then 'FACTORY_DRAIN' else 'NONE' end),
     'OBSERVATION',jsonb_build_object('state',case when lo.id is null then 'MISSING' else lo.identity_status end,'reason',case when lo.id is null then 'NO_FACTUAL_OBSERVATION_FROM_PRODUCER' else coalesce(lo.identity_reason,'OBSERVATION_RECORDED') end,'next_action',case when lo.id is null then 'SOURCE_REFRESH' else 'NONE' end),
@@ -203,7 +224,10 @@ select
     'SEO',jsonb_build_object('state',coalesce(u.seo_state,'UNKNOWN'),'reason',coalesce(u.seo_effective_reason,u.seo_row_reason,'UNIVERSE_STATE_NOT_RECONCILED'),'next_action',case when u.seo_state='READY' then 'NONE' else 'INSPECT_SEO_REASON' end)
   ) as next_actions,
   u.evaluated_at as routing_updated_at,
-  lo.evidence as observation_evidence
+  lo.evidence as observation_evidence,
+  li.outcome as ingestion_outcome,
+  li.trace_contract_version as ingestion_trace_contract_version,
+  li.reason as ingestion_outcome_reason
   from public.opportunities o
 left join latest_ingestion li on li.opportunity_id = o.id
 left join latest_observation lo on lo.opportunity_id = o.id
@@ -220,6 +244,8 @@ returns jsonb language sql stable security definer set search_path = '' as $$
   totals as (
     select count(*) total_inventory,
       count(*) filter(where ingestion_state='TRACED') ingestion_traced,
+      count(*) filter(where ingestion_state='INCOMPLETE') ingestion_trace_incomplete,
+      count(*) filter(where ingestion_state='LEGACY_TRACE_STATE_UNVERIFIED') ingestion_trace_legacy_unverified,
       count(*) filter(where ingestion_state='HISTORICAL_DB_PRESENCE') ingestion_historical_untraced,
       count(*) filter(where observation_state='MISSING') observation_missing,
       count(*) filter(where observation_state<>'MISSING') observation_present,
@@ -243,6 +269,7 @@ returns jsonb language sql stable security definer set search_path = '' as $$
       count(*) filter(where created_at>=now()-interval '24 hours') new_24h,
       count(*) filter(where created_at>=now()-interval '7 days') new_7d,
       count(*) filter(where ingestion_state='TRACED') ingestion_traced,
+      count(*) filter(where ingestion_state='INCOMPLETE') ingestion_trace_incomplete,
       count(*) filter(where observation_state='MISSING') observation_missing,
       count(*) filter(where factory_status='ready') factory_ready,
       count(*) filter(where factory_status='review') factory_review,

@@ -80,7 +80,8 @@ assert('P0.3-D: latestRun uses runnerIds.has (not aliasSet.has)',
   adminData.includes('runsForSource') && adminData.includes('runnerIdsFor(profile)'))
 
 assert('P0.3-E: history filter uses runnerIds (not aliasSet)',
-  adminData.includes('const history = runsForSource.slice(0, 12)'))
+  adminData.includes('const rawHistory = runsForSource.slice(0, 12)') &&
+  adminData.includes('const history = rawHistory.map'))
 
 assert('P0.3-F: diagnose_source uses runnerIdsFor for scraper_runs query',
   adminData.includes('diagRunnerIds') && adminData.includes('.in("scraper_id", diagRunnerIds)'))

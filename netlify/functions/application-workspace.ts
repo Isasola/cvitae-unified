@@ -318,9 +318,9 @@ const WORKSPACE_FIELDS = 'id,opportunity_id,source_version_id,source_content_has
 const OPPORTUNITY_FIELDS = 'id,slug,title,organization,location,description,tags,requirements,responsibilities,benefits,duration_text,start_date,start_date_text,employment_type,deadline,application_url,source,opportunity_kind,updated_at,verification_status,is_active,catalog_eligible,deleted_at,archived_at,remote,remote_scope,eligible_countries,eligible_regions,citizenship_requirement,residency_requirement'
 
 async function loadOpportunity(supabase: any, selector: { id?: string; slug?: string }) {
-  let query = supabase.from('opportunities').select(OPPORTUNITY_FIELDS)
-    .eq('is_active', true).eq('verification_status', 'verified').eq('catalog_eligible', true)
-    .is('deleted_at', null).is('archived_at', null)
+  // Catalog membership is the canonical effective consumer decision. Do not
+  // recreate it from raw opportunity flags in this secondary B2C consumer.
+  let query = supabase.from('opportunity_catalog_universe').select(OPPORTUNITY_FIELDS)
   if (selector.id) query = query.eq('id', selector.id)
   else if (selector.slug) query = query.eq('slug', selector.slug)
   else return null

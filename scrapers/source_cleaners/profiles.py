@@ -69,9 +69,9 @@ V2_PROFILES: dict[str, SourceProfile] = {
         known_assumptions=("api_is_primary", "remote_without_evidence_is_unknown", "worldwide_requires_explicit_evidence"),
         web_catalog_allowed=True, source_attribution_required=True,
         third_party_job_distribution_allowed=False, google_jobs_distribution_allowed=False,
-        # Himalayas API TOS explicitly prohibits organic search engine indexing of
-        # their listings. web_catalog_allowed=True is a separate concern (internal catalog).
-        search_engine_indexing_allowed=False,
+        # First-party ordinary public pages may be indexed with source attribution
+        # and linkback. JobPosting and third-party job distribution remain denied.
+        search_engine_indexing_allowed=True,
     ),
     "talentcom": SourceProfile(
         source="talentcom", adapter_version="talent:v2.0.0", auto_enabled=False,

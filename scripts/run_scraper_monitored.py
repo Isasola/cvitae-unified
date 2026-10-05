@@ -186,6 +186,25 @@ def execution_outcome(returncode: int, output: str, summary: dict | None) -> tup
     error_lines = [line.strip() for line in output.splitlines() if ERROR_RE.search(line)]
     if summary:
         error_lines = [str(item) for item in summary.get("errors", []) if item]
+        adapter_metrics = structured_adapter_metrics(output) or {}
+        extraction = adapter_metrics.get("extraction_metrics") or {}
+        lineage = extraction.get("scan_lineage") or {}
+        lineage_evidence = lineage.get("lineage_evidence") or {}
+        technical_reasons = []
+        if summary.get("technical_failure") is True:
+            technical_reasons.append("INGESTION_TECHNICAL_FAILURE")
+        if int(summary.get("lineage_failed") or 0) > 0:
+            technical_reasons.append("INGESTION_LINEAGE_WRITE_FAILED")
+        if int(summary.get("source_identity_failed") or 0) > 0:
+            technical_reasons.append("PRODUCER_IDENTITY_CORRUPTED")
+        if lineage_evidence.get("status") == "WARNING":
+            technical_reasons.extend(str(reason) for reason in lineage_evidence.get("reason_codes", []) if reason)
+        counts = lineage.get("counts") or {}
+        if int(counts.get("PERSISTED", 0)) > 0 and lineage_evidence.get("status") != "PASS":
+            technical_reasons.append("PERSISTED_ROW_WITHOUT_CONFIRMED_LINEAGE")
+        for reason in dict.fromkeys(technical_reasons):
+            if reason not in error_lines:
+                error_lines.append(reason)
     warning_count = len(WARNING_RE.findall(output))
     error_count = len(error_lines)
     if returncode != 0:
@@ -194,7 +213,9 @@ def execution_outcome(returncode: int, output: str, summary: dict | None) -> tup
             useful_lines = [line.strip() for line in output.splitlines() if line.strip()]
             error_lines = [useful_lines[-1] if useful_lines else f"Proceso finalizó con código {returncode}"]
             error_count = 1
-    elif error_count or warning_count:
+    elif error_count:
+        status = "failed"
+    elif warning_count:
         status = "partial_success"
     else:
         status = "success"

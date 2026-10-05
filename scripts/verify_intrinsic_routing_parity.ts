@@ -62,22 +62,22 @@ assert(!migration.includes('source_policy.matching_enabled'))
 assert(!migration.includes('source_policy.seo_enabled'))
 
 const policy = (source: string, extra: Partial<SourcePolicyRow> = {}): SourcePolicyRow => ({ source, is_enabled: true, catalog_enabled: true, matching_enabled: true, alerts_enabled: true, seo_enabled: true, web_catalog_allowed: false, search_engine_indexing_allowed: null, google_jobs_distribution_allowed: false, ...extra })
-const ready = { ...fixture.cases.find((item: any) => item.id === 'good-complete').row, id: 'ready', source: 'computrabajo', eligible_regions: ['GLOBAL'], catalog_eligible: false, match_eligible: false, alerts_eligible: false, seo_eligible: false }
+const ready = { ...fixture.cases.find((item: any) => item.id === 'good-complete').row, id: 'ready', source: 'unregistered_future_source', eligible_regions: ['GLOBAL'], catalog_eligible: false, match_eligible: false, alerts_eligible: false, seo_eligible: false }
 const reconciled = { ...ready, ...intrinsicRoutingGates(ready).proposed }
-const ordinary = evaluateOpportunityDistribution(reconciled, [policy('computrabajo')])
+const ordinary = evaluateOpportunityDistribution(reconciled, [policy('jobicy')])
 assert.equal(ordinary.matching.capabilityState, 'UNKNOWN', 'source permission UNKNOWN remains fail-closed despite enabled switches')
 assert(!ordinary.catalog.allowed && !ordinary.matching.allowed && !ordinary.alerts.allowed && !ordinary.seo.allowed)
 const profile = { professional_title: 'Programme Officer International Development', profile_data: { habilidades: ['programme management', 'monitoring'], seniority: 'mid', location: 'Paraguay' } }
 const ranked = rankOpportunitiesV2(profile as any, [reconciled], buildDictionary([]), V2_PRESET_FULL)
 assert.equal(ranked.eligible.length, 1, 'matching consumes the reconciled match gate plus intrinsic evidence')
 assert.equal([reconciled].filter(row => row.alerts_eligible === true).length, 1, 'alert request filter sees reconciled alert gate')
-assert.equal(buildEffectiveSeoInventory([reconciled], [policy('computrabajo')]).length, 0, 'SEO does not treat UNKNOWN source permission as allowed')
+assert.equal(buildEffectiveSeoInventory([reconciled], [policy('jobicy')]).length, 0, 'unknown source policy cannot enter any public consumer')
 const himalayas = evaluateOpportunityDistribution({ ...reconciled, source: 'himalayas' }, [policy('himalayas')])
 assert(himalayas.catalog.allowed && himalayas.matching.allowed && himalayas.alerts.allowed)
-assert(!himalayas.seo.allowed && !himalayas.jobPosting.allowed && !himalayas.googleJobs.allowed)
+assert(himalayas.seo.allowed && !himalayas.jobPosting.allowed && !himalayas.googleJobs.allowed && !himalayas.thirdParty.allowed)
 const thin = { ...reconciled, ...fixture.cases.find((item: any) => item.id === 'thin-description').row }
-const thinDecision = evaluateOpportunityDistribution(thin, [policy('computrabajo')])
-assert(!thinDecision.catalog.allowed && thinDecision.catalog.capabilityState === 'UNKNOWN' && !thinDecision.matching.allowed)
+const thinDecision = evaluateOpportunityDistribution({ ...thin, source:'jobicy' }, [policy('jobicy')])
+assert(thinDecision.catalog.allowed && !thinDecision.matching.allowed, 'thin professional evidence does not disable intrinsically ready Catalog rows')
 
 // Same public helper, over multiple raw pages, proves stale false gates do not
 // hide an otherwise-ready row and pagination still terminates at target/end.
@@ -86,6 +86,6 @@ const raw = [
   ...Array.from({ length: 3 }, (_, index) => ({ ...ready, source: 'himalayas', id: `ready-${index}`, slug: `ready-${index}` })),
 ]
 const offsets: number[] = []
-const publicRows = await collectAllowedPages({ target: 3, pageSize: 100, fetchPage: async (offset, size) => { offsets.push(offset); return raw.slice(offset, offset + size) }, allowed: row => evaluateOpportunityDistribution(row, [policy('himalayas')]).catalog.allowed })
+const publicRows = await collectAllowedPages({ target: 3, pageSize: 100, maxPages: 6, fetchPage: async (offset, size) => { offsets.push(offset); return raw.slice(offset, offset + size) }, allowed: row => evaluateOpportunityDistribution(row, [policy('himalayas', { web_catalog_allowed:true })]).catalog.allowed })
 assert.equal(publicRows.length, 3); assert(offsets.length >= 5); assert.equal(publicRows[0].id, 'ready-0')
-console.log(`verify_intrinsic_routing_parity: PASS cases=${fixture.cases.length} pages=${offsets.length} consumers=public+matching+alerts+seo himalayas=internal_only`)
+console.log(`verify_intrinsic_routing_parity: PASS cases=${fixture.cases.length} pages=${offsets.length} consumers=public+matching+alerts+seo himalayas=first_party_seo_allowed_job_distribution_denied`)

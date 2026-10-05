@@ -37,7 +37,7 @@ function inventoryDelta(rows: any[], policies: ReturnType<typeof buildCanonicalS
 
 async function getSourcePolicies() {
   const [{ data, error }, { data: permissions, error: permissionError }] = await Promise.all([
-    supabase.from('opportunity_sources').select('source,is_enabled,matching_enabled'),
+    supabase.rpc('get_source_distribution_policy'),
     supabase.from('opportunity_source_consumer_permissions').select('canonical_source,consumer,permission_state').eq('consumer', 'matching'),
   ])
   if (error) throw error
@@ -357,9 +357,9 @@ if (universeRefreshError) throw new Error('OPPORTUNITY_UNIVERSE_LIFECYCLE_REFRES
 let dirtySourceBatches = 0
 let pendingDirtySources = 0
 do {
-  const { data, error } = await supabase.rpc('refresh_dirty_opportunity_universe_sources', { p_limit: 50 })
+  const { data, error } = await supabase.rpc('refresh_dirty_opportunity_universe_sources', { p_limit: 1 })
   if (error) throw new Error('OPPORTUNITY_UNIVERSE_SOURCE_POLICY_REFRESH_FAILED')
-  pendingDirtySources = Number(data?.sources_refreshed || 0)
+  pendingDirtySources = Number(data?.pending_sources || 0)
   dirtySourceBatches++
   if (pendingDirtySources > 0 && dirtySourceBatches >= 10) throw new Error('OPPORTUNITY_UNIVERSE_DIRTY_SOURCE_QUEUE_NOT_DRAINED')
 } while (pendingDirtySources > 0)

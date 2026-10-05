@@ -8,7 +8,6 @@ const root = path.resolve(import.meta.dirname, '..')
 const fixture = JSON.parse(fs.readFileSync(path.join(root, 'scripts/fixtures/seo-inventory.json'), 'utf8'))
 const effective = buildEffectiveSeoInventory(fixture.opportunities, fixture.policies)
 const normal = redirectText(effective)
-assert.match(normal.text, /^\/oportunidades\/programme-officer \/empleos\/programme-officer 301!$/m)
 assert.match(normal.text, /^\/empleos\/regional-fellowship \/oportunidades\/regional-fellowship 301!$/m)
 assert.ok(!normal.text.includes('/empleos/programme-officer /'), 'canonical job has no redirect')
 
@@ -26,7 +25,8 @@ for (const { source, target } of normal.redirects) {
   assert.notEqual(from.family, to.family); assert.equal(from.slug, to.slug); sources.add(source)
 }
 for (const { target } of normal.redirects) assert.ok(!sources.has(target), 'no generated chain or loop')
-for (const row of fixture.opportunities.filter((row: any) => ['thin', 'restricted', 'archived'].includes(row.id))) assert.ok(!normal.text.includes(row.slug), `excluded row has no alias: ${row.id}`)
+for (const row of fixture.opportunities.filter((row: any) => ['thin', 'archived'].includes(row.id))) assert.ok(!normal.text.includes(row.slug), `excluded row has no alias: ${row.id}`)
+assert.ok(normal.text.includes('/oportunidades/himalayas-first-party /empleos/himalayas-first-party 301!'), 'first-party Himalayas SEO page has only a canonical route alias')
 for (const bad of ['/unknown/x', '/empleos/', '/empleos/a/b', '/empleos/unsafe space']) assert.throws(() => canonicalRoute(bad), /seo_redirect_invalid_canonical_path/)
 assert.throws(() => parseInventory({ generated_at:'nope', rows:[] }), /seo_inventory_stale/)
 assert.throws(() => parseInventory({ generated_at:new Date().toISOString(), rows:[] }), /seo_inventory_empty/)

@@ -477,7 +477,7 @@ decisions as (
       when nullif(trim(coalesce(c.title,'')),'') is null then 'MISSING_TITLE' when nullif(trim(coalesce(c.slug,'')),'') is null then 'MISSING_CANONICAL_IDENTITY'
       when length(trim(coalesce(c.description,'')))<100 then 'THIN_CONTENT' when nullif(trim(coalesce(c.organization,'')),'') is null then 'MISSING_ORGANIZATION' else 'SEO_ROW_READY' end seo_row_reason,
     case when c.lifecycle_state<>'ACTIVE_VALID' then case when c.lifecycle_state in ('LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE') then 'UNKNOWN' else 'NOT_READY' end when not c.professional_fact then 'NOT_READY' else 'READY' end alerts_row_state,
-    case when c.canonical_source='computrabajo' then case when current_date<=date '2026-10-09' then 'ACTIVE' else 'EXPIRED' end else 'NOT_APPLICABLE' end temporary_legacy_seo_exception_state,
+    case when c.canonical_source='computrabajo' then case when (now() at time zone 'UTC')::date<=date '2026-10-09' then 'ACTIVE' else 'EXPIRED' end else 'NOT_APPLICABLE' end temporary_legacy_seo_exception_state,
     case when c.lifecycle_state='STALE_DERIVED_STATE' then c.lifecycle_reason
       when c.lifecycle_state<>'LIFECYCLE_UNKNOWN' then null
       when c.deadline_state='INVALID' then 'DEADLINE_INVALID_OR_TIMEZONE_UNKNOWN'
@@ -496,15 +496,25 @@ decisions as (
       else 'REFRESH_REQUIRED' end lifecycle_recovery_class
   from classified c
 ),
+states_prepared as (
+ select d.*,
+  (d.canonical_source='computrabajo'
+    and d.temporary_legacy_seo_exception_state='ACTIVE'
+    and d.seo_permission='DENIED'
+    and d.seo_eligible is true and d.seo_status='eligible'
+    and d.created_at is not null and (d.created_at at time zone 'UTC')::date<=date '2026-10-03'
+    and d.seo_row_state='READY' and d.source_operation_state='ALLOWED' and d.seo_switch_state='ALLOWED') temporary_legacy_seo_exception_applied
+ from decisions d
+),
 states as (
  select d.*,
   case when d.matching_row_state<>'READY' then d.matching_row_state when d.matching_permission='DENIED' or d.source_operation_state='DENIED' or d.matching_switch_state='DENIED' then 'NOT_READY'
     when d.matching_permission is distinct from 'ALLOWED' or d.source_operation_state in ('UNKNOWN','CONFLICT') or d.matching_switch_state='UNKNOWN' then 'UNKNOWN' else 'READY' end final_matching_state,
   case when d.catalog_row_state<>'READY' then d.catalog_row_state when d.catalog_permission='DENIED' or d.source_operation_state='DENIED' or d.catalog_switch_state='DENIED' then 'NOT_READY' when d.catalog_permission is distinct from 'ALLOWED' or d.source_operation_state in ('UNKNOWN','CONFLICT') or d.catalog_switch_state='UNKNOWN' then 'UNKNOWN' else 'READY' end catalog_state,
   case when d.alerts_row_state<>'READY' then d.alerts_row_state when d.alerts_permission='DENIED' or d.source_operation_state='DENIED' or d.alerts_switch_state='DENIED' then 'NOT_READY' when d.alerts_permission is distinct from 'ALLOWED' or d.source_operation_state in ('UNKNOWN','CONFLICT') or d.alerts_switch_state='UNKNOWN' then 'UNKNOWN' else 'READY' end alerts_state,
-  case when d.seo_row_state<>'READY' then d.seo_row_state when d.source_operation_state='DENIED' then 'NOT_READY' when d.source_operation_state in ('UNKNOWN','CONFLICT') then 'UNKNOWN' else 'READY' end seo_state,
-  case when d.seo_row_state<>'READY' then d.seo_row_reason when d.source_operation_state='DENIED' then 'SOURCE_DISABLED' when d.source_operation_state in ('UNKNOWN','CONFLICT') then case when d.source_operation_state='CONFLICT' then 'SOURCE_POLICY_ALIAS_CONFLICT' else 'SOURCE_OPERATIONAL_STATE_UNKNOWN' end else 'SEO_EFFECTIVE_READY' end seo_effective_reason
- from decisions d
+  case when d.seo_row_state<>'READY' then d.seo_row_state when d.temporary_legacy_seo_exception_applied then 'READY' when d.seo_permission='DENIED' then 'NOT_READY' when d.seo_switch_state='DENIED' then 'NOT_READY' when d.source_operation_state='DENIED' then 'NOT_READY' when d.source_operation_state in ('UNKNOWN','CONFLICT') then 'UNKNOWN' else 'READY' end seo_state,
+  case when d.seo_row_state<>'READY' then d.seo_row_reason when d.temporary_legacy_seo_exception_applied then 'TEMP_LEGACY_SEO_EXCEPTION_APPLIED' when d.seo_permission='DENIED' then 'SOURCE_SEO_PERMISSION_DENIED' when d.seo_switch_state='DENIED' then 'SOURCE_SEO_OPERATOR_DISABLED' when d.source_operation_state='DENIED' then 'SOURCE_DISABLED' when d.source_operation_state in ('UNKNOWN','CONFLICT') then case when d.source_operation_state='CONFLICT' then 'SOURCE_POLICY_ALIAS_CONFLICT' else 'SOURCE_OPERATIONAL_STATE_UNKNOWN' end else 'SEO_EFFECTIVE_READY' end seo_effective_reason
+ from states_prepared d
 ),
 failures as (
  select s.*,case when lifecycle_state<>'ACTIVE_VALID' then 'LIFECYCLE_'||lifecycle_state
@@ -552,7 +562,7 @@ summary as (
   count(*) filter(where is_active=true and verification_status='verified' and deleted_at is null and archived_at is null and deadline_state in ('OPEN','UNKNOWN') and alerts_eligible=true and is_enabled=true and alerts_enabled=true) current_alerts,
   count(*) filter(where is_active=true and verification_status='verified' and deleted_at is null and archived_at is null and deadline_state in ('OPEN','UNKNOWN') and seo_eligible=true and is_enabled=true and seo_enabled=true) current_seo,
   count(*) filter(where lifecycle_state='ACTIVE_VALID') lifecycle_ready,
-  count(*) filter(where canonical_source='computrabajo' and temporary_legacy_seo_exception_state='ACTIVE' and seo_permission='DENIED' and seo_eligible=true and seo_status='eligible' and seo_row_state='READY' and source_operation_state='ALLOWED') temporary_legacy_seo_exception_active_rows
+  count(*) filter(where temporary_legacy_seo_exception_applied) temporary_legacy_seo_exception_active_rows
  from failures
 ),
 life_counts as (select (select total_inventory from summary) total,sum(n) grouped from (select count(*) n from failures group by lifecycle_state) x),
@@ -582,7 +592,7 @@ select jsonb_build_object(
  'TOP_SEO_CONTENT_BLOCK_REASONS',(select coalesce(jsonb_agg(jsonb_build_object('reason',reason,'count',n) order by n desc,reason),'[]'::jsonb) from (select seo_content_reason reason,count(*) n from failures where seo_content_state='NOT_READY' group by seo_content_reason) seo_content_reasons),
  'SEO_CONTENT_REASONS_PER_SOURCE',(select coalesce(jsonb_agg(jsonb_build_object('source',q.canonical_source,'content_ready',q.ready,'content_not_ready',q.not_ready,'reasons',q.reasons) order by q.total desc,q.canonical_source),'[]'::jsonb) from (select canonical_source,count(*) total,count(*) filter(where seo_content_state='READY') ready,count(*) filter(where seo_content_state='NOT_READY') not_ready,coalesce((select jsonb_agg(jsonb_build_object('reason',reason,'count',n) order by n desc,reason) from (select seo_content_reason reason,count(*) n from failures f where f.canonical_source=u.canonical_source and seo_content_state='NOT_READY' group by seo_content_reason) r),'[]'::jsonb) reasons from failures u group by canonical_source) q),
  'ROUTING_UNRESOLVED_ROWS',s.routing_unresolved_total,'ROWS_WITH_ANY_SOURCE_PERMISSION_UNKNOWN',s.rows_with_any_source_permission_unknown,'SOURCE_PERMISSION_UNKNOWN_DIMENSION_CLAIMS',s.unknown_permission_dimension_claims,'REPAIRABLE_ROWS',s.repairable_rows,'SOURCE_POLICY_ALIAS_CONFLICT_ROWS',s.source_policy_alias_conflicts,'FIRST_FAILURE',ff.value,'WHY_NOT_MATCH_UNIVERSE',e.value,'PER_SOURCE',ps.value,
- 'TEMP_LEGACY_SEO_EXCEPTION',jsonb_build_object('name','TEMP_LEGACY_SEO_EXCEPTION_UNTIL_2026_10_09','source','computrabajo','permission_state','DENIED','state',case when current_date<=date '2026-10-09' then 'ACTIVE' else 'EXPIRED' end,'expires_on','2026-10-09','active_rows',s.temporary_legacy_seo_exception_active_rows,'reason','Preserves SEO-ready first-party rows during the live observation window; does not grant source permission or any other consumer.'),
+ 'TEMP_LEGACY_SEO_EXCEPTION',jsonb_build_object('name','TEMP_LEGACY_SEO_EXCEPTION_UNTIL_2026_10_09','source','computrabajo','consumer','seo','scope','existing-first-party-seo-only','legacy_created_on_or_before','2026-10-03','permission_state','DENIED','state',case when (now() at time zone 'UTC')::date<=date '2026-10-09' then 'ACTIVE' else 'EXPIRED' end,'expires_on_inclusive','2026-10-09','applied_only_for','SEO_READY + seo_eligible=true + seo_status=eligible + created_at<=2026-10-03 + source enabled + SEO switch enabled','active_rows',s.temporary_legacy_seo_exception_active_rows,'reason','Preserves qualifying legacy first-party SEO rows through 2026-10-09 UTC inclusive; never grants permission or another consumer.'),
  'CURRENT_VS_PREDICTED_IMPACT',jsonb_build_object('CURRENT_PUBLIC_CATALOG',s.current_catalog,'PREDICTED_CATALOG_UNIVERSE',s.catalog_universe,'CATALOG_ROWS_REMOVED',greatest(s.current_catalog-s.catalog_universe,0),'CATALOG_ROWS_ADDED',greatest(s.catalog_universe-s.current_catalog,0),'CURRENT_MATCHING_UNIVERSE',s.current_matching,'PREDICTED_FINAL_MATCHING_UNIVERSE',s.final_matching_universe,'MATCH_ROWS_REMOVED',greatest(s.current_matching-s.final_matching_universe,0),'MATCH_ROWS_ADDED',greatest(s.final_matching_universe-s.current_matching,0),'CURRENT_ALERT_UNIVERSE',s.current_alerts,'PREDICTED_ALERT_UNIVERSE',s.alert_universe,'CURRENT_SEO_UNIVERSE',s.current_seo,'PREDICTED_SEO_UNIVERSE',s.seo_universe),
  'RECONCILIATION_DIFFERENCE',jsonb_build_object('lifecycle',s.total_inventory-(s.active_valid+s.inactive_valid+s.expired+s.deleted+s.archived+s.hard_dead+s.superseded_duplicate+s.stale_derived_state+s.lifecycle_unknown),'matching_first_failure',s.total_inventory-(select coalesce(sum(n),0) from (select count(*) n from failures group by first_failure) groups),'active_matching',mc.lifecycle_ready-(mc.ready+mc.permission_failure+mc.operational_failure+mc.row_not_ready+mc.row_unknown),'difference',(select count(*) from failures)-(s.active_valid+s.inactive_valid+s.expired+s.deleted+s.archived+s.hard_dead+s.superseded_duplicate+s.stale_derived_state+s.lifecycle_unknown)),
  'RETRIEVAL_SCHEMA_PRESENCE',jsonb_build_object('opportunity_universe_state',to_regclass('public.opportunity_universe_state') is not null,'states',to_regclass('public.matching_retrieval_states') is not null,'candidates',to_regclass('public.matching_retrieval_candidates') is not null,'score_rpc',to_regprocedure('public.score_opportunity_embeddings(public.vector,text[])') is not null,'prune_rpc',to_regprocedure('public.prune_matching_retrieval_candidates()') is not null)

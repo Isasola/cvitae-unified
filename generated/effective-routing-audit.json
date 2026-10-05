@@ -1,0 +1,1695 @@
+{
+  "schema_version": "effective-routing-audit:v1",
+  "evidence_level": "LOCAL_REGISTRY_ONLY",
+  "registry_profiles": 105,
+  "registry_validation": {
+    "alias_collisions": 0,
+    "ambiguous_patterns": 0,
+    "alias_pattern_conflicts": 0
+  },
+  "sources": [
+    {
+      "canonical_source": "500_latam",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "abc",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "aecid_paraguay_calls",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "agroindustria",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "aptitus",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "arbeitnow",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "automotriz",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "bancos",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "becal",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "becas_gobierno_itaipu",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "bolsas_locales",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "bumeran",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "buscojobs",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "caf_calls",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "callcenters",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "cde_frontera",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "chevening",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "cird_competitions_tenders",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "coimbra_group",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "computrabajo",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "conacyt_convocatorias",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "constructoras",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "cooperativas",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "copaco",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "daad",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "developmentaid",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "devex",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "eby_yacyreta",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "empleapy_mtess",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "energia_utilities",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "erasmus_mundus",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "eu_delegation_paraguay",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "eu_lac_accelerator",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "f6s_latam",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "farmacias",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "fcq_una_job_board",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "fiuna_job_board",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "foros",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "frigorificos",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "fundacion",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "fundacion_carolina",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "gastronomia_hoteles",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "globaljobs",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "google_startups_latam",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "googlejobs_v2",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "googlejobs_v3",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "grupocarteshs",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "grupovierci",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "himalayas",
+      "policy_evidence_state": "EXPLICIT_RESTRICTION",
+      "catalog_source_state": "CONFIG_ENABLED",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "ALLOWED",
+      "google_jobs_source_state": "EXPLICIT_RESTRICTION",
+      "explicit_restrictions": [
+        "GOOGLE_JOBS_DENIED",
+        "THIRD_PARTY_DISTRIBUTION_DENIED"
+      ],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": true
+    },
+    {
+      "canonical_source": "hireon",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "hospitales",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "idb_calls",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "idealist",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "impactpool",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "indeed",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "industria_manufactura",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "innovandopy_startups",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "ipa_convocatorias",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "itau",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "jobicy",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "jooble",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "laborum",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "logistica_transporte",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "medios_comunicacion",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "mef_inapp_becas",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "merienderos",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "mic_portal_emprendedor",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "ministerios",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "mit_solve",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "mitic_opportunities",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "oas_scholarships",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "ofertaslaborales",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "one_young_world_scholarships",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "ongs",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "opportunitydesk",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "oya",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "personal",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "pivot_jobs",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "pro_ong_conevio",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "puertos_importadoras",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "reddit",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "reemujerpy_mipymes",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "reliefweb",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "remotive",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "retail_malls",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "santander_open_academy",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "scholarship_corner",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "scrapper",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "seguros",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "sicca",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "snj_paraguay",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "startup_chile",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "supermercados",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "talentcom",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "tech_local",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "telecomunicaciones",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "tigo",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "ucom_job_board",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "universidades",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "unjobs",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "us_embassy_paraguay",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "vc4a_pes_latam",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "weworkremotely",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "workday_multinacionales",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    },
+    {
+      "canonical_source": "wwf_paraguay_calls",
+      "policy_evidence_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "catalog_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "matching_source_state": "UNKNOWN",
+      "alerts_source_state": "UNKNOWN",
+      "seo_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "google_jobs_source_state": "CONFIG_DISABLED_NO_RESTRICTION_EVIDENCE",
+      "explicit_restrictions": [],
+      "unknowns": [
+        "matching_admin_switch",
+        "alerts_admin_switch",
+        "current_db_operational_switches"
+      ],
+      "source_attribution_required": false
+    }
+  ]
+}

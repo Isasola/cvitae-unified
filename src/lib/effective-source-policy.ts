@@ -11,6 +11,8 @@ export type SourcePolicyRow = {
   web_catalog_allowed?: boolean | null; search_engine_indexing_allowed?: boolean | null
   google_jobs_distribution_allowed?: boolean | null; third_party_job_distribution_allowed?: boolean | null
   source_attribution_required?: boolean | null
+  /** Explicit operator intent projected from existing admin_policy_events. */
+  consumer_switch_overrides?: Partial<Record<'catalog' | 'matching' | 'alerts', boolean | null>>
 }
 export type CapabilityState = 'ALLOWED' | 'DENIED' | 'UNKNOWN'
 export type AdminSwitchState = 'ENABLED' | 'DISABLED' | 'UNKNOWN' | 'LEGACY_CONFIG_DISABLED'
@@ -36,9 +38,20 @@ const CANONICAL_POLICY_FIELDS: Array<keyof SourcePolicyRow> = [
   'is_enabled','matching_enabled','catalog_enabled','alerts_enabled','seo_enabled',
 ]
 export type SourcePolicyConflicts = Record<'is_enabled' | 'matching_enabled' | 'catalog_enabled' | 'alerts_enabled' | 'seo_enabled', boolean>
+/** Same normalization as canonical_opportunity_source_policy. Never grants permission. */
+export function effectiveSourceSwitches<T extends SourcePolicyRow>(row: T, permissionResolver = sourcePermissionTruth): T {
+  const effective = { ...row }
+  for (const consumer of ['catalog', 'matching', 'alerts'] as const) {
+    const field = `${consumer}_enabled` as const
+    const override = row.consumer_switch_overrides?.[consumer]
+    if (override !== undefined) effective[field] = override
+    else if (row.is_enabled === true && permissionResolver(canonicalSource(row.source), consumer).state === 'ALLOWED') effective[field] = true
+  }
+  return effective
+}
 export function sourcePolicyForCanonical(raw: string | null | undefined, rows: SourcePolicyRow[]) {
   const canonical = canonicalSource(raw)
-  const aliases = rows.filter(item => canonicalSource(item.source) === canonical)
+  const aliases = rows.filter(item => canonicalSource(item.source) === canonical).map(item => effectiveSourceSwitches(item))
   const conflicts = Object.fromEntries(CANONICAL_POLICY_FIELDS.map(field => [field, new Set(aliases.map(item => item[field] === true ? 'true' : item[field] === false ? 'false' : 'unknown')).size > 1])) as SourcePolicyConflicts
   const conflict = Object.values(conflicts).some(Boolean)
   if (!aliases.length) return { canonical, policy: undefined, aliases: [] as string[], conflict: false, conflicts }
@@ -74,8 +87,14 @@ const decision = (canonicalSource: string, consumer: Consumer, rowReadiness: Rea
   const adminSwitchState = legacySwitchState(policy, admin)
   const projectionSwitch = consumer === 'catalog' ? policy?.catalog_enabled : consumer === 'matching' ? policy?.matching_enabled : consumer === 'alerts' ? policy?.alerts_enabled : consumer === 'seo' || consumer === 'jobPosting' ? policy?.seo_enabled : true
   const exceptionState = consumer === 'seo' ? temporaryLegacySeoExceptionState(canonicalSource, asOf) : null
-  const exceptionApplied = Boolean(exceptionState?.state === 'ACTIVE' && canonicalSource === 'computrabajo' && capabilityState === 'DENIED' && rowReadiness.state === 'READY' && storedGate === true && row && isQualifyingTemporaryLegacySeoRow(row) && live && policy?.is_enabled === true && extraReasons.length === 0)
-  const temporaryException = exceptionState ? { ...exceptionState, applied: exceptionApplied } : null
+  const temporaryExceptionApplied = Boolean(consumer === 'seo'
+    && canonicalSource === 'computrabajo'
+    && exceptionState?.state === 'ACTIVE'
+    && capabilityState === 'DENIED'
+    && rowReadiness.state === 'READY'
+    && live
+    && isQualifyingTemporaryLegacySeoRow(row || {}, canonicalSource))
+  const temporaryException = exceptionState ? { ...exceptionState, applied: temporaryExceptionApplied } : null
   const permissionReasons = [
     ...(capabilityState === 'ALLOWED' ? [] : [capabilityState === 'UNKNOWN' ? 'SOURCE_CAPABILITY_UNKNOWN' : 'SOURCE_CAPABILITY_DENIED']),
     ...(capabilityState === 'UNKNOWN' ? [`SOURCE_${consumer.toUpperCase()}_PERMISSION_UNKNOWN`] : capabilityState === 'DENIED' ? [`SOURCE_${consumer.toUpperCase()}_PERMISSION_DENIED`] : []),
@@ -86,14 +105,17 @@ const decision = (canonicalSource: string, consumer: Consumer, rowReadiness: Rea
     ...(policy?.is_enabled === true ? [] : [policy ? 'SOURCE_DISABLED' : 'SOURCE_SWITCH_UNKNOWN']),
     ...(['catalog', 'matching', 'alerts', 'jobPosting'].includes(consumer) && projectionSwitch !== true
       ? [projectionSwitch === false ? `SOURCE_${consumer.toUpperCase()}_OPERATOR_DISABLED` : `SOURCE_${consumer.toUpperCase()}_SWITCH_UNKNOWN`] : []),
+    ...(consumer === 'seo' && projectionSwitch === false ? ['SOURCE_SEO_OPERATOR_DISABLED'] : []),
     ...(live ? [] : ['ROW_LIFECYCLE_NOT_ROUTABLE']),
     ...extraReasons,
   ]
   // First-party organic SEO is gated by lifecycle, row facts and global source
   // operation. Canonical permission remains diagnostic; external distribution
   // uses its own JobPosting/Google Jobs decisions below.
-  const effectiveReasons = consumer === 'seo' ? reasons : exceptionApplied ? reasons : [...reasons, ...permissionReasons]
-  const permissionAllowsRouting = consumer === 'seo' || capabilityState === 'ALLOWED' || exceptionApplied
+  const effectiveReasons = consumer === 'seo'
+    ? [...reasons, ...(capabilityState === 'DENIED' && !temporaryExceptionApplied ? permissionReasons : [])]
+    : [...reasons, ...permissionReasons]
+  const permissionAllowsRouting = consumer === 'seo' ? capabilityState !== 'DENIED' || temporaryExceptionApplied : capabilityState === 'ALLOWED'
   return { allowed: effectiveReasons.length === 0 && permissionAllowsRouting, canonicalSource, rowReadiness, capabilityState, adminSwitchState, storedGateState: storedGateState(storedGate, storedApplicable), reasons: effectiveReasons, permissionReasons, temporaryException }
 }
 

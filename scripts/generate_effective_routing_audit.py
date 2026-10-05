@@ -17,14 +17,13 @@ def configured(value: bool) -> str:
 
 
 def source_entry(profile: object) -> dict:
-    # Only Himalayas has repository evidence of an external search-engine
-    # restriction. A false/default field for another source is configuration,
-    # not proof of a contractual prohibition.
+    # Himalayas permits first-party organic WebPage indexing; its separate
+    # JobPosting/Google Jobs/third-party denials remain explicit.
     explicit = []
     if profile.source == "himalayas":
-        explicit = ["SEARCH_ENGINE_INDEXING_DENIED", "GOOGLE_JOBS_DENIED", "THIRD_PARTY_DISTRIBUTION_DENIED"]
+        explicit = ["GOOGLE_JOBS_DENIED", "THIRD_PARTY_DISTRIBUTION_DENIED"]
     web = configured(bool(profile.web_catalog_allowed))
-    search = "EXPLICIT_RESTRICTION" if profile.source == "himalayas" else configured(bool(profile.search_engine_indexing_allowed))
+    search = "ALLOWED" if profile.source == "himalayas" else configured(bool(profile.search_engine_indexing_allowed))
     google = "EXPLICIT_RESTRICTION" if profile.source == "himalayas" else configured(bool(profile.google_jobs_distribution_allowed))
     return {
         "canonical_source": profile.source,

@@ -68,14 +68,17 @@ _SOURCE_POLICY_FIELDS = (
 )
 
 
-def _fetch_run(session: requests.Session, run_id: str) -> dict[str, Any]:
+def _fetch_run(session: requests.Session, run_id: str, scraper_id: str | None = None) -> dict[str, Any]:
+    params = {
+        "select": "run_id,scraper_id,status,started_at,finished_at,extraction_metrics,error_summary",
+        "run_id": f"eq.{run_id}",
+        "limit": "1",
+    }
+    if scraper_id:
+        params["scraper_id"] = f"eq.{scraper_id}"
     response = session.get(
         f"{api_base()}/scraper_runs", headers=api_headers(),
-        params={
-            "select": "run_id,scraper_id,status,started_at,finished_at,extraction_metrics,error_summary",
-            "run_id": f"eq.{run_id}",
-            "limit": "1",
-        },
+        params=params,
         timeout=30,
     )
     response.raise_for_status()
@@ -98,11 +101,37 @@ def _extract_persisted_ids(run: dict[str, Any]) -> list[str] | None:
         oid = item.get("opportunity_id")
         if not oid or item.get("persistence") != "PERSISTED":
             continue
+        # Promotion outcomes are durable per-item resume markers. A later
+        # scheduled pass processes only rows not yet terminally classified.
+        if item.get("promotion_status") in {"APPLIED", "IDEMPOTENT_REPLAY", "NOT_ELIGIBLE", "UNCHANGED_SKIPPED"}:
+            continue
         s = str(oid)
         if s not in seen:
             seen.add(s)
             result.append(s)
     return result
+
+
+def _ingestion_outcomes(session: requests.Session, run_id: str, ids: list[str]) -> dict[str, list[str]]:
+    """Resolve terminal sink outcomes only for this bounded run page of IDs."""
+    if not ids:
+        return {}
+    quoted = ",".join(f'"{str(value).replace(chr(34), "")}"' for value in ids[:MAX_BATCH_SIZE])
+    response = session.get(
+        f"{api_base()}/opportunity_ingestion_events", headers=api_headers(),
+        params={
+            "select": "opportunity_id,outcome", "run_id": f"eq.{run_id}",
+            "opportunity_id": f"in.({quoted})", "limit": str(MAX_BATCH_SIZE * 10),
+        }, timeout=30,
+    )
+    response.raise_for_status()
+    outcomes: dict[str, list[str]] = {}
+    for item in response.json():
+        opportunity_id = str(item.get("opportunity_id") or "")
+        outcome = str(item.get("outcome") or "")
+        if opportunity_id and outcome:
+            outcomes.setdefault(opportunity_id, []).append(outcome)
+    return outcomes
 
 
 def _source_from_run(run: dict[str, Any]) -> str:
@@ -284,7 +313,7 @@ def _update_run_metrics(
     response = session.patch(
         f"{api_base()}/scraper_runs",
         headers={**api_headers(), "Prefer": "return=minimal"},
-        params={"run_id": f"eq.{run['run_id']}"},
+        params={"run_id": f"eq.{run['run_id']}", "scraper_id": f"eq.{run['scraper_id']}"},
         json={"extraction_metrics": existing_metrics},
         timeout=30,
     )
@@ -295,6 +324,8 @@ def run(
     run_id: str,
     *,
     dry_run: bool,
+    scraper_id: str | None = None,
+    max_opportunities: int | None = None,
     session: requests.Session | None = None,
 ) -> dict[str, Any]:
     session = session or requests.Session()
@@ -304,7 +335,7 @@ def run(
 
     # 1. Fetch the scraper run
     try:
-        scraper_run = _fetch_run(session, run_id)
+        scraper_run = _fetch_run(session, run_id, scraper_id)
     except (requests.HTTPError, ValueError) as exc:
         return {
             "status": "AUTOMATION_BRIDGE_FAILED",
@@ -314,21 +345,59 @@ def run(
         }
 
     # 2. Extract persisted IDs from exact scan_lineage — FAIL CLOSED if missing
-    persisted_ids = _extract_persisted_ids(scraper_run)
-    if persisted_ids is None:
+    all_pending_ids = _extract_persisted_ids(scraper_run)
+    if all_pending_ids is None:
         return {
             "status": "SCAN_LINEAGE_UNAVAILABLE",
             "run_id": run_id,
             "evaluated": 0,
             "auto_promote": 0,
         }
-    if not persisted_ids:
+    if not all_pending_ids:
         return {
-            "status": "NO_PERSISTED_IDS",
+            "status": "NO_PENDING_IDS",
             "run_id": run_id,
             "evaluated": 0,
             "auto_promote": 0,
         }
+    batch_limit = min(max_opportunities or MAX_BATCH_SIZE, MAX_BATCH_SIZE)
+    selected_ids = all_pending_ids[:batch_limit]
+    remaining_ids = max(0, len(all_pending_ids) - len(selected_ids))
+    try:
+        run_outcomes = _ingestion_outcomes(session, run_id, selected_ids)
+    except requests.RequestException as exc:
+        return {"status": "AUTOMATION_BRIDGE_FAILED", "reason": "INGESTION_OUTCOME_LOOKUP_FAILED", "run_id": run_id, "evaluated": 0, "error": str(exc)[:300]}
+    missing_receipts = [oid for oid in selected_ids if oid not in run_outcomes]
+    if missing_receipts:
+        return {"status": "AUTOMATION_BRIDGE_FAILED", "reason": "INGESTION_OUTCOME_MISSING", "run_id": run_id, "evaluated": 0, "missing_receipt_ids": missing_receipts}
+    unchanged_ids = {
+        oid for oid in selected_ids
+        if not any(outcome in {"INSERTED", "UPDATED"} for outcome in run_outcomes[oid])
+        and all(outcome in {"UNCHANGED", "DUPLICATE_IN_RUN"} for outcome in run_outcomes[oid])
+    }
+    invalid_outcomes = {
+        oid: run_outcomes[oid] for oid in selected_ids
+        if not all(outcome in {"INSERTED", "UPDATED", "UNCHANGED", "DUPLICATE_IN_RUN"} for outcome in run_outcomes[oid])
+    }
+    if invalid_outcomes:
+        return {"status": "AUTOMATION_BRIDGE_FAILED", "reason": "INGESTION_OUTCOME_INVALID", "run_id": run_id, "evaluated": 0, "invalid_outcomes": invalid_outcomes}
+    persisted_ids = [oid for oid in selected_ids if oid not in unchanged_ids]
+    skipped_unchanged = {
+        oid: {"promotion_status": "UNCHANGED_SKIPPED", "promotion_reason": "SINK_OUTCOME_UNCHANGED_OR_DUPLICATE"}
+        for oid in unchanged_ids
+    }
+    if not persisted_ids:
+        bridge_summary = {
+            "version": BRIDGE_VERSION, "status": "NO_UNCHANGED_WORK", "run_id": run_id,
+            "evaluated": 0, "pending_after_batch": remaining_ids, "unchanged_skipped": len(unchanged_ids),
+            "runtime_seconds": round(time.monotonic() - started, 2),
+        }
+        if not dry_run:
+            try:
+                _update_run_metrics(session, scraper_run, skipped_unchanged, bridge_summary)
+            except requests.RequestException as exc:
+                return {"status": "AUTOMATION_BRIDGE_FAILED", "reason": "UNCHANGED_SKIP_MARKER_WRITE_FAILED", "run_id": run_id, "evaluated": 0, "error": str(exc)[:300]}
+        return {"status": "NO_PENDING_IDS" if not remaining_ids else "RESUMABLE", "run_id": run_id, "evaluated": 0, "pending_after_batch": remaining_ids, "unchanged_skipped": len(unchanged_ids)}
 
     # 3. Resolve source profile
     raw_source = _source_from_run(scraper_run)
@@ -485,7 +554,7 @@ def run(
             promo_counts["dry_run"] += 1
 
     # 13. Enrich scan_lineage items with automation results
-    enriched_items: dict[str, dict[str, Any]] = {}
+    enriched_items: dict[str, dict[str, Any]] = dict(skipped_unchanged)
     for oid, evaluation in evaluations.items():
         row = rows_by_id[oid]
         result = promotion_results.get(oid, {})
@@ -501,10 +570,12 @@ def run(
 
     bridge_summary: dict[str, Any] = {
         "version": BRIDGE_VERSION,
-        "status": "DRY_RUN" if dry_run else "COMPLETED",
+        "status": "DRY_RUN" if dry_run else "RESUMABLE" if remaining_ids else "COMPLETED",
         "run_id": run_id,
         "execution_id": execution_id,
         "evaluated": len(evaluations),
+        "pending_after_batch": remaining_ids,
+        "unchanged_skipped": len(unchanged_ids),
         "auto_promote": decision_counts.get(AUTO_PROMOTE, 0),
         "human_review": decision_counts.get(HUMAN_REVIEW, 0),
         "hold": decision_counts.get(HOLD, 0),
@@ -533,10 +604,12 @@ def run(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-id", required=True, help="scraper_runs.run_id")
+    parser.add_argument("--scraper-id", help="Exact scraper_runs.scraper_id when a workflow run contains multiple producers")
     parser.add_argument("--dry-run", action="store_true", help="No writes to DB")
+    parser.add_argument("--max-opportunities", type=int, help="Bound one resumable batch")
     args = parser.parse_args()
     load_local_env()
-    result = run(args.run_id, dry_run=args.dry_run)
+    result = run(args.run_id, dry_run=args.dry_run, scraper_id=args.scraper_id, max_opportunities=args.max_opportunities)
     print("CVITAE_BRIDGE_RESULT=" + json.dumps(result, ensure_ascii=False, sort_keys=True))
     status = result.get("status", "")
     if status in {"SCAN_LINEAGE_UNAVAILABLE", "AUTOMATION_BRIDGE_FAILED"}:

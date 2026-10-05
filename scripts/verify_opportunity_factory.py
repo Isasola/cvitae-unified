@@ -159,7 +159,7 @@ assert lineage_summary.inserted == 1 and lineage_summary.lineage_written == 1
 lineage_event = lineage_session.posts[-1][0]
 assert lineage_event["opportunity_id"] == "opportunity-1"
 assert lineage_event["canonical_source"] == "unjobs" and lineage_event["producer_id"] == "unjobs_scraper"
-assert lineage_event["run_id"] == "run-fixture" and lineage_event["trace_state"] == "TRACED"
+assert lineage_event["run_id"] == "run-fixture" and lineage_event["trace_state"] == "TRACED", lineage_event
 assert lineage_event["evidence"]["is_source_observation"] is False
 
 unattributed_sink = OpportunitySink("https://fixture.supabase.co", "fixture-key")
@@ -170,7 +170,8 @@ with patch.dict(os.environ, {"CVITAE_SCRAPER_ID": "", "CVITAE_SCRAPER_RUN_ID": "
 unattributed_event = unattributed_session.posts[-1][0]
 assert unattributed_event["opportunity_id"] == "opportunity-1"
 assert unattributed_event["trace_state"] == "INCOMPLETE"
-assert unattributed_event["reason"] in {"SCRAPER_IDENTITY_NOT_SUPPLIED", "SCRAPER_RUN_ID_NOT_SUPPLIED"}
+assert "SCRAPER_IDENTITY_NOT_SUPPLIED" in unattributed_event["trace_reason"] or "SCRAPER_RUN_ID_NOT_SUPPLIED" in unattributed_event["trace_reason"]
+assert unattributed_event["reason"] is None, "trace incompleteness is separate from business outcome reason"
 
 workflow = (ROOT / ".github/workflows/refresh_embeddings.yml").read_text(encoding="utf-8")
 migration = (ROOT / "supabase/migrations/202609100001_admin_atomic_factory_foundation.sql").read_text(encoding="utf-8")
