@@ -3,14 +3,13 @@ import path from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import { buildEffectiveSeoInventory } from '../src/lib/seo-inventory.ts'
 import type { SourcePolicyRow } from '../src/lib/effective-source-policy.ts'
-import { fetchAllPages } from '../src/lib/paged-fetch.js'
+import { seoUniversePages } from '../src/lib/seo-universe-fetch.js'
 
 type Input = { opportunities: Record<string, any>[]; policies: SourcePolicyRow[] }
 const root = path.resolve(import.meta.dirname, '..')
 const output = path.join(root, 'generated', 'public-seo-inventory.json')
 const policyOutput = path.join(root, 'generated', 'source-distribution-policy-snapshot.json')
 const fixture = process.env.SEO_INVENTORY_FIXTURE
-const PAGE_SIZE = 1000
 const OPPORTUNITY_COLUMNS = 'id,slug,title,organization,description,location,city,department,country_code,eligible_countries,eligible_regions,remote_scope,tags,deadline,application_url,source_url,source,opportunity_type,opportunity_kind,type,created_at,updated_at,is_active,verification_status,catalog_eligible,seo_eligible,seo_status,deleted_at,archived_at'
 
 async function input(): Promise<Input> {
@@ -23,11 +22,8 @@ async function input(): Promise<Input> {
   const db = createClient(url, key)
   const { data: policies, error: policyError } = await db.rpc('get_source_distribution_policy')
   if (policyError) throw policyError
-  const opportunities = await fetchAllPages<Record<string, any>>(PAGE_SIZE, async (offset, size) => {
-    const { data, error } = await db.from('opportunity_seo_universe').select(OPPORTUNITY_COLUMNS).not('slug','is',null).order('updated_at', { ascending:false }).order('id', { ascending:true }).range(offset, offset + size - 1)
-    if (error) throw error
-    return data || []
-  })
+  const opportunities: Record<string, any>[] = []
+  for await (const page of seoUniversePages(db, OPPORTUNITY_COLUMNS)) opportunities.push(...page)
   return { opportunities, policies: policies || [] }
 }
 
