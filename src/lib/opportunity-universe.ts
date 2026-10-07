@@ -1,8 +1,7 @@
-import { canonicalSource, effectiveSourceSwitches } from './effective-source-policy'
+import { canonicalSource, effectiveSourceSwitches, registeredSourceOperationalDefault } from './effective-source-policy'
 import { catalogReadiness, deadlineLifecycle, seoContentReadinessIndependentOfLifecycle, seoReadiness } from './opportunity-truth'
 import { hasProfessionalEvidence } from '../../shared/professional-evidence'
 import { SOURCE_PERMISSION_DIMENSIONS, sourcePermissionDimensionTruth, sourcePermissionTruth } from './source-permission-truth'
-import { isQualifyingTemporaryLegacySeoRow, temporaryLegacySeoExceptionState } from './temporary-legacy-seo-exception'
 
 export type UniverseState = 'READY' | 'NOT_READY' | 'UNKNOWN'
 export type LifecycleState = 'ACTIVE_VALID' | 'EXPIRED' | 'DELETED' | 'ARCHIVED' | 'HARD_DEAD' | 'SUPERSEDED_DUPLICATE' | 'INACTIVE_VALID' | 'STALE_DERIVED_STATE' | 'LIFECYCLE_UNKNOWN'
@@ -114,39 +113,29 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
   const source_matching_operational_state: PermissionState = globalPolicyConflict || aliasConflicts.includes('matching_enabled') || matchingPolicyUnknown ? 'UNKNOWN' : matchingValues.has('false') ? 'DENIED' : 'ALLOWED'
   const source_matching_operational_reason = globalPolicyConflict || aliasConflicts.includes('matching_enabled') ? 'SOURCE_POLICY_ALIAS_CONFLICT' : matchingPolicyUnknown ? 'SOURCE_MATCHING_SWITCH_UNKNOWN' : source_matching_operational_state === 'DENIED' ? 'SOURCE_MATCHING_DISABLED' : 'SOURCE_MATCHING_ENABLED'
   const source_operational_state = globalPolicyConflict ? 'CONFLICT' : policyUnknown ? 'UNKNOWN' : policy?.is_enabled ? 'ENABLED' : 'DISABLED'
-  const source_operational_reason = globalPolicyConflict ? 'SOURCE_POLICY_ALIAS_CONFLICT' : policyUnknown ? 'SOURCE_POLICY_STATE_UNKNOWN' : source_operational_state === 'ENABLED' ? 'SOURCE_OPERATIONALLY_ENABLED' : 'SOURCE_DISABLED'
-  const final_matching_state: UniverseState = matching_row_state !== 'READY' ? matching_row_state : sourcePermission.state === 'DENIED' || source_matching_operational_state === 'DENIED' || source_operational_state === 'DISABLED' ? 'NOT_READY' : sourcePermission.state === 'UNKNOWN' || source_matching_operational_state === 'UNKNOWN' || source_operational_state === 'UNKNOWN' || source_operational_state === 'CONFLICT' ? 'UNKNOWN' : 'READY'
+  const source_operational_reason = globalPolicyConflict ? 'SOURCE_POLICY_ALIAS_CONFLICT' : policyUnknown ? 'SOURCE_POLICY_STATE_UNKNOWN' : !registeredSourceOperationalDefault(source) ? 'NO_EXECUTABLE_PRODUCER' : source_operational_state === 'ENABLED' ? 'SOURCE_OPERATIONALLY_ENABLED' : 'SOURCE_DISABLED'
+  const final_matching_state: UniverseState = matching_row_state !== 'READY' ? matching_row_state : source_matching_operational_state === 'DENIED' || source_operational_state === 'DISABLED' ? 'NOT_READY' : source_matching_operational_state === 'UNKNOWN' || source_operational_state === 'UNKNOWN' || source_operational_state === 'CONFLICT' ? 'UNKNOWN' : 'READY'
   const catalogRow = catalogReadiness({ ...row, is_active: lifecycleReady, verification_status: lifecycleReady ? 'verified' : row.verification_status }, now)
   const seoRow = seoReadiness({ ...row, is_active: lifecycleReady, verification_status: lifecycleReady ? 'verified' : row.verification_status }, now)
   const catalogPermission = permissionResolver(source, 'catalog')
   const seoPermission = permissionResolver(source, 'seo')
   const alertPermission = permissionResolver(source, 'alerts')
-  const consumerState = (ready: boolean, permissionState: PermissionState, switchState: PermissionState): UniverseState => !lifecycleReady ? (lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE' ? 'UNKNOWN' : 'NOT_READY') : !ready ? 'NOT_READY' : source_operational_state === 'UNKNOWN' || source_operational_state === 'CONFLICT' ? 'UNKNOWN' : source_operational_state === 'DISABLED' || permissionState === 'DENIED' || switchState === 'DENIED' ? 'NOT_READY' : permissionState === 'ALLOWED' && switchState === 'ALLOWED' ? 'READY' : 'UNKNOWN'
+  const consumerState = (ready: boolean, _permissionState: PermissionState, switchState: PermissionState): UniverseState => !lifecycleReady ? (lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE' ? 'UNKNOWN' : 'NOT_READY') : !ready ? 'NOT_READY' : source_operational_state === 'UNKNOWN' || source_operational_state === 'CONFLICT' ? 'UNKNOWN' : source_operational_state === 'DISABLED' || switchState === 'DENIED' ? 'NOT_READY' : switchState === 'ALLOWED' ? 'READY' : 'UNKNOWN'
   const catalog_state = consumerState(catalogRow.state === 'READY', catalogPermission.state, catalogOperational)
-  const legacySeoException = temporaryLegacySeoExceptionState(source, now)
   const seo_row_state: UniverseState = !lifecycleReady ? (lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE' ? 'UNKNOWN' : 'NOT_READY') : seoRow.state === 'READY' ? 'READY' : 'NOT_READY'
   const seo_row_reason = !lifecycleReady ? lifecycle_reason : seoRow.state === 'READY' ? 'SEO_ROW_READY' : seoRow.reasons[0] || 'SEO_ROW_NOT_READY'
-  const legacySeoExceptionApplied = source === 'computrabajo'
-    && legacySeoException.state === 'ACTIVE'
-    && seoPermission.state === 'DENIED'
-    && seo_row_state === 'READY'
-    && isQualifyingTemporaryLegacySeoRow(row, source)
-    && source_operational_state === 'ENABLED'
-    && !aliasConflicts.includes('seo_enabled')
-    && !seoValues.has('false')
   const seo_state: UniverseState = seo_row_state !== 'READY' ? seo_row_state
-    : seoPermission.state === 'DENIED' && !legacySeoExceptionApplied ? 'NOT_READY'
-    : seoValues.size === 1 && seoValues.has('false') ? 'NOT_READY'
-    : source_operational_state === 'UNKNOWN' || source_operational_state === 'CONFLICT' ? 'UNKNOWN'
+    : seoOperational === 'DENIED' ? 'NOT_READY'
+    : seoOperational === 'UNKNOWN' || source_operational_state === 'UNKNOWN' || source_operational_state === 'CONFLICT' ? 'UNKNOWN'
     : source_operational_state === 'DISABLED' ? 'NOT_READY'
     : 'READY'
   const seo_effective_reason = seo_row_state !== 'READY' ? seo_row_reason
-    : legacySeoExceptionApplied ? 'TEMP_LEGACY_SEO_EXCEPTION_APPLIED'
-    : seoPermission.state === 'DENIED' ? 'SOURCE_SEO_PERMISSION_DENIED'
-    : seoValues.size === 1 && seoValues.has('false') ? 'SOURCE_SEO_OPERATOR_DISABLED'
+    : seoOperational === 'DENIED' ? 'SOURCE_SEO_OPERATOR_DISABLED'
+    : aliasConflicts.includes('seo_enabled') ? 'SOURCE_POLICY_ALIAS_CONFLICT'
+    : seoOperational === 'UNKNOWN' ? 'SOURCE_SEO_SWITCH_UNKNOWN'
     : source_operational_state === 'CONFLICT' ? 'SOURCE_POLICY_ALIAS_CONFLICT'
     : source_operational_state === 'UNKNOWN' ? 'SOURCE_OPERATIONAL_STATE_UNKNOWN'
-    : source_operational_state === 'DISABLED' ? 'SOURCE_DISABLED'
+    : source_operational_state === 'DISABLED' ? source_operational_reason
     : 'SEO_EFFECTIVE_READY'
   const seoContent = seoContentReadinessIndependentOfLifecycle(row)
   const lifecycleUnresolved = lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE'
@@ -170,14 +159,11 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
   const unresolved_dimensions: string[] = []
   if (lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE') unresolved_dimensions.push('LIFECYCLE')
   if (matching_row_state === 'UNKNOWN') unresolved_dimensions.push('ROW_MATCH_READINESS')
-  if (sourcePermission.state === 'UNKNOWN') unresolved_dimensions.push('SOURCE_MATCH_PERMISSION')
   if (source_matching_operational_state === 'UNKNOWN') unresolved_dimensions.push('SOURCE_MATCHING_SWITCH')
   if (source_operational_state === 'UNKNOWN') unresolved_dimensions.push('SOURCE_OPERATIONAL_STATE')
   if (source_operational_state === 'CONFLICT') unresolved_dimensions.push('SOURCE_POLICY_ALIAS_CONFLICT:is_enabled')
   if (source_matching_operational_state === 'UNKNOWN' && aliasConflicts.includes('matching_enabled')) unresolved_dimensions.push('SOURCE_POLICY_ALIAS_CONFLICT:matching_enabled')
-  if (lifecycleReady && catalogRow.state === 'READY' && catalogPermission.state === 'UNKNOWN') unresolved_dimensions.push('CATALOG_PERMISSION')
   if (lifecycleReady && catalogRow.state === 'READY' && catalogOperational === 'UNKNOWN') unresolved_dimensions.push(aliasConflicts.includes('catalog_enabled') ? 'SOURCE_POLICY_ALIAS_CONFLICT:catalog_enabled' : 'CATALOG_SWITCH_UNKNOWN')
-  if (professional && alertPermission.state === 'UNKNOWN' && lifecycleReady) unresolved_dimensions.push('ALERT_PERMISSION')
   if (professional && alertsOperational === 'UNKNOWN' && lifecycleReady) unresolved_dimensions.push(aliasConflicts.includes('alerts_enabled') ? 'SOURCE_POLICY_ALIAS_CONFLICT:alerts_enabled' : 'ALERT_SWITCH_UNKNOWN')
   const source_permission_unknown_dimensions = SOURCE_PERMISSION_DIMENSIONS.filter(dimension => sourcePermissionDimensionTruth(source, dimension).state === 'UNKNOWN')
   return {
@@ -193,10 +179,10 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
       source, observation_id: observation?.id ?? null, observation_status: observation?.identity_status ?? null, observation_http_status: observation?.http_status ?? null, observation_at: observation?.observed_at ?? null,
       source_policy_rows: sourcePolicies.map(item => item.source), source_policy_alias_conflicts: aliasConflicts, source_permission: sourcePermission.provenance,
       consumer_switch_overrides: policy?.consumer_switch_overrides || {},
-      switch_authority: 'CANONICAL_PERMISSION_WITH_ADMIN_POLICY_EVENTS',
+      first_party_permission_role: 'ADVISORY_ONLY',
+      switch_authority: 'REGISTRY_OPERATION_WITH_ADMIN_POLICY_EVENTS',
       consumer_permission_states: { catalog: permissionResolver(source, 'catalog').state, matching: sourcePermission.state, alerts: permissionResolver(source, 'alerts').state, seo: permissionResolver(source, 'seo').state },
       consumer_switch_states: { catalog: catalogOperational, matching: source_matching_operational_state, alerts: alertsOperational, seo: seoOperational },
-      temporary_legacy_seo_exception: source === 'computrabajo' ? { ...legacySeoException, applied: legacySeoExceptionApplied, permission_state: seoPermission.state, disposition: legacySeoExceptionApplied ? 'QUALIFYING_LEGACY_SEO_ROW_ONLY' : 'NOT_APPLIED' } : null,
     },
   }
 }
@@ -250,8 +236,6 @@ export function summarizeOpportunityUniverse(decisions: OpportunityUniverseDecis
       : item.matching_row_state === 'UNKNOWN' ? 'MATCH_ROW_UNKNOWN'
       : item.source_operational_state === 'CONFLICT' ? 'SOURCE_POLICY_ALIAS_CONFLICT'
       : item.source_policy_alias_conflicts.includes('matching_enabled') ? 'SOURCE_POLICY_ALIAS_CONFLICT'
-      : item.source_matching_state === 'DENIED' ? 'SOURCE_MATCH_DENIED'
-      : item.source_matching_state === 'UNKNOWN' ? 'SOURCE_MATCH_UNKNOWN'
       : item.source_matching_operational_state === 'DENIED' ? 'SOURCE_MATCHING_DISABLED'
       : item.source_matching_operational_state === 'UNKNOWN' ? 'SOURCE_MATCHING_UNKNOWN'
       : item.source_operational_state === 'DISABLED' ? 'SOURCE_DISABLED'

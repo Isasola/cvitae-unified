@@ -14,9 +14,12 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scrapers"))
 
 from scrapers.opportunity_sink import OpportunitySink
 from scripts.opportunity_factory import FactoryClient, seal, should_generate_embedding
+from scrapers.source_adapters import RunLineageWriter
+from himalayas_scraper import adapt_himalayas_job
 
 
 class Response:
@@ -25,6 +28,9 @@ class Response:
 
     def raise_for_status(self) -> None:
         return None
+
+    def json(self):
+        return [{"id": "future-himalayas-factual"}]
 
 
 class SinkSession:
@@ -112,8 +118,43 @@ def main() -> int:
     }
     factory.commit(selected[0], snapshot, None)
     assert factory_session.posts and factory_session.posts[0]["p_status"] == "ready"
+    # Same Sink and factual adapter boundary; no source permission is an
+    # ingestion kill. All transports below are in-memory, never HTTP requests.
+    adapter = adapt_himalayas_job({"guid": "https://himalayas.app/jobs/fixture-factual-native-1",
+        "applicationLink": raw["application_url"], "title": raw["title"], "companyName": raw["organization"],
+        "description": raw["description"], "locationRestrictions": [{"alpha2":"PY", "name":"Paraguay"}]}, source_status=200)
+    factual_row = {**raw, "id": "future-himalayas-factual", "source": adapter.source,
+        "title": adapter.title, "organization": adapter.organization, "description": adapter.description,
+        "location": adapter.location, "country_code": adapter.country_code,
+        "remote_scope": adapter.remote_scope, "eligible_countries": adapter.eligible_countries,
+        "eligible_regions": adapter.eligible_regions, "source_url": adapter.source_url, "application_url": adapter.apply_url}
+    factual_sink = OpportunitySink("https://fixture.supabase.co", "fixture-key")
+    factual_transport = SinkSession()
+    factual_sink.session = factual_transport
+    os.environ["CVITAE_SCRAPER_RUN_ID"] = "fixture-factual-run"
+    os.environ["CVITAE_SCRAPER_ID"] = "fixture-factual-producer"
+    os.environ["CVITAE_SOURCE_SCAN_REQUEST_ID"] = ""
+    factual_sink._existing_urls = lambda urls: {url: {**factual_transport.posts[0][0], "id": "future-himalayas-factual"} for url in urls} if factual_transport.posts else {}
+    factual_summary = factual_sink.upsert([factual_row], adapter_version=adapter.adapter_version, cleaner_id="source_adapters.clean")
+    assert factual_summary.inserted == 1
+    assert factual_summary.lineage_traced == 1 and factual_summary.lineage_failed == 0
+    ingestion_event = factual_transport.posts[1][0]
+    assert ingestion_event["trace_state"] == "TRACED" and ingestion_event["opportunity_id"] == "future-himalayas-factual"
+    class LineageSession:
+        def __init__(self): self.posts = []
+        def get(self, *_args, **_kwargs): return Response()
+        def post(self, url, **kwargs):
+            self.posts.append((url, kwargs["json"]))
+            return Response()
+    transport = LineageSession()
+    os.environ["CVITAE_SCRAPER_RUN_ID"] = "fixture-factual-run"
+    os.environ["CVITAE_SOURCE_SCAN_REQUEST_ID"] = ""
+    lineage = RunLineageWriter("https://fixture.supabase.co", "fixture-key", transport).record([adapter])
+    observations = [payload[0] for url, payload in transport.posts if url.endswith("opportunity_source_observations")]
+    assert lineage["items"][0]["observation"]["state"] == "PERSISTED" and len(observations) == 1
     print(json.dumps({
         "row": persisted,
+        "active_flow": {"row": factual_transport.posts[0][0], "ingestion_event": ingestion_event, "observation": observations[0], "lineage": lineage["items"][0]},
         "sink": {"found": summary.found, "valid": summary.valid, "unique": summary.unique, "duplicates_in_run": summary.duplicates_in_run, "inserted": summary.inserted},
         "factory": {"selected": len(selected), "status": status, "embedding_state": "NOT_REQUIRED_PRE_TRIGGER", "commit_called": len(factory_session.posts), "db_policy_trigger_simulated": False},
     }, ensure_ascii=False))

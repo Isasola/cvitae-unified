@@ -1,4 +1,4 @@
-import { sourcePermissionDimensionTruth } from '../../../src/lib/source-permission-truth'
+import { sourcePermissionDimensionTruth, sourcePermissionEvidenceClass } from '../../../src/lib/source-permission-truth'
 
 export type GateStatus = 'PASS' | 'WARNING' | 'FAIL' | 'NOT_APPLICABLE' | 'NOT_EVALUATED'
 
@@ -71,7 +71,8 @@ export function evaluateEightGates(profile: any, rows: any[], latestRun: any, ob
   const permission = (dimension: Parameters<typeof sourcePermissionDimensionTruth>[1]) => sourcePermissionDimensionTruth(profile.canonical_source, dimension)
   const surface = (dimension: Parameters<typeof sourcePermissionDimensionTruth>[1], label: string, operational?: boolean | null) => {
     const evidence = permission(dimension)
-    return { surface: label, state: evidence.state, reason: evidence.reason, provenance: evidence.provenance,
+    return { surface: label, permission_role: ['catalog','matching','alerts','seo_index'].includes(dimension) ? 'ADVISORY_FIRST_PARTY' : 'SPECIFIC_DIMENSION', state: evidence.state, reason: evidence.reason, provenance: evidence.provenance,
+      evidence_class: sourcePermissionEvidenceClass(evidence),
       operational_state: operational === true ? 'ENABLED' : operational === false ? 'DISABLED' : 'UNKNOWN' }
   }
   const attribution = permission('attribution_requirement')
@@ -99,6 +100,6 @@ export function evaluateEightGates(profile: any, rows: any[], latestRun: any, ob
     { surfaces, allowed, restricted, permission_unknown: undefinedPolicies },
     { blocked_by_gate: priorUnconfirmed ? priorUnconfirmedIndex + 1 : null, blocked_by_reason: priorUnconfirmed?.reason_code || null }, null,
   )
-  const context = { source: profile.canonical_source, run_id: latestRun?.run_id || null, opportunity_id: null, adapter_version: latestRun?.adapter_version || profile.adapter_version, semantic_version: profile.semantic_version }
+  const context = { source: profile.canonical_source, run_id: latestRun?.run_id || null, opportunity_id: null, adapter_version: latestRun?.adapter_version || 'NOT_REPORTED', expected_adapter_version: profile.adapter_version, semantic_version: profile.semantic_version }
   return { contract: 'source-intelligence:eight-gates:v1', ...context, gates: [discovery, detail, filters, quality, persistence, health, automation, distribution].map(value => ({ ...value, ...context })) }
 }

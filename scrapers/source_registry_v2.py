@@ -14,6 +14,8 @@ from __future__ import annotations
 import re
 import hashlib
 import json
+import ast
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
@@ -159,6 +161,66 @@ def certification(profile: SourceProfile) -> dict:
     }
 
 
+@lru_cache(maxsize=1)
+def executable_producers() -> dict[str, tuple[str, ...]]:
+    """Repository entrypoints + exact emitted identities; never imports/runs a scraper.
+
+    A workflow ID is a producer identity only when its script actually exists
+    and has a main entrypoint. Literal aliases emitted by a shared script belong
+    to their canonical profile, not independent producers. Metadata alone is
+    insufficient (e.g. googlejobs_v3 actually emits googlejobs -> googlejobs_v2).
+    """
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/scrapers.yml").read_text(encoding="utf-8")
+    bindings: dict[str, set[str]] = {}
+    for run_id, path in re.findall(r"run_scraper_monitored\.py\s+(\S+)\s+\S+\s+(scrapers/[^\s]+\.py)", workflow):
+        bindings.setdefault(path, set()).add(re.sub(r"(?:_scraper|_scrapper)$", "", run_id))
+    for row in json.loads((root / "scrapers/source_registry.json").read_text(encoding="utf-8"))["sources"]:
+        if row.get("script"):
+            bindings.setdefault(row["script"], set()).add(row["source_id"])
+    # Direct CLI producers may predate the workflow/JSON entrypoint list.
+    # Only main implementations with exact emitted identities count; filenames
+    # or aliases alone never activate a profile.
+    for target in (root / "scrapers").glob("*.py"):
+        bindings.setdefault(target.relative_to(root).as_posix(), set())
+    result: dict[str, set[str]] = {}
+    for path, declared in bindings.items():
+        target = (root / path).resolve()
+        if not target.is_relative_to(root.resolve()) or not target.is_file():
+            continue
+        tree = ast.parse(target.read_text(encoding="utf-8-sig"))
+        if not any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "main" for n in ast.walk(tree)):
+            continue
+        emitted: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                emitted.update(v.value for k, v in zip(node.keys, node.values)
+                    if isinstance(k, ast.Constant) and k.value == "source" and isinstance(v, ast.Constant) and isinstance(v.value, str))
+            elif isinstance(node, ast.keyword) and node.arg == "source" and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                emitted.add(node.value.value)
+            elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                if any(isinstance(t, ast.Name) and t.id in ("SOURCE", "SOURCE_ID", "source") for t in node.targets):
+                    emitted.add(node.value.value)
+        canonical = set()
+        for value in emitted:
+            try: canonical.add(resolve_emitted_source(value).source)
+            except ValueError: continue
+        # Workflow family bindings cover dynamic emitted IDs. An explicit
+        # literal identity supersedes a misleading workflow/filename alias.
+        if not canonical:
+            for value in declared:
+                try: canonical.add(resolve_emitted_source(value).source)
+                except ValueError: continue
+        for source in canonical:
+            result.setdefault(source, set()).add(path)
+    return {source: tuple(sorted(paths)) for source, paths in result.items()}
+
+
+def operational_default(profile: SourceProfile) -> bool:
+    """Executable producer defaults ACTIVE; manual intent is a separate DB audit."""
+    return profile.source in executable_producers()
+
+
 def runtime_projection(profile: SourceProfile) -> dict:
     """Return the policy-only, durable DB mirror for one SourceProfile.
 
@@ -200,6 +262,20 @@ def registry_snapshot() -> dict:
         item["contract_covered"] = bool(profile.source_family and profile.semantic_version and profile.opportunity_kinds or profile.adapter is None)
         item["freshness_ttl_hours"] = profile.freshness_ttl_hours
         item["active"] = profile.active
+        entrypoints = executable_producers().get(profile.source, ())
+        item["producer_execution"] = {"state": "EXECUTABLE_PRODUCER" if entrypoints else "NO_EXECUTABLE_PRODUCER",
+            "entrypoints": list(entrypoints), "operational_default": "ACTIVE" if entrypoints else "INACTIVE"}
+        if not entrypoints:
+            root = Path(__file__).resolve().parents[1]
+            # A versioned workflow profile may name a real script whose emitted
+            # identity belongs to another canonical producer. Diagnose that
+            # distinction instead of claiming that the script itself is absent.
+            declared = {path for run_id, path in re.findall(r"run_scraper_monitored\.py\s+(\S+)\s+\S+\s+(scrapers/[^\s]+\.py)",
+                (root / ".github/workflows/scrapers.yml").read_text(encoding="utf-8"))
+                if re.sub(r"(?:_scraper|_scrapper)$", "", run_id) == profile.source}
+            owners = sorted(source for source, paths in executable_producers().items() if declared.intersection(paths))
+            item["producer_execution"].update({"reason": "ENTRYPOINT_IDENTITY_BELONGS_TO_ANOTHER_PROFILE" if owners else "NO_IMPLEMENTED_MAIN_ENTRYPOINT",
+                "canonical_producer_owners": owners})
         item["refresh_capability"] = {
             "scout": profile.scout,
             "discovery_strategy": profile.discovery_strategy,

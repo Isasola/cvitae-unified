@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from run_opportunity_enrichment_batch import api_base, api_headers, load_local_env
 from source_cleaners import PROFILES
-from source_registry_v2 import runtime_projection
+from source_registry_v2 import runtime_projection, operational_default
 
 PROJECTION_FIELDS = tuple(runtime_projection(next(iter(PROFILES.values()))).keys())
 PROJECTION_FIELDS = tuple(field for field in PROJECTION_FIELDS if field != "source") + ("registry_synced_at",)
@@ -158,11 +158,12 @@ def apply(rows: list[dict[str, Any]], *, session: requests.Session | None = None
             continue
         if row["action"] == "INSERT":
             # Only DB-contract defaults plus registry-owned projection fields.
-            # New rows start disabled/review: presence never implies health or
-            # publication eligibility.
+            # Executable sources operate independently of trust/publication/AUTO.
+            # Registry-only candidates remain unavailable until implemented.
             payload = {
                 **row["desired"], "display_name": row["source"].replace("_", " ").title(),
-                "trust_level": "review", "auto_verify": False, "is_enabled": False,
+                "trust_level": "review", "auto_verify": False,
+                "is_enabled": operational_default(PROFILES[row["source"]]) if row["source"] in PROFILES else False,
             }
             response = session.post(
                 f"{api_base()}/opportunity_sources", headers={**api_headers(), "Prefer": "return=representation"},

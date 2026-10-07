@@ -67,7 +67,7 @@ assert.equal(unknown.policyFound, false)
 assert.equal(unknown.catalog.allowed, false)
 assert.equal(unknown.matching.allowed, false)
 assert.equal(unknown.seo.allowed, false)
-assert.ok(unknown.catalog.reasons.includes('SOURCE_CAPABILITY_UNKNOWN'))
+assert.ok(unknown.catalog.permissionReasons.includes('SOURCE_CAPABILITY_UNKNOWN')); assert.ok(unknown.catalog.reasons.includes('NO_EXECUTABLE_PRODUCER'))
 assert.ok(unknown.matching.reasons.includes('SOURCE_SWITCH_UNKNOWN'))
 
 console.log(JSON.stringify({

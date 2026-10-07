@@ -36,6 +36,8 @@ assert.equal(himalayas.gates[6].reason_code, 'AUTO_DISABLED_BY_POLICY')
 assert.equal(himalayas.gates[7].status, 'WARNING')
 assert.equal(himalayas.gates[7].reason_code, 'MIXED_PERMISSION_STATES')
 assert.equal(himalayas.gates[7].metrics.surfaces.organic_seo.state, 'ALLOWED')
+assert.equal(himalayas.gates[7].metrics.surfaces.organic_seo.permission_role,'ADVISORY_FIRST_PARTY')
+assert.equal(himalayas.gates[7].metrics.surfaces.google_jobs.permission_role,'SPECIFIC_DIMENSION')
 assert.equal(himalayas.gates[7].metrics.surfaces.google_jobs.state, 'DENIED')
 assert.equal(himalayas.gates[7].metrics.surfaces.third_party_distribution.state, 'DENIED')
 

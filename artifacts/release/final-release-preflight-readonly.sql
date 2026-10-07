@@ -19,7 +19,7 @@ WITH manifest AS (
     {
       "version": "202610040001",
       "name": "source_switch_wiring",
-      "sha256": "782806f595b491d114591b321ac5e51d23421e7a47b79412f95eaddbffabe383"
+      "sha256": "3055782d986c1043697adb5b7ca70376efef94ab41d3bf9b3fd0644a82e59b0c"
     },
     {
       "version": "202610040002",
@@ -1182,6 +1182,18 @@ WITH manifest AS (
     },
     {
       "schema": "public",
+      "name": "apply_opportunity_source_trust",
+      "input_names": [],
+      "input_types": [],
+      "result": "trigger",
+      "setof": false,
+      "outputs": [],
+      "defaults": 0,
+      "action": "REPLACE_OR_NEW",
+      "provided_by": "202610040001"
+    },
+    {
+      "schema": "public",
       "name": "catalog_search_text",
       "input_names": [
         "p_title",
@@ -1400,17 +1412,17 @@ WITH manifest AS (
     {
       "migration": "202610040001",
       "name": "public.canonical_opportunity_source_policy",
-      "body_md5": "3c85c1b899f3c2eea64e9f12889caddd"
+      "body_md5": "7f52e45c93bafdc467d2a4ce13dede9d"
     },
     {
       "migration": "202610040001",
       "name": "public.admin_update_source_policy_atomic",
-      "body_md5": "a7b8a4c69c402ec2d37abc3a16d34497"
+      "body_md5": "0af2c9b96ecb61368d2a42ceda9ff908"
     },
     {
       "migration": "202610040001",
       "name": "public.get_source_distribution_policy",
-      "body_md5": "03b64fec4330af1e1fe7a949576bb134"
+      "body_md5": "645545197318c563f2d794784f08fe6f"
     },
     {
       "migration": "202610040001",
@@ -1430,7 +1442,7 @@ WITH manifest AS (
     {
       "migration": "202610040001",
       "name": "public.opportunity_universe_decision",
-      "body_md5": "bcba67248d71a06d0372a815b2976907"
+      "body_md5": "e332ff16fe93f33d20cc2ce8db8900db"
     },
     {
       "migration": "202610040001",
@@ -1440,12 +1452,17 @@ WITH manifest AS (
     {
       "migration": "202610040001",
       "name": "public.refresh_due_opportunity_universe",
-      "body_md5": "64890d0f859dae6786273c5974a84148"
+      "body_md5": "68a10c8087ac4b4446cef0cd5821e21a"
     },
     {
       "migration": "202610040001",
       "name": "public.get_opportunity_universe_row",
-      "body_md5": "69e599fd461a3a795fa68449a273106a"
+      "body_md5": "f4300673224b2b0bfc02b7eeda23688d"
+    },
+    {
+      "migration": "202610040001",
+      "name": "public.apply_opportunity_source_trust",
+      "body_md5": "4a47ecd3c19ae16e1d5746160dd82fdb"
     },
     {
       "migration": "202610040002",

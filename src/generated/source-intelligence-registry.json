@@ -7,7 +7,7 @@
   "emitted_aliases": 148,
   "pending_certification": 103,
   "profiles": 105,
-  "registry_hash": "abae925e104b2235eaeefbbca1fa2f4bb6b2f01f1cc56e70bcd111fcd2539191",
+  "registry_hash": "fccedd5ec917f360dae38fe63404d40a36520b52f1fc1c16dd16c65424415db3",
   "schema_version": "source-intelligence-registry:v2",
   "sources": [
     {
@@ -32,6 +32,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/unjobs_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": "UNJobsAdapter",
         "cleaner": "UNJobsCleaner",
@@ -87,6 +94,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/himalayas_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": "HimalayasAdapter",
         "cleaner": "HimalayasCleaner",
@@ -122,6 +136,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/talentcom_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": "TalentAdapter",
         "cleaner": "TalentCleaner",
@@ -157,6 +178,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/weworkremotely_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": "WWRAdapter",
         "cleaner": "WWRCleaner",
@@ -192,6 +220,14 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/empleapy_mtess_scraper.py",
+          "scrapers/scrapper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -226,6 +262,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/mef_inapp_becas_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -260,6 +303,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "canonical_producer_owners": [],
+        "entrypoints": [],
+        "operational_default": "INACTIVE",
+        "reason": "NO_IMPLEMENTED_MAIN_ENTRYPOINT",
+        "state": "NO_EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -294,6 +344,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/mitic_opportunities_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -328,6 +385,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/innovandopy_startups_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -362,6 +426,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/mic_portal_emprendedor_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -396,6 +467,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "canonical_producer_owners": [],
+        "entrypoints": [],
+        "operational_default": "INACTIVE",
+        "reason": "NO_IMPLEMENTED_MAIN_ENTRYPOINT",
+        "state": "NO_EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -430,6 +508,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/snj_paraguay_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -464,6 +549,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/ipa_convocatorias_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -498,6 +590,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/aecid_paraguay_calls_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -532,6 +631,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "canonical_producer_owners": [],
+        "entrypoints": [],
+        "operational_default": "INACTIVE",
+        "reason": "NO_IMPLEMENTED_MAIN_ENTRYPOINT",
+        "state": "NO_EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -566,6 +672,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/eu_delegation_py_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -600,6 +713,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/becas_gobierno_itaipu_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -634,6 +754,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/eby_yacyreta_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -668,6 +795,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/wwf_paraguay_calls_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -702,6 +836,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/cird_competitions_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -736,6 +877,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/pro_ong_conevio_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -770,6 +918,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/fiuna_job_board_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -804,6 +959,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/ucom_job_board_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -838,6 +1000,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/fcq_una_job_board_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -872,6 +1041,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/chevening_scholarships_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -906,6 +1082,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/erasmus_mundus_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -940,6 +1123,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/oas_scholarships_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -974,6 +1164,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/daad_scholarships_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1008,6 +1205,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/coimbra_group_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1042,6 +1246,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/santander_open_academy_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1076,6 +1287,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/one_young_world_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1110,6 +1328,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/500_latam_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1144,6 +1369,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/google_startups_latam_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1178,6 +1410,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/startup_chile_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1212,6 +1451,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/idb_calls_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1246,6 +1492,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/caf_calls_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1280,6 +1533,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/mit_solve_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1314,6 +1574,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/eu_lac_accelerator_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1348,6 +1615,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "canonical_producer_owners": [],
+        "entrypoints": [],
+        "operational_default": "INACTIVE",
+        "reason": "NO_IMPLEMENTED_MAIN_ENTRYPOINT",
+        "state": "NO_EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1382,6 +1656,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "canonical_producer_owners": [],
+        "entrypoints": [],
+        "operational_default": "INACTIVE",
+        "reason": "NO_IMPLEMENTED_MAIN_ENTRYPOINT",
+        "state": "NO_EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1416,6 +1697,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "canonical_producer_owners": [],
+        "entrypoints": [],
+        "operational_default": "INACTIVE",
+        "reason": "NO_IMPLEMENTED_MAIN_ENTRYPOINT",
+        "state": "NO_EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1450,6 +1738,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/impactpool_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1484,6 +1779,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "canonical_producer_owners": [],
+        "entrypoints": [],
+        "operational_default": "INACTIVE",
+        "reason": "NO_IMPLEMENTED_MAIN_ENTRYPOINT",
+        "state": "NO_EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1518,6 +1820,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "canonical_producer_owners": [],
+        "entrypoints": [],
+        "operational_default": "INACTIVE",
+        "reason": "NO_IMPLEMENTED_MAIN_ENTRYPOINT",
+        "state": "NO_EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1553,6 +1862,14 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/computrabajo_pe.py",
+          "scrapers/computrabajo_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1587,6 +1904,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/buscojobs_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1622,6 +1946,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/scrapper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1658,6 +1989,14 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/abc_scrapper.py",
+          "scrapers/scrapper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1693,6 +2032,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/fundacion_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1727,6 +2073,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/remotive_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1762,6 +2115,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/oya_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1796,6 +2156,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/opportunitydesk_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1830,6 +2197,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/becal_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1864,6 +2238,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/fundacion_carolina_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1898,6 +2279,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/arbeitnow_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1932,6 +2320,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/jobicy_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -1966,6 +2361,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/sicca_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2000,6 +2402,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/ministerios_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2036,6 +2445,13 @@
         "^banco_[a-z0-9_]+$"
       ],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/bancos_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2072,6 +2488,13 @@
         "^coop_[a-z0-9_]+$"
       ],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/cooperativas_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2109,6 +2532,13 @@
         "^seguros_[a-z0-9_]+$"
       ],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/seguros_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2146,6 +2576,13 @@
         "^cc_[a-z0-9_]+$"
       ],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/callcenters_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2182,6 +2619,13 @@
         "^univ_[a-z0-9_]+$"
       ],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/universidades_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2218,6 +2662,13 @@
         "^const_[a-z0-9_]+$"
       ],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/constructoras_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2253,6 +2704,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/grupovierci_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2288,6 +2746,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/grupocarteshs_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2324,6 +2789,13 @@
         "^hosp_[a-z0-9_]+$"
       ],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/hospitales_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2360,6 +2832,13 @@
         "^retail_(?!malls(?:_py)?$)[a-z0-9_]+$"
       ],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/supermercados_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2399,6 +2878,13 @@
         "^ong_[a-z0-9_]+$"
       ],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/ongs_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2435,6 +2921,13 @@
         "^tech_[a-z0-9_]+$"
       ],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/tech_local_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2471,6 +2964,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/foros_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2506,6 +3006,14 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/jooble_pe.py",
+          "scrapers/jooble_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2541,6 +3049,14 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/googlejobs_v2.py",
+          "scrapers/googlejobs_v3.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2575,6 +3091,15 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "canonical_producer_owners": [
+          "googlejobs_v2"
+        ],
+        "entrypoints": [],
+        "operational_default": "INACTIVE",
+        "reason": "ENTRYPOINT_IDENTITY_BELONGS_TO_ANOTHER_PROFILE",
+        "state": "NO_EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2610,6 +3135,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/automotriz_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2645,6 +3177,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/farmacias_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2680,6 +3219,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/gastronomia_hoteles_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2715,6 +3261,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/agroindustria_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2750,6 +3303,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/frigorificos_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2785,6 +3345,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/industria_manufactura_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2820,6 +3387,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/telecomunicaciones_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2855,6 +3429,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/medios_comunicacion_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2890,6 +3471,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/retail_malls_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2925,6 +3513,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/logistica_transporte_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2960,6 +3555,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/energia_utilities_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -2995,6 +3597,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/puertos_importadoras_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3030,6 +3639,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/cde_frontera_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3064,6 +3680,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/workday_multinacionales_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3099,6 +3722,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/bolsas_locales_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3134,6 +3764,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/aptitus_pe.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3169,6 +3806,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/bumeran_pe.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3204,6 +3848,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/indeed_pe.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3239,6 +3890,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/laborum_pe.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3275,6 +3933,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/foros_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3309,6 +3974,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/scrapper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3343,6 +4015,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/hireon_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3377,6 +4056,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/idealist_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3411,6 +4097,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/scrapper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3445,6 +4138,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/foros_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3479,6 +4179,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/foros_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3513,6 +4220,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/scrapper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3547,6 +4261,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/pivot_jobs_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3581,6 +4302,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/reliefweb_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3615,6 +4343,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/scholarship_corner_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,
@@ -3649,6 +4384,13 @@
       ],
       "emitted_patterns": [],
       "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/scrapper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
       "refresh_capability": {
         "adapter": null,
         "cleaner": null,

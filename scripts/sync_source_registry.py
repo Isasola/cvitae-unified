@@ -5,7 +5,7 @@ Para cada fuente en el registry que no tenga fila en opportunity_sources:
   - Crea la fila con trust_level según el tier (A→review, B→review, C→blocked)
   - allowed_opportunity_types desde opportunity_scopes
   - eligible_countries/regions desde el registry
-  - Todos los flags de activación en false (política de seguridad)
+  - Fuentes con implementación registrada operan; consumidores conservan sus puertas independientes
 
 Para fuentes que ya existen: no sobreescribe nada — preserva configuración manual.
 
@@ -26,6 +26,8 @@ import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "scrapers" / "source_registry.json"
+sys.path.insert(0, str(ROOT / "scrapers"))
+from source_registry_v2 import resolve_emitted_source, operational_default
 
 # Mapeo tier → trust_level
 TIER_TRUST = {"A": "review", "B": "review", "C": "blocked"}
@@ -45,13 +47,18 @@ def build_row(entry: dict) -> dict:
     elif market == "GLOBAL":
         eligible_regions = ["GLOBAL"]
 
+    try:
+        operational = operational_default(resolve_emitted_source(entry["source_id"]))
+    except ValueError:
+        operational = False
+
     return {
         "source": entry["source_id"],
         "display_name": entry.get("name") or entry["source_id"].replace("_", " ").title(),
         "country_code": "PY" if market == "PY" else None,
         "trust_level": TIER_TRUST.get(tier, "review"),
         "auto_verify": False,
-        "is_enabled": False,
+        "is_enabled": operational,
         "verification_criteria": {
             "tier": tier,
             "original_source_required": entry.get("original_source_required", True),

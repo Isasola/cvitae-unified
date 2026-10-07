@@ -10,7 +10,7 @@ import { resolve } from 'node:path'
 import { deadlineLifecycle, intrinsicRoutingGates } from '../src/lib/opportunity-truth.ts'
 import { evaluateOpportunityDistribution, type SourcePolicyRow } from '../src/lib/effective-source-policy.ts'
 import { buildEffectiveSeoInventory } from '../src/lib/seo-inventory.ts'
-import { collectAllowedPages } from '../netlify/functions/lib/public-opportunity-pagination.ts'
+import { publicCatalogPage, publicCatalogQuery } from '../netlify/functions/lib/public-opportunity-pagination.ts'
 import { buildDictionary } from '../supabase/functions/_shared/matching.ts'
 import { rankOpportunitiesV2, V2_PRESET_FULL } from '../supabase/functions/_shared/matching-v2.ts'
 
@@ -79,13 +79,12 @@ const thin = { ...reconciled, ...fixture.cases.find((item: any) => item.id === '
 const thinDecision = evaluateOpportunityDistribution({ ...thin, source:'jobicy' }, [policy('jobicy')])
 assert(thinDecision.catalog.allowed && !thinDecision.matching.allowed, 'thin professional evidence does not disable intrinsically ready Catalog rows')
 
-// Same public helper, over multiple raw pages, proves stale false gates do not
-// hide an otherwise-ready row and pagination still terminates at target/end.
-const raw = [
-  ...Array.from({ length: 450 }, (_, index) => ({ ...thin, id: `denied-${index}`, slug: `denied-${index}`, title: '' })),
-  ...Array.from({ length: 3 }, (_, index) => ({ ...ready, source: 'himalayas', id: `ready-${index}`, slug: `ready-${index}` })),
-]
-const offsets: number[] = []
-const publicRows = await collectAllowedPages({ target: 3, pageSize: 100, maxPages: 6, fetchPage: async (offset, size) => { offsets.push(offset); return raw.slice(offset, offset + size) }, allowed: row => evaluateOpportunityDistribution(row, [policy('himalayas', { web_catalog_allowed:true })]).catalog.allowed })
-assert.equal(publicRows.length, 3); assert(offsets.length >= 5); assert.equal(publicRows[0].id, 'ready-0')
-console.log(`verify_intrinsic_routing_parity: PASS cases=${fixture.cases.length} pages=${offsets.length} consumers=public+matching+alerts+seo himalayas=first_party_seo_allowed_job_distribution_denied`)
+// Current C09/C20 collector accepts an already-filtered canonical SQL page.
+// Full-inventory search/coverage is executed in verify_cable_wiring_sql.mjs.
+const canonicalRows = Array.from({length:101},(_,index)=>({...reconciled,source:'himalayas',id:`ready-${index}`,slug:`ready-${index}`,updated_at:'2026-10-06T00:00:00Z'}))
+const publicPage = publicCatalogPage(canonicalRows)
+assert.equal(publicPage.rows.length,100)
+assert(publicPage.nextCursor)
+assert.equal(publicCatalogQuery({cursor:publicPage.nextCursor!}).p_after_id,'ready-99')
+assert(publicPage.rows.every(row=>evaluateOpportunityDistribution(row,[policy('himalayas')]).catalog.allowed))
+console.log(`verify_intrinsic_routing_parity: PASS cases=${fixture.cases.length} canonical_page=100 cursor=PASS consumers=public+matching+alerts+seo`)

@@ -8,6 +8,11 @@ export const SOURCE_PERMISSION_REVIEWED_AT = '2026-09-29'
 export type SourcePermissionDimension = typeof SOURCE_PERMISSION_DIMENSIONS[number]
 export type SourcePermissionState = 'ALLOWED' | 'DENIED' | 'UNKNOWN' | 'NOT_APPLICABLE'
 export type SourcePermissionConsumer = 'catalog' | 'matching' | 'alerts' | 'seo'
+export function sourcePermissionEvidenceClass(decision: SourcePermissionDecision) {
+  return decision.state !== 'UNKNOWN' && decision.evidence_type.startsWith('OFFICIAL_')
+    && Boolean(decision.provenance && decision.evidence_url_or_repo_reference)
+    ? 'EXPLICIT_EVIDENCE_BACKED' : 'DEFAULT/INHERITED/UNSUPPORTED'
+}
 export type SourcePermissionDecision = {
   state: SourcePermissionState; reason: string; evidence_type: string
   provenance: string; evidence_url_or_repo_reference: string; verified_at: string

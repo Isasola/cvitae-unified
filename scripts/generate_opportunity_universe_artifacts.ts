@@ -3,6 +3,22 @@ import { resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import registry from '../src/generated/source-intelligence-registry.json'
 import { canonicalSourcePermissionRegistry, SOURCE_PERMISSION_DIMENSIONS, SOURCE_PERMISSION_REVIEWED_AT, sourcePermissionCoverage } from '../src/lib/source-permission-truth.ts'
+import { registeredSourceOperationalDefault } from '../src/lib/effective-source-policy.ts'
+
+// C09.1 release overlay is a generated Registry projection, not a second list
+// of operational truth. This mode leaves all historical release artifacts alone.
+if (process.argv.includes('--source-operation-projection-only')) {
+  const target = resolve(process.cwd(), 'supabase/migrations/202610040001_source_switch_wiring.sql')
+  const sql = readFileSync(target, 'utf8')
+  const sources = (registry as any).sources.map((item: any) => item.canonical_source)
+    .filter(registeredSourceOperationalDefault).sort()
+  const pattern = /v_source=any\(array\[[^\]]+\]\)/g
+  if ([...sql.matchAll(pattern)].length !== 1) throw new Error('SOURCE_OPERATION_PROJECTION_MARKER_MISMATCH')
+  const projection = `v_source=any(array[${sources.map((source: string) => `'${source.replaceAll("'", "''")}'`).join(',')}])`
+  writeFileSync(target, sql.replace(pattern, projection))
+  console.log(`SOURCE_OPERATION_REGISTRY_PROJECTION=${sources.length}`)
+  process.exit(0)
+}
 
 const root = process.cwd()
 const out = resolve(root, 'artifacts/opportunity-universe')

@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import { buildEffectiveSeoInventory } from '../src/lib/seo-inventory.ts'
+import type { SourcePolicyRow } from '../src/lib/effective-source-policy.ts'
 import { fetchAllPages } from '../src/lib/paged-fetch.js'
 
 type Input = { opportunities: Record<string, any>[]; policies: SourcePolicyRow[] }
@@ -33,7 +34,7 @@ async function input(): Promise<Input> {
 const { opportunities, policies } = await input()
 const rows = buildEffectiveSeoInventory(opportunities, policies)
 fs.mkdirSync(path.dirname(output), { recursive:true })
-const policyFields = ['source','is_enabled','catalog_enabled','matching_enabled','alerts_enabled','seo_enabled','registry_certified','registry_adapter_version','registry_policy_hash','registry_synced_at','web_catalog_allowed','search_engine_indexing_allowed','google_jobs_distribution_allowed','third_party_job_distribution_allowed','source_attribution_required']
+const policyFields = ['source','is_enabled','catalog_enabled','matching_enabled','alerts_enabled','seo_enabled','registry_certified','registry_adapter_version','registry_policy_hash','registry_synced_at','web_catalog_allowed','search_engine_indexing_allowed','google_jobs_distribution_allowed','third_party_job_distribution_allowed','source_attribution_required','consumer_switch_overrides']
 const policySnapshot = policies.map(policy => Object.fromEntries(policyFields.filter(field => field in policy).map(field => [field, (policy as any)[field]])))
 fs.writeFileSync(policyOutput, JSON.stringify({ schema_version:'source-distribution-policy:v1', generated_at:new Date().toISOString(), policies: policySnapshot }, null, 2))
 fs.writeFileSync(output, JSON.stringify({ schema_version:'public-seo-inventory:v1', generated_at:new Date().toISOString(), rows }, null, 2))

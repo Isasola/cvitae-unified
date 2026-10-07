@@ -1,5 +1,5 @@
 -- LOCAL ONLY. Reuse policy audit, canonical policy and Universe. No inventory update on apply.
--- Stored switches remain available for rollback; effective defaults follow explicit permission.
+-- Stored switches remain available for rollback; effective defaults follow executable producers; first-party permissions are advisory.
 create index if not exists admin_policy_events_source_lookup_idx
   on public.admin_policy_events(entity_type,entity_key,created_at desc,id desc);
 create index if not exists opportunities_universe_source_cursor_idx on public.opportunities (lower(source),(id::text));
@@ -22,13 +22,14 @@ end $$;
 
 create or replace function public.canonical_opportunity_source_policy(p_raw_source text)
 returns jsonb language plpgsql stable security definer set search_path=public as $$
-declare v_policy jsonb; v_source text; v_consumer text; v_field text; v_override jsonb; v_overrides jsonb:='{}'::jsonb; v_stored jsonb;
+declare v_policy jsonb; v_source text; v_consumer text; v_field text; v_override jsonb; v_overrides jsonb:='{}'::jsonb; v_stored jsonb; v_executable boolean;
 begin
   v_policy:=public.stored_opportunity_source_policy(p_raw_source);
   v_source:=v_policy->>'canonical_source';
-  v_stored:=jsonb_build_object('catalog',v_policy->'catalog_enabled','matching',v_policy->'matching_enabled','alerts',v_policy->'alerts_enabled');
-  foreach v_consumer in array array['catalog','matching','alerts'] loop
-    v_field:=v_consumer||'_enabled';
+  v_executable:=v_source=any(array['500_latam','abc','aecid_paraguay_calls','agroindustria','aptitus','arbeitnow','automotriz','bancos','becal','becas_gobierno_itaipu','bolsas_locales','bumeran','buscojobs','caf_calls','callcenters','cde_frontera','chevening','cird_competitions_tenders','coimbra_group','computrabajo','constructoras','cooperativas','copaco','daad','eby_yacyreta','empleapy_mtess','energia_utilities','erasmus_mundus','eu_delegation_paraguay','eu_lac_accelerator','farmacias','fcq_una_job_board','fiuna_job_board','foros','frigorificos','fundacion','fundacion_carolina','gastronomia_hoteles','google_startups_latam','googlejobs_v2','grupocarteshs','grupovierci','himalayas','hireon','hospitales','idb_calls','idealist','impactpool','indeed','industria_manufactura','innovandopy_startups','ipa_convocatorias','itau','jobicy','jooble','laborum','logistica_transporte','medios_comunicacion','mef_inapp_becas','merienderos','mic_portal_emprendedor','ministerios','mit_solve','mitic_opportunities','oas_scholarships','ofertaslaborales','one_young_world_scholarships','ongs','opportunitydesk','oya','personal','pivot_jobs','pro_ong_conevio','puertos_importadoras','reddit','reliefweb','remotive','retail_malls','santander_open_academy','scholarship_corner','scrapper','seguros','sicca','snj_paraguay','startup_chile','supermercados','talentcom','tech_local','telecomunicaciones','tigo','ucom_job_board','universidades','unjobs','weworkremotely','workday_multinacionales','wwf_paraguay_calls']);
+  v_stored:=jsonb_build_object('source',v_policy->'is_enabled','catalog',v_policy->'catalog_enabled','matching',v_policy->'matching_enabled','alerts',v_policy->'alerts_enabled','seo',v_policy->'seo_enabled');
+  foreach v_consumer in array array['source','catalog','matching','alerts','seo'] loop
+    v_field:=case when v_consumer='source' then 'is_enabled' else v_consumer||'_enabled' end;
     select case when e.after_state->'explicit_consumer_switches' ? v_consumer
            then e.after_state->'explicit_consumer_switches'->v_consumer else e.after_state->v_field end
       into v_override from public.admin_policy_events e
@@ -42,14 +43,17 @@ begin
       v_policy:=jsonb_set(v_policy,array[v_field],coalesce(v_override,'null'::jsonb));
       v_overrides:=jsonb_set(v_overrides,array[v_consumer],coalesce(v_override,'null'::jsonb));
       v_policy:=jsonb_set(v_policy,array[v_field||'_alias_conflict'],'false'::jsonb);
-    elsif v_policy->>'is_enabled'='true' and exists(select 1 from public.opportunity_source_consumer_permissions
-      where canonical_source=v_source and consumer=v_consumer and permission_state='ALLOWED') then
+    -- Generated from Registry V2 active executable profiles; not permission evidence.
+    elsif (v_consumer='source' and jsonb_array_length(v_policy->'policy_rows')>0
+      and v_executable)
+      or (v_consumer<>'source' and v_policy->>'is_enabled'='true') then
       v_policy:=jsonb_set(v_policy,array[v_field],'true'::jsonb);
       v_policy:=jsonb_set(v_policy,array[v_field||'_alias_conflict'],'false'::jsonb);
     end if;
   end loop;
-  return v_policy||jsonb_build_object('consumer_permission_states',(select jsonb_object_agg(consumer,permission_state) from public.opportunity_source_consumer_permissions where canonical_source=v_source), 'consumer_switch_overrides',v_overrides,'stored_consumer_switches',v_stored,
-    'switch_authority','CANONICAL_PERMISSION_WITH_ADMIN_POLICY_EVENTS');
+  if not v_executable then v_policy:=jsonb_set(v_policy,'{is_enabled}','false'::jsonb); end if;
+  return v_policy||jsonb_build_object('producer_state',case when v_executable then 'EXECUTABLE_PRODUCER' else 'NO_EXECUTABLE_PRODUCER' end,'first_party_permission_role','ADVISORY_ONLY','consumer_permission_states',(select jsonb_object_agg(consumer,permission_state) from public.opportunity_source_consumer_permissions where canonical_source=v_source), 'consumer_switch_overrides',v_overrides,'stored_consumer_switches',v_stored,
+    'switch_authority','REGISTRY_OPERATION_WITH_ADMIN_POLICY_EVENTS');
 end $$;
 revoke all on function public.stored_opportunity_source_policy(text) from public,anon,authenticated;
 grant execute on function public.stored_opportunity_source_policy(text) to service_role;
@@ -86,7 +90,7 @@ begin
     updated_at=clock_timestamp(),updated_by=left(coalesce(nullif(p_actor,''),'admin'),120)
   where source=p_source returning * into v_after;
   insert into public.admin_policy_events(entity_type,entity_key,before_state,after_state,impacted_rows,actor)
-  values('source',p_source,to_jsonb(v_current),to_jsonb(v_after)||jsonb_build_object('explicit_consumer_switches',(select coalesce(jsonb_object_agg(replace(key,'_enabled',''),value),'{}'::jsonb) from jsonb_each(p_changes) where key in ('catalog_enabled','matching_enabled','alerts_enabled'))),v_impacted,left(coalesce(nullif(p_actor,''),'admin'),120));
+  values('source',p_source,to_jsonb(v_current),to_jsonb(v_after)||jsonb_build_object('explicit_consumer_switches',(select coalesce(jsonb_object_agg(case when key='is_enabled' then 'source' else replace(key,'_enabled','') end,value),'{}'::jsonb) from jsonb_each(p_changes) where key in ('is_enabled','catalog_enabled','matching_enabled','alerts_enabled','seo_enabled'))),v_impacted,left(coalesce(nullif(p_actor,''),'admin'),120));
   return jsonb_build_object('ok',true,'impacted_rows',v_impacted,'updated_at',v_after.updated_at);
 end $$;
 
@@ -118,8 +122,8 @@ security definer
 set search_path = pg_catalog, public
 as $$
   select
-    os.source, os.is_enabled, (p.policy->>'catalog_enabled')::boolean, (p.policy->>'matching_enabled')::boolean,
-    (p.policy->>'alerts_enabled')::boolean, os.seo_enabled, os.registry_certified,
+    os.source, (p.policy->>'is_enabled')::boolean, (p.policy->>'catalog_enabled')::boolean, (p.policy->>'matching_enabled')::boolean,
+    (p.policy->>'alerts_enabled')::boolean, (p.policy->>'seo_enabled')::boolean, os.registry_certified,
     os.registry_adapter_version, os.registry_policy_hash, os.registry_synced_at,
     os.web_catalog_allowed, os.search_engine_indexing_allowed,
     os.google_jobs_distribution_allowed, os.third_party_job_distribution_allowed,
@@ -198,18 +202,18 @@ with effective_policies as materialized (select distinct public.canonical_opport
 select o.*, u.lifecycle_state as universe_lifecycle_state, u.matching_row_state as universe_matching_row_state,
        u.source_matching_state as universe_source_matching_state, u.final_matching_state as universe_final_matching_state, u.alerts_state as universe_alerts_state
 from public.opportunities o left join public.opportunity_source_identity_aliases a on a.emitted_source=lower(trim(o.source)) join effective_policies p on p.policy->>'canonical_source'=coalesce(a.canonical_source,lower(trim(o.source))) join public.opportunity_universe_state u on u.opportunity_id=o.id::text
-where u.final_matching_state='READY' and public.opportunity_deadline_state(o.deadline) in ('OPEN','UNKNOWN') and p.policy->>'is_enabled'='true' and p.policy->>'matching_enabled'='true' and p.policy->'consumer_permission_states'->>'matching'='ALLOWED';
+where u.final_matching_state='READY' and public.opportunity_deadline_state(o.deadline) in ('OPEN','UNKNOWN') and p.policy->>'is_enabled'='true' and p.policy->>'matching_enabled'='true';
 
 create or replace view public.opportunity_catalog_universe with (security_invoker=true) as
 with effective_policies as materialized (select distinct public.canonical_opportunity_source_policy(s.source) policy from public.opportunity_sources s)
 select o.*,u.lifecycle_state as universe_lifecycle_state,u.catalog_state as universe_catalog_state
-from public.opportunities o left join public.opportunity_source_identity_aliases a on a.emitted_source=lower(trim(o.source)) join effective_policies p on p.policy->>'canonical_source'=coalesce(a.canonical_source,lower(trim(o.source))) join public.opportunity_universe_state u on u.opportunity_id=o.id::text where u.catalog_state='READY' and public.opportunity_deadline_state(o.deadline) in ('OPEN','UNKNOWN') and p.policy->>'is_enabled'='true' and p.policy->>'catalog_enabled'='true' and p.policy->'consumer_permission_states'->>'catalog'='ALLOWED';
+from public.opportunities o left join public.opportunity_source_identity_aliases a on a.emitted_source=lower(trim(o.source)) join effective_policies p on p.policy->>'canonical_source'=coalesce(a.canonical_source,lower(trim(o.source))) join public.opportunity_universe_state u on u.opportunity_id=o.id::text where u.catalog_state='READY' and public.opportunity_deadline_state(o.deadline) in ('OPEN','UNKNOWN') and p.policy->>'is_enabled'='true' and p.policy->>'catalog_enabled'='true';
 
 create or replace view public.opportunity_alert_universe with (security_invoker=true) as
 with effective_policies as materialized (select distinct public.canonical_opportunity_source_policy(s.source) policy from public.opportunity_sources s)
 select o.*,u.lifecycle_state as universe_lifecycle_state,u.alerts_state as universe_alerts_state
   ,u.final_matching_state as universe_final_matching_state
-from public.opportunities o left join public.opportunity_source_identity_aliases a on a.emitted_source=lower(trim(o.source)) join effective_policies p on p.policy->>'canonical_source'=coalesce(a.canonical_source,lower(trim(o.source))) join public.opportunity_universe_state u on u.opportunity_id=o.id::text where u.alerts_state='READY' and public.opportunity_deadline_state(o.deadline) in ('OPEN','UNKNOWN') and p.policy->>'is_enabled'='true' and p.policy->>'alerts_enabled'='true' and p.policy->'consumer_permission_states'->>'alerts'='ALLOWED';
+from public.opportunities o left join public.opportunity_source_identity_aliases a on a.emitted_source=lower(trim(o.source)) join effective_policies p on p.policy->>'canonical_source'=coalesce(a.canonical_source,lower(trim(o.source))) join public.opportunity_universe_state u on u.opportunity_id=o.id::text where u.alerts_state='READY' and public.opportunity_deadline_state(o.deadline) in ('OPEN','UNKNOWN') and p.policy->>'is_enabled'='true' and p.policy->>'alerts_enabled'='true';
 
 
 -- Same reducer, with explicit policy/audit provenance for Admin.
@@ -243,8 +247,6 @@ declare
   v_seo_row text;
   v_seo_row_reason text;
   v_seo_effective_reason text;
-  v_temp_legacy_seo_exception_state text;
-  v_temp_legacy_seo_exception_applied boolean := false;
   v_alerts text;
   v_alerts_row text;
   v_final text;
@@ -279,7 +281,7 @@ begin
   v_permission_provenance := coalesce(v_permission_provenance, 'NO_CANONICAL_PERMISSION_EVIDENCE');
   v_policy_conflict := coalesce((p_source_policy->>'is_enabled_alias_conflict')::boolean,false);
   v_source_enabled := case when v_policy_conflict then 'UNKNOWN' else coalesce(p_source_policy->>'is_enabled','UNKNOWN') end;
-  v_source_operational_reason := case when v_policy_conflict then 'SOURCE_POLICY_ALIAS_CONFLICT' when v_source_enabled='UNKNOWN' then 'SOURCE_POLICY_STATE_UNKNOWN' when v_source_enabled='true' then 'SOURCE_OPERATIONALLY_ENABLED' else 'SOURCE_DISABLED' end;
+  v_source_operational_reason := case when p_source_policy->>'producer_state'='NO_EXECUTABLE_PRODUCER' then 'NO_EXECUTABLE_PRODUCER' when v_policy_conflict then 'SOURCE_POLICY_ALIAS_CONFLICT' when v_source_enabled='UNKNOWN' then 'SOURCE_POLICY_STATE_UNKNOWN' when v_source_enabled='true' then 'SOURCE_OPERATIONALLY_ENABLED' else 'SOURCE_DISABLED' end;
   v_matching_enabled := case when v_policy_conflict or coalesce((p_source_policy->>'matching_enabled_alias_conflict')::boolean,false) then 'UNKNOWN' else coalesce(p_source_policy->>'matching_enabled','UNKNOWN') end;
   v_matching_operational_reason := case when v_policy_conflict or coalesce((p_source_policy->>'matching_enabled_alias_conflict')::boolean,false) then 'SOURCE_POLICY_ALIAS_CONFLICT' when v_matching_enabled='UNKNOWN' then 'SOURCE_MATCHING_SWITCH_UNKNOWN' when v_matching_enabled='true' then 'SOURCE_MATCHING_ENABLED' else 'SOURCE_MATCHING_DISABLED' end;
   v_deadline_status:=public.opportunity_deadline_state(v_deadline);
@@ -349,7 +351,7 @@ begin
   -- Catalog/SEO/Alerts permissions are resolved independently below by reading each consumer row.
   select permission_state into v_permission_state from public.opportunity_source_consumer_permissions where canonical_source = v_canonical and consumer = 'catalog';
   v_catalog_permission:=coalesce(v_permission_state,'UNKNOWN');
-  v_catalog := case when v_catalog_row <> 'READY' then v_catalog_row when v_source_enabled='UNKNOWN' or coalesce((p_source_policy->>'catalog_enabled_alias_conflict')::boolean,false) or coalesce(p_source_policy->>'catalog_enabled','UNKNOWN')='UNKNOWN' or coalesce(v_permission_state,'UNKNOWN')='UNKNOWN' then 'UNKNOWN' when v_source_enabled='false' or coalesce(p_source_policy->>'catalog_enabled','UNKNOWN')='false' or v_permission_state='DENIED' then 'NOT_READY' else 'READY' end;
+  v_catalog := case when v_catalog_row <> 'READY' then v_catalog_row when v_source_enabled='UNKNOWN' or coalesce((p_source_policy->>'catalog_enabled_alias_conflict')::boolean,false) or coalesce(p_source_policy->>'catalog_enabled','UNKNOWN')='UNKNOWN' then 'UNKNOWN' when v_source_enabled='false' or coalesce(p_source_policy->>'catalog_enabled','UNKNOWN')='false' then 'NOT_READY' else 'READY' end;
   select permission_state into v_permission_state from public.opportunity_source_consumer_permissions where canonical_source = v_canonical and consumer = 'seo_index';
   v_seo_permission:=coalesce(v_permission_state,'UNKNOWN');
   v_seo_row := case when not v_lifecycle_ready then case when v_lifecycle in ('LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE') then 'UNKNOWN' else 'NOT_READY' end
@@ -362,49 +364,32 @@ begin
     when length(v_description)<100 then 'THIN_CONTENT'
     when nullif(trim(coalesce(p_row->>'organization','')),'') is null then 'MISSING_ORGANIZATION'
     else 'SEO_ROW_READY' end;
-  v_temp_legacy_seo_exception_state := case when v_canonical <> 'computrabajo' then 'NOT_APPLICABLE' when (now() at time zone 'UTC')::date <= date '2026-10-09' then 'ACTIVE' else 'EXPIRED' end;
-  v_temp_legacy_seo_exception_applied := v_canonical='computrabajo'
-    and v_temp_legacy_seo_exception_state='ACTIVE'
-    and v_seo_row='READY'
-    and p_row->>'seo_eligible'='true'
-    and p_row->>'seo_status'='eligible'
-    and p_row->>'created_at' ~ '^\d{4}-\d{2}-\d{2}([T ].*)?$'
-    and left(p_row->>'created_at',10)<='2026-10-03'
-    and v_seo_permission='DENIED'
-    and v_source_enabled='true'
-    and p_source_policy->>'seo_enabled'='true'
-    and not coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false);
   v_seo := case when v_seo_row <> 'READY' then v_seo_row
-    when v_temp_legacy_seo_exception_applied then 'READY'
-    when v_seo_permission='DENIED' then 'NOT_READY'
     when p_source_policy->>'seo_enabled'='false' and not coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) then 'NOT_READY'
-    when v_source_enabled='UNKNOWN' then 'UNKNOWN'
+    when v_source_enabled='UNKNOWN' or coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) or coalesce(p_source_policy->>'seo_enabled','UNKNOWN')='UNKNOWN' then 'UNKNOWN'
     when v_source_enabled='false' then 'NOT_READY' else 'READY' end;
   v_seo_effective_reason := case when v_seo_row<>'READY' then v_seo_row_reason
-    when v_temp_legacy_seo_exception_applied then 'TEMP_LEGACY_SEO_EXCEPTION_APPLIED'
-    when v_seo_permission='DENIED' then 'SOURCE_SEO_PERMISSION_DENIED'
     when p_source_policy->>'seo_enabled'='false' and not coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) then 'SOURCE_SEO_OPERATOR_DISABLED'
+    when coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) then 'SOURCE_POLICY_ALIAS_CONFLICT'
+    when coalesce(p_source_policy->>'seo_enabled','UNKNOWN')='UNKNOWN' then 'SOURCE_SEO_SWITCH_UNKNOWN'
     when v_source_enabled='UNKNOWN' then case when v_policy_conflict then 'SOURCE_POLICY_ALIAS_CONFLICT' else 'SOURCE_OPERATIONAL_STATE_UNKNOWN' end
-    when v_source_enabled='false' then 'SOURCE_DISABLED'
+    when v_source_enabled='false' then v_source_operational_reason
     else 'SEO_EFFECTIVE_READY' end;
   select permission_state into v_permission_state from public.opportunity_source_consumer_permissions where canonical_source = v_canonical and consumer = 'alerts';
   v_alert_permission:=coalesce(v_permission_state,'UNKNOWN');
   v_alerts_row := case when not v_lifecycle_ready then case when v_lifecycle in ('LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE') then 'UNKNOWN' else 'NOT_READY' end when not v_professional then 'NOT_READY' else 'READY' end;
-  v_alerts := case when v_alerts_row <> 'READY' then v_alerts_row when v_source_enabled='UNKNOWN' or coalesce((p_source_policy->>'alerts_enabled_alias_conflict')::boolean,false) or coalesce(p_source_policy->>'alerts_enabled','UNKNOWN')='UNKNOWN' or coalesce(v_permission_state,'UNKNOWN')='UNKNOWN' then 'UNKNOWN' when v_source_enabled='false' or coalesce(p_source_policy->>'alerts_enabled','UNKNOWN')='false' or v_permission_state='DENIED' then 'NOT_READY' else 'READY' end;
+  v_alerts := case when v_alerts_row <> 'READY' then v_alerts_row when v_source_enabled='UNKNOWN' or coalesce((p_source_policy->>'alerts_enabled_alias_conflict')::boolean,false) or coalesce(p_source_policy->>'alerts_enabled','UNKNOWN')='UNKNOWN' then 'UNKNOWN' when v_source_enabled='false' or coalesce(p_source_policy->>'alerts_enabled','UNKNOWN')='false' then 'NOT_READY' else 'READY' end;
   select coalesce(array_agg(consumer order by consumer),'{}') into v_permission_unknown_dimensions
     from public.opportunity_source_consumer_permissions
     where canonical_source=v_canonical and permission_state='UNKNOWN';
-  v_final := case when v_matching_row <> 'READY' then v_matching_row when v_permission = 'DENIED' or v_source_enabled = 'false' or v_matching_enabled = 'false' then 'NOT_READY'
-    when v_permission <> 'ALLOWED' or v_source_enabled = 'UNKNOWN' or v_matching_enabled = 'UNKNOWN' then 'UNKNOWN' else 'READY' end;
+  v_final := case when v_matching_row <> 'READY' then v_matching_row when v_source_enabled = 'false' or v_matching_enabled = 'false' then 'NOT_READY'
+    when v_source_enabled = 'UNKNOWN' or v_matching_enabled = 'UNKNOWN' then 'UNKNOWN' else 'READY' end;
   if v_lifecycle in ('LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE') then v_unresolved := array_append(v_unresolved,'LIFECYCLE'); end if;
   if v_matching_row = 'UNKNOWN' then v_unresolved := array_append(v_unresolved,'ROW_MATCH_READINESS'); end if;
-  if v_permission = 'UNKNOWN' then v_unresolved := array_append(v_unresolved,'SOURCE_MATCH_PERMISSION'); end if;
   if v_source_enabled = 'UNKNOWN' then v_unresolved := array_append(v_unresolved,case when v_policy_conflict then 'SOURCE_POLICY_ALIAS_CONFLICT:is_enabled' else 'SOURCE_OPERATIONAL_STATE' end); end if;
   if v_matching_enabled = 'UNKNOWN' and coalesce((p_source_policy->>'matching_enabled_alias_conflict')::boolean,false) then v_unresolved := array_append(v_unresolved,'SOURCE_POLICY_ALIAS_CONFLICT:matching_enabled'); end if;
   if v_matching_enabled = 'UNKNOWN' then v_unresolved := array_append(v_unresolved,'SOURCE_MATCHING_SWITCH'); end if;
-  if v_lifecycle_ready and v_catalog_row='READY' and v_catalog_permission='UNKNOWN' then v_unresolved := array_append(v_unresolved,'CATALOG_PERMISSION'); end if;
   if v_lifecycle_ready and v_catalog_row='READY' and (coalesce((p_source_policy->>'catalog_enabled_alias_conflict')::boolean,false) or coalesce(p_source_policy->>'catalog_enabled','UNKNOWN')='UNKNOWN') then v_unresolved := array_append(v_unresolved,case when coalesce((p_source_policy->>'catalog_enabled_alias_conflict')::boolean,false) then 'SOURCE_POLICY_ALIAS_CONFLICT:catalog_enabled' else 'CATALOG_SWITCH_UNKNOWN' end); end if;
-  if v_lifecycle_ready and v_alerts_row='READY' and v_alert_permission='UNKNOWN' then v_unresolved := array_append(v_unresolved,'ALERT_PERMISSION'); end if;
   if v_lifecycle_ready and v_alerts_row='READY' and (coalesce((p_source_policy->>'alerts_enabled_alias_conflict')::boolean,false) or coalesce(p_source_policy->>'alerts_enabled','UNKNOWN')='UNKNOWN') then v_unresolved := array_append(v_unresolved,case when coalesce((p_source_policy->>'alerts_enabled_alias_conflict')::boolean,false) then 'SOURCE_POLICY_ALIAS_CONFLICT:alerts_enabled' else 'ALERT_SWITCH_UNKNOWN' end); end if;
   return jsonb_build_object(
     'inventory_state','PRESENT','lifecycle_state',v_lifecycle,'lifecycle_reason',v_lifecycle_reason,'lifecycle_repair',v_repair,
@@ -412,7 +397,7 @@ begin
     'matching_row_state',v_matching_row,'matching_row_reason',v_matching_reason,'source_matching_state',v_permission,
     'source_matching_reason',v_permission_reason,'source_matching_provenance',v_permission_provenance,'source_matching_operational_state',case when v_matching_enabled='true' then 'ALLOWED' when v_matching_enabled='false' then 'DENIED' else 'UNKNOWN' end,'source_matching_operational_reason',v_matching_operational_reason,'source_operational_state',case when v_policy_conflict then 'CONFLICT' when v_source_enabled='true' then 'ENABLED' when v_source_enabled='false' then 'DISABLED' else 'UNKNOWN' end,'source_operational_reason',v_source_operational_reason,
     'final_matching_state',v_final,'seo_row_state',v_seo_row,'seo_row_reason',v_seo_row_reason,'seo_effective_reason',v_seo_effective_reason,'seo_state',v_seo,'alerts_state',v_alerts,'catalog_operational_state',case when p_source_policy->>'catalog_enabled'='true' then 'ALLOWED' when p_source_policy->>'catalog_enabled'='false' then 'DENIED' else 'UNKNOWN' end,'alerts_operational_state',case when p_source_policy->>'alerts_enabled'='true' then 'ALLOWED' when p_source_policy->>'alerts_enabled'='false' then 'DENIED' else 'UNKNOWN' end,'seo_operational_state',case when p_source_policy->>'seo_enabled'='true' then 'ALLOWED' when p_source_policy->>'seo_enabled'='false' then 'DENIED' else 'UNKNOWN' end,'unresolved_dimensions',to_jsonb(v_unresolved),'source_permission_unknown_dimensions',to_jsonb(v_permission_unknown_dimensions),
-    'provenance',jsonb_build_object('source',v_canonical,'observation_id',p_observation->>'id','observation_status',p_observation->>'identity_status','observation_http_status',p_observation->>'http_status','observation_at',p_observation->>'observed_at','source_policy_rows',p_source_policy->'policy_rows','consumer_switch_overrides',p_source_policy->'consumer_switch_overrides','stored_consumer_switches',p_source_policy->'stored_consumer_switches','switch_authority',p_source_policy->'switch_authority','source_policy_alias_conflicts',jsonb_build_array(case when coalesce((p_source_policy->>'is_enabled_alias_conflict')::boolean,false) then 'is_enabled' end,case when coalesce((p_source_policy->>'matching_enabled_alias_conflict')::boolean,false) then 'matching_enabled' end,case when coalesce((p_source_policy->>'catalog_enabled_alias_conflict')::boolean,false) then 'catalog_enabled' end,case when coalesce((p_source_policy->>'alerts_enabled_alias_conflict')::boolean,false) then 'alerts_enabled' end,case when coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) then 'seo_enabled' end),'consumer_permission_states',jsonb_build_object('catalog',v_catalog_permission,'matching',v_permission,'alerts',v_alert_permission,'seo',v_seo_permission),'consumer_switch_states',jsonb_build_object('catalog',case when p_source_policy->>'catalog_enabled'='true' and not coalesce((p_source_policy->>'catalog_enabled_alias_conflict')::boolean,false) then 'ALLOWED' when p_source_policy->>'catalog_enabled'='false' and not coalesce((p_source_policy->>'catalog_enabled_alias_conflict')::boolean,false) then 'DENIED' else 'UNKNOWN' end,'matching',case when v_matching_enabled='true' then 'ALLOWED' when v_matching_enabled='false' then 'DENIED' else 'UNKNOWN' end,'alerts',case when p_source_policy->>'alerts_enabled'='true' and not coalesce((p_source_policy->>'alerts_enabled_alias_conflict')::boolean,false) then 'ALLOWED' when p_source_policy->>'alerts_enabled'='false' and not coalesce((p_source_policy->>'alerts_enabled_alias_conflict')::boolean,false) then 'DENIED' else 'UNKNOWN' end,'seo',case when p_source_policy->>'seo_enabled'='true' and not coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) then 'ALLOWED' when p_source_policy->>'seo_enabled'='false' and not coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) then 'DENIED' else 'UNKNOWN' end),'temporary_legacy_seo_exception',case when v_canonical='computrabajo' then jsonb_build_object('name','TEMP_LEGACY_SEO_EXCEPTION_UNTIL_2026_10_09','state',v_temp_legacy_seo_exception_state,'expires_on','2026-10-09','applied',v_temp_legacy_seo_exception_applied,'permission_state',v_seo_permission,'reason','Preserve qualifying SEO-ready first-party rows during the live observation window; no permission or other consumer is granted.') else null end,'permission_source',v_permission_provenance,'seo_content_readiness_independent_of_lifecycle',case when v_seo_content_reason='SEO_CONTENT_READY_INDEPENDENT_OF_LIFECYCLE' then 'READY' else 'NOT_READY' end,'seo_content_reason',v_seo_content_reason,'lifecycle_unresolved_reason',v_lifecycle_unresolved_reason,'lifecycle_recovery_class',v_lifecycle_recovery_class)
+    'provenance',jsonb_build_object('source',v_canonical,'observation_id',p_observation->>'id','observation_status',p_observation->>'identity_status','observation_http_status',p_observation->>'http_status','observation_at',p_observation->>'observed_at','source_policy_rows',p_source_policy->'policy_rows','consumer_switch_overrides',p_source_policy->'consumer_switch_overrides','stored_consumer_switches',p_source_policy->'stored_consumer_switches','switch_authority',p_source_policy->'switch_authority','source_policy_alias_conflicts',jsonb_build_array(case when coalesce((p_source_policy->>'is_enabled_alias_conflict')::boolean,false) then 'is_enabled' end,case when coalesce((p_source_policy->>'matching_enabled_alias_conflict')::boolean,false) then 'matching_enabled' end,case when coalesce((p_source_policy->>'catalog_enabled_alias_conflict')::boolean,false) then 'catalog_enabled' end,case when coalesce((p_source_policy->>'alerts_enabled_alias_conflict')::boolean,false) then 'alerts_enabled' end,case when coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) then 'seo_enabled' end),'consumer_permission_states',jsonb_build_object('catalog',v_catalog_permission,'matching',v_permission,'alerts',v_alert_permission,'seo',v_seo_permission),'consumer_switch_states',jsonb_build_object('catalog',case when p_source_policy->>'catalog_enabled'='true' and not coalesce((p_source_policy->>'catalog_enabled_alias_conflict')::boolean,false) then 'ALLOWED' when p_source_policy->>'catalog_enabled'='false' and not coalesce((p_source_policy->>'catalog_enabled_alias_conflict')::boolean,false) then 'DENIED' else 'UNKNOWN' end,'matching',case when v_matching_enabled='true' then 'ALLOWED' when v_matching_enabled='false' then 'DENIED' else 'UNKNOWN' end,'alerts',case when p_source_policy->>'alerts_enabled'='true' and not coalesce((p_source_policy->>'alerts_enabled_alias_conflict')::boolean,false) then 'ALLOWED' when p_source_policy->>'alerts_enabled'='false' and not coalesce((p_source_policy->>'alerts_enabled_alias_conflict')::boolean,false) then 'DENIED' else 'UNKNOWN' end,'seo',case when p_source_policy->>'seo_enabled'='true' and not coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) then 'ALLOWED' when p_source_policy->>'seo_enabled'='false' and not coalesce((p_source_policy->>'seo_enabled_alias_conflict')::boolean,false) then 'DENIED' else 'UNKNOWN' end),'first_party_permission_role','ADVISORY_ONLY','permission_source',v_permission_provenance,'seo_content_readiness_independent_of_lifecycle',case when v_seo_content_reason='SEO_CONTENT_READY_INDEPENDENT_OF_LIFECYCLE' then 'READY' else 'NOT_READY' end,'seo_content_reason',v_seo_content_reason,'lifecycle_unresolved_reason',v_lifecycle_unresolved_reason,'lifecycle_recovery_class',v_lifecycle_recovery_class)
   );
 end $$;
 
@@ -421,9 +406,7 @@ create or replace view public.opportunity_seo_universe with (security_invoker=tr
 with effective_policies as materialized (select distinct public.canonical_opportunity_source_policy(s.source) policy from public.opportunity_sources s)
 select o.*,u.lifecycle_state as universe_lifecycle_state,u.seo_state as universe_seo_state
 from public.opportunities o left join public.opportunity_source_identity_aliases a on a.emitted_source=lower(trim(o.source)) join effective_policies p on p.policy->>'canonical_source'=coalesce(a.canonical_source,lower(trim(o.source))) join public.opportunity_universe_state u on u.opportunity_id=o.id::text where u.seo_state='READY' and public.opportunity_deadline_state(o.deadline) in ('OPEN','UNKNOWN') and p.policy->>'is_enabled'='true' and p.policy->>'seo_enabled' is distinct from 'false'
- and (coalesce(p.policy->'consumer_permission_states'->>'seo_index','UNKNOWN')<>'DENIED' or
- (p.policy->>'canonical_source'='computrabajo' and u.provenance->'temporary_legacy_seo_exception'->>'applied'='true'
- and (now() at time zone 'UTC')::date<=date '2026-10-09'));
+;
 
 -- Scheduling metadata only. Lifecycle truth remains opportunity_universe_decision.
 alter table public.opportunity_universe_state add column if not exists next_lifecycle_check_at timestamptz;
@@ -460,15 +443,6 @@ declare v_id text; v_count integer:=0;
 begin
   if coalesce(auth.role(),'')<>'service_role' then raise exception 'service_role_required'; end if;
   if p_limit<1 or p_limit>500 then raise exception 'page_size_out_of_range'; end if;
-  -- Only enqueue the temporal SEO expiry here. The common owner's separate
-  -- dirty-source loop drains it within its explicit source/page budget.
-  if (now() at time zone 'UTC')::date>date '2026-10-09' and exists (
-    select 1 from public.opportunities o join public.opportunity_universe_state u on u.opportunity_id=o.id::text
-    where lower(o.source)='computrabajo' and u.seo_state='READY'
-      and u.provenance->'temporary_legacy_seo_exception'->>'applied'='true') then
-    insert into public.opportunity_universe_dirty_sources(canonical_source,reason)
-      values('computrabajo','TEMP_LEGACY_SEO_EXCEPTION_EXPIRED') on conflict(canonical_source) do nothing;
-  end if;
   for v_id in select u.opportunity_id from public.opportunity_universe_state u
     where u.next_lifecycle_check_at<=now()
     order by u.next_lifecycle_check_at,u.opportunity_id limit p_limit loop
@@ -506,30 +480,28 @@ begin
     when v_state.lifecycle_state not in ('ACTIVE_VALID','LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE') then 'LIFECYCLE: '||v_state.lifecycle_reason
     when v_state.lifecycle_state='ACTIVE_VALID' and v_state.professional_readiness<>'PROFESSIONAL_READY' then 'LIFECYCLE -> DATA_READINESS: '||v_state.professional_reason
     when v_state.lifecycle_state='ACTIVE_VALID' and v_state.matching_row_state<>'READY' then 'DATA_READINESS -> ROW_MATCH_READINESS: '||v_state.matching_row_reason
-    when v_state.lifecycle_state='ACTIVE_VALID' and v_state.source_matching_state<>'ALLOWED' then 'ROW_MATCH_READINESS -> SOURCE_PERMISSION: '||v_state.source_matching_reason
-    when v_state.lifecycle_state='ACTIVE_VALID' and v_state.source_matching_operational_state<>'ALLOWED' then 'SOURCE_PERMISSION -> SOURCE_MATCHING_CAPABILITY: '||v_state.source_matching_operational_reason
-    when v_state.lifecycle_state='ACTIVE_VALID' and v_state.final_matching_state<>'READY' then 'SOURCE_PERMISSION -> FINAL_MATCHING: '||v_state.source_operational_state
+    when v_state.lifecycle_state='ACTIVE_VALID' and v_state.source_matching_operational_state<>'ALLOWED' then 'OPERATOR_STATE -> SOURCE_MATCHING_CAPABILITY: '||v_state.source_matching_operational_reason
+    when v_state.lifecycle_state='ACTIVE_VALID' and v_state.final_matching_state<>'READY' then 'OPERATOR_STATE -> FINAL_MATCHING: '||v_state.source_operational_state
     when v_state.lifecycle_state='ACTIVE_VALID' then 'FINAL_MATCHING -> RETRIEVAL: ROW_READY_FOR_RETRIEVAL'
     when v_state.opportunity_id is null then 'SOURCE → OBSERVATION → LIFECYCLE: UNRECONCILED'
     when v_state.provenance->>'observation_id' is null then 'SOURCE → OBSERVATION: NO_LINKED_OBSERVATION'
     when v_state.lifecycle_state<>'ACTIVE_VALID' then 'OBSERVATION → LIFECYCLE: '||v_state.lifecycle_reason
     when v_state.professional_readiness<>'PROFESSIONAL_READY' then 'LIFECYCLE → DATA_READINESS: '||v_state.professional_reason
     when v_state.matching_row_state<>'READY' then 'DATA_READINESS → ROW_MATCH_READINESS: '||v_state.matching_row_reason
-    when v_state.source_matching_state<>'ALLOWED' then 'ROW_MATCH_READINESS → SOURCE_PERMISSION: '||v_state.source_matching_reason
     when v_state.source_matching_operational_state<>'ALLOWED' then 'SOURCE_PERMISSION → SOURCE_MATCHING_CAPABILITY: '||v_state.source_matching_operational_reason
     when v_state.final_matching_state<>'READY' then 'SOURCE_PERMISSION → FINAL_MATCHING: '||v_state.source_operational_state
     else 'FINAL_MATCHING → RETRIEVAL: ROW_READY_FOR_RETRIEVAL' end;
   if v_pending and v_state.final_matching_state<>'READY'
      and v_state.matching_row_state='READY' and v_state.source_operational_state='ENABLED'
-     and v_state.source_matching_state='ALLOWED' and v_state.source_matching_operational_state='ALLOWED' then
+     and v_state.source_matching_operational_state='ALLOWED' then
     v_cable:='UNIVERSE_RECONCILIATION: STORED_FINAL_MATCHING_NOT_READY';
   end if;
   v_result:=jsonb_build_object('found',true,'opportunity_id',p_opportunity_id,'source',v_source,'first_broken_cable',v_cable,'observation',jsonb_build_object('linked',v_state.provenance->>'observation_id' is not null,'id',v_state.provenance->>'observation_id','identity_status',v_state.provenance->>'observation_status','http_status',v_state.provenance->>'observation_http_status','observed_at',v_state.provenance->>'observation_at','note',case when v_state.provenance->>'observation_id' is null then 'NO_LINKED_OBSERVATION_INFORMATIONAL_UNLESS_REQUIRED_TO_RESOLVE_LIFECYCLE' else null end),'inventory_state',v_state.inventory_state,'lifecycle_state',v_state.lifecycle_state,'lifecycle_reason',v_state.lifecycle_reason,'professional_readiness',v_state.professional_readiness,'professional_reason',v_state.professional_reason,
     'consumer_diagnostics',jsonb_build_object(
-      'CATALOG',jsonb_build_object('row_state',v_state.catalog_row_state,'source_global_state',v_state.source_operational_state,'consumer_switch_state',v_state.provenance->'consumer_switch_states'->>'catalog','permission_state',v_state.provenance->'consumer_permission_states'->>'catalog','effective_state',v_state.catalog_state,'first_unresolved_or_blocking_reason',case when v_state.catalog_row_state<>'READY' then 'CATALOG_ROW_NOT_READY' when v_state.source_operational_state<>'ENABLED' then v_state.source_operational_reason when v_state.provenance->'consumer_switch_states'->>'catalog'<>'ALLOWED' then 'CATALOG_SWITCH_OR_ALIAS_CONFLICT' when v_state.provenance->'consumer_permission_states'->>'catalog'<>'ALLOWED' then 'CATALOG_PERMISSION_NOT_ALLOWED' else null end),
-      'MATCHING',jsonb_build_object('row_state',v_state.matching_row_state,'source_global_state',v_state.source_operational_state,'consumer_switch_state',v_state.source_matching_operational_state,'permission_state',v_state.source_matching_state,'effective_state',v_state.final_matching_state,'first_unresolved_or_blocking_reason',case when v_state.matching_row_state<>'READY' then v_state.matching_row_reason when v_state.source_operational_state<>'ENABLED' then v_state.source_operational_reason when v_state.source_matching_operational_state<>'ALLOWED' then v_state.source_matching_operational_reason when v_state.source_matching_state<>'ALLOWED' then v_state.source_matching_reason else null end),
-      'ALERTS',jsonb_build_object('row_state',v_state.alerts_row_state,'source_global_state',v_state.source_operational_state,'consumer_switch_state',v_state.provenance->'consumer_switch_states'->>'alerts','permission_state',v_state.provenance->'consumer_permission_states'->>'alerts','effective_state',v_state.alerts_state,'first_unresolved_or_blocking_reason',case when v_state.alerts_row_state<>'READY' then 'ALERT_ROW_NOT_READY' when v_state.source_operational_state<>'ENABLED' then v_state.source_operational_reason when v_state.provenance->'consumer_switch_states'->>'alerts'<>'ALLOWED' then 'ALERTS_SWITCH_OR_ALIAS_CONFLICT' when v_state.provenance->'consumer_permission_states'->>'alerts'<>'ALLOWED' then 'ALERTS_PERMISSION_NOT_ALLOWED' else null end),
-      'SEO',jsonb_build_object('row_state',v_state.seo_row_state,'row_reason',v_state.seo_row_reason,'source_global_state',v_state.source_operational_state,'consumer_switch_state',v_state.provenance->'consumer_switch_states'->>'seo','permission_state',v_state.provenance->'consumer_permission_states'->>'seo','effective_state',v_state.seo_state,'first_unresolved_or_blocking_reason',v_state.seo_effective_reason)),
+      'CATALOG',jsonb_build_object('row_state',v_state.catalog_row_state,'source_global_state',v_state.source_operational_state,'consumer_switch_state',v_state.provenance->'consumer_switch_states'->>'catalog','permission_role','ADVISORY_FIRST_PARTY','permission_state',v_state.provenance->'consumer_permission_states'->>'catalog','effective_state',v_state.catalog_state,'first_unresolved_or_blocking_reason',case when v_state.catalog_row_state<>'READY' then 'CATALOG_ROW_NOT_READY' when v_state.source_operational_state<>'ENABLED' then v_state.source_operational_reason when v_state.provenance->'consumer_switch_states'->>'catalog'<>'ALLOWED' then 'CATALOG_SWITCH_OR_ALIAS_CONFLICT' else null end),
+      'MATCHING',jsonb_build_object('row_state',v_state.matching_row_state,'source_global_state',v_state.source_operational_state,'consumer_switch_state',v_state.source_matching_operational_state,'permission_role','ADVISORY_FIRST_PARTY','permission_state',v_state.source_matching_state,'effective_state',v_state.final_matching_state,'first_unresolved_or_blocking_reason',case when v_state.matching_row_state<>'READY' then v_state.matching_row_reason when v_state.source_operational_state<>'ENABLED' then v_state.source_operational_reason when v_state.source_matching_operational_state<>'ALLOWED' then v_state.source_matching_operational_reason else null end),
+      'ALERTS',jsonb_build_object('row_state',v_state.alerts_row_state,'source_global_state',v_state.source_operational_state,'consumer_switch_state',v_state.provenance->'consumer_switch_states'->>'alerts','permission_role','ADVISORY_FIRST_PARTY','permission_state',v_state.provenance->'consumer_permission_states'->>'alerts','effective_state',v_state.alerts_state,'first_unresolved_or_blocking_reason',case when v_state.alerts_row_state<>'READY' then 'ALERT_ROW_NOT_READY' when v_state.source_operational_state<>'ENABLED' then v_state.source_operational_reason when v_state.provenance->'consumer_switch_states'->>'alerts'<>'ALLOWED' then 'ALERTS_SWITCH_OR_ALIAS_CONFLICT' else null end),
+      'SEO',jsonb_build_object('row_state',v_state.seo_row_state,'row_reason',v_state.seo_row_reason,'source_global_state',v_state.source_operational_state,'consumer_switch_state',v_state.provenance->'consumer_switch_states'->>'seo','permission_role','ADVISORY_FIRST_PARTY','permission_state',v_state.provenance->'consumer_permission_states'->>'seo','effective_state',v_state.seo_state,'first_unresolved_or_blocking_reason',v_state.seo_effective_reason)),
     'catalog_state',v_state.catalog_state,'matching_row_state',v_state.matching_row_state,'matching_row_reason',v_state.matching_row_reason,'source_matching_state',v_state.source_matching_state,'source_matching_reason',v_state.source_matching_reason,'source_matching_operational_state',v_state.source_matching_operational_state,'source_matching_operational_reason',v_state.source_matching_operational_reason,'final_matching_state',v_state.final_matching_state,'seo_state',v_state.seo_state,'alerts_state',v_state.alerts_state,'unresolved_dimensions',v_state.unresolved_dimensions,'source_permission_unknown_dimensions',v_state.source_permission_unknown_dimensions,'provenance',v_state.provenance);
   v_result:=v_result||jsonb_build_object('source_operational_state',v_state.source_operational_state,'source_operational_reason',v_state.source_operational_reason);
   if v_pending then
@@ -543,4 +515,31 @@ begin
     end loop;
   end if;
   return v_result;
+end $$;
+
+
+-- C09.1: operator routing state is not factual row verification.
+-- Preserve trust/auto_verify and intrinsic readiness; no row rewrite on apply.
+create or replace function public.apply_opportunity_source_trust()
+returns trigger language plpgsql security definer set search_path=public as $$
+declare v_source_policy jsonb; v_source_trust jsonb; v_decision jsonb;
+begin
+  new.source:=coalesce(nullif(trim(new.source),''),'unknown');
+  insert into public.opportunity_sources(source,display_name,trust_level,auto_verify,is_enabled,notes)
+  values(new.source,initcap(replace(new.source,'_',' ')),'review',false,true,'Fuente detectada automáticamente; requiere configuración.') on conflict(source) do nothing;
+  select to_jsonb(s) into v_source_trust from public.opportunity_sources s where s.source=new.source;
+  new.country_code:=coalesce(new.country_code,(v_source_trust->>'country_code'));
+  if v_source_trust->>'trust_level'='blocked' then new.verification_status:='quarantined'; new.is_active:=false;
+  elsif new.verification_status='pending' and v_source_trust->>'auto_verify'='true' then
+    new.verification_status:='verified'; new.verification_score:=coalesce(new.verification_score,85);
+    new.verification_reasons:=coalesce(nullif(new.verification_reasons,'[]'::jsonb),(v_source_trust->'verification_criteria'));
+    new.reviewed_at:=coalesce(new.reviewed_at,now()); new.reviewed_by:=coalesce(new.reviewed_by,'source_policy:'||new.source); new.is_active:=true;
+  elsif new.verification_status<>'verified' then new.is_active:=false; end if;
+  v_source_policy:=public.canonical_opportunity_source_policy(new.source);
+  v_decision:=public.opportunity_universe_decision(to_jsonb(new),null,v_source_policy);
+  new.catalog_eligible:=(v_decision->>'catalog_row_state'='READY');
+  new.match_eligible:=(v_decision->>'matching_row_state'='READY');
+  new.alerts_eligible:=(v_decision->>'alerts_row_state'='READY');
+  new.seo_eligible:=(v_decision->>'seo_row_state'='READY');
+  return new;
 end $$;

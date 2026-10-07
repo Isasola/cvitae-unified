@@ -14,6 +14,15 @@ Supabase reportó Disk IO Budget próximo a agotarse. Netlify dispone de unos 7
 créditos: no usar un production deploy como prueba. `feature/aws-migration` es
 PROD; un push dispara deployment.
 
+## C09.1 - Delta pre-release de semantica, sin cambiar el orden
+
+- La revision local separa operacion Registry, permisos por consumer, row gates y override auditado. 040001 normaliza defaults source/consumer y conserva kills explicitos de source/SEO en admin_policy_events. El trigger de ingreso conserva trust/auto_verify, sin usar el switch operacional para cambiar la verificacion factual.
+- La lista operacional SQL es una proyeccion Registry V2, regenerable localmente con `tsx scripts/generate_opportunity_universe_artifacts.ts --source-operation-projection-only`; verifier exige paridad. Este comando no se ejecuta contra PROD ni cambia los artifacts historicos.
+- 030002 y las otras tres migrations no cambian. Sigue el mismo orden 1->5 y el mismo reconcile/cursor (canary 10, continuacion 100). No aplicar 202610020001 como migration nueva.
+- El preflight PROD anterior PASS pertenece al RC congelado antes de este delta. Los manifests read-only preflight/rollback se actualizan solo por la dependencia de 040001; no se ejecutan en esta pasada. Capturar el rollback completo de la version nueva antes de un apply autorizado; incluye apply_opportunity_source_trust() y su trigger, sin inventar deploy ID.
+- En smoke comprobar source activa aun con Google Jobs/third-party DENIED; Catalog/Matching/Alerts/SEO por datos/lifecycle y operator state. Permisos historicos first-party son advisory; externos siguen fail-closed. Computrabajo no necesita ventana: misma fila READY el 03/09/10 de octubre. 105 perfiles = 96 ejecutables ACTIVE por default (92 archivos) + 9 sin producer canonico propio (8 sin implementacion; 1 identidad de version compartida); no afirmar estado/kills PROD desde el conteo local.
+- Rollback conserva el proceso I existente. Si se revierte el delta de verificacion, restaurar la definicion/owner/ACL de apply_opportunity_source_trust() desde el JSON read-only guardado, junto con las functions/policy/views del mismo snapshot. No reconstruir SQL anterior de memoria ni restaurar falsos defaults como permisos. No se ejecuta este plan localmente.
+
 ## A. Migrations y configuración a aplicar
 
 Aplicar únicamente los archivos pendientes, después del preflight de schema y
@@ -32,15 +41,13 @@ backup de funciones que exige el gate existente Item 49/50:
    definición completa del reducer SEO (se corrigió el salto de línea que pegaba
    CREATE FUNCTION a un comentario); misma ventana Computrabajo, sin extensión.
 3. `supabase/migrations/202610040001_source_switch_wiring.sql`:
-   `canonical_opportunity_source_policy` resuelve defaults de Catalog/Matching/
-   Alerts sólo para permiso ALLOWED + fuente enabled. Conserva decisiones
-   explícitas de `admin_policy_events`. El RPC Admin registra incluso una
-   solicitud false→false y el RPC público entrega esa intención. Los switches
-   almacenados no se bulk-updatean. Dirty queue gana cursor; deadline maintenance
-   gana metadata/index de próxima revisión, sin otro reducer. Las vistas canónicas
-   bloquean kills/denials actuales incluso antes de drenar la cola. La vista SEO
-   impide extender la excepción Computrabajo por un estado persistido viejo; el
-   owner común reconcilia su expiración mediante la misma dirty queue.
+   `canonical_opportunity_source_policy` deriva default ACTIVE de los 96 productores
+   ejecutables y diagnostica 9 NO_EXECUTABLE_PRODUCER. Conserva kills auditados,
+   solicitudes false->false y stored switches para rollback. El reducer/vistas
+   finales separan first-party row gates de advisory source permissions; Google
+   Jobs/third-party no se habilitan. Retira la excepcion Computrabajo redundante
+   del reducer/view/maintenance final. Dirty queue/cursor y deadline maintenance
+   se conservan, sin otro reducer ni reconciliacion al aplicar.
 4. `supabase/migrations/202610040002_public_catalog_coverage.sql`:
    búsqueda/filtros sobre Catalog canónico antes de LIMIT, 101 lookahead/100
    resultados + cursor; índices de búsqueda factual y área. Requiere pg_trgm en
@@ -63,7 +70,7 @@ las cinco migrations anteriores; tampoco ejecutar los viejos monolitos SQL.
 Prerequisitos: tablas/RPCs/views de Universe, Observation, permissions y Admin
 policy events ya existentes en el diagnóstico. No reejecutar ciegamente la
 migration base ni el viejo monolito de apply; podría restaurar el worker sin
-cursor. No habilitar UNJobs ni WWR ni cambiar permissions por este plan.
+cursor. No cambiar evidencia de permissions. UNJobs/WWR son operacionales por producer ejecutable; sus puertas first-party dependen de datos/lifecycle y kills, no de UNKNOWN/DENIED historico.
 
 Runtime del mismo release: proyección efectiva compartida, policy RPC en
 Retrieval/match-batch/Alert sender, endpoint público paginado y browser lists,
@@ -144,7 +151,7 @@ permitida → Universe → consumidores → Admin, usando las autoridades existe
 o cambio factual. `opportunity_observation_refresh_universe` puede reparar esa
 fila con nueva evidencia factual. Se aplica la misma policy efectiva que al
 histórico. Una fila ya verificada y factual ready no necesita un operador que
-encienda un default stale. Falta de evidencia/permiso conserva reason UNKNOWN.
+encienda un default stale. Falta de evidencia factual conserva reason UNKNOWN; permissions historicas first-party quedan advisory, externas fail-closed.
 
 Factory/bridge existentes siguen certificación explícita. El worker
 `run_scheduled_source_automation.py` es el owner preparado, con receipts,
@@ -265,17 +272,19 @@ READY si intrinsic gates pasan. Abrir su página pública y confirmar attributio
 visible + link Himalayas original. JobPosting/Google Jobs/third-party DENIED;
 la página se indexa normalmente como WebPage, sin syndication.
 
-## H. UNKNOWN, DENIED y kill siguen fuera
+## H. Negativos factuales, distribucion externa y kills
 
-Comparar un ID UNJobs y WWR ya existentes mediante row inspector y exact lookup
-en las vistas; no deben pasar por switches true. Lifecycle UNKNOWN permanece
-pendiente hasta evidencia factual suficiente. Un override explícito del audit
-debe explicar denial aunque fila READY y permiso ALLOWED; no apagar una fuente
-real sólo para crear la prueba. Usar el audit real existente y pruebas locales.
+Comparar IDs existentes de UNJobs/WWR mediante inspector y vistas exactas.
+Filas factuales completas pueden pasar first-party aun con advisory UNKNOWN/DENIED;
+no reescribir esa evidencia. Lifecycle UNKNOWN o datos faltantes quedan fuera con
+razon factual. External Google Jobs/third-party UNKNOWN/DENIED no entregan.
+Verificar un kill manual real auditado sin apagar una fuente para crear la prueba:
+source kill bloquea todas sus rutas; consumer kill solo la puerta indicada.
+Un perfil sin producer debe mostrar NO_EXECUTABLE_PRODUCER, sin falsa activacion.
 
-Computrabajo: sólo qualifying legacy SEO rows, exactamente hasta 2026-10-09 UTC
-inclusive; 2026-10-10 EXPIRED, normal deny. Nunca Catalog/Matching/Alerts ni otra
-fuente por esa excepción.
+Computrabajo: filas completas antiguas/nuevas pasan ordinary SEO por los mismos
+row gates, sin excepcion/fecha source-specific; las incompletas no. Su evidencia
+historica y los permisos de distribucion externa permanecen intactos.
 
 ## I. Rollback exacto
 
@@ -313,7 +322,7 @@ se borran rows, receipts o evidence. Source-policy original queda intacta salvo
 cambios explícitos de operador auditados. Sólo con autorización: restaurar el
 deploy publicado anterior por su ID registrado, sin push de debug; suspender
 workers del release y conservar todos los checkpoints. Verificar exact-row,
-denials y SEO/JobPosting. Para reconciliar estados explicativos tras rollback,
+kills/denials externos y SEO/JobPosting. Para revertir la semantica C09.1 completa, restaurar las definiciones/owner/ACL de opportunity_universe_decision y las cuatro views desde el snapshot pre-apply, ademas de canonical_opportunity_source_policy/apply_opportunity_source_trust; usar el runtime anterior correspondiente. No reconstruir el veto anterior desde memoria. Para reconciliar estados explicativos tras rollback,
 usar C con un state-file nuevo `final-cable-rollback-cursor.json`, bajo budget
 autorizado. No restaurar el viejo RPC que refrescaba fuentes enteras sin cursor.
 
@@ -387,7 +396,7 @@ validacion PROD respectivamente. No repetir sus fixtures para rediagnosticar.
   mismo cursor, sin reiniciar ni duplicar trabajo. No ejecutar ahora.
 - **Acceptance posterior:** F exige Catalog > 0, Matching > 0, Alerts > 0,
   SEO > 0 y contenido real, no solo HTTP 200. G valida una Himalayas exacta;
-  H preserva UNKNOWN/DENIED/manual-kill y Computrabajo temporal. E conserva
+  H conserva lifecycle UNKNOWN, external UNKNOWN/DENIED, manual kills y Computrabajo row-driven sin excepcion. E conserva
   el canary futuro del scraper real, 1 item con run/identity/lineage/Observation
   factuales; UNCHANGED no prueba NEW DATA. Alert delivery solo con consentimiento
   y autorizacion especifica; gate automatico true solo despues de smoke/canary

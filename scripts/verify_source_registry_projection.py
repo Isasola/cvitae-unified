@@ -48,6 +48,16 @@ session=Session(); outcome=apply([{"source":"new_source","action":"INSERT","desi
 assert outcome[0]["action"]=="INSERT" and session.calls[0][0]=="POST"
 payload=session.calls[0][2]["json"]
 assert payload["is_enabled"] is False and payload["trust_level"]=="review" and "registry_policy_hash" in payload
+functional_session=Session()
+apply([{"source":"himalayas","action":"INSERT","desired":desired}],session=functional_session)
+functional_payload=functional_session.calls[0][2]["json"]
+assert functional_payload["is_enabled"] is True
+assert functional_payload["auto_verify"] is False and functional_payload["registry_auto_enabled"] is False
+assert functional_payload["google_jobs_distribution_allowed"] is False
+assert "catalog_enabled" not in functional_payload
+from sync_source_registry import build_row
+assert build_row({"source_id":"computrabajo"})["is_enabled"] is True
+assert build_row({"source_id":"computrabajo"})["catalog_enabled"] is False
 inventory=projection_inventory([
     {"source":"himalayas","action":"NOOP"},
     {"source":"new_source","action":"INSERT"},

@@ -6,42 +6,10 @@ import { pg_trgm } from '../.cvitae-state/cable-sql-test/node_modules/@electric-
 import { createPublicOpportunitiesHandler } from '../netlify/functions/public-opportunities.ts'
 import { pipelineWithCurrentUniverse } from '../src/lib/opportunity-universe.ts'
 const db = new PGlite({ extensions: { pg_trgm } })
-const sql = path => readFileSync(path, 'utf8')
+const sql = path => readFileSync(path, 'utf8').replaceAll('\r\n', '\n')
 const query = async (text, params = []) => (await db.query(text, params)).rows
 const checks = []
-const filesChangedThisPass = [
-  ".gitignore",
-  "WORKING_PRINCIPLES.md",
-  "docs/GRAND_CHECKPOINT.md",
-  "docs/POST_RELEASE_BACKLOG.md",
-  "netlify/functions/lib/public-opportunity-pagination.ts",
-  "netlify/functions/public-opportunities.ts",
-  "netlify/functions/send-high-match-alerts.ts",
-  "netlify/functions/admin-data.ts",
-  "src/lib/effective-source-policy.ts",
-  "src/lib/opportunity-universe.ts",
-  "src/lib/public-source-policy.ts",
-  "src/pages/Jobs.tsx",
-  "src/pages/Opportunities.tsx",
-  "src/pages/MarketOpportunities.tsx",
-  "supabase/functions/match-batch/index.ts",
-  "supabase/migrations/202610030002_opportunity_universe_seo_permission.sql",
-  "supabase/migrations/202610040001_source_switch_wiring.sql",
-  "supabase/migrations/202610040002_public_catalog_coverage.sql",
-  "scripts/run_matching_retrieval_expansion.ts",
-  "scripts/refresh_opportunity_universe_maintenance.ts",
-  "scripts/run_observation_coverage_recovery.py",
-  "scripts/run_source_maintenance.py",
-  "scripts/verify_effective_source_policy.ts",
-  "scripts/verify_opportunity_universe.ts",
-  "scripts/verify-public-opportunity-pagination.ts",
-  "scripts/verify_matching_retrieval_expansion.ts",
-  "scripts/verify_observation_coverage_recovery.py",
-  "scripts/verify-release-candidate.mjs",
-  "scripts/verify_cable_wiring_sql.mjs",
-  "artifacts/release/final-cable-apply-plan.md",
-  "artifacts/release/cable-local-sql-evidence.json"
-]
+
 const pass = name => { checks.push(name); console.log(`PASS ${name}`) }
 try {
   await db.exec(`
@@ -96,6 +64,7 @@ try {
     values($1,$2,$1,$4,'Factual fixture organization',repeat('Lead programme delivery, research and stakeholder coordination with professional experience. ',3),
       'job',$3,'verified',now()-interval '1 day','Research')`, [id,source,active,title])
   await insert('existing')
+  await query("update opportunity_sources set is_enabled=false,seo_enabled=false where source='himalayas'")
   assert.equal((await query("select catalog_state from opportunity_universe_state where opportunity_id='existing'"))[0].catalog_state, 'NOT_READY')
   await db.exec(sql('supabase/migrations/202610040001_source_switch_wiring.sql'))
   await db.exec(sql('supabase/migrations/202610040002_public_catalog_coverage.sql'))
@@ -135,11 +104,11 @@ try {
   for (const source of ['unjobs','weworkremotely']) {
     await insert(source,source)
     const state = (await query('select * from opportunity_universe_state where opportunity_id=$1',[source]))[0]
-    for (const field of ['catalog_state','final_matching_state','alerts_state']) assert.equal(state[field],source==='unjobs'?'UNKNOWN':'NOT_READY')
-    assert.equal((await query('select count(*) n from opportunity_catalog_universe where id=$1',[source]))[0].n,0)
+    for (const field of ['catalog_state','final_matching_state','alerts_state']) assert.equal(state[field],'READY','first-party routing ignores historical source-level permission vetoes')
+    assert.equal((await query('select count(*) n from opportunity_catalog_universe where id=$1',[source]))[0].n,1)
   }
-  pass('CASE_3_UNKNOWN_PERMISSION_TRUE_SWITCH_BLOCKED')
-  pass('CASE_4_DENIED_PERMISSION_BLOCKED')
+  pass('CASE_3_UNKNOWN_ADVISORY_ROW_DRIVEN')
+  pass('CASE_4_DENIED_ADVISORY_ROW_DRIVEN')
   // The current false -> false request must still record operator intent.
   await query(`select admin_update_source_policy_atomic('himalayas','{"catalog_enabled":false,"matching_enabled":false,"alerts_enabled":false}',null,'admin')`)
   assert.equal((await query('select count(*) n from opportunity_catalog_universe where source=\'himalayas\''))[0].n,0,'explicit kill takes effect before dirty queue drains')
@@ -173,6 +142,59 @@ try {
   assert.equal(resolved.lifecycle_state,'ACTIVE_VALID')
   for (const field of ['catalog_state','final_matching_state','alerts_state']) assert.equal(resolved[field],'READY')
   pass('CASE_8_UNKNOWN_FACTUAL_OBSERVATION_AUTOMATIC')
+  // C09.1: a stale default is not a manual kill; permissions never own collection.
+  assert.equal((await query("select canonical_opportunity_source_policy('weworkremotely') p"))[0].p.is_enabled,true)
+  assert.equal((await query("select canonical_opportunity_source_policy('unjobs') p"))[0].p.is_enabled,true)
+  assert.equal((await query("select * from get_source_distribution_policy() where source='himalayas'"))[0].seo_enabled,true)
+  await query(`select admin_update_source_policy_atomic('himalayas','{"seo_enabled":false}',null,'admin')`)
+  const seoKill=(await query("select get_opportunity_universe_row('future') p"))[0].p
+  assert.equal(seoKill.consumer_diagnostics.SEO.effective_state,'NOT_READY')
+  assert.equal(seoKill.consumer_diagnostics.MATCHING.effective_state,'READY')
+  assert.equal((await query("select canonical_opportunity_source_policy('himalayas') p"))[0].p.consumer_switch_overrides.seo,false)
+  await query(`select admin_update_source_policy_atomic('himalayas','{"is_enabled":false}',null,'admin')`)
+  assert.equal((await query("select canonical_opportunity_source_policy('himalayas') p"))[0].p.is_enabled,false)
+  assert.equal((await query("select count(*) n from opportunity_catalog_universe where source='himalayas'"))[0].n,0)
+  await insert('operator-killed-row')
+  assert.equal((await query("select verification_status from opportunities where id='operator-killed-row'"))[0].verification_status,'verified','operator switch cannot falsify row verification')
+  assert.equal((await query("select catalog_state from opportunity_universe_state where opportunity_id='operator-killed-row'"))[0].catalog_state,'NOT_READY','operator kill still blocks delivery')
+  await query(`select admin_update_source_policy_atomic('himalayas','{"is_enabled":true,"seo_enabled":true}',null,'admin')`)
+  await insert('seo-thin','himalayas')
+  await query("update opportunities set description='' where id='seo-thin'")
+  assert.equal((await query("select seo_state from opportunity_universe_state where opportunity_id='seo-thin'"))[0].seo_state,'NOT_READY')
+  await query("update opportunities set description=repeat('Factual programme responsibilities and experience. ',4) where id='seo-thin'")
+  assert.equal((await query("select seo_state from opportunity_universe_state where opportunity_id='seo-thin'"))[0].seo_state,'READY')
+  // Every ready source fixture uses the same persisted reducer, including historical advisory DENIED.
+  for (const source of ['computrabajo','impactpool','fundacion_carolina','arbeitnow']) {
+    await query('insert into opportunity_sources(source,auto_verify,is_enabled) values($1,true,false)',[source])
+    await query('insert into opportunity_source_identity_aliases values($1,$1) on conflict do nothing',[source])
+    for (const consumer of ['catalog','matching','alerts','seo_index','google_jobs','third_party_distribution'])
+      await query(`insert into opportunity_source_consumer_permissions(canonical_source,consumer,permission_state,reason,provenance)
+        values($1,$2,'DENIED','EXPLICIT_LOCAL_NEGATIVE_FIXTURE','LOCAL_ONLY') on conflict do nothing`,[source,consumer])
+    await insert(source,source)
+    const state=(await query('select * from opportunity_universe_state where opportunity_id=$1',[source]))[0]
+    for (const field of ['catalog_state','final_matching_state','alerts_state','seo_state']) assert.equal(state[field],'READY')
+    assert.equal(state.provenance.temporary_legacy_seo_exception,undefined)
+    const admin=(await query('select get_opportunity_universe_row($1) p',[source]))[0].p
+    for (const consumer of ['CATALOG','MATCHING','ALERTS','SEO']) {
+      assert.equal(admin.consumer_diagnostics[consumer].permission_state,'DENIED')
+      assert.equal(admin.consumer_diagnostics[consumer].permission_role,'ADVISORY_FIRST_PARTY')
+      assert.equal(admin.consumer_diagnostics[consumer].effective_state,'READY')
+    }
+  }
+  await query(`insert into opportunity_source_consumer_permissions(canonical_source,consumer,permission_state,reason,provenance)
+    values('weworkremotely','google_jobs','DENIED','EXPLICIT_LOCAL_NEGATIVE_FIXTURE','LOCAL_ONLY')`)
+  await query(`select admin_update_source_policy_atomic('weworkremotely','{"seo_enabled":false}',null,'admin')`)
+  assert.equal((await query("select count(*) n from opportunity_seo_universe where source='weworkremotely'"))[0].n,0)
+  assert.equal((await query("select count(*) n from opportunity_catalog_universe where source='weworkremotely'"))[0].n,1)
+  await query(`select admin_update_source_policy_atomic('weworkremotely','{"seo_enabled":true}',null,'admin')`)
+  await query("insert into opportunity_sources(source,is_enabled,auto_verify) values('conacyt_convocatorias',true,true)")
+  await query("insert into opportunity_source_identity_aliases values('conacyt_convocatorias','conacyt_convocatorias') on conflict do nothing")
+  assert.equal((await query("select canonical_opportunity_source_policy('conacyt_convocatorias') p"))[0].p.producer_state,'NO_EXECUTABLE_PRODUCER')
+  assert.equal((await query("select canonical_opportunity_source_policy('conacyt_convocatorias') p"))[0].p.is_enabled,false)
+  await insert('no-producer','conacyt_convocatorias')
+  assert.equal((await query("select get_opportunity_universe_row('no-producer') p"))[0].p.source_operational_reason,'NO_EXECUTABLE_PRODUCER')
+  pass('C09_1_FIRST_PARTY_ROW_DRIVEN_EXTERNAL_DENIED_ADVISORY_AND_NO_PRODUCER')
+  pass('C09_1_OPERATIONAL_DEFAULT_SOURCE_AND_SEO_AUDITED_KILLS_ROW_REPAIR')
   // More than 1,000 existing rows; search and area predicates execute in SQL.
   for (let page=0;page<6;page++) await db.exec(`insert into opportunities(id,source,slug,title,organization,description,opportunity_type,is_active,verification_status,updated_at,rubro)
     select 'bulk-'||lpad(n::text,5,'0'),'himalayas','bulk-'||n,'Programme Officer','Fixture',repeat('Professional programme coordination responsibilities and factual experience requirements. ',3),'job',true,'verified',now()+interval '1 day','Operations'
@@ -250,7 +272,7 @@ try {
   // After exercising the verbatim migration, inject only the clock dependency
   // into the same reducer/view definitions to prove the inclusive date boundary.
   // Repository SQL is not modified; this isolated in-memory DB is destroyed.
-  await query("insert into opportunity_sources(source,auto_verify) values('computrabajo',true)")
+  await query("insert into opportunity_sources(source,auto_verify) values('computrabajo',true) on conflict do nothing")
   await query("insert into opportunity_source_identity_aliases values('computrabajo','computrabajo') on conflict do nothing")
   for(const consumer of ['catalog','matching','alerts','seo_index']) await query(`insert into opportunity_source_consumer_permissions(canonical_source,consumer,permission_state,reason,provenance)
     values('computrabajo',$1,$2,'TEMPORARY_CONTRACT_FIXTURE','LOCAL_ONLY') on conflict(canonical_source,consumer) do update set permission_state=excluded.permission_state`,[consumer,consumer==='matching'?'UNKNOWN':'DENIED'])
@@ -263,15 +285,18 @@ try {
   const seoViewStart=wiringSql.indexOf('create or replace view public.opportunity_seo_universe')
   const seoView=wiringSql.slice(seoViewStart,wiringSql.indexOf(';',seoViewStart)+1)
   await db.exec((reducer+'\n'+seoView).replaceAll('now()','public.cvitae_test_now()'))
-  for(const [date,expected] of [['2026-10-03','READY'],['2026-10-09','READY'],['2026-10-10','NOT_READY']]) {
+  for(const [date,expected] of [['2026-10-03','READY'],['2026-10-09','READY'],['2026-10-10','READY']]) {
     await query("select set_config('cvitae.test_now',$1,false)",[`${date}T12:00:00Z`])
     await query("select refresh_opportunity_universe('ct-legacy')")
     const state=(await query("select * from opportunity_universe_state where opportunity_id='ct-legacy'"))[0]
     assert.equal(state.seo_state,expected)
     assert.equal((await query("select count(*) n from opportunity_seo_universe where id='ct-legacy'"))[0].n,expected==='READY'?1:0)
-    assert.notEqual(state.catalog_state,'READY'); assert.notEqual(state.final_matching_state,'READY'); assert.notEqual(state.alerts_state,'READY')
+    for (const field of ['catalog_state','final_matching_state','alerts_state']) assert.equal(state[field],'READY')
+    assert.equal(state.provenance.temporary_legacy_seo_exception,undefined)
   }
-  pass('COMPUTRABAJO_SQL_OCT03_OCT09_READY_OCT10_EXPIRED_ONLY_SEO')
+  await query("update opportunities set created_at='2026-10-10',seo_eligible=false,seo_status='pending' where id='ct-legacy'")
+  assert.equal((await query("select seo_state from opportunity_universe_state where opportunity_id='ct-legacy'"))[0].seo_state,'READY')
+  pass('COMPUTRABAJO_SQL_ALL_DATES_HISTORICAL_FUTURE_ROW_DRIVEN_NO_EXCEPTION')
   const rollback=sql('artifacts/release/final-cable-apply-plan.md').split('## I. Rollback exacto')[1].match(/```sql\n([\s\S]*?)```/)[1]
   await db.exec(rollback)
   assert.equal((await query("select count(*) n from opportunity_catalog_universe where id='jobicy'"))[0].n,0)
@@ -279,5 +304,5 @@ try {
   assert.equal((await query("select * from get_source_distribution_policy() where source='jobicy'"))[0].consumer_switch_overrides.catalog,false)
   assert.ok((await query('select count(*) n from opportunity_universe_dirty_sources'))[0].n>0)
   pass('EXACT_RELEASE_PLAN_ROLLBACK_FUNCTION_AND_DIRTY_QUEUE')
-  writeFileSync('artifacts/release/cable-local-sql-evidence.json',JSON.stringify({status:'LOCAL_SQL_EXECUTION_PASS',engine:'PGlite PostgreSQL',checks,catalog_rows:total,catalog_pages:requests,dirty_pages:dirtyPages,seo_urls:sitemap.length,files_changed_this_pass:filesChangedThisPass,prod_executed:false},null,2)+'\n')
+  writeFileSync('artifacts/release/cable-local-sql-evidence.json',JSON.stringify({status:'LOCAL_SQL_EXECUTION_PASS',engine:'PGlite PostgreSQL',checks,catalog_rows:total,catalog_pages:requests,dirty_pages:dirtyPages,seo_urls:sitemap.length,checkpoint:"C09.1 delta; C09/C20 baseline retained",changed_migrations:["202610040001_source_switch_wiring.sql"],prod_executed:false},null,2)+'\n')
 } finally { await db.close() }
