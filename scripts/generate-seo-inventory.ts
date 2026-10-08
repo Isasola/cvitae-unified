@@ -1,11 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { createClient } from '@supabase/supabase-js'
-import { buildEffectiveSeoInventory } from '../src/lib/seo-inventory.ts'
+import { buildEffectiveSeoInventory, buildSeoInventoryFromUniverse } from '../src/lib/seo-inventory.ts'
+import { publicDistributionProjection } from '../src/lib/effective-source-policy.ts'
 import type { SourcePolicyRow } from '../src/lib/effective-source-policy.ts'
 import { seoUniversePages } from '../src/lib/seo-universe-fetch.js'
 
-type Input = { opportunities: Record<string, any>[]; policies: SourcePolicyRow[] }
+type Input = { opportunities: Record<string, any>[]; policies: SourcePolicyRow[]; fromUniverse?: boolean }
 const root = path.resolve(import.meta.dirname, '..')
 const output = path.join(root, 'generated', 'public-seo-inventory.json')
 const policyOutput = path.join(root, 'generated', 'source-distribution-policy-snapshot.json')
@@ -24,11 +25,17 @@ async function input(): Promise<Input> {
   if (policyError) throw policyError
   const opportunities: Record<string, any>[] = []
   for await (const page of seoUniversePages(db, OPPORTUNITY_COLUMNS)) opportunities.push(...page)
-  return { opportunities, policies: policies || [] }
+  return { opportunities, policies: policies || [], fromUniverse: true }
 }
 
-const { opportunities, policies } = await input()
-const rows = buildEffectiveSeoInventory(opportunities, policies)
+const { opportunities, policies, fromUniverse } = await input()
+// The offline fixture contains raw rows and deliberately tests shared row gates.
+// Live rows have already crossed the canonical SQL consumer gate. Re-filtering
+// them here can silently drop an admitted future source from build/sitemap.
+const rows = fromUniverse ? buildSeoInventoryFromUniverse(opportunities).map(row => {
+    const { seo: _legacySeoDecision, ...external } = publicDistributionProjection(row, policies)
+    return { ...row, distribution: { ...external, seo: { allowed: true, authority: 'opportunity_seo_universe' } } }
+  }) : buildEffectiveSeoInventory(opportunities, policies)
 fs.mkdirSync(path.dirname(output), { recursive:true })
 const policyFields = ['source','is_enabled','catalog_enabled','matching_enabled','alerts_enabled','seo_enabled','registry_certified','registry_adapter_version','registry_policy_hash','registry_synced_at','web_catalog_allowed','search_engine_indexing_allowed','google_jobs_distribution_allowed','third_party_job_distribution_allowed','source_attribution_required','consumer_switch_overrides']
 const policySnapshot = policies.map(policy => Object.fromEntries(policyFields.filter(field => field in policy).map(field => [field, (policy as any)[field]])))
