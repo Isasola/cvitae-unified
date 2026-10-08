@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { chromium } from '@playwright/test'
 import { createPublicOpportunitiesHandler } from '../netlify/functions/public-opportunities.ts'
-import { createPublicDetailHandler } from '../netlify/functions/public-opportunity-detail.ts'
+import { createPublicDetailHandler, parsePublicDetailPath } from '../netlify/functions/public-opportunity-detail.ts'
 import { DETAIL_FALLBACK_RULES } from './generate-opportunity-redirects.mjs'
 import { canonicalOpportunityPathForRow } from '../src/lib/opportunity-truth.ts'
 import { evaluateOpportunityDistribution } from '../src/lib/effective-source-policy.ts'
@@ -112,22 +112,42 @@ const event = (params: Record<string, string>) => ({ queryStringParameters: para
 const invoke = async (params: Record<string, string>) => await api(event(params), {} as any, () => {}) as any
 const template = '<html><head><title>Home</title><meta name="robots" content="index,follow"><link rel="canonical" href="https://cvitae.lat"><script type="module" src="/assets/app.js"></script></head><body><div id="root">Home snapshot</div></body></html>'
 const htmlHandler = createPublicDetailHandler(api, () => template)
-const detailRequest = (slug: string, family = 'empleos') => new Request(`http://localhost/.netlify/functions/public-opportunity-detail?${new URLSearchParams({ slug, family })}`)
+// Model the production rewrite: original event.path, no injected query.
+const requestEvent = (pathname: string, rawQuery = '') => ({
+  path: pathname, rawQuery, rawUrl: `http://localhost${pathname}${rawQuery ? '?' + rawQuery : ''}`,
+  httpMethod: 'GET', headers: {}, multiValueHeaders: {},
+  queryStringParameters: Object.fromEntries(new URLSearchParams(rawQuery)),
+  multiValueQueryStringParameters: null, body: null, isBase64Encoded: false,
+})
+const detailRequest = (slug: string, family = 'empleos') => requestEvent('/.netlify/functions/public-opportunity-detail', new URLSearchParams({ slug, family }).toString())
 const html = async (slug: string, family = 'empleos') => {
-  const response = await htmlHandler(detailRequest(slug, family), {} as any)
-  return { statusCode: response.status, headers: { Location: response.headers.get('Location') }, body: await response.text() }
+  const response = await htmlHandler(detailRequest(slug, family))
+  return { ...response, headers: response.headers || {}, body: response.body || '' }
 }
 assert.doesNotMatch(read('netlify.toml'), /from = "\/(empleos|oportunidades)\/:slug\/?"/)
 const detailSource = read('netlify/functions/public-opportunity-detail.ts')
-assert.doesNotMatch(detailSource, /export const config|preferStatic|context\.params/)
-assert.match(detailSource, /url\.searchParams\.get\('slug'\)/)
-assert.match(detailSource, /url\.searchParams\.get\('family'\)/)
-assert.doesNotMatch(detailSource, /queryStringParameters \|\||\.from\(|slug ===|source ===/)
+assert.doesNotMatch(detailSource, /export const config|preferStatic|context\.params|export default/)
+assert.match(detailSource, /export const handler = createPublicDetailHandler\(\)/)
+assert.match(detailSource, /parsePublicDetailPath\(event\.path\)/)
+assert.doesNotMatch(detailSource, /\.from\(|slug ===|source ===/)
 for (const query of ['slug=unsafe%2Fslug&family=empleos', 'slug=valid&family=wrong', 'slug=valid&slug=other&family=empleos', 'slug=valid&family=empleos&family=empleos', 'slug=valid']) {
-  const response = await htmlHandler(new Request(`http://localhost/.netlify/functions/public-opportunity-detail?${query}`), {} as any)
-  assert.equal(response.status, 404, 'invalid or ambiguous query identity is rejected')
+  assert.equal((await htmlHandler(requestEvent('/.netlify/functions/public-opportunity-detail', query))).statusCode, 404, 'invalid or ambiguous direct-query identity is rejected')
 }
-assert.equal((await htmlHandler(detailRequest(a.slug), { params: { slug: 'ignored-custom-param' } } as any)).status, 200, 'validated query is the default endpoint authority, not custom path params')
+for (const pathname of ['/empleos/', '/empleos/a/b', '/empleos/%2e%2e', '/empleos/%2F', '/empleos/a%5Cb', '/empleos/%ZZ', '/empleos//valid', '/other/valid', '/empleos/valid//']) {
+  assert.equal(parsePublicDetailPath(pathname), null, `invalid original path: ${pathname}`)
+  assert.equal((await htmlHandler(requestEvent(pathname, new URLSearchParams({ slug: a.slug, family: 'empleos' }).toString()))).statusCode, 404, 'query cannot rescue an invalid public path')
+}
+for (const row of [a, b, scholarship]) {
+  const canonical = canonicalOpportunityPathForRow(row)
+  for (const slash of ['', '/']) {
+    const result = await htmlHandler(requestEvent(canonical + slash))
+    assert.equal(result.statusCode, 200); assert.ok(result.body!.includes(row.title))
+  }
+  const spoof = await htmlHandler(requestEvent(canonical, 'slug=missing&family=oportunidades'))
+  assert.equal(spoof.statusCode, 200); assert.ok(spoof.body!.includes(row.title), 'original path wins over hostile query')
+}
+assert.deepEqual(parsePublicDetailPath('/empleos/encoded%2Dslug/'), { family: 'empleos', slug: 'encoded-slug' })
+assert.equal((await htmlHandler({ ...detailRequest(a.slug), httpMethod: 'POST' })).statusCode, 405)
 let cursor = '', pages = 0
 const listed = new Map<string, any>()
 do {
@@ -160,11 +180,11 @@ assert.equal(evaluateOpportunityDistribution({ ...facts, source: 'future_source_
 assert.equal(JSON.parse((await invoke({ slug: future.slug })).body).distribution.seo.allowed, true)
 assert.equal(JSON.parse((await invoke({ slug: b.slug })).body).distribution.seo.allowed, false, 'Catalog-only rows remain noindex')
 assert.match((await html(b.slug)).body, /noindex,follow/)
-for (const slug of ['expired-role', 'invalid-deadline', 'deleted-role', 'archived-role', 'inactive-role', 'unknown-role', 'source-kill', 'consumer-kill', '__missing_local__']) {
+for (const slug of ['expired-role', 'invalid-deadline', 'deleted-role', 'archived-role', 'inactive-role', 'unknown-role', 'source-kill', 'consumer-kill', 'missing-local-role', '__missing_local__']) {
   assert.equal((await invoke({ slug })).statusCode, 404)
   const response = await html(slug)
   assert.equal(response.statusCode, 404); assert.match(response.body, /noindex,follow/)
-  assert.doesNotMatch(response.body, /application\/ld\+json|JobPosting/)
+  assert.doesNotMatch(response.body, /application\/ld\+json|JobPosting|rel="canonical"|property="og:url"/)
   assert.ok(![...listed.values()].some(row => row.slug === slug))
 }
 const redirect = await html(a.slug, 'oportunidades')
@@ -178,8 +198,8 @@ const originalError = console.error
 try {
   console.error = () => {}
   assert.equal((await failedApi(event({ slug: a.slug }), {} as any, () => {}) as any).statusCode, 503)
-  const unavailable = await createPublicDetailHandler(failedApi, () => template)(detailRequest(a.slug), {} as any)
-  assert.equal(unavailable.status, 503, 'database errors remain unavailable, not false 404')
+  const unavailable = await createPublicDetailHandler(failedApi, () => template)(detailRequest(a.slug))
+  assert.equal(unavailable.statusCode, 503, 'database errors remain unavailable, not false 404')
 } finally { console.error = originalError }
 const seoRows = await query('select * from opportunity_seo_universe order by id')
 assert.ok(seoRows.length > 2501); assert.ok(seoRows.some(row => row.slug === 'seo-page-2500'))
@@ -273,23 +293,33 @@ if (process.argv.includes('--browser')) {
   const require = createRequire(import.meta.url)
   const esbuild = createRequire(require.resolve('vite'))('esbuild')
   await esbuild.build({
-    stdin: { contents: "export { createPublicDetailHandler } from './netlify/functions/public-opportunity-detail.ts'", resolveDir: process.cwd(), loader: 'ts' },
+    stdin: { contents: "export { createPublicDetailHandler, parsePublicDetailPath } from './netlify/functions/public-opportunity-detail.ts'", resolveDir: process.cwd(), loader: 'ts' },
     bundle: true, platform: 'node', format: 'esm', tsconfigRaw: {},
+    // Bundled CommonJS dependencies (ws) need Node require in the ESM harness.
+    banner: { js: "import { createRequire as createNodeRequire } from 'node:module'; const require = createNodeRequire(import.meta.url);" },
     outfile: '.cvitae-state/generated-detail-runtime.mjs',
   })
+  // Explicit ESM for the legacy fixture wrapper, like the sibling functions.
+  // Remove only the old wrapper created by this verifier, never user files.
+  const oldWrapper = `${fixtureFunctions}/public-opportunity-detail.ts`
+  if (fs.existsSync(oldWrapper)) fs.unlinkSync(oldWrapper)
   // No custom path config: only the built _redirects may reach this endpoint.
-  fs.writeFileSync(`${fixtureFunctions}/public-opportunity-detail.ts`, `
-import { createPublicDetailHandler } from '../generated-detail-runtime.mjs'
-const readPublic = async (event: any) => {
+  fs.writeFileSync(`${fixtureFunctions}/public-opportunity-detail.mjs`, `
+import { createPublicDetailHandler, parsePublicDetailPath } from '../generated-detail-runtime.mjs'
+const readPublic = async (event) => {
   const response = await fetch(${JSON.stringify(fixtureOrigin)} + '/api?' + new URLSearchParams(event.queryStringParameters))
   return { statusCode: response.status, headers: Object.fromEntries(response.headers), body: await response.text() }
 }
-const detail = createPublicDetailHandler(readPublic as any)
-export default async (request: Request, context: any) => {
-  const response = await detail(request, context)
-  response.headers.set('X-Local-Detail-Function', 'generated-redirect')
-  response.headers.set('X-Local-Detail-Query', new URL(request.url).search)
-  return response
+const detail = createPublicDetailHandler(readPublic)
+export const handler = async (event) => {
+  const response = await detail(event)
+  const identity = parsePublicDetailPath(event.path)
+  return { ...response, headers: { ...response.headers,
+    'X-Local-Detail-Function': 'generated-redirect',
+    'X-Local-Original-Path': event.path,
+    'X-Local-Detail-Identity': identity ? identity.family + '/' + identity.slug : '',
+    'X-Local-Detail-Query': event.rawQuery || '',
+  } }
 }
 `)
   fs.writeFileSync(`${fixtureFunctions}/public-opportunities.mjs`, `
@@ -329,8 +359,11 @@ export const handler = async event => {
       if (devExited || Date.now() > deadline) throw new Error(`Netlify Dev failed to start: ${devOutput}`)
       try {
         const ready = await fetch(`${origin}/.netlify/functions/public-opportunity-detail?${new URLSearchParams({ slug: b.slug, family: 'empleos' })}`, { signal: AbortSignal.timeout(1000) })
+        if (ready.status >= 500) throw new Error(`Netlify fixture function error: ${await ready.text()}`)
         if (ready.status === 200 && ready.headers.get('x-local-detail-function') === 'generated-redirect') break
-      } catch {}
+      } catch (error: any) {
+        if (error.message?.startsWith('Netlify fixture function error:')) throw new Error(`${error.message}\n${devOutput}`)
+      }
       await new Promise(resolve => setTimeout(resolve, 500))
     }
     console.log('NETLIFY_DEV=READY offline=true fixture_functions=true')
@@ -356,6 +389,12 @@ export const handler = async event => {
       assert.equal(document!.status(), 200)
       const hasStatic = fs.existsSync(path.join('dist', canonical, 'index.html'))
       assert.equal(document!.headers()['x-local-detail-function'], hasStatic ? undefined : 'generated-redirect', 'static prerender wins; missing static uses generated rewrite to default endpoint')
+      if (!hasStatic) {
+        assert.equal(document!.headers()['x-local-original-path'], canonical + '/')
+        assert.equal(document!.headers()['x-local-detail-identity'], canonical.slice(1))
+        assert.equal(document!.headers()['x-local-detail-query'], '', 'rewrite does not inject query identity')
+        console.log(`ORIGINAL_PATH=${document!.headers()['x-local-original-path']} IDENTITY=${document!.headers()['x-local-detail-identity']}`)
+      }
       assert.equal((await apiResponse)?.status(), 200)
       await page.getByRole('heading', { name: row.title, exact: true }).waitFor()
       // Wait for the live component, not the pre-hydration snapshot.
@@ -373,18 +412,32 @@ export const handler = async event => {
       assert.equal(response.status, 200)
       assert.equal(response.headers.get('x-local-detail-function'), 'generated-redirect')
       const body = await response.text()
+      assert.equal(response.headers.get('x-local-original-path'), canonicalOpportunityPathForRow(row) + slash)
       assert.ok(body.includes(row.title)); assert.match(body, /noindex,follow/)
+      assert.equal((body.match(/rel="canonical"/g) || []).length, 1)
+      assert.ok(body.includes(`https://cvitae.lat${canonicalOpportunityPathForRow(row)}`))
       assert.doesNotMatch(body, /<title>CVitae \| Empleos, oportunidades/)
     }
     const endpoint = await fetch(`${origin}/.netlify/functions/public-opportunity-detail?${new URLSearchParams({ slug: b.slug, family: 'empleos' })}`)
     assert.equal(endpoint.status, 200); assert.ok((await endpoint.text()).includes(b.title))
+    const directMissing = await fetch(`${origin}/.netlify/functions/public-opportunity-detail?family=empleos&slug=missing-local`)
+    assert.equal(directMissing.status, 404)
+    const spoofed = await fetch(`${origin}${canonicalOpportunityPathForRow(b)}?slug=missing&family=oportunidades`)
+    assert.equal(spoofed.status, 200); assert.ok((await spoofed.text()).includes(b.title))
+    assert.equal(spoofed.headers.get('x-local-detail-identity'), canonicalOpportunityPathForRow(b).slice(1))
+    console.log('ORIGINAL_PATH_QUERY_SPOOF=PASS direct_valid=200 direct_missing=404')
     for (const slash of ['', '/']) {
       const response = await fetch(`${origin}/empleos/__missing_final_route_test__${slash}`)
       assert.equal(response.status, 404)
       assert.equal(response.headers.get('x-local-detail-function'), 'generated-redirect')
       const body = await response.text()
-      assert.match(body, /noindex,follow/); assert.doesNotMatch(body, /application\/ld\+json|JobPosting|Home snapshot|<title>CVitae \| Empleos, oportunidades/)
+      assert.match(body, /noindex,follow/); assert.doesNotMatch(body, /application\/ld\+json|JobPosting|Home snapshot|<title>CVitae \| Empleos, oportunidades|rel="canonical"|property="og:url"/)
+      assert.equal(response.headers.get('x-local-original-path'), `/empleos/__missing_final_route_test__${slash}`)
     }
+    const validMissing = await fetch(`${origin}/empleos/missing-local-role/`)
+    assert.equal(validMissing.status, 404)
+    assert.equal(validMissing.headers.get('x-local-detail-identity'), 'empleos/missing-local-role')
+    assert.doesNotMatch(await validMissing.text(), /rel="canonical"|JobPosting/)
     const missingApi = page.waitForResponse(response => response.url().includes('slug=__missing_final_route_test__'))
     const missing = await page.goto(`${origin}/empleos/__missing_final_route_test__/`)
     assert.equal(missing!.status(), 404); assert.equal((await missingApi).status(), 404)
@@ -415,7 +468,7 @@ export const handler = async event => {
     await page.getByText('Este empleo ya no está activo o no existe.').waitFor()
     assert.equal(await page.getByRole('heading', { name: a.title, exact: true }).count(), 0)
     assert.deepEqual(fatal, [], 'no fatal browser errors')
-    console.log('GENERATED_REDIRECT_ROUTING=PASS custom_path=ABSENT static_precedence=PASS catalog_first=PASS catalog_page_2=PASS no_slash=PASS trailing_slash=PASS default_endpoint=PASS missing_404=PASS missing_home_spa=FALSE list=PASS spa=PASS sitemap=PASS auth=PASS assets=PASS')
+    console.log('GENERATED_REDIRECT_ROUTING=PASS custom_path=ABSENT static_precedence=PASS catalog_first=PASS catalog_page_2=PASS no_slash=PASS trailing_slash=PASS original_path=PASS query_spoof=PASS default_endpoint=PASS missing_canonical=ABSENT missing_404=PASS missing_home_spa=FALSE list=PASS spa=PASS sitemap=PASS auth=PASS assets=PASS')
     console.log('PRERENDER_HYDRATION=PASS canary_a=PASS canary_b=PASS future_source=PASS page_2=PASS missing_404=PASS old_contract_negative_control=REPRODUCED')
   } finally {
     await browser.close(); await stopDev(); await new Promise<void>(resolve => server.close(() => resolve()))

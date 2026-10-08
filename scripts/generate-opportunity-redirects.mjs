@@ -8,12 +8,11 @@ const ROUTE = /^\/(empleos|oportunidades)\/([a-z0-9][a-z0-9._-]*)$/i
 const MAX_AGE_MS = 24 * 60 * 60 * 1000
 
 // Non-forced rewrites preserve static SEO shadowing. This deployed artifact
-// precedes netlify.toml's SPA fallback, including both trailing-slash forms.
+// precedes netlify.toml's SPA fallback. Identity comes from the original path,
+// including both trailing-slash forms.
 export const DETAIL_FALLBACK_RULES = [
-  '/empleos/:slug /.netlify/functions/public-opportunity-detail?family=empleos&slug=:slug 200',
-  '/empleos/:slug/ /.netlify/functions/public-opportunity-detail?family=empleos&slug=:slug 200',
-  '/oportunidades/:slug /.netlify/functions/public-opportunity-detail?family=oportunidades&slug=:slug 200',
-  '/oportunidades/:slug/ /.netlify/functions/public-opportunity-detail?family=oportunidades&slug=:slug 200',
+  '/empleos/* /.netlify/functions/public-opportunity-detail 200',
+  '/oportunidades/* /.netlify/functions/public-opportunity-detail 200',
 ]
 
 export function canonicalRoute(pathname) {

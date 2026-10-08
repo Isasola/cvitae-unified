@@ -8,8 +8,8 @@ const root = path.resolve(import.meta.dirname, '..')
 const fixture = JSON.parse(fs.readFileSync(path.join(root, 'scripts/fixtures/seo-inventory.json'), 'utf8'))
 const effective = buildEffectiveSeoInventory(fixture.opportunities, fixture.policies)
 const normal = redirectText(effective)
-const expectedFallbacks = ['empleos', 'oportunidades'].flatMap(family => ['', '/'].map(slash =>
-  `/${family}/:slug${slash} /.netlify/functions/public-opportunity-detail?family=${family}&slug=:slug 200`))
+const expectedFallbacks = ['empleos', 'oportunidades'].map(family =>
+  `/${family}/* /.netlify/functions/public-opportunity-detail 200`)
 assert.deepEqual(DETAIL_FALLBACK_RULES, expectedFallbacks)
 assert.deepEqual(normal.text.trim().split('\n'), [
   ...normal.redirects.map(({ source, target }: { source: string; target: string }) => `${source} ${target} 301!`),

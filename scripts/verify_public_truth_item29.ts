@@ -58,6 +58,6 @@ for (const family of ['empleos','oportunidades']) {
 }
 const detailSource = fs.readFileSync('netlify/functions/public-opportunity-detail.ts','utf8')
 assert.doesNotMatch(detailSource, /export const config|preferStatic|context\.params/)
-assert.match(detailSource, /status: 404/)
+assert.match(detailSource, /statusCode: 404/)
 for (const page of ['src/pages/Jobs.tsx', 'src/pages/Opportunities.tsx', 'src/pages/MarketOpportunities.tsx']) assert.match(fs.readFileSync(page, 'utf8'), /canonicalOpportunityPathForRow/)
 console.log('verify_public_truth_item29: PASS lifecycle canonical_mode detail_404 loader_404')

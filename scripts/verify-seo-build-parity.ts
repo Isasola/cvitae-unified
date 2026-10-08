@@ -60,7 +60,9 @@ const fallbacks = redirects.filter(line => !line.endsWith(' 301!'))
 assert.deepEqual(aliases, expectedAliases, 'exactly one forced redirect per effective SEO alias, with canonical target and graph validation')
 assert.deepEqual(fallbacks, DETAIL_FALLBACK_RULES, 'only the fixed, non-forced detail infrastructure rewrites')
 assert.deepEqual(redirects, [...expectedAliases, ...DETAIL_FALLBACK_RULES], 'all SEO aliases precede detail fallbacks; no SPA or other rules')
-assert.ok(fallbacks.every(line => line.endsWith(' 200') && !line.includes('!')))
+assert.deepEqual(fallbacks, ['empleos', 'oportunidades'].map(family =>
+  `/${family}/* /.netlify/functions/public-opportunity-detail 200`), 'rewrites use original path, not injected queries')
+assert.ok(fallbacks.every(line => line.endsWith(' 200') && !/[!?]/.test(line)))
 assert.doesNotMatch(fs.readFileSync(path.join(root, 'netlify.toml'), 'utf8'), /from = "\/(empleos|oportunidades)\/:slug\/?"/)
 console.log(`SEO_ALIAS_RULES=${aliases.length} DETAIL_FALLBACK_RULES=${fallbacks.length} LAST_SEO_ALIAS_INDEX=${aliases.length - 1} FIRST_DETAIL_FALLBACK_INDEX=${aliases.length} ORDER=PASS`)
 

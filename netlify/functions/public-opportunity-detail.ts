@@ -1,4 +1,4 @@
-import type { Context, HandlerEvent, HandlerContext } from '@netlify/functions'
+import type { HandlerEvent, HandlerContext, HandlerResponse } from '@netlify/functions'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createPublicOpportunitiesHandler } from './public-opportunities'
@@ -11,7 +11,7 @@ const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g,
 
 /** The built template supplies this deploy's assets, never another deploy's shell. */
 export function publicDetailHtml(template: string, row: Record<string, any> | null, unavailable = false) {
-  const canonical = row ? canonicalOpportunityUrlForRow(row as any) : 'https://cvitae.lat'
+  const canonical = row ? canonicalOpportunityUrlForRow(row as any) : ''
   const title = row ? `${row.title} | CVitae` : unavailable ? 'Oportunidad no disponible | CVitae' : 'Página no encontrada | CVitae'
   const description = row ? String(row.description || row.title).replace(/<[^>]*>/g, ' ').trim() : 'Esta oportunidad no está disponible.'
   const schema = row ? aggregatedJobPosting(row, canonical).structuredData ?? {
@@ -20,12 +20,12 @@ export function publicDetailHtml(template: string, row: Record<string, any> | nu
     ...(row.organization ? { provider: { '@type': 'Organization', name: row.organization } } : {}),
   } : null
   const metadata = `<title>${escapeHtml(title)}</title>
-<link rel="canonical" href="${escapeHtml(canonical)}">
+${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">` : ''}
 <meta name="robots" content="${row?.distribution?.seo?.allowed === true ? 'index,follow' : 'noindex,follow'}">
 <meta name="description" content="${escapeHtml(description.slice(0, 160))}">
 <meta property="og:title" content="${escapeHtml(title)}">
 <meta property="og:description" content="${escapeHtml(description.slice(0, 160))}">
-<meta property="og:url" content="${escapeHtml(canonical)}">
+${canonical ? `<meta property="og:url" content="${escapeHtml(canonical)}">` : ''}
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://cvitae.lat/og-image.jpg">
 ${schema ? `<script type="application/ld+json">${JSON.stringify(schema).replace(/</g, '\\u003c')}</script>` : ''}`
@@ -46,32 +46,59 @@ ${original && original !== '#' ? `<p>Fuente: <a href="${escapeHtml(original)}" r
     .replace(/<body\b([^>]*)>[\s\S]*?<\/body>/i, `<body$1><div id="root">${content}</div></body>`)
 }
 
+/** Decode only the slug segment; never normalize traversal into another route. */
+export function parsePublicDetailPath(pathname: string) {
+  const match = /^\/(empleos|oportunidades)\/([^/]+)\/?$/.exec(pathname)
+  if (!match) return null
+  try {
+    const slug = decodeURIComponent(match[2])
+    return validSlug(slug) ? { family: match[1], slug } : null
+  } catch { return null }
+}
+
+const validSlug = (slug: string) => /^[a-z0-9][a-z0-9._-]*$/i.test(slug) && !['.', '..'].includes(slug)
+
+function publicDetailIdentity(event: HandlerEvent) {
+  // In function rewrites Netlify's legacy event.path preserves the incoming
+  // public path. Queries must never replace that public identity.
+  if (!/^\/\.netlify\/functions\/public-opportunity-detail\/?$/.test(event.path)) {
+    return parsePublicDetailPath(event.path)
+  }
+  // Direct endpoint compatibility only. Keep duplicate parameters observable.
+  const query = new URLSearchParams(event.rawQuery ?? '')
+  if (event.rawQuery == null) {
+    for (const [name, value] of Object.entries(event.queryStringParameters || {})) {
+      for (const item of event.multiValueQueryStringParameters?.[name] || (value == null ? [] : [value])) query.append(name, item)
+    }
+  }
+  const slug = query.get('slug') || ''
+  const family = query.get('family') || ''
+  return query.getAll('slug').length === 1 && query.getAll('family').length === 1 &&
+    ['empleos', 'oportunidades'].includes(family) && validSlug(slug) ? { family, slug } : null
+}
+
 export function createPublicDetailHandler(
   readPublic = createPublicOpportunitiesHandler(),
   template = () => readFileSync(resolve(process.cwd(), 'dist/index.html'), 'utf8'),
-): (request: Request, context: Context) => Promise<Response> {
-  return async (request) => {
-    const url = new URL(request.url)
-    const slug = url.searchParams.get('slug') || ''
-    const family = url.searchParams.get('family') || ''
+): (event: HandlerEvent) => Promise<HandlerResponse> {
+  return async (event) => {
     const headers = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }
-    if (request.method !== 'GET') return new Response(null, { status: 405, headers: { Allow: 'GET' } })
-    if (url.searchParams.getAll('slug').length !== 1 || url.searchParams.getAll('family').length !== 1 ||
-        !['empleos', 'oportunidades'].includes(family) || !/^[a-z0-9][a-z0-9._-]*$/i.test(slug)) {
-      return new Response(publicDetailHtml(template(), null), { status: 404, headers })
-    }
+    if (event.httpMethod !== 'GET') return { statusCode: 405, headers: { Allow: 'GET' } }
+    const identity = publicDetailIdentity(event)
+    if (!identity) return { statusCode: 404, headers, body: publicDetailHtml(template(), null) }
+    const { slug, family } = identity
     // Adapt only the transport: the existing public resolver remains the authority.
-    const event = { httpMethod: 'GET', path: url.pathname, rawUrl: request.url,
-      headers: Object.fromEntries(request.headers), queryStringParameters: { mode: 'all', slug } } as HandlerEvent
-    const result = await readPublic(event, {} as HandlerContext, () => {}) as any
-    if (result.statusCode !== 200) return new Response(
-      publicDetailHtml(template(), null, result.statusCode !== 404), { status: result.statusCode, headers })
+    const result = await readPublic({ ...event, queryStringParameters: { mode: 'all', slug } }, {} as HandlerContext, () => {}) as any
+    if (result.statusCode !== 200) return {
+      statusCode: result.statusCode, headers,
+      body: publicDetailHtml(template(), null, result.statusCode !== 404),
+    }
     const row = JSON.parse(result.body)
     const canonicalPath = canonicalOpportunityPathForRow(row)
-    if (canonicalPath !== `/${family}/${slug}`) return new Response(null, { status: 301,
-      headers: { Location: canonicalPath, 'Cache-Control': 'no-store' } })
-    return new Response(publicDetailHtml(template(), row), { status: 200, headers })
+    if (canonicalPath !== `/${family}/${slug}`) return { statusCode: 301,
+      headers: { Location: canonicalPath, 'Cache-Control': 'no-store' } }
+    return { statusCode: 200, headers, body: publicDetailHtml(template(), row) }
   }
 }
 
-export default createPublicDetailHandler()
+export const handler = createPublicDetailHandler()
