@@ -110,18 +110,6 @@
   status = 200
   force = true
 
-# Static SEO details retain precedence. Other public Catalog details resolve
-# through the same live public authority; truly absent rows still return 404.
-[[redirects]]
-  from = "/oportunidades/:slug"
-  to = "/.netlify/functions/public-opportunity-detail?family=oportunidades&slug=:slug"
-  status = 200
-
-[[redirects]]
-  from = "/empleos/:slug"
-  to = "/.netlify/functions/public-opportunity-detail?family=empleos&slug=:slug"
-  status = 200
-
 [[redirects]]
   from = "/blog/:slug"
   to = "/404.html"

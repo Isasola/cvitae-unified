@@ -3,9 +3,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import http from 'node:http'
 import { spawn } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { chromium } from '@playwright/test'
 import { createPublicOpportunitiesHandler } from '../netlify/functions/public-opportunities.ts'
-import { createPublicDetailHandler } from '../netlify/functions/public-opportunity-detail.ts'
+import { createPublicDetailHandler, config as detailConfig } from '../netlify/functions/public-opportunity-detail.ts'
 import { canonicalOpportunityPathForRow } from '../src/lib/opportunity-truth.ts'
 import { evaluateOpportunityDistribution } from '../src/lib/effective-source-policy.ts'
 import { buildSeoInventoryFromUniverse } from '../src/lib/seo-inventory.ts'
@@ -110,7 +111,20 @@ const event = (params: Record<string, string>) => ({ queryStringParameters: para
 const invoke = async (params: Record<string, string>) => await api(event(params), {} as any, () => {}) as any
 const template = '<html><head><title>Home</title><meta name="robots" content="index,follow"><link rel="canonical" href="https://cvitae.lat"><script type="module" src="/assets/app.js"></script></head><body><div id="root">Home snapshot</div></body></html>'
 const htmlHandler = createPublicDetailHandler(api, () => template)
-const html = async (slug: string, family = 'empleos') => await htmlHandler(event({ slug, family }), {} as any, () => {}) as any
+const html = async (slug: string, family = 'empleos') => {
+  const response = await htmlHandler(new Request(`http://localhost/${family}/${slug}`), { params: { slug } } as any)
+  return { statusCode: response.status, headers: { Location: response.headers.get('Location') }, body: await response.text() }
+}
+assert.deepEqual(detailConfig.path, ['/empleos/:slug', '/oportunidades/:slug'])
+assert.equal(detailConfig.preferStatic, true)
+assert.deepEqual(detailConfig.method, ['GET'])
+assert.doesNotMatch(read('netlify.toml'), /from = "\/(empleos|oportunidades)\/:slug"/)
+const detailSource = read('netlify/functions/public-opportunity-detail.ts')
+assert.match(detailSource, /context\.params\.slug/)
+assert.match(detailSource, /new URL\(request\.url\)\.pathname/)
+assert.doesNotMatch(detailSource, /queryStringParameters \|\||\.from\(|slug ===|source ===/)
+const injected = await htmlHandler(new Request(`http://localhost/empleos/missing-role?slug=${a.slug}&family=empleos`), { params: { slug: 'missing-role' } } as any)
+assert.equal(injected.status, 404, 'query parameters cannot grant native routing identity')
 let cursor = '', pages = 0
 const listed = new Map<string, any>()
 do {
@@ -161,6 +175,8 @@ const originalError = console.error
 try {
   console.error = () => {}
   assert.equal((await failedApi(event({ slug: a.slug }), {} as any, () => {}) as any).statusCode, 503)
+  const unavailable = await createPublicDetailHandler(failedApi, () => template)(new Request(`http://localhost/empleos/${a.slug}`), { params: { slug: a.slug } } as any)
+  assert.equal(unavailable.status, 503, 'database errors remain unavailable, not false 404')
 } finally { console.error = originalError }
 const seoRows = await query('select * from opportunity_seo_universe order by id')
 assert.ok(seoRows.length > 2501); assert.ok(seoRows.some(row => row.slug === 'seo-page-2500'))
@@ -204,37 +220,105 @@ if (process.argv.includes('--build')) {
 
 if (process.argv.includes('--browser')) {
   assert.ok(fs.existsSync('dist/index.html'), 'run the fixture build first')
-  const liveHtml = createPublicDetailHandler(api)
   let reproduceOldFailure = false
+  // Fixture transport only. Netlify Dev itself decides static/function/SPA routing.
   const server = http.createServer(async (request, response) => {
     try {
       assert.equal(request.method, 'GET', 'browser test forbids writes')
       const url = new URL(request.url!, 'http://localhost')
       let result: any
-      if (url.pathname === '/.netlify/functions/public-opportunities') {
+      if (url.pathname === '/api') {
         const params = Object.fromEntries(url.searchParams)
         result = reproduceOldFailure && params.slug === a.slug
           ? { statusCode: 404, body: '{"error":"not_found"}', headers: { 'Content-Type': 'application/json' } }
           : await invoke(params)
-      } else {
-        const target = path.resolve('dist', `.${decodeURIComponent(url.pathname)}`, url.pathname.endsWith('/') ? 'index.html' : '')
-        assert.ok(target.startsWith(path.resolve('dist') + path.sep))
-        const staticFile = fs.existsSync(target) && fs.statSync(target).isFile() ? target : path.join(target, 'index.html')
-        if (fs.existsSync(staticFile) && fs.statSync(staticFile).isFile()) {
-          const mime: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' }
-          result = { statusCode: 200, headers: { 'Content-Type': mime[path.extname(staticFile)] || 'application/octet-stream' }, body: fs.readFileSync(staticFile) }
-        } else {
-          const segments = url.pathname.split('/').filter(Boolean)
-          result = ['empleos', 'oportunidades'].includes(segments[0]) && segments.length === 2
-            ? await liveHtml(event({ family: segments[0], slug: segments[1] }), {} as any, () => {})
-            : { statusCode: 404, body: 'Not found' }
-        }
-      }
+      } else if (/^\/sitemap[^/]*\.xml$/.test(url.pathname)) {
+        result = { statusCode: 200, headers: { 'Content-Type': 'application/xml' }, body: fs.readFileSync(path.join('dist', url.pathname.slice(1))) }
+      } else result = { statusCode: 404, body: 'Not found' }
       response.writeHead(result.statusCode, result.headers || {}); response.end(result.body)
     } catch (error) { response.writeHead(500); response.end(String(error)) }
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
-  const origin = `http://127.0.0.1:${(server.address() as any).port}`
+  const fixtureOrigin = `http://127.0.0.1:${(server.address() as any).port}`
+  const freePort = async () => {
+    const probe = http.createServer()
+    await new Promise<void>(resolve => probe.listen(0, '127.0.0.1', resolve))
+    const port = (probe.address() as any).port
+    await new Promise<void>(resolve => probe.close(() => resolve()))
+    return port
+  }
+  const port = await freePort(), functionsPort = await freePort()
+  const origin = `http://localhost:${port}`
+  const fixtureFunctions = '.cvitae-state/native-detail-functions'
+  fs.mkdirSync(fixtureFunctions, { recursive: true })
+  // Bundle the unchanged production factory for the local harness. Netlify Dev
+  // otherwise tries Windows package symlinks requiring developer/admin mode.
+  const require = createRequire(import.meta.url)
+  const esbuild = createRequire(require.resolve('vite'))('esbuild')
+  await esbuild.build({
+    stdin: { contents: "export { createPublicDetailHandler } from './netlify/functions/public-opportunity-detail.ts'", resolveDir: process.cwd(), loader: 'ts' },
+    bundle: true, platform: 'node', format: 'esm', tsconfigRaw: {},
+    outfile: '.cvitae-state/native-detail-runtime.mjs',
+  })
+  // Copy the exact production config declaration, rather than a test routing model.
+  const nativeConfig = detailSource.match(/export const config: Config = \{[\s\S]*?\n\}/)![0]
+  fs.writeFileSync(`${fixtureFunctions}/public-opportunity-detail.ts`, `
+import type { Config } from '@netlify/functions'
+import { createPublicDetailHandler } from '../native-detail-runtime.mjs'
+${nativeConfig}
+const readPublic = async (event: any) => {
+  const response = await fetch(${JSON.stringify(fixtureOrigin)} + '/api?' + new URLSearchParams(event.queryStringParameters))
+  return { statusCode: response.status, headers: Object.fromEntries(response.headers), body: await response.text() }
+}
+const detail = createPublicDetailHandler(readPublic as any)
+export default async (request: Request, context: any) => {
+  const response = await detail(request, context)
+  response.headers.set('X-Local-Detail-Function', 'native')
+  return response
+}
+`)
+  fs.writeFileSync(`${fixtureFunctions}/public-opportunities.mjs`, `
+export const handler = async event => {
+  const response = await fetch(${JSON.stringify(fixtureOrigin)} + '/api?' + new URLSearchParams(event.queryStringParameters))
+  return { statusCode: response.status, headers: Object.fromEntries(response.headers), body: await response.text() }
+}
+`)
+  fs.writeFileSync(`${fixtureFunctions}/sitemap.mjs`, `
+export const handler = async event => {
+  const response = await fetch(${JSON.stringify(fixtureOrigin)} + new URL(event.rawUrl).pathname)
+  return { statusCode: response.status, headers: Object.fromEntries(response.headers), body: await response.text() }
+}
+`)
+  const devEnv = { ...process.env }
+  for (const name of Object.keys(devEnv)) if (/SUPABASE|CVITAE_DB_URL|NETLIFY_AUTH_TOKEN|NETLIFY_SITE_ID/.test(name)) delete devEnv[name]
+  devEnv.CVITAE_PROD_RELEASE_VALIDATED = 'false'
+  const dev = spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c',
+    `netlify.cmd dev --offline --skip-gitignore --geo mock --no-open --framework #static --dir dist --functions ${fixtureFunctions} --port ${port} --functions-port ${functionsPort}`],
+    { env: devEnv, stdio: ['ignore', 'pipe', 'pipe'] })
+  let devOutput = '', devExited = false
+  dev.stdout.on('data', chunk => { devOutput = (devOutput + chunk).slice(-16000) })
+  dev.stderr.on('data', chunk => { devOutput = (devOutput + chunk).slice(-16000) })
+  dev.on('exit', () => { devExited = true })
+  const stopDev = async () => {
+    if (devExited) return
+    await new Promise<void>((resolve, reject) => {
+      const executable = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'taskkill.exe')
+      const stop = spawn(executable, ['/PID', String(dev.pid), '/T', '/F'], { stdio: 'ignore' })
+      stop.on('error', reject)
+      stop.on('exit', code => code === 0 || code === 128 ? resolve() : reject(new Error(`Netlify Dev cleanup: exit ${code}`)))
+    })
+  }
+  try {
+    const deadline = Date.now() + 300000
+    while (true) {
+      if (devExited || Date.now() > deadline) throw new Error(`Netlify Dev failed to start: ${devOutput}`)
+      try { if ((await fetch(origin + '/', { signal: AbortSignal.timeout(1000) })).status === 200) break } catch {}
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+    console.log('NETLIFY_DEV=READY offline=true fixture_functions=true')
+  } catch (error) {
+    await stopDev(); await new Promise<void>(resolve => server.close(() => resolve())); throw error
+  }
   const browser = await chromium.launch({ headless: true })
   const context = await browser.newContext()
   await context.route('**/*', route => {
@@ -251,6 +335,8 @@ if (process.argv.includes('--browser')) {
       const apiResponse = page.waitForResponse(response => response.url().includes('/.netlify/functions/public-opportunities?') && new URL(response.url()).searchParams.get('slug') === row.slug)
       const document = await page.goto(`${origin}${canonical}/`)
       assert.equal(document!.status(), 200)
+      const hasStatic = fs.existsSync(path.join('dist', canonical, 'index.html'))
+      assert.equal(document!.headers()['x-local-detail-function'], hasStatic ? undefined : 'native', 'static prerender wins; missing static uses native function')
       assert.equal((await apiResponse).status(), 200)
       await page.getByRole('heading', { name: row.title, exact: true }).waitFor()
       // Wait for the live component, not the pre-hydration snapshot.
@@ -269,6 +355,21 @@ if (process.argv.includes('--browser')) {
     await page.getByText('Este empleo ya no está activo o no existe.').waitFor()
     assert.match(await page.locator('meta[name="robots"]').last().getAttribute('content') || '', /noindex/)
     assert.equal(await page.locator('script[type="application/ld+json"]').count(), 0)
+    assert.equal(missing!.headers()['x-local-detail-function'], 'native')
+    // Exercise actual deployed output/config, including unrelated route priority.
+    for (const route of ['/empleos/', '/dashboard', '/auth/callback']) {
+      const response = await fetch(origin + route)
+      assert.equal(response.status, 200, route)
+      assert.match(await response.text(), /<html/i)
+      assert.equal(response.headers.get('x-local-detail-function'), null)
+    }
+    const rootXml = await fetch(origin + '/sitemap.xml')
+    assert.equal(rootXml.status, 200); assert.match(await rootXml.text(), /<sitemapindex/)
+    const childXml = await fetch(origin + '/sitemap-static.xml')
+    assert.equal(childXml.status, 200); assert.match(await childXml.text(), /<urlset/)
+    const asset = read('dist/index.html').match(/src="(\/assets\/[^" ]+\.js)"/)![1]
+    const assetResponse = await fetch(origin + asset)
+    assert.equal(assetResponse.status, 200); assert.equal(assetResponse.headers.get('x-local-detail-function'), null)
     // Negative control: the same prerendered 200 with the old Catalog-only 404
     // destroys its content during hydration. This test detects the PROD defect.
     reproduceOldFailure = true
@@ -278,9 +379,10 @@ if (process.argv.includes('--browser')) {
     await page.getByText('Este empleo ya no está activo o no existe.').waitFor()
     assert.equal(await page.getByRole('heading', { name: a.title, exact: true }).count(), 0)
     assert.deepEqual(fatal, [], 'no fatal browser errors')
+    console.log('NATIVE_ROUTING=PASS static_precedence=PASS catalog_first=PASS catalog_page_2=PASS missing_404=PASS list=PASS spa=PASS sitemap=PASS auth=PASS assets=PASS')
     console.log('PRERENDER_HYDRATION=PASS canary_a=PASS canary_b=PASS future_source=PASS page_2=PASS missing_404=PASS old_contract_negative_control=REPRODUCED')
   } finally {
-    await browser.close(); await new Promise<void>(resolve => server.close(() => resolve()))
+    await browser.close(); await stopDev(); await new Promise<void>(resolve => server.close(() => resolve()))
   }
 }
 await db.close()

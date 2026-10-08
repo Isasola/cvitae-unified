@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions'
+import type { Config, Context, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createPublicOpportunitiesHandler } from './public-opportunities'
@@ -49,24 +49,35 @@ ${original && original !== '#' ? `<p>Fuente: <a href="${escapeHtml(original)}" r
 export function createPublicDetailHandler(
   readPublic = createPublicOpportunitiesHandler(),
   template = () => readFileSync(resolve(process.cwd(), 'dist/index.html'), 'utf8'),
-): Handler {
-  return async (event, context) => {
-    const { slug = '', family = '' } = event.queryStringParameters || {}
+): (request: Request, context: Context) => Promise<Response> {
+  return async (request, context) => {
+    const pathname = new URL(request.url).pathname
+    const route = pathname.match(/^\/(empleos|oportunidades)\/([^/]+)\/?$/)
+    const slug = context.params.slug || ''
+    const family = route?.[1] || ''
     const headers = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }
-    if (!/^[a-z0-9][a-z0-9._-]*$/i.test(slug) || !['empleos', 'oportunidades'].includes(family)) {
-      return { statusCode: 404, headers, body: publicDetailHtml(template(), null) }
+    if (request.method !== 'GET') return new Response(null, { status: 405, headers: { Allow: 'GET' } })
+    if (!route || route[2] !== slug || !/^[a-z0-9][a-z0-9._-]*$/i.test(slug)) {
+      return new Response(publicDetailHtml(template(), null), { status: 404, headers })
     }
-    const result = await readPublic({ ...event, queryStringParameters: { mode: 'all', slug } }, context, () => {}) as any
-    if (result.statusCode !== 200) return {
-      statusCode: result.statusCode, headers,
-      body: publicDetailHtml(template(), null, result.statusCode !== 404),
-    }
+    // Adapt only the transport: the existing public resolver remains the authority.
+    const event = { httpMethod: 'GET', path: pathname, rawUrl: request.url,
+      headers: Object.fromEntries(request.headers), queryStringParameters: { mode: 'all', slug } } as HandlerEvent
+    const result = await readPublic(event, {} as HandlerContext, () => {}) as any
+    if (result.statusCode !== 200) return new Response(
+      publicDetailHtml(template(), null, result.statusCode !== 404), { status: result.statusCode, headers })
     const row = JSON.parse(result.body)
     const canonicalPath = canonicalOpportunityPathForRow(row)
-    if (canonicalPath !== `/${family}/${slug}`) return { statusCode: 301,
-      headers: { Location: canonicalPath, 'Cache-Control': 'no-store' }, body: '' }
-    return { statusCode: 200, headers, body: publicDetailHtml(template(), row) }
+    if (canonicalPath !== `/${family}/${slug}`) return new Response(null, { status: 301,
+      headers: { Location: canonicalPath, 'Cache-Control': 'no-store' } })
+    return new Response(publicDetailHtml(template(), row), { status: 200, headers })
   }
 }
 
-export const handler = createPublicDetailHandler()
+export const config: Config = {
+  path: ['/empleos/:slug', '/oportunidades/:slug'],
+  preferStatic: true,
+  method: ['GET'],
+}
+
+export default createPublicDetailHandler()

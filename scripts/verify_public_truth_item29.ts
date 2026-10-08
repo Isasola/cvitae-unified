@@ -5,6 +5,7 @@ import { evaluateOpportunityDistribution, type SourcePolicyRow } from '../src/li
 import { publicCatalogQuery, publicCatalogPage } from '../netlify/functions/lib/public-opportunity-pagination.ts'
 import { publicOpportunityResponse } from '../netlify/functions/public-opportunities.ts'
 import { decodePublicOpportunityResponse } from '../src/lib/public-opportunity-response.ts'
+import { config as detailConfig } from '../netlify/functions/public-opportunity-detail.ts'
 
 const now = new Date('2026-09-22T12:00:00-03:00')
 const row = { source:'computrabajo', slug:'role', title:'Programme Officer', organization:'Acme', description:'Programme delivery, monitoring, stakeholder coordination and reporting responsibilities. '.repeat(2), tags:['programme','monitoring'], opportunity_type:'job', is_active:true, verification_status:'verified', catalog_eligible:true, match_eligible:true, alerts_eligible:true, seo_eligible:true, seo_status:'eligible' }
@@ -54,10 +55,11 @@ await assert.rejects(() => decodePublicOpportunityResponse(response(503, { error
 await assert.rejects(() => decodePublicOpportunityResponse(response(404, { error:'not_found' }) as any), /public_policy_unavailable/)
 const netlify = fs.readFileSync('netlify.toml', 'utf8')
 for (const family of ['empleos','oportunidades']) {
-  const rule = netlify.split('[[redirects]]').find(block=>block.includes(`from = "/${family}/:slug"`))!
-  assert.ok(rule.includes(`public-opportunity-detail?family=${family}&slug=:slug`))
-  assert.match(rule, /status = 200/); assert.doesNotMatch(rule, /force = true/, 'static SEO snapshots retain priority')
+  assert.ok(!netlify.includes(`from = "/${family}/:slug"`), 'native function is the only detail routing authority')
 }
-assert.match(fs.readFileSync('netlify/functions/public-opportunity-detail.ts','utf8'), /statusCode: 404/)
+assert.deepEqual(detailConfig.path, ['/empleos/:slug', '/oportunidades/:slug'])
+assert.equal(detailConfig.preferStatic, true)
+assert.deepEqual(detailConfig.method, ['GET'])
+assert.match(fs.readFileSync('netlify/functions/public-opportunity-detail.ts','utf8'), /status: 404/)
 for (const page of ['src/pages/Jobs.tsx', 'src/pages/Opportunities.tsx', 'src/pages/MarketOpportunities.tsx']) assert.match(fs.readFileSync(page, 'utf8'), /canonicalOpportunityPathForRow/)
 console.log('verify_public_truth_item29: PASS lifecycle canonical_mode detail_404 loader_404')
