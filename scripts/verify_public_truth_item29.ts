@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { catalogReadiness, canonicalOpportunityPathForRow, deadlineLifecycle, matchesPublicOpportunityMode } from '../src/lib/opportunity-truth.ts'
 import { evaluateOpportunityDistribution, type SourcePolicyRow } from '../src/lib/effective-source-policy.ts'
-import { collectAllowedPages } from '../netlify/functions/lib/public-opportunity-pagination.ts'
+import { publicCatalogQuery, publicCatalogPage } from '../netlify/functions/lib/public-opportunity-pagination.ts'
 import { publicOpportunityResponse } from '../netlify/functions/public-opportunities.ts'
 import { decodePublicOpportunityResponse } from '../src/lib/public-opportunity-response.ts'
 
@@ -31,9 +31,17 @@ const raw = [
   ...Array.from({ length: 450 }, (_, index) => ({ ...row, id:`other-${index}`, slug:`other-${index}`, opportunity_type:'training' })),
   ...Array.from({ length: 300 }, (_, index) => ({ ...row, id:`job-${index}`, slug:`job-${index}`, opportunity_type:null, opportunity_kind:'job' })),
 ]
-const offsets:number[] = []
-const jobs = await collectAllowedPages({ target:300, pageSize:100, maxPages:8, fetchPage:async (offset, size) => { offsets.push(offset); return raw.slice(offset, offset + size) }, allowed:item => matchesPublicOpportunityMode(item, 'jobs') })
-assert.equal(jobs.length, 300); assert.ok(offsets.at(-1)! >= 700, 'mode filtering must scan past opposite-family rows')
+const jobs:typeof raw = []
+let cursor:string|null = null
+do {
+  const args = publicCatalogQuery({ mode:'jobs', cursor:cursor || undefined })
+  // The canonical SQL RPC filters the entire result set before its page budget.
+  const page = publicCatalogPage(raw.filter(item => matchesPublicOpportunityMode(item, 'jobs'))
+    .sort((a,b)=>a.id.localeCompare(b.id)).filter(item=>!args.p_after_id || item.id>args.p_after_id)
+    .slice(0,args.p_limit))
+  jobs.push(...page.rows); cursor=page.nextCursor
+} while(cursor)
+assert.equal(jobs.length, 300)
 assert.ok(jobs.every(item => matchesPublicOpportunityMode(item, 'jobs')))
 assert.equal(matchesPublicOpportunityMode({ ...row, opportunity_type:null, opportunity_kind:'job' }, 'jobs'), true)
 assert.equal(matchesPublicOpportunityMode({ ...row, opportunity_type:null, opportunity_kind:'training' }, 'non_jobs'), true)
@@ -45,6 +53,11 @@ assert.equal(await decodePublicOpportunityResponse(response(404, { error:'not_fo
 await assert.rejects(() => decodePublicOpportunityResponse(response(503, { error:'unavailable' }) as any, 'missing'), /public_policy_unavailable/)
 await assert.rejects(() => decodePublicOpportunityResponse(response(404, { error:'not_found' }) as any), /public_policy_unavailable/)
 const netlify = fs.readFileSync('netlify.toml', 'utf8')
-assert.match(netlify, /from = "\/oportunidades\/:slug"[\s\S]*?status = 404/); assert.match(netlify, /from = "\/empleos\/:slug"[\s\S]*?status = 404/)
+for (const family of ['empleos','oportunidades']) {
+  const rule = netlify.split('[[redirects]]').find(block=>block.includes(`from = "/${family}/:slug"`))!
+  assert.ok(rule.includes(`public-opportunity-detail?family=${family}&slug=:slug`))
+  assert.match(rule, /status = 200/); assert.doesNotMatch(rule, /force = true/, 'static SEO snapshots retain priority')
+}
+assert.match(fs.readFileSync('netlify/functions/public-opportunity-detail.ts','utf8'), /statusCode: 404/)
 for (const page of ['src/pages/Jobs.tsx', 'src/pages/Opportunities.tsx', 'src/pages/MarketOpportunities.tsx']) assert.match(fs.readFileSync(page, 'utf8'), /canonicalOpportunityPathForRow/)
 console.log('verify_public_truth_item29: PASS lifecycle canonical_mode detail_404 loader_404')

@@ -206,6 +206,16 @@ try {
     rpc: async (name,args) => ({ data: name==='get_source_distribution_policy'
       ? await query('select * from get_source_distribution_policy()')
       : await query('select * from search_public_opportunities($1,$2,$3,$4,$5,$6,$7)',[args.p_query,args.p_area,args.p_types,args.p_mode,args.p_after_updated_at,args.p_after_id,args.p_limit]), error:null }),
+    from: name => {
+      assert.equal(name,'opportunity_seo_universe')
+      return { select: columns => {
+        assert.equal(columns,'id')
+        return { in: async (field,ids) => {
+          assert.equal(field,'id'); assert.ok(ids.length<=100)
+          return { data:await query('select id from opportunity_seo_universe where id=any($1::text[])',[ids]),error:null }
+        } }
+      } }
+    },
   }))
   const response=await publicHandler({queryStringParameters:{mode:'jobs',q:'Rare Precision',area:'Research'}},{})
   assert.equal(response.statusCode,200)
