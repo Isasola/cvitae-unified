@@ -1,5 +1,23 @@
 # Plan final de aplicación del cableado
 
+## CURRENT STATUS ADDENDUM — 2026-10-08
+
+Este plan histórico ya NO representa el paso inmediato de release.
+Consultar primero [docs/FROZEN_CHECKPOINT_2026-10-08.md](../../docs/FROZEN_CHECKPOINT_2026-10-08.md).
+
+El código `8281c6a5a1aed348b9360f994322a4624fabd247` está validado en
+`cvitae-lat.netlify.app`. El siguiente paso, después del reset de créditos,
+es publicar ese mismo código en el current site `cvitae-lata`
+(`7c1d2305-cf2c-4e7e-a41c-0c4ca30d976f`), que conserva `cvitae.lat`, y ejecutar
+su smoke final. No cambiar de cuenta ni mover dominio.
+
+No ejecutar migrations, reconciliation, backfill ni pushes descritos abajo
+como continuación automática. `202610040001` y `202610080001` ya tienen apply
+PROD reportado y validado; no reaplicarlas por leer este plan. Otros pendientes
+conservan su autorización/gates propios. `CVITAE_PROD_RELEASE_VALIDATED=FALSE`
+hasta el smoke PASS del current-domain deploy. El resto se conserva como historia.
+
+
 STATUS: PREPARED / NOT_EXECUTED / C20_LOCAL_BOUNDED_PASS
 
 Autoridad operativa: `docs/GRAND_CHECKPOINT.md`, C01–C21. Este documento es el

@@ -282,3 +282,41 @@ DO_NOT_DO_NOW:
 - No consultar/modificar PROD ni ejecutar deploy en esta tarea documental.
 
 CLOSURE_TEST: Con distintos tamaños de SEO READY, comprobar mediante planes y métricas que la primera página accede al camino READY ordenado y examina aproximadamente el presupuesto de candidatos necesario para producir 250, sin trabajo previo sobre todo READY. Las páginas posteriores mantienen id > cursor y uso efectivo del índice; deadline OPEN/UNKNOWN y source operational gates permanecen aplicados. El recorrido hasta EOF conserva todas las URLs elegibles, sin cap global, fuentes excluidas ni pérdidas; comparar contra los baselines PROD registrados arriba y añadir evidencia antes de marcar DONE.
+
+### PD-007 — SEO alias double-301 normalization
+
+TYPE: SEO
+
+STATUS: NONBLOCKING_BACKLOG
+
+DISCOVERED_AT: 2026-10-08
+
+FOUND_WHILE: Smoke PROD del routing público en cvitae-lat.netlify.app.
+
+PROBLEM: Un alias SEO puede producir 301 → 301 por normalización/trailing slash.
+
+EXPECTED: Revisar en un release futuro la normalización para llegar al canonical
+con el mínimo de redirects, conservando aliases, static priority y 404.
+
+CURRENT: No bloquea el release actual. El destino final, Detail, hydration y el
+indexing contract probado siguen funcionando. No se corrige durante el deploy
+current-site pendiente por reset de créditos.
+
+AFFECTED_FILES_OR_SYSTEMS: Aliases SEO generados y normalización/trailing slash
+de Netlify; scripts/generate-opportunity-redirects.mjs y dist/_redirects como
+referencias de la autoridad actual, sin cambios en esta pasada documental.
+
+EVIDENCE: Smoke PROD ya comunicado: un alias SEO puede producir 301 → 301 antes
+del destino final correcto; no rompe Detail, hydration ni el indexing contract
+probado. No se ejecutó una consulta HTTP nueva ni una auditoría de aliases aquí.
+
+SCOPE_NEXT_DEPLOY: Activar sólo con autorización del usuario, registrar el release
+que lo absorba y probar una normalización equivalente con muestras de aliases
+válidos, slash variants y destinos inexistentes.
+
+DO_NOT_DO_NOW: No resolver antes del deploy current-site. No reabrir routing,
+reescribir aliases, modificar código, push ni deploy por esta deuda no bloqueante.
+
+CLOSURE_TEST: Alias SEO representativo llega al canonical correcto sin doble 301,
+loop ni pérdida de cobertura; el destino mantiene Detail/hydration/metadata,
+static priority y el 404/noindex de inexistentes. Agregar evidencia antes de DONE.

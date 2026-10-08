@@ -1,5 +1,100 @@
 # CVITAE GRAND CHECKPOINT
 
+## FROZEN RELEASE CHECKPOINT — 2026-10-08/09
+
+```text
+CURRENT_ITEM = CURRENT-SITE DEPLOY AFTER NETLIFY CREDIT RESET
+STATUS = FROZEN / CODE VALIDATED / CURRENT DOMAIN DEPLOY PENDING
+OPERATING_STATE = FROZEN_PENDING_CURRENT_SITE_DEPLOY
+CODE_BASELINE = 8281c6a5a1aed348b9360f994322a4624fabd247
+CODE_BASELINE_STATUS = VALIDATED
+CURRENT_DOMAIN_DEPLOY = PENDING CREDIT RESET
+CVITAE_PROD_RELEASE_VALIDATED = FALSE
+```
+
+**Handoff autocontenido:** [FROZEN_CHECKPOINT_2026-10-08.md](FROZEN_CHECKPOINT_2026-10-08.md).
+Este bloque fija el paso inmediato y sustituye las instrucciones operativas
+anteriores de cutover/apply/release. C01–C21 y Master 1–67 debajo conservan su
+historia; sus pendientes no se ejecutan automáticamente por abrir otro chat.
+
+### Código y evidencia congelados
+
+- Único worktree de esta pasada: `C:\Users\isaso\cvitae-item53-public-contracts`;
+  branch local `fix/item53-public-contracts-20260923`.
+- Código validado y ya en remote `feature/aws-migration`:
+  `8281c6a5a1aed348b9360f994322a4624fabd247`,
+  `fix: reconcile public detail metadata on hydration`.
+- Ambiente de validación: `https://cvitae-lat.netlify.app`, site `cvitae-lat`,
+  Site ID `45e57d76-bc1e-46f2-95dc-1981973276db`, deploy final
+  `6ac7f9ed968fe10008a3a541`, READY/PUBLISHED, commit exacto anterior.
+- `ROUTING_CABLE=CLOSED_PROD`, `PUBLIC_DETAIL_CONTRACT=CLOSED_PROD`,
+  `HEAD_METADATA=CLOSED_PROD` en ese ambiente, con smoke real HTTP/Chromium.
+  SEO: HTTP 200, canonical/description/OG singleton inicial e hidratado.
+  Catalog: HTTP 200 Detail real, canonical y robots `noindex,follow` singleton,
+  hydration PASS. Missing: HTTP 404/noindex, canonical/og:url/JobPosting ausentes.
+  Home, `/empleos/` y sitemap PASS; `CRITICAL_5XX=NONE`.
+- SEO read path y recorrido keyset exhaustivo ya cerrados. Evidencia de build
+  PROD anterior: `SOURCE_POLICY_SNAPSHOT=119`, `SEO_INVENTORY=6026`,
+  sitemap=6048, redirects=6026, collisions=0. Son observaciones de aquel build,
+  no un total fijo ni un cap de inventario; page size != total limit.
+
+### Dominio y decisión operativa vigente
+
+`cvitae.lat` sigue asociado a **cvitae-lata**,
+Site ID `7c1d2305-cf2c-4e7e-a41c-0c4ca30d976f`.
+`CURRENT_CVITAE_LAT_OWNER=cvitae-lata`; `DOMAIN_POINTS_TO_CURRENT_SITE=YES`.
+Cutover NO ejecutado: DETACH/ATTACH/DNS/nameservers sin cambios. La credencial
+CLI tenía acceso administrativo al current site y sólo ficha pública del sitio
+de validación; se detuvo antes de liberar el dominio.
+
+`www.cvitae.lat` mantiene 301 → `https://cvitae.lat/`; TLS válido; DNS externo,
+Namecheap. No se movió ni borró una Netlify DNS zone. Según el usuario, el
+current site/cuenta alcanzó el límite de créditos el 2026-10-08.
+
+**Decisión del usuario:** quedarse en la misma cuenta y en `cvitae-lata`.
+No mover el custom domain ni usar `cvitae-lat` como producción final. PD-005
+permanece histórico/backlog, sin activar una migración de cuenta. El site
+`cvitae-lat` conserva la evidencia del candidato validado.
+
+### Próxima ejecución — 2026-10-09, después del reset de créditos
+
+1. En la MISMA cuenta actual, comprobar `cvitae-lata`/Site ID exacto, créditos
+   y builds disponibles, repo linkage y production branch `feature/aws-migration`.
+2. Sin modificar código ni crear commit, desplegar/retry EXACTAMENTE
+   `8281c6a5a1aed348b9360f994322a4624fabd247` en el current site.
+   Preferir retry de un deploy de ese mismo commit bloqueado por créditos, si existe.
+3. No usar un commit vacío, ni push del checkpoint/tag documental como trigger.
+   Si una limitación real exige trigger Git, STOP y pedir autorización primero.
+4. Smoke corto en `https://cvitae.lat`: Home/empleos 200; SEO canary 200 con
+   metadata singleton/hydration; primer Catalog actual 200 Detail, canonical y
+   noindex únicos/hydration; missing 404/noindex sin canonical/og:url/JobPosting;
+   sitemap 200 XML. Ver detalle y URLs en el handoff.
+5. Sólo después de ese smoke PASS: `CVITAE_PROD_RELEASE_VALIDATED=TRUE`.
+   Hoy permanece FALSE: código validado en el provisional no demuestra deploy
+   en el sitio que posee el dominio. C16/C17/etc continúan sólo según sus propios
+   contratos y autorizaciones; no arrancar workers/recovery por este documento.
+
+### DO_NOT_REOPEN — sin regresión nueva concreta
+
+- Routing público; List → Detail; original request path; Catalog fallback.
+- 404/noindex; prerender/hydration parity; metadata singleton.
+- SEO read path; inventario SEO exhaustivo; sitemap/redirect generation.
+- `DO_NOT_REOPEN_ROUTING_WITHOUT_NEW_REGRESSION=TRUE`.
+- `DO_NOT_REOPEN_HEAD_METADATA_WITHOUT_NEW_REGRESSION=TRUE`.
+
+PD-006 (primera página SEO keyset) y PD-007 (alias doble 301) no bloquean el deploy
+current-site. No resolverlos ahora. Recordatorio temporal histórico Computrabajo:
+2026-10-09 inclusive dentro de ventana; 2026-10-10 EXPIRED, sin extensión por
+créditos. C09.1 ya documenta `RETIRED_REDUNDANT_FIRST_PARTY_POLICY`; el recordatorio
+no reinstala esa excepción ni cambia el contrato row-driven del baseline.
+
+Otros chats pueden continuar trabajo LOCAL autorizado desde el código exacto
+anterior más este checkpoint, sin esperar al deploy. No reauditar los cierres,
+no aplicar migrations/reconciliation automáticamente y no alterar el candidato
+que debe publicarse mañana. Tag documental local previsto:
+`checkpoint/pre-current-site-deploy-20261008` (sin push).
+
+
 ## ACTIVE CORRECTIVE LIST — SINGLE OPERATIONAL BIBLE
 
 El master historico 1-67 permanece intacto debajo de esta Biblia. `DO NOT REOPEN` se limita al contrato local probado; PROD continua pendiente donde se indica.
