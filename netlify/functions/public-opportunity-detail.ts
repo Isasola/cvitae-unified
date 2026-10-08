@@ -5,6 +5,7 @@ import { createPublicOpportunitiesHandler } from './public-opportunities'
 import { canonicalOpportunityPathForRow, canonicalOpportunityUrlForRow, publicOpportunitySchemaType } from '../../src/lib/opportunity-truth'
 import { aggregatedJobPosting } from '../../src/lib/factual-job-posting'
 import { safeExternalUrl } from '../../src/lib/safe-url'
+import { publicDetailDescription, withPublicDetailHead } from '../../src/lib/public-detail-head.js'
 
 const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g,
   character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]!))
@@ -22,9 +23,9 @@ export function publicDetailHtml(template: string, row: Record<string, any> | nu
   const metadata = `<title>${escapeHtml(title)}</title>
 ${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">` : ''}
 <meta name="robots" content="${row?.distribution?.seo?.allowed === true ? 'index,follow' : 'noindex,follow'}">
-<meta name="description" content="${escapeHtml(description.slice(0, 160))}">
+<meta name="description" content="${escapeHtml(publicDetailDescription(description))}">
 <meta property="og:title" content="${escapeHtml(title)}">
-<meta property="og:description" content="${escapeHtml(description.slice(0, 160))}">
+<meta property="og:description" content="${escapeHtml(publicDetailDescription(description))}">
 ${canonical ? `<meta property="og:url" content="${escapeHtml(canonical)}">` : ''}
 <meta property="og:type" content="article">
 <meta property="og:image" content="https://cvitae.lat/og-image.jpg">
@@ -37,12 +38,7 @@ ${original && original !== '#' ? `<p>Fuente: <a href="${escapeHtml(original)}" r
 </article></main>` : `<main><h1>${unavailable ? 'No disponible' : '404'}</h1><p>${escapeHtml(description)}</p><a href="/empleos">Volver a empleos</a></main>`
   // Remove the Home snapshot/metadata while retaining compiled module/style
   // assets. React then uses the exact same public resolver during hydration.
-  return template
-    .replace(/<title\b[^>]*>[\s\S]*?<\/title>/gi, '')
-    .replace(/<link\b[^>]*\brel=["']canonical["'][^>]*>/gi, '')
-    .replace(/<meta\b[^>]*(?:\bname=["'](?:description|robots|twitter:[^"']+)["']|\bproperty=["']og:[^"']+["'])[^>]*>/gi, '')
-    .replace(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace('</head>', `${metadata.replace(/<(meta|link|script)\b/g, '<$1 data-rh="true"')}</head>`)
+  return withPublicDetailHead(template, metadata)
     .replace(/<body\b([^>]*)>[\s\S]*?<\/body>/i, `<body$1><div id="root">${content}</div></body>`)
 }
 

@@ -8,6 +8,7 @@ import { aggregatedJobPosting, factualJobPosting } from '../src/lib/factual-job-
 import { toGoogleEmploymentType } from '../src/lib/seo/employment-type.shared.js'
 import { deadlineLifecycle, isScholarshipLike } from '../src/lib/opportunity-truth.ts'
 import { safeExternalUrl } from '../src/lib/safe-url.ts'
+import { publicDetailDescription, withPublicDetailHead } from '../src/lib/public-detail-head.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
@@ -127,7 +128,9 @@ function markdownToSnapshotHtml(md, maxChars = 4000) {
 }
 
 // ── Core helpers ───────────────────────────────────────────────────────────
-function injectPage(templateHtml, metaTagsBlock, contentHtml) {
+function injectPage(templateHtml, metaTagsBlock, contentHtml, publicDetail = false) {
+  if (publicDetail) return withPublicDetailHead(templateHtml, metaTagsBlock)
+    .replace('<div id="root"></div>', `<div id="root">${contentHtml}</div>`)
   // Strip template-level canonical and robots BEFORE injecting metaTagsBlock so the injected
   // page-specific tags are the sole authority. The home page (index.html) is not processed here
   // and retains its own canonical/robots from the template.
@@ -600,7 +603,7 @@ async function prerender() {
     const title = (job.title || '').trim()
     if (!title) throw new Error(`inventory_job_missing_title:${job.canonical_path}`)
     const description = (job.description || '').trim()
-    const descExcerpt = description.replace(/[#*`>]/g, '').substring(0, 160) || title
+    const descExcerpt = publicDetailDescription(description || title)
     const canonical = `${SITE_URL}${job.canonical_path}`
     const realOrg = (job.organization || '').trim()
     const factual = aggregatedJobPosting(job, canonical)
@@ -622,7 +625,7 @@ async function prerender() {
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`
     const jobDir = join(distDir, family, slug)
     mkdirSync(jobDir, { recursive: true })
-    writeFileSync(join(jobDir, 'index.html'), injectPage(templateHtml, metaTags, jobSnapshotContent(job)))
+    writeFileSync(join(jobDir, 'index.html'), injectPage(templateHtml, metaTags, jobSnapshotContent(job), true))
     jobCount++
   }
 
@@ -649,7 +652,7 @@ async function prerender() {
     if (family !== 'oportunidades') throw new Error(`unexpected_opportunity_canonical_path:${opp.canonical_path}`)
     const title = (opp.title || '').trim()
     if (!title) throw new Error(`inventory_opportunity_missing_title:${opp.canonical_path}`)
-    const desc = (opp.description || title).replace(/[#*`>]/g, '').substring(0, 160)
+    const desc = publicDetailDescription(opp.description || title)
     const canonical = `${SITE_URL}${opp.canonical_path}`
     const ldType = isScholarshipLike(opp) ? 'Scholarship' : 'WebPage'
     const ld = {
@@ -669,7 +672,7 @@ async function prerender() {
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`
     const oppDir = join(distDir, family, slug)
     mkdirSync(oppDir, { recursive: true })
-    writeFileSync(join(oppDir, 'index.html'), injectPage(templateHtml, metaTags, opportunitySnapshotContent(opp)))
+    writeFileSync(join(oppDir, 'index.html'), injectPage(templateHtml, metaTags, opportunitySnapshotContent(opp), true))
     oppCount++
   }
 

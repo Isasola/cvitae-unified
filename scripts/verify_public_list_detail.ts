@@ -11,6 +11,7 @@ import { DETAIL_FALLBACK_RULES } from './generate-opportunity-redirects.mjs'
 import { canonicalOpportunityPathForRow } from '../src/lib/opportunity-truth.ts'
 import { evaluateOpportunityDistribution } from '../src/lib/effective-source-policy.ts'
 import { buildSeoInventoryFromUniverse } from '../src/lib/seo-inventory.ts'
+import { publicDetailDescription } from '../src/lib/public-detail-head.js'
 
 // Local PostgreSQL only. Use the existing SQL-test installation, never credentials.
 const { PGlite } = await import('../.cvitae-state/cable-sql-test/node_modules/@electric-sql/pglite/dist/index.js')
@@ -110,7 +111,7 @@ const transport = {
 const api = createPublicOpportunitiesHandler(() => transport as any)
 const event = (params: Record<string, string>) => ({ queryStringParameters: params }) as any
 const invoke = async (params: Record<string, string>) => await api(event(params), {} as any, () => {}) as any
-const template = '<html><head><title>Home</title><meta name="robots" content="index,follow"><link rel="canonical" href="https://cvitae.lat"><script type="module" src="/assets/app.js"></script></head><body><div id="root">Home snapshot</div></body></html>'
+const template = '<html><head><title>Home</title><meta name="description" content="Home description"><meta property="og:url" content="https://cvitae.lat"><meta property="og:title" content="Home"><meta property="og:description" content="Home description"><meta property="og:type" content="website"><meta name="twitter:title" content="Home"><meta name="robots" content="index,follow"><link rel="canonical" href="https://cvitae.lat"><script type="module" src="/assets/app.js"></script></head><body><div id="root">Home snapshot</div></body></html>'
 const htmlHandler = createPublicDetailHandler(api, () => template)
 // Model the production rewrite: original event.path, no injected query.
 const requestEvent = (pathname: string, rawQuery = '') => ({
@@ -378,11 +379,61 @@ export const handler = async event => {
     return route.continue()
   })
   const page = await context.newPage()
+  const parser = await context.newPage()
+  // Inert HTML parsing measures the response before any JS can hydrate it.
+  const headSnapshot = (target: any, html: string | null = null) => target.evaluate((source: string | null) => {
+    const doc = source === null ? document : new DOMParser().parseFromString(source, 'text/html')
+    const selectors = {
+      title: 'title', canonical: 'link[rel="canonical"]', description: 'meta[name="description"]', robots: 'meta[name="robots"]',
+      ogUrl: 'meta[property="og:url"]', ogTitle: 'meta[property="og:title"]', ogDescription: 'meta[property="og:description"]',
+      ogType: 'meta[property="og:type"]', ogImage: 'meta[property="og:image"]',
+      twitterTitle: 'meta[name="twitter:title"]', twitterDescription: 'meta[name="twitter:description"]',
+      twitterUrl: 'meta[name="twitter:url"]', twitterCard: 'meta[name="twitter:card"]', twitterImage: 'meta[name="twitter:image"]',
+    }
+    return {
+      values: Object.fromEntries(Object.entries(selectors).map(([key, selector]) => [key, [...doc.head.querySelectorAll(selector)].map(tag =>
+        tag.tagName === 'TITLE' ? tag.textContent : tag.getAttribute(tag.tagName === 'LINK' ? 'href' : 'content'))])),
+      initialOwned: doc.head.querySelectorAll('[data-rh="true"]').length,
+      jobPosting: [...doc.querySelectorAll('script[type="application/ld+json"]')].filter(tag => /JobPosting/.test(tag.textContent || '')).length,
+    }
+  }, html)
+  const assertDetailHead = (snapshot: any, row: any, hydrated: boolean) => {
+    const expected = `https://cvitae.lat${canonicalOpportunityPathForRow(row)}`
+    const values = snapshot.values
+    assert.deepEqual(values.title, [`${row.title} | CVitae`])
+    assert.deepEqual(values.canonical, [expected], 'exactly one canonical, including after hydration')
+    assert.deepEqual(values.description, [publicDetailDescription(row.description || row.title)])
+    assert.deepEqual(values.ogUrl, [expected])
+    assert.deepEqual(values.ogTitle, values.title)
+    assert.deepEqual(values.ogDescription, values.description)
+    assert.deepEqual(values.ogType, ['article'])
+    assert.deepEqual(values.ogImage, ['https://cvitae.lat/og-image.jpg'])
+    const seo = seoRows.some(item => item.id === row.id)
+    assert.ok(values.robots.length <= 1, 'robots singleton; no index/noindex contradiction')
+    if (!seo) assert.deepEqual(values.robots, ['noindex,follow'])
+    else assert.ok(values.robots.every((value: string) => value === 'index,follow'))
+    for (const key of Object.keys(values).filter(key => key.startsWith('twitter'))) assert.deepEqual(values[key], [], 'Home Twitter metadata must not leak into detail')
+    if (hydrated) assert.equal(snapshot.initialOwned, 0, 'initial HEAD handed off after live HEAD commits')
+    else assert.ok(snapshot.initialOwned > 0, 'initial detail HEAD explicitly owned')
+  }
+  const assertMissingHead = (snapshot: any, hydrated: boolean) => {
+    assert.deepEqual(snapshot.values.title, ['P\u00e1gina no encontrada | CVitae'])
+    assert.deepEqual(snapshot.values.description, ['Esta oportunidad no est\u00e1 disponible.'])
+    assert.deepEqual(snapshot.values.robots, ['noindex,follow'])
+    assert.deepEqual(snapshot.values.canonical, [])
+    assert.deepEqual(snapshot.values.ogUrl, [])
+    assert.equal(snapshot.jobPosting, 0)
+    for (const [key, values] of Object.entries(snapshot.values)) assert.ok((values as any[]).length <= 1, `missing singleton: ${key}`)
+    if (hydrated) assert.equal(snapshot.initialOwned, 0)
+  }
   const fatal: string[] = []
   page.on('pageerror', error => fatal.push(error.message))
   try {
     for (const row of [a, b, future, other, scholarship, listed.get('paged-0104')]) {
       const canonical = canonicalOpportunityPathForRow(row)
+      const initial = await fetch(`${origin}${canonical}/`)
+      assert.equal(initial.status, 200)
+      assertDetailHead(await headSnapshot(parser, await initial.text()), row, false)
       const apiResponse = page.waitForResponse(response => response.url().includes('/.netlify/functions/public-opportunities?') && new URL(response.url()).searchParams.get('slug') === row.slug).catch(() => null)
       const document = await page.goto(`${origin}${canonical}/`)
       if (document!.status() !== 200) console.log(`DETAIL_ROUTE_FAILURE=${canonical} status=${document!.status()} function=${document!.headers()['x-local-detail-function']} query=${document!.headers()['x-local-detail-query']}`)
@@ -402,8 +453,7 @@ export const handler = async event => {
         await page.getByText('Volver a oportunidades', { exact: true }).first().waitFor()
       })
       assert.equal(await page.getByText(/ya no est[áa] activ[oa] o no existe/).count(), 0)
-      const canonicalUrls = await page.locator('link[rel="canonical"]').evaluateAll(elements => elements.map(element => element.getAttribute('href')))
-      assert.ok(canonicalUrls.length > 0 && canonicalUrls.every(url => url === `https://cvitae.lat${canonical}`))
+      assertDetailHead(await headSnapshot(page), row, true)
       for (const text of await page.locator('script[type="application/ld+json"]').allTextContents()) JSON.parse(text)
       if (row.id === b.id) assert.match(await page.locator('meta[name="robots"]').last().getAttribute('content') || '', /noindex/)
     }
@@ -425,12 +475,19 @@ export const handler = async event => {
     const spoofed = await fetch(`${origin}${canonicalOpportunityPathForRow(b)}?slug=missing&family=oportunidades`)
     assert.equal(spoofed.status, 200); assert.ok((await spoofed.text()).includes(b.title))
     assert.equal(spoofed.headers.get('x-local-detail-identity'), canonicalOpportunityPathForRow(b).slice(1))
-    console.log('ORIGINAL_PATH_QUERY_SPOOF=PASS direct_valid=200 direct_missing=404')
+    const spoofApi = page.waitForResponse(response => response.url().includes('/.netlify/functions/public-opportunities?') && new URL(response.url()).searchParams.get('slug') === b.slug)
+    await page.goto(`${origin}${canonicalOpportunityPathForRow(b)}?slug=missing&family=oportunidades`)
+    assert.equal((await spoofApi).status(), 200)
+    await page.getByRole('heading', { name: b.title, exact: true }).waitFor()
+    await page.getByText('Volver a empleos', { exact: true }).first().waitFor()
+    assertDetailHead(await headSnapshot(page), b, true)
+    console.log('ORIGINAL_PATH_QUERY_SPOOF=PASS direct_valid=200 direct_missing=404 metadata_identity=PASS')
     for (const slash of ['', '/']) {
       const response = await fetch(`${origin}/empleos/__missing_final_route_test__${slash}`)
       assert.equal(response.status, 404)
       assert.equal(response.headers.get('x-local-detail-function'), 'generated-redirect')
       const body = await response.text()
+      assertMissingHead(await headSnapshot(parser, body), false)
       assert.match(body, /noindex,follow/); assert.doesNotMatch(body, /application\/ld\+json|JobPosting|Home snapshot|<title>CVitae \| Empleos, oportunidades|rel="canonical"|property="og:url"/)
       assert.equal(response.headers.get('x-local-original-path'), `/empleos/__missing_final_route_test__${slash}`)
     }
@@ -442,9 +499,17 @@ export const handler = async event => {
     const missing = await page.goto(`${origin}/empleos/__missing_final_route_test__/`)
     assert.equal(missing!.status(), 404); assert.equal((await missingApi).status(), 404)
     await page.getByText('Este empleo ya no está activo o no existe.').waitFor()
-    assert.match(await page.locator('meta[name="robots"]').last().getAttribute('content') || '', /noindex/)
+    assertMissingHead(await headSnapshot(page), true)
     assert.equal(await page.locator('script[type="application/ld+json"]').count(), 0)
     assert.equal(missing!.headers()['x-local-detail-function'], 'generated-redirect')
+    const siblingInitial = await fetch(`${origin}/oportunidades/__missing_head_sibling__/`)
+    assert.equal(siblingInitial.status, 404)
+    assertMissingHead(await headSnapshot(parser, await siblingInitial.text()), false)
+    const siblingApi = page.waitForResponse(response => response.url().includes('slug=__missing_head_sibling__'))
+    await page.goto(`${origin}/oportunidades/__missing_head_sibling__/`)
+    assert.equal((await siblingApi).status(), 404)
+    await page.getByText('Esta oportunidad ya no est\u00e1 activa o no existe.').waitFor()
+    assertMissingHead(await headSnapshot(page), true)
     // Exercise actual deployed output/config, including unrelated route priority.
     for (const route of ['/empleos/', '/dashboard', '/auth/callback']) {
       const response = await fetch(origin + route)
@@ -467,8 +532,10 @@ export const handler = async event => {
     assert.equal(oldDocument!.status(), 200); assert.equal((await oldApi).status(), 404)
     await page.getByText('Este empleo ya no está activo o no existe.').waitFor()
     assert.equal(await page.getByRole('heading', { name: a.title, exact: true }).count(), 0)
+    assertMissingHead(await headSnapshot(page), true)
     assert.deepEqual(fatal, [], 'no fatal browser errors')
     console.log('GENERATED_REDIRECT_ROUTING=PASS custom_path=ABSENT static_precedence=PASS catalog_first=PASS catalog_page_2=PASS no_slash=PASS trailing_slash=PASS original_path=PASS query_spoof=PASS default_endpoint=PASS missing_canonical=ABSENT missing_404=PASS missing_home_spa=FALSE list=PASS spa=PASS sitemap=PASS auth=PASS assets=PASS')
+    console.log('PUBLIC_DETAIL_HEAD_SINGLETONS=PASS seo_initial=PASS seo_hydrated=PASS catalog_initial=PASS catalog_hydrated=PASS page_2=PASS missing_both_families=PASS stale_static_missing=PASS query_spoof=PASS title=PASS canonical=PASS description=PASS robots=PASS og=PASS twitter_home_removed=PASS')
     console.log('PRERENDER_HYDRATION=PASS canary_a=PASS canary_b=PASS future_source=PASS page_2=PASS missing_404=PASS old_contract_negative_control=REPRODUCED')
   } finally {
     await browser.close(); await stopDev(); await new Promise<void>(resolve => server.close(() => resolve()))
