@@ -224,3 +224,61 @@ DO_NOT_DO_NOW:
 - No ejecutar deploy.
 
 CLOSURE_TEST: cvitae.lat sirve el mismo release, functions y variables requeridas desde la cuenta elegida y smoke tests pasan.
+
+### PD-006 — SEO Universe — optimizar primera página del keyset
+
+TYPE: PERFORMANCE
+
+STATUS: BACKLOG
+
+DISCOVERED_AT: 2026-10-08
+
+FOUND_WHILE: Verificación PROD del SEO Universe read path, posterior a 202610080001; resultados informados por el usuario.
+
+PROBLEM: La primera página todavía trabaja sobre el conjunto completo SEO READY antes de ordenar y obtener las primeras 250 filas. Su costo crece con el universo completo, mientras que las páginas posteriores ya trabajan cerca del tamaño de página. Al agregar/corregir scrapers y aumentar oportunidades elegibles, la primera lectura puede volver a degradarse aunque el resto del cursor siga eficiente.
+
+EXPECTED: También la primera página debe comenzar directamente desde el índice/camino SEO READY ordenado y trabajar aproximadamente con el page budget necesario, conservando los gates y la cobertura exhaustiva. PAGE SIZE != TOTAL LIMIT.
+
+CURRENT: POST-RELEASE / NEAR-TERM PERFORMANCE IMPROVEMENT. NO bloquea el release actual. La deuda se conserva deliberadamente: el release pasó el criterio PROD (~0.8 s para la primera página, frente al fallo anterior de varios segundos/timeout), está ampliamente por debajo del timeout y es seguro actualmente. Se registra para evitar que el crecimiento mensual reintroduzca el incidente.
+
+AFFECTED_FILES_OR_SYSTEMS: public.opportunity_seo_universe; opportunity_universe_seo_ready_id_idx; supabase/migrations/202610080001_seo_universe_read_path.sql (referencia de la implementación actual); src/lib/seo-universe-fetch.js; scripts/generate-seo-inventory.ts; netlify/functions/sitemap.ts.
+
+EVIDENCE:
+
+Contexto PROD validado 2026-10-08, proporcionado por el usuario; no se consultó PROD en esta tarea documental:
+
+- opportunity_universe_seo_ready_id_idx está activo.
+- Las páginas posteriores usan opportunity_id > cursor mediante el índice parcial SEO READY.
+- Una página posterior procesa aproximadamente 251 IDs para devolver 250.
+- Ya no existe el patrón anterior de ~16.357 lookups por página.
+- La verificación completa quedó alrededor de 900 ms.
+- La primera página todavía examina aproximadamente 6.054 opportunity_universe_state con seo_state='READY'; ~6.026 filas sobreviven los gates y después ordena para obtener las primeras 250.
+- Tiempo observado PROD de esa primera lectura: ~781 ms.
+
+SCOPE_NEXT_DEPLOY:
+
+Mejora cercana/no bloqueante; activar su implementación sólo con autorización del usuario y registrar el release/Cxx que la absorba. Revisar este punto cuando Codex vuelva a trabajar sobre read path / SEO Universe / sitemap, e incluirlo en revisión periódica de rendimiento conforme crezca el inventario.
+
+Comparar al menos:
+
+- total SEO READY;
+- Execution Time de la primera página;
+- filas examinadas para producir 250;
+- Execution Time de una página posterior;
+- presencia/uso de opportunity_universe_seo_ready_id_idx.
+
+La meta no es perseguir micro-optimizaciones: intervenir cuando el crecimiento muestre que la primera página empieza a escalar materialmente con el universo. Optimizar el acceso ordenado inicial sin recorrer todo READY antes del LIMIT, preservando canonical SEO Universe → gates → ordered keyset → exhaustive coverage.
+
+DO_NOT_DO_NOW:
+
+- No reabrir la implementación SEO ni cambiar código productivo durante el release actual por este pendiente.
+- No aumentar statement_timeout.
+- No bajar artificialmente page size.
+- No introducir un cap global.
+- No excluir fuentes.
+- No quitar deadline ni source operational gates.
+- No duplicar la verdad SEO.
+- No hardcodear scrapers.
+- No consultar/modificar PROD ni ejecutar deploy en esta tarea documental.
+
+CLOSURE_TEST: Con distintos tamaños de SEO READY, comprobar mediante planes y métricas que la primera página accede al camino READY ordenado y examina aproximadamente el presupuesto de candidatos necesario para producir 250, sin trabajo previo sobre todo READY. Las páginas posteriores mantienen id > cursor y uso efectivo del índice; deadline OPEN/UNKNOWN y source operational gates permanecen aplicados. El recorrido hasta EOF conserva todas las URLs elegibles, sin cap global, fuentes excluidas ni pérdidas; comparar contra los baselines PROD registrados arriba y añadir evidencia antes de marcar DONE.
