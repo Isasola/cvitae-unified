@@ -1,4 +1,4 @@
-import type { Config, Context, HandlerEvent, HandlerContext } from '@netlify/functions'
+import type { Context, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createPublicOpportunitiesHandler } from './public-opportunities'
@@ -50,18 +50,18 @@ export function createPublicDetailHandler(
   readPublic = createPublicOpportunitiesHandler(),
   template = () => readFileSync(resolve(process.cwd(), 'dist/index.html'), 'utf8'),
 ): (request: Request, context: Context) => Promise<Response> {
-  return async (request, context) => {
-    const pathname = new URL(request.url).pathname
-    const route = pathname.match(/^\/(empleos|oportunidades)\/([^/]+)\/?$/)
-    const slug = context.params.slug || ''
-    const family = route?.[1] || ''
+  return async (request) => {
+    const url = new URL(request.url)
+    const slug = url.searchParams.get('slug') || ''
+    const family = url.searchParams.get('family') || ''
     const headers = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }
     if (request.method !== 'GET') return new Response(null, { status: 405, headers: { Allow: 'GET' } })
-    if (!route || route[2] !== slug || !/^[a-z0-9][a-z0-9._-]*$/i.test(slug)) {
+    if (url.searchParams.getAll('slug').length !== 1 || url.searchParams.getAll('family').length !== 1 ||
+        !['empleos', 'oportunidades'].includes(family) || !/^[a-z0-9][a-z0-9._-]*$/i.test(slug)) {
       return new Response(publicDetailHtml(template(), null), { status: 404, headers })
     }
     // Adapt only the transport: the existing public resolver remains the authority.
-    const event = { httpMethod: 'GET', path: pathname, rawUrl: request.url,
+    const event = { httpMethod: 'GET', path: url.pathname, rawUrl: request.url,
       headers: Object.fromEntries(request.headers), queryStringParameters: { mode: 'all', slug } } as HandlerEvent
     const result = await readPublic(event, {} as HandlerContext, () => {}) as any
     if (result.statusCode !== 200) return new Response(
@@ -72,12 +72,6 @@ export function createPublicDetailHandler(
       headers: { Location: canonicalPath, 'Cache-Control': 'no-store' } })
     return new Response(publicDetailHtml(template(), row), { status: 200, headers })
   }
-}
-
-export const config: Config = {
-  path: ['/empleos/:slug', '/oportunidades/:slug'],
-  preferStatic: true,
-  method: ['GET'],
 }
 
 export default createPublicDetailHandler()

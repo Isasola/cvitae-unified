@@ -4,6 +4,7 @@ import path from 'node:path'
 import { buildEffectiveSeoInventory, buildSeoInventoryFromUniverse, seoCanonicalPaths } from '../src/lib/seo-inventory.ts'
 import { sitemapIndexEntries } from '../src/lib/sitemap-universe.js'
 import { publicDistributionProjection } from '../src/lib/effective-source-policy.ts'
+import { buildOpportunityRedirects, DETAIL_FALLBACK_RULES } from './generate-opportunity-redirects.mjs'
 
 const root = path.resolve(import.meta.dirname, '..')
 const fixture = JSON.parse(fs.readFileSync(path.resolve(root, process.env.SEO_INVENTORY_FIXTURE || 'scripts/fixtures/seo-inventory.json'), 'utf8'))
@@ -45,13 +46,27 @@ for (const canonical of expected) {
 }
 
 const redirects = fs.readFileSync(path.join(root, 'dist/_redirects'), 'utf8').trim().split(/\r?\n/).filter(Boolean)
-const redirectTargets = redirects.map(line => line.split(/\s+/)[1])
-same(redirectTargets, 'redirect targets must be canonical effective SEO URLs')
-assert.ok(redirects.every(line => line.endsWith(' 301!')), 'redirects must be forced HTTP redirects')
+// Derive expected aliases independently so a regression in the generator cannot
+// silently omit aliases while still passing the deployed-artifact comparison.
+const canonicalSet = new Set(expected)
+const expectedGraph = expected.map(target => ({ target, source: target.startsWith('/empleos/')
+  ? target.replace('/empleos/', '/oportunidades/') : target.replace('/oportunidades/', '/empleos/') }))
+  .filter(({ source }) => !canonicalSet.has(source))
+  .sort((a, b) => a.source.localeCompare(b.source) || a.target.localeCompare(b.target))
+assert.deepEqual(buildOpportunityRedirects(inventory).redirects, expectedGraph, 'generator must cover every effective, non-colliding alias')
+const expectedAliases = expectedGraph.map(({ source, target }) => `${source} ${target} 301!`)
+const aliases = redirects.filter(line => line.endsWith(' 301!'))
+const fallbacks = redirects.filter(line => !line.endsWith(' 301!'))
+assert.deepEqual(aliases, expectedAliases, 'exactly one forced redirect per effective SEO alias, with canonical target and graph validation')
+assert.deepEqual(fallbacks, DETAIL_FALLBACK_RULES, 'only the fixed, non-forced detail infrastructure rewrites')
+assert.deepEqual(redirects, [...expectedAliases, ...DETAIL_FALLBACK_RULES], 'all SEO aliases precede detail fallbacks; no SPA or other rules')
+assert.ok(fallbacks.every(line => line.endsWith(' 200') && !line.includes('!')))
+assert.doesNotMatch(fs.readFileSync(path.join(root, 'netlify.toml'), 'utf8'), /from = "\/(empleos|oportunidades)\/:slug\/?"/)
+console.log(`SEO_ALIAS_RULES=${aliases.length} DETAIL_FALLBACK_RULES=${fallbacks.length} LAST_SEO_ALIAS_INDEX=${aliases.length - 1} FIRST_DETAIL_FALLBACK_INDEX=${aliases.length} ORDER=PASS`)
 
 // Runtime uses the same Opportunity Truth projection; this guards against a
 // build-only URL selection being introduced beside the runtime function.
 same(seoCanonicalPaths(project()), 'runtime effective inventory')
 assert.deepEqual(sitemapIndexEntries(2501).filter(name => name.startsWith('sitemap-opportunities/')), ['sitemap-opportunities/1.xml', 'sitemap-opportunities/2.xml', 'sitemap-opportunities/3.xml'], 'shared pagination contract remains 1000/1000/501')
 
-console.log(JSON.stringify({ total: fixture.opportunities.length, effective_seo: expected.length, build_child_opportunity_urls: opportunityPaths.length, prerender_public_200: prerendered.length, redirects: redirects.length, sitemap_children: childNames.length }))
+console.log(JSON.stringify({ total: fixture.opportunities.length, effective_seo: expected.length, build_child_opportunity_urls: opportunityPaths.length, prerender_public_200: prerendered.length, redirects: aliases.length, detail_fallbacks: fallbacks.length, sitemap_children: childNames.length }))

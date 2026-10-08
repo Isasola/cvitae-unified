@@ -7,6 +7,15 @@ const inventoryPath = path.join(root, 'generated', 'public-seo-inventory.json')
 const ROUTE = /^\/(empleos|oportunidades)\/([a-z0-9][a-z0-9._-]*)$/i
 const MAX_AGE_MS = 24 * 60 * 60 * 1000
 
+// Non-forced rewrites preserve static SEO shadowing. This deployed artifact
+// precedes netlify.toml's SPA fallback, including both trailing-slash forms.
+export const DETAIL_FALLBACK_RULES = [
+  '/empleos/:slug /.netlify/functions/public-opportunity-detail?family=empleos&slug=:slug 200',
+  '/empleos/:slug/ /.netlify/functions/public-opportunity-detail?family=empleos&slug=:slug 200',
+  '/oportunidades/:slug /.netlify/functions/public-opportunity-detail?family=oportunidades&slug=:slug 200',
+  '/oportunidades/:slug/ /.netlify/functions/public-opportunity-detail?family=oportunidades&slug=:slug 200',
+]
+
 export function canonicalRoute(pathname) {
   const match = ROUTE.exec(String(pathname || ''))
   if (!match) throw new Error(`seo_redirect_invalid_canonical_path:${pathname}`)
@@ -49,7 +58,8 @@ export function parseInventory(inventory, now = Date.now()) {
 
 export function redirectText(rows) {
   const { redirects, collisions } = buildOpportunityRedirects(rows)
-  return { text: redirects.map(({ source, target }) => `${source} ${target} 301!`).join('\n') + (redirects.length ? '\n' : ''), redirects, collisions }
+  const aliases = redirects.map(({ source, target }) => `${source} ${target} 301!`)
+  return { text: [...aliases, ...DETAIL_FALLBACK_RULES].join('\n') + '\n', redirects, collisions }
 }
 
 export function generate() {
@@ -59,6 +69,7 @@ export function generate() {
   fs.writeFileSync(path.join(root, 'dist', '_redirects'), text)
   console.log(`SEO_REDIRECTS=${redirects.length}`)
   console.log(`SEO_REDIRECT_COLLISIONS=${collisions}`)
+  console.log(`DETAIL_FALLBACK_RULES=${DETAIL_FALLBACK_RULES.length}`)
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) generate()
