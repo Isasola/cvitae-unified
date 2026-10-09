@@ -173,5 +173,123 @@ histórica y su blocker anterior. Este resultado y el integration gate actualiza
 superseden únicamente aquel estado LOCAL; no reescriben Master/C01–C21 ni Golden.
 Consultar `artifacts/release/parallel-b2c-local-evidence-20261008.json`.
 No integrar/desplegar automáticamente: commit local del delta y paquete separado;
-el ZIP frozen original sigue inmutable. El deploy current-site de mañana sigue
-siendo EXACT Golden, en la misma cuenta/site, sin mezclar este trabajo.
+el ZIP frozen original sigue inmutable. La selección vigente de mañana es Golden / R1 / LATER READY según el bloque
+R1 siguiente y el integration gate; requiere revisión/autorización explícita,
+sin cambiar cuenta/site ni mezclar trabajo no ready.
+
+
+## Estado vigente R1 — CLOSED_LOCAL / R1
+
+R1_INTEGRATION_READY=4e5b59bae59b5e0ae4fd11dfc6683f91ca614f33
+R1_INTEGRATION_READY_LOCAL=TRUE
+Tag local inmutable: checkpoint/b2c-ready-20261008-r1.
+Ver `B2C_READY_CHECKPOINT_R1_2026-10-08.md` para identidad, evidencia y límites.
+R2 desciende del checkpoint DOCUMENTAL posterior a R1; no continuar producto
+sobre el branch R1 congelado. R1 sustituye sólo el estado local del blocker
+semántico histórico de GRAND_CHECKPOINT, no modifica Master/C01–C21.
+
+CLOSED_LOCAL / R1: profile/load/save/retry/reload (9 grupos), application
+workspace/version/checklist/copia/PDF/efectos (26 casos), CV literal y requirement
+semantic grounding (60 casos), cache/context guard y supported/gap UI/reload.
+No repetirlos como frentes nuevos. Evidencia y build combinado ya PASS.
+
+### Remaining OPEN_LOCAL_NOW — gaps de evidencia, no bugs presumidos
+
+Lista derivada únicamente de Master42–44 y paquetes A/B/C anteriores. No abre
+nuevas features ni declara roto lo que existe. Cada contrato debe reutilizar la
+evidencia baseline y confirmar el gap exacto antes de cambiar implementación.
+Orden recomendado: Free/Beta + retorno Dashboard (43/44), luego versiones CVVivo
+(42), luego el límite sesión/extracción aún no cubierto por R1. Learning/retorno
+se valida junto al primer paquete si sus dependencias permiten un cable completo.
+
+#### 1. Master43 — Free / Founding Beta: adquisición y valor sin veto accidental
+
+- CONTRACT: entitlement → presentación Dashboard/acciones existentes → avance
+  válido; Free top-3 sólo presentación, sin truncar universo ni scoring.
+- CURRENT STATE: controles Free/top-3/CTA/consent baseline protegidos y regresiones
+  dirigidas PASS; falta evidencia integrada de todas las variantes de este cable.
+- INPUT: sesiones Free/Beta nuevas y de retorno; retrieval fixture no vacío/cero.
+- OUTPUT: acciones/datos visibles según entitlement, cero honesto, errores/retry
+  útiles y continuidad del flujo permitido; no false success ni efectos dobles.
+- AFFECTED SURFACES: Dashboard.tsx, useFoundingBeta.ts, FoundingBetaModal.tsx,
+  founding-beta-action.ts y endpoints realmente usados; analytics existente.
+- DEPENDENCIES: R1 perfil/Workspace; contratos existentes de entitlement,
+  snapshots/presentation, CTA/return intent/consent. No cambiar matching core.
+- BLOCKERS: ninguno local identificado; servicios/pago/email reales pendientes
+  PROD no se convierten en cierre local. No enviar correos en fixtures.
+- ACCEPTANCE: handler/estado/UI/acción/reload y efectos locales, Free/Beta,
+  sesión/servicio/cupo fallidos sin pérdida de adquisición; no PASS aislado de gate.
+- TARGETED REGRESSION: verify_conversion_analytics_item56,
+  verify_b2c_secondary_contracts y Candidate Truth/eligibility sólo si afectados;
+  nuevo E2E del gap específico, no reejecutar routing/SEO por defecto.
+
+#### 2. Master44 — retorno orgánico y Learning: continuar estado útil/factual
+
+- CONTRACT: contexto guardado → regreso/sesión → Dashboard/versión/plan existente
+  → próxima acción útil → efecto consentido, sin inventar gaps del candidato.
+- CURRENT STATE: return intent/CTA/Dashboard bounded son baseline; R1 cubre
+  retorno/reload de perfil y Workspace, no todo el loop Master44 ni retención real.
+- INPUT: estado nuevo/retorno, versión/perfil/plan persistidos, gaps corroborados,
+  cero resultados, sesión ausente y cache viejo.
+- OUTPUT: retorno a identidad/estado correctos, plan basado en gaps corroborados,
+  error recuperable/cero honesto; sin generar hechos ni duplicar efectos.
+- AFFECTED SURFACES: Dashboard.tsx, LearningPlan.tsx, CVVivo.tsx y endpoints
+  actualmente consumidos, auth/return-intent y analytics si el cable lo exige.
+- DEPENDENCIES: R1 hechos/semántica, contratos C11/C12 y entitlement/estado del
+  workstream1. NO confundir Learning factual con requisito unsupported convertido
+  en experiencia. Revisar autoridad existente antes de delegar.
+- BLOCKERS: ninguno local demostrado; medición de retención/entrega email y
+  real-provider/GSC pendientes PROD, fuera de esta ejecución local.
+- ACCEPTANCE: regreso real en browser con reload/estado/acción/efecto; plan
+  soportado por gaps, cache/servicio/sesión fallidos recuperables. No cerrar
+  retención comercial sólo por esta evidencia local.
+- TARGETED REGRESSION: verify-learning-plan, secondary contracts y conversion
+  analytics según diff; Candidate Truth si toca evidencia; E2E del retorno.
+
+#### 3. Master42 — CVVivo / versión privada / adaptación / PDF fuera de Workspace R1
+
+- CONTRACT: oportunidad/snapshot privado + hechos confirmados → versión del CV
+  correcta → edición/selección/reload → PDF de esa versión; user isolation.
+- CURRENT STATE: C11/C12 son baseline; R1 cierra ApplicationWorkspace/PDF y
+  grounding, no el resto de generate-cv-vivo/cv-workspace/CVVivo como journey único.
+- INPUT: usuario/contexto, versión base factual, oportunidad o snapshot privado
+  actual; casos vacíos/excluded y fallo provider/persistencia.
+- OUTPUT: versión vinculada a usuario/oportunidad/parent, reload estable y PDF
+  legible elegido; snapshot privado no modifica universo/denominator global.
+- AFFECTED SURFACES: CVVivo.tsx, generate-cv-vivo.ts, cv-workspace.ts y helpers
+  existentes directamente llamados. ApplicationWorkspace R1 sólo si dependencia
+  demostrada; no reconstruirlo ni crear generación paralela.
+- DEPENDENCIES: hechos confirmados/Candidate Truth/R1; C11/C12/version ownership;
+  provider/Auth/DB/storage reemplazados únicamente en frontera local.
+- BLOCKERS: ninguno local demostrado; precisión provider y SQL/RLS/locks reales
+  no validados, permanecen limitación externa declarada.
+- ACCEPTANCE: producer/normalizer/persistencia/servidor/UI/edición/reload/PDF y
+  efectos reales locales; negativos, user isolation y sin hechos fabricados.
+- TARGETED REGRESSION: verify-b2c-cv-universal, verify-b2c-cv-polish,
+  verify_b2c_secondary_contracts según superficie; grounding/journey R1 si toca
+  sus autoridades, no tests de todos los contratos congelados.
+
+#### 4. Master42 — límite auth/entrada/extracción CV anterior al perfil R1
+
+- CONTRACT: auth/return → archivo CV → extracción factual → revisión/confirmación
+  → perfil de usuario correcto → continuidad; error nunca autoriza overwrite.
+- CURRENT STATE: R1 prueba safe profile load/save/retry y frontera CV privada;
+  no declara signup/callback/extracción semántica real completos.
+- INPUT: sesión/return intent, archivo soportado/no soportado, extracción parcial
+  o vacía, cancelación y errores Auth/storage/provider.
+- OUTPUT: hechos explícitos revisables y perfil propio conservado, retry/retorno
+  seguro; UNKNOWN no se convierte en hecho ni extracción vacía en éxito.
+- AFFECTED SURFACES: AuthCallback.tsx/auth existente, ProfileBuilder.tsx,
+  b2c-profile.ts, analyze-cv-candidate.ts, extract-pdf-text.ts, helpers necesarios.
+- DEPENDENCIES: R1 perfil y Candidate Truth/ownership, CTA/return intent baseline.
+- BLOCKERS: ninguno local demostrado; OAuth/email/OCR/modelo reales requieren
+  validación externa futura, no llamadas PROD ni reabrir profile journey ya PASS.
+- ACCEPTANCE: cable local browser/handler/estado completo con fronteras simuladas
+  explícitas, confirmación/reload, usuario distinto, fallo/cancelación/retry y
+  proveedor bloqueado cuando factual boundary impide operación.
+- TARGETED REGRESSION: profile journey, CV universal, conversion analytics,
+  Candidate Truth/eligibility sólo según diff + E2E de la entrada/extracción faltante.
+
+BLOCKED_UNTIL_PROD sigue: current-site deploy/smoke y créditos; provider semántico
+real, SQL/RLS/locks, entrega/retención real, C16/C17/C18 y canary futuro. No
+empezarlos por avanzar R2. PD-006/PD-007 no entran en scope local B2C.

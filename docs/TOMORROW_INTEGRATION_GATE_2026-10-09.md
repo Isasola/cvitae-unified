@@ -1,8 +1,60 @@
 # Tomorrow integration gate — 2026-10-09
 
-Subordinado a GRAND_CHECKPOINT y FROZEN_CHECKPOINT. No cambia el candidato que
-se publicará en cvitae-lata: primero se despliega EXACTAMENTE Golden, sin mezclar
-trabajo nocturno. Integrar B2C nuevo es un paso posterior revisado y autorizado.
+Subordinado a GRAND_CHECKPOINT y FROZEN_CHECKPOINT. La selección de candidato
+vigente está en el bloque R1 siguiente. Ese bloque supersede la instrucción
+histórica Golden-only únicamente para selección; NO autoriza integración/deploy.
+
+
+## Gate vigente R1 / siguiente línea R2 — 2026-10-08
+
+```text
+GOLDEN_PRODUCT_BASE=8281c6a5a1aed348b9360f994322a4624fabd247
+COMMON_GOVERNANCE_BASE=9b8f6a899197e2795280fd1cb30484fb68f1bbc0
+COMMON_INTEGRATION_BASE=9b8f6a899197e2795280fd1cb30484fb68f1bbc0
+R1_INTEGRATION_READY=4e5b59bae59b5e0ae4fd11dfc6683f91ca614f33
+R1_INTEGRATION_READY_LOCAL=TRUE
+R1_IMMUTABLE_TAG=checkpoint/b2c-ready-20261008-r1
+R1_CHECKPOINT_DOC_COMMIT=SHA exacto externo en MANIFEST.json/git-state.txt
+R2_BRANCH=work/b2c-r2-20261008
+R2_START=R1_CHECKPOINT_DOC_COMMIT
+REQUIREMENT_SEMANTIC_REAL_PROVIDER_PROD_CANARY=PENDING
+```
+
+La fecha de corte no autoriza deploy. Mañana se elige tras revisión explícita:
+
+| Candidato | Identidad | Condición |
+|---|---|---|
+| A — GOLDEN | 8281c6a5a1aed348b9360f994322a4624fabd247 | Producto probado en site de validación |
+| B — R1 | 4e5b59bae59b5e0ae4fd11dfc6683f91ca614f33 | Delta B2C INTEGRATION_READY_LOCAL=TRUE; canaries reales siguen pendientes |
+| C — LATER READY | Descendiente de 4e5b59 | Gate independiente INTEGRATION_READY_LOCAL=TRUE y revisión del delta completo |
+
+El commit documental R1 agrega sólo governance/handoff; su tree productivo
+coincide con 4e5b59. No mezclar un R2 sin gate PASS. Si R2 falla, R1 sigue
+recuperable y seleccionable mediante tag/branch/package. No destruir tag ni
+continuar producto directamente sobre R1. R2 se crea por Git worktree desde
+el DOC_COMMIT, con mismo HEAD/tree y archivos de gobierno iniciales.
+
+Semántica local CLOSED_LOCAL: 60 casos, application26, profile9 y browser/build
+PASS. El provider fue simulado; después de deployment AUTORIZADO, un canary
+real-provider acotado, read-only/user-safe debe comprobar que respeta el contrato.
+No significa autorización PROD ni una razón para reabrir grounding local esta noche.
+No declarar precisión real-model/SQL/RLS/locks/producto PROD por resultados locales.
+
+Integración por Git, no copy-paste: revisar common9b..R1 y después
+R1_CHECKPOINT_DOC_COMMIT..R2_HEAD (stat/name-status/diff), además el delta completo
+common9b..candidato. Clasificar TODOS los paths SAFE_NEW_SCOPE / SHARED_SURFACE /
+PROTECTED_SURFACE. Regresión dirigida sólo del CLOSED afectado según mapa inferior.
+Elegir merge/cherry-pick explícito tras review; no directory overwrite.
+
+Cada R2 sigue INPUT → PRODUCER → TRANSFORM → STATE → API/SERVER → UI → USER
+ACTION → EFFECT/ANALYTICS → FAILURE MODE → TEST → ACCEPTANCE. Commits locales
+permitidos. NO push/deploy/Netlify/PROD/migration apply/reconciliation. No isolated
+PASS = feature closure. El plan vigente enumera los contratos locales restantes.
+
+Current-site sigue cvitae-lata / 7c1d2305-cf2c-4e7e-a41c-0c4ca30d976f, misma
+cuenta y dominio sin mover. CVITAE_PROD_RELEASE_VALIDATED=FALSE. Las instrucciones
+Golden-only debajo son historia del checkpoint inicial; antes de gastar build,
+acordar candidato A/B/C y repetir únicamente su gate operativo autorizado.
 
 ## Base común determinista
 
@@ -87,7 +139,7 @@ Mientras sólo se preparó el checkpoint y no existe un delta B2C evaluado,
 INTEGRATION_READY_LOCAL=FALSE / PRODUCT_DELTA_NOT_VALIDATED. La paridad inicial
 es un gate de arranque, no evidencia de producto nuevo terminado.
 
-## Deploy de mañana sigue separado
+## Deploy de mañana — instrucciones Golden del checkpoint inicial (histórico)
 
 En la misma cuenta/current site cvitae-lata, Site ID
 7c1d2305-cf2c-4e7e-a41c-0c4ca30d976f, comprobar crédito reset y linkage; preferir
