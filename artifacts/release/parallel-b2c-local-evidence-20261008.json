@@ -1,0 +1,231 @@
+{
+  "date": "2026-10-08",
+  "commonIntegrationBase": "9b8f6a899197e2795280fd1cb30484fb68f1bbc0",
+  "goldenProductBase": "8281c6a5a1aed348b9360f994322a4624fabd247",
+  "workspace": "C:\\Users\\isaso\\cvitae-b2c-parallel-20261008",
+  "branch": "work/b2c-parallel-20261008",
+  "integrationReadyLocal": true,
+  "scope": "Complete tonight local profile/application/grounding delta; NOT whole Master42-44 or PROD",
+  "runtime": "v24.21.0",
+  "packageManager": "pnpm11.8.0",
+  "testResults": {
+    "profile": {
+      "status": "PASS",
+      "evidencePath": ".cvitae-state\\b2c-profile-journey\\result.json",
+      "sha256": "d88cfbb28ed449c53d0076fb6864552b9a0f6ce73891d25ca273b6900f049ac2",
+      "caseCount": 9
+    },
+    "application": {
+      "status": "PASS_LOCAL_ACTIONS_LITERAL_CV_AND_SEMANTIC_REQUIREMENTS",
+      "evidencePath": ".cvitae-state\\b2c-application-journey\\evidence.json",
+      "sha256": "3c0800aaf759105cf3dced8020e9794197333f202bea0735da0e7491f6220ac7",
+      "caseCount": 26
+    },
+    "grounding": {
+      "status": "PASS_CV_LITERAL_AND_REQUIREMENT_SEMANTIC_GROUNDING",
+      "evidencePath": ".cvitae-state\\application-claim-grounding\\evidence.json",
+      "sha256": "31c16fdfb59afda6839dde3aa1343c59c696570a9e4a75982ed6f021041ecc88",
+      "caseCount": 60
+    },
+    "build": {
+      "status": "PASS",
+      "evidencePath": ".cvitae-state\\b2c-integrated-build\\result.json",
+      "sha256": "ce54ac9ead596ae13ee8b14b13dfe9efdb0f88bef47b93dd949f955118fe3ce8",
+      "caseCount": null
+    }
+  },
+  "commands": [
+    {
+      "command": "pnpm.cmd exec tsx scripts/verify_b2c_profile_journey.ts",
+      "runtime": "Node24.21.0 via worktree-local PATH",
+      "result": "PASS",
+      "scope": "local fixture/boundary; not PROD",
+      "finalAfterSemanticFix": "PASS"
+    },
+    {
+      "command": "pnpm.cmd exec tsx scripts/verify_b2c_application_journey.ts",
+      "runtime": "Node24.21.0 via worktree-local PATH",
+      "result": "PASS",
+      "scope": "local fixture/boundary; not PROD",
+      "finalAfterSemanticFix": "PASS"
+    },
+    {
+      "command": "pnpm.cmd exec tsx scripts/verify_application_claim_grounding.ts",
+      "runtime": "Node24.21.0 via worktree-local PATH",
+      "result": "PASS",
+      "scope": "local fixture/boundary; not PROD",
+      "finalAfterSemanticFix": "PASS"
+    },
+    {
+      "command": "pnpm.cmd exec tsx scripts/verify_b2c_secondary_contracts.ts",
+      "runtime": "Node24.21.0 via worktree-local PATH",
+      "result": "PASS",
+      "scope": "local fixture/boundary; not PROD",
+      "finalAfterSemanticFix": "PASS"
+    },
+    {
+      "command": "pnpm.cmd exec tsx scripts/verify_conversion_analytics_item56.ts",
+      "runtime": "Node24.21.0 via worktree-local PATH",
+      "result": "PASS",
+      "scope": "local fixture/boundary; not PROD",
+      "finalAfterSemanticFix": "PASS"
+    },
+    {
+      "command": "pnpm.cmd exec tsx scripts/verify_candidate_truth.ts",
+      "runtime": "Node24.21.0 via worktree-local PATH",
+      "result": "PASS",
+      "scope": "local fixture/boundary; not PROD",
+      "finalAfterSemanticFix": "PASS"
+    },
+    {
+      "command": "pnpm.cmd exec tsx scripts/verify_candidate_eligibility_truth.ts",
+      "runtime": "Node24.21.0 via worktree-local PATH",
+      "result": "PASS",
+      "scope": "local fixture/boundary; not PROD",
+      "finalAfterSemanticFix": "PASS"
+    },
+    {
+      "command": "pnpm.cmd build",
+      "result": "PASS",
+      "seoInventory": 2501,
+      "sitemapUrls": 2511,
+      "aliases": 2501,
+      "collisions": 0,
+      "fixtureOnly": true,
+      "finalAfterSemanticFix": "PASS",
+      "runner": "node .cvitae-state/run-b2c-integrated-build.mjs (invokes pnpm.cmd build once with sanitized fixture env)"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "productionReads": "NONE",
+  "productionWrites": "NONE",
+  "push": "NONE",
+  "deploy": "NONE",
+  "migrationApply": "NONE",
+  "reconciliation": "NONE",
+  "openLocalLimits": [],
+  "build": {
+    "status": "PASS",
+    "runtime": "v24.21.0",
+    "packageManager": "pnpm11.8.0",
+    "duration_ms": 42723,
+    "exitCode": 0,
+    "seoFixture": "seo-fixture.json",
+    "requests": [
+      {
+        "method": "GET",
+        "path": "/rest/v1/content_hub?select=id%2Cslug%2Ccreated_at%2Cupdated_at&slug=not.is.null&order=updated_at.desc%2Cid.asc&offset=0&limit=1000&tipo=eq.blog&is_active=eq.true"
+      },
+      {
+        "method": "GET",
+        "path": "/rest/v1/recruiter_vacancies?select=id%2Cslug%2Ccreated_at&slug=not.is.null&order=created_at.desc%2Cid.asc&offset=0&limit=1000&is_active=eq.true"
+      }
+    ],
+    "productionCredentials": "REMOVED",
+    "productionReads": "NONE",
+    "productionWrites": "NONE",
+    "derivedTrackedFiles": "RESTORED",
+    "scope": "LOCAL_ONLY_SYNTHETIC"
+  },
+  "baselineKnownFailure": {
+    "verifier": "scripts/verify_candidate_truth_backbone_item57.ts",
+    "result": "FAIL_STATIC_ASSERTION_EXPECTS_OLD_ALERT_CALLSITE",
+    "sender": "netlify/functions/send-high-match-alerts.ts",
+    "bothPathsUnchangedFromCommonBase": true,
+    "fixed": false,
+    "notEvidenceOfNewRegression": true
+  },
+  "limitations": [
+    "Semantic provider/auth/PostgREST/storage/RPC/Bedrock transports substituted locally; no real SQL/RLS/locking/provider or PROD proof.",
+    "CV factual guard copies complete confirmed facts; requirement relationship can use equivalent wording through semantic assessment.",
+    "New preparation uses one additional bounded semantic provider call; safely reused cache invokes no provider.",
+    "Entire Master42-44 not declared closed; tomorrow Golden/current-site deploy remains separate.",
+    "Parallel local commit authorized only when gates pass; integration/push/deploy still NOT executed."
+  ],
+  "semanticRequirementCases": {
+    "related": "PASS",
+    "unrelatedKnown": "PASS",
+    "missing": "PASS",
+    "crossContext": "PASS",
+    "equivalentWording": "PASS",
+    "staleCache": "PASS",
+    "cvSeparation": "PASS",
+    "reload": "PASS"
+  },
+  "rootCause": "Draft support label was retained after checking ID existence only; downstream coverage/state/UI trusted it.",
+  "semanticFixAuthority": "application-workspace.ts: requirementInputs -> assessRequirementSupport through callApplicationModel -> normalizeApplicationResult -> sealed state -> loadWorkspace/accept",
+  "staleCacheGuard": {
+    "contract": "confirmed-semantic-v1",
+    "fingerprintVersioned": true,
+    "scope": [
+      "user",
+      "opportunity",
+      "source version",
+      "source content",
+      "evidence values/hash",
+      "requirements",
+      "fit",
+      "CV",
+      "cover message"
+    ],
+    "jsonbCanonicalOrder": "PASS",
+    "freshConfirmedEvidenceOnReloadAndAccept": "PASS",
+    "legacyProjectionDowngradedWithoutRewrite": true
+  },
+  "browserE2e": {
+    "status": "PASS",
+    "test": "browser semantic supported/gap labels, coverage, accepted CV and reload preserve truth",
+    "supported": "Análisis de datos",
+    "gap": "Inglés avanzado",
+    "unrelatedDraftEvidenceId": "summary-a",
+    "coverage": 50,
+    "unsupportedNotInAcceptedCV": true
+  },
+  "remainingBlockers": [],
+  "newUnresolvedFailures": [],
+  "resolvedIntermediateFailures": [
+    "New verifier duplicate symbol renamed before final run.",
+    "Esbuild/Vite sandbox parent-directory denial: identical local fixture command rerun escalated.",
+    "Browser label assertion corrected for real CSS text-transform uppercase; full journey rerun PASS."
+  ],
+  "changedSurfaceClassification": {
+    "docs/GRAND_CHECKPOINT.md": "SAFE_NEW_SCOPE",
+    "docs/PARALLEL_B2C_WORK_PLAN_2026-10-08.md": "SAFE_NEW_SCOPE",
+    "docs/TOMORROW_INTEGRATION_GATE_2026-10-09.md": "SAFE_NEW_SCOPE",
+    "netlify/functions/application-workspace.ts": "PROTECTED_SURFACE",
+    "src/hub/ApplicationWorkspace.tsx": "PROTECTED_SURFACE",
+    "src/hub/ProfileBuilder.tsx": "PROTECTED_SURFACE",
+    "artifacts/release/parallel-b2c-local-evidence-20261008.json": "SAFE_NEW_SCOPE",
+    "scripts/b2c-application-boundary.ts": "SAFE_NEW_SCOPE",
+    "scripts/verify_application_claim_grounding.ts": "SAFE_NEW_SCOPE",
+    "scripts/verify_b2c_application_journey.ts": "SAFE_NEW_SCOPE",
+    "scripts/verify_b2c_profile_journey.ts": "SAFE_NEW_SCOPE"
+  },
+  "protectedSurfaceCheck": {
+    "commonBase": "9b8f6a899197e2795280fd1cb30484fb68f1bbc0",
+    "result": "ZERO_DIFF",
+    "paths": [
+      "netlify.toml",
+      "package.json",
+      "pnpm-lock.yaml",
+      "AGENTS.md",
+      "WORKING_PRINCIPLES.md",
+      "src/lib",
+      "src/pages",
+      "scripts/generate-opportunity-redirects.mjs",
+      "scripts/generate-seo-inventory.ts",
+      "scripts/prerender.mjs",
+      "netlify/functions/public-opportunities.ts",
+      "netlify/functions/public-opportunity-detail.ts",
+      "netlify/functions/sitemap.ts",
+      "netlify/functions/send-high-match-alerts.ts",
+      "scripts/verify_candidate_truth_backbone_item57.ts",
+      "supabase/migrations",
+      ".github/workflows",
+      "generated"
+    ]
+  }
+}

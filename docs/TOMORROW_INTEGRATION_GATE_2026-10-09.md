@@ -95,3 +95,56 @@ retry del mismo Golden SHA bloqueado por créditos si existe. No mover dominio,
 no usar cvitae-lat como final y no disparar build con commit vacío/documental.
 Si hace falta Git trigger, STOP/pedir autorización. Smoke corto en cvitae.lat
 según FROZEN_CHECKPOINT. C16/C17/C18 siguen sus dependencias/autorizaciones.
+
+## Resultado del primer delta paralelo — 2026-10-08
+
+COMMON_INTEGRATION_BASE=9b8f6a899197e2795280fd1cb30484fb68f1bbc0
+GOLDEN_PRODUCT_BASE=8281c6a5a1aed348b9360f994322a4624fabd247
+INTEGRATION_READY_LOCAL=TRUE (gate semántico y delta local completos; no integración/deploy).
+
+| Changed path | Clase | Regresión / evidencia |
+|---|---|---|
+| src/hub/ProfileBuilder.tsx | PROTECTED_SURFACE | Profile journey (9 grupos), Candidate Truth/eligibility, conversion analytics/retorno, privado CV y aislamiento usuario |
+| src/hub/ApplicationWorkspace.tsx | PROTECTED_SURFACE | Application journey (26 casos), secondary contracts, version/attestation/ownership, PDF/CSS real, analytics consent/dedupe |
+| netlify/functions/application-workspace.ts | PROTECTED_SURFACE | Grounding (60 casos), application journey, secondary contracts; controles cached/legacy/user-scoped accept y invariantes Candidate Truth |
+| scripts/b2c-application-boundary.ts | SAFE_NEW_SCOPE | Transporte externo sintético sólo local compartido por journeys/grounding; no prueba SQL/RLS/locking real |
+| scripts/verify_application_claim_grounding.ts | SAFE_NEW_SCOPE | Admisión literal completa, campos faltantes/retry/cache/legacy/ownership; soporte semántico, cache/JSONB/contexto y requisitos estructurados |
+| scripts/verify_b2c_application_journey.ts | SAFE_NEW_SCOPE | Handler/browser/persistencia local/version/PDF/efectos y fallos |
+| scripts/verify_b2c_profile_journey.ts | SAFE_NEW_SCOPE | Handler/browser/storage local/perfil/retorno, fallos/retry/auth switch |
+| docs/GRAND_CHECKPOINT.md | SAFE_NEW_SCOPE | Agregado de evidencia acotada, sin reescribir Master/C01–C21/frozen contract |
+| docs/PARALLEL_B2C_WORK_PLAN_2026-10-08.md | SAFE_NEW_SCOPE | Resultado local y límites del provider; no nueva Biblia/lista operacional |
+| docs/TOMORROW_INTEGRATION_GATE_2026-10-09.md | SAFE_NEW_SCOPE | Esta clasificación y acceptance local PASS |
+| artifacts/release/parallel-b2c-local-evidence-20261008.json | SAFE_NEW_SCOPE | Resumen sin credenciales; logs/PDF/screenshots locales ignorados |
+
+Todas las superficies CLOSED de routing/HEAD/SEO/read path/universes/policies y
+migrations permanecen sin cambios. No se rerunó C01–C21 ni preflight PROD.
+La vieja aserción backbone57 de alerts queda roja y visible como baseline,
+no afectada por este diff. No confundir mocks de transporte con PROD PASS.
+Antes de integración revisar el delta completo commonBase..PARALLEL_READY_COMMIT
+por Git: name-status/stat/diff y pruebas de superficies afectadas. El commit local
+se captura en el segundo MANIFEST/paquete y en el reporte final, evitando un SHA
+self-referential dentro de su propio tree. No integrar por directory overwrite.
+El deploy Golden del current-site sigue siendo un paso independiente.
+
+### Acceptance consolidada — 2026-10-08
+
+INTEGRATION_READY_LOCAL=TRUE / CLOSED_LOCAL del delta, NO PROD PASS.
+Perfil9, application26 (incluye browser supported vs gap y reload), grounding60
+(incluye paraphrase, unrelated/missing/foreign IDs, legacy/digest/rejection, CV
+separation, JSONB, provider failure/retry), analytics/secondary/candidate truth/
+eligibility PASS. UN build final posterior al último cambio productivo PASS;
+git diff --check PASS; no nuevo rojo sin resolver; protected public surfaces ZERO DIFF.
+
+El viejo fallo estático backbone57 sigue visible/unchanged y no se rerunó.
+Incidentes intermedios resueltos: duplicate identifier en verifier nuevo (renombrado),
+esbuild sandbox Access Denied (mismo comando fuera del sandbox), aserción UI sensible
+a mayúsculas mientras CSS muestra RESPALDADO (aserción case-insensitive; journey
+completo repetido PASS). Los errores 401/422/500/503 de fixtures negativos son
+pruebas de failure/retry esperadas, no errores PROD ni rojos finales.
+
+Semántica se verifica con el modelo existente en una fase específica independiente
+de labels de drafting; el mock prueba el contrato, no exactitud de Bedrock real.
+No promete cerrar todo Master42–44 ni real SQL/RLS/locks/proveedor. Los límites PROD
+ya declarados se conservan y no constituyen una autorización para consultarlos.
+Paquete SECOND separado CVITAE_PARALLEL_READY: source Git tree/diff/evidencia/
+manifest/bundle delta si se incluye. El ZIP frozen previo NO se sobrescribe.

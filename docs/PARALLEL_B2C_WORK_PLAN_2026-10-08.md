@@ -122,3 +122,56 @@ se prueba implementación real hasta esa frontera y se explicita su límite.
 
 INTEGRATION_READY_LOCAL=TRUE sólo bajo TOMORROW_INTEGRATION_GATE; de lo contrario
 FALSE con evidencia/gap concreto. No equivale a deploy autorizado ni PROD PASS.
+
+## Resultado de ejecución local — 2026-10-08 — SEMANTIC GATE CLOSED_LOCAL
+
+Common base exacto: `9b8f6a899197e2795280fd1cb30484fb68f1bbc0`.
+GOLDEN_PRODUCT_BASE=8281c6a5a1aed348b9360f994322a4624fabd247
+INTEGRATION_READY_LOCAL=TRUE para el delta de esta noche, no todo Master42–44,
+no integración ejecutada ni PROD_VALIDATED.
+
+- Perfil/save/retry/reload/return/private CV: 9 grupos PASS.
+- Workspace/version/checklist/copia/PDF/efectos/browser: 26 casos PASS.
+- Guard CV factual y semántica de requisitos: 60 casos PASS.
+- Analytics, secondary contracts, Candidate Truth y eligibility: PASS.
+- Build FINAL combinado fixture: Node24.21.0/pnpm11.8 PASS, SEO2501, sitemap2511,
+  aliases2501, collisions0, prerender/robots PASS, sin credenciales/red PROD.
+- git diff --check PASS; superficies públicas CLOSED, migrations y configuración
+  frozen: ZERO DIFF. Backbone57 conserva su red estático antiguo sin modificación.
+
+### Cable de soporte semántico corregido
+
+JOB REQUIREMENT (incluye campos estructurados) → requirementInputs (fragmentos
+válidos, IDs de evidencia confirmada del usuario/contexto) → drafting model
+propone documentos → assessRequirementSupport evalúa contenido/facts de cada
+par con el MISMO provider/model de Application Workspace, sin recibir el status
+propuesto → normalizer exige identidad de requisito, IDs scoped, citas completas
+y decisión semántica → requirement_analysis/fit_summary → UI/coverage → reload
+→ aceptación/CV literal. La igualdad de citas protege el hecho, NO compara el
+requisito con la evidencia; redacción semánticamente equivalente sigue soportada.
+
+KNOWN EVIDENCE != SUPPORTING EVIDENCE. Una referencia desconocida/ajena no elimina
+el requisito: conserva gap y cobertura cero. Relación incierta/no relacionada
+no es supported. Partial sólo aporta media cobertura y un esencial parcial sigue
+incompleto; no se etiqueta Respaldo sólido ni se omite del checklist.
+
+`confirmed-semantic-v1` versiona el fingerprint y sella usuario/oportunidad/
+versión/valores/evidencia/requisitos/cobertura/CV con digest canónico compatible
+con orden JSONB. Cache antiguo no pasa; overview/reload degrada sólo la proyección
+insegura, sin reescribir historia. Evidencia rechazada/editada o pendiente obliga
+reprepare y bloquea accept antes del RPC. Provider incompleto/fallido no persiste
+un resultado y permite retry. Evidencia pendiente bloquea incluso el primer call.
+
+La corrección agrega UN call semántico acotado (<=24 requisitos, <=8 hechos
+citados por requisito) a una preparación nueva válida; reuso seguro no llama IA.
+Los tests sustituyen el provider, Auth/DB/RPC/storage en sus fronteras. Demuestran
+wiring/normalización/persistencia local/browser, NO precisión universal del modelo,
+SQL/RLS/locking reales ni éxito PROD. No se hizo ninguna llamada externa real.
+
+El bloque PARALLEL LOCAL EVIDENCE de GRAND_CHECKPOINT conserva la primera pasada
+histórica y su blocker anterior. Este resultado y el integration gate actualizado
+superseden únicamente aquel estado LOCAL; no reescriben Master/C01–C21 ni Golden.
+Consultar `artifacts/release/parallel-b2c-local-evidence-20261008.json`.
+No integrar/desplegar automáticamente: commit local del delta y paquete separado;
+el ZIP frozen original sigue inmutable. El deploy current-site de mañana sigue
+siendo EXACT Golden, en la misma cuenta/site, sin mezclar este trabajo.

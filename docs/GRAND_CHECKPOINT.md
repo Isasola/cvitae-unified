@@ -95,6 +95,68 @@ que debe publicarse mañana. Tag documental local previsto:
 `checkpoint/pre-current-site-deploy-20261008` (sin push).
 
 
+## PARALLEL LOCAL EVIDENCE — 2026-10-08 — MASTER 42 SUBCONTRACTS
+
+Esta evidencia existe sólo en `work/b2c-parallel-20261008`, workspace
+`C:\Users\isaso\cvitae-b2c-parallel-20261008`. No modifica el candidato frozen
+ni autoriza integración/deploy. Common base:
+`9b8f6a899197e2795280fd1cb30484fb68f1bbc0`; Golden product:
+`8281c6a5a1aed348b9360f994322a4624fabd247`.
+
+### Cierres locales acotados, no cierre completo de Master 42–44
+
+| Subcontrato | Bug reproducido / corrección | Evidencia local y alcance |
+|---|---|---|
+| Perfil: carga → edición → guardado → retorno → reload | Un fallo de status dejaba editar un formulario vacío y guardar sobre un perfil existente. Ahora loading/error/ready y usuario cargado controlan la edición; retry recupera datos, error de guardado conserva draft, una respuesta tardía de otra sesión no reemplaza el perfil actual. | CLOSED_LOCAL del cable probado: componente real en Chromium + handler real + SDK + transporte Auth/PostgREST/storage/embedding LOCAL + estado sintético persistido. 9 grupos PASS, ownership y compensación CV privado incluidos. No cambia el handler de perfil ni Candidate Truth. |
+| Workspace: preparar → confirmar → aceptar versión → reload → checklist/copia/PDF → acción oficial | Error de checklist desaparecía durante reload; copia/PDF fallidos no eran recuperables. Rollback optimista y error visible, retry, controles contra writes solapados. html2canvas fallaba con oklch de CSS real; el browser resuelve colores sólo en la copia temporal de PDF, sin cambiar preview/CSS vivos. | CLOSED_LOCAL de acciones probadas: 25 casos handler/UI/browser, identidad/versionado, fallos/retry/idempotencia, aislamiento usuario, PDF real legible, analítica consentida sin PII/doble efecto. DB/RPC/provider externos se simulan en su frontera; esto NO prueba SQL/RLS/locks reales. |
+| CV propuesto: evidencia confirmada → normalización → persistencia → aceptación | El guard anterior comprobaba sólo números; una afirmación sin números con un ID conocido pero no relacionado pasaba. Ahora cada bloque copia el valor COMPLETO de evidencia confirmada (sólo formato de whitespace), conserva negaciones/qualifiers y rechaza hechos nuevos, truncados, HTML/controles o referencias ajenas. | CLOSED_LOCAL del texto factual admitido: 43 casos PASS. Contrato `complete-literal-v1` versiona el fingerprint; cached/legacy workspaces sin este control no se aceptan ni se reusan como nuevos. Historia inmutable, sin backfill/migration. Reprepare aplica control nuevo. No se garantiza equivalencia de paráfrasis: se rechazan. |
+
+INPUT (sesión/CV/perfil/oportunidad factual) → PRODUCER (UI/handler reales) →
+TRANSFORM (Candidate Truth/evidence/normalizer existentes) → STATE (transportes
+locales y persistencia sintética; versiones/RPC simulados explícitamente) →
+API/SERVER → UI Chromium → USER ACTION (confirmar/guardar/aceptar/descargar/abrir) →
+ANALYTICS/EFFECT (consent/dedupe y popup externo sin envío) → FAILURE (auth/DB/
+provider/clipboard/PDF/session switch) → TEST (retry/reload/ownership) → ACCEPTANCE
+local de los subcontratos de arriba, no una declaración PROD.
+
+### Pendiente local que impide declarar terminada la integración completa
+
+`INTEGRATION_READY_LOCAL=FALSE` para el paquete B2C completo. El verifier factual
+reproduce y conserva visible `OPEN_LOCAL_LIMIT`: requirements puede aceptar
+`status=supported` con un ID conocido pero semánticamente no relacionado; el
+coverage_score puede heredar esa clasificación del proveedor. El guard de texto
+CV sí impide convertirlo en un hecho inventado del candidato, pero esto NO cierra
+el clasificador/cobertura de requisitos. Master 42 permanece parcialmente abierto;
+Master 43–44 no se declaran cerrados por regresiones aisladas de Free/retorno.
+No convertir este gap factual en backlog no bloqueante para ocultarlo.
+
+### Evidencia combinada y protección del baseline
+
+- Parent revisó el diff combinado y volvió a ejecutar los tres verifiers nuevos.
+  Además PASS: `verify_b2c_secondary_contracts.ts`,
+  `verify_conversion_analytics_item56.ts`, `verify_candidate_truth.ts`,
+  `verify_candidate_eligibility_truth.ts`.
+- Node 24.21.0 / pnpm 11.8.0, frozen install offline y UN build combinado PASS.
+  Fixture SEO=2501 (no dato PROD); Vite, sitemap=2511, prerender (2500 jobs +
+  1 opportunity), aliases=2501, collisions=0, detail fallbacks=2 y robots PASS.
+  Credenciales PROD removidas; las dos lecturas auxiliares de build fueron GET
+  a un transporte localhost. Generated tracked files se restauraron tras build.
+- Red baseline explícito: `verify_candidate_truth_backbone_item57.ts` contiene
+  una aserción estática que espera el antiguo callsite directo de ranking de
+  alertas; el callsite actual usa DI. Verifier y sender son byte-identical al
+  common base. No se modifica ese contrato ni se presenta esa prueba como PASS.
+- Fallos de sandbox Vite/esbuild de acceso a directorio se repitieron con el
+  mismo comando autorizado fuera del sandbox; PASS, sin cambios para eludir tests.
+- Routing, HEAD público, SEO/read-path, universes, source policies, migrations,
+  Matching scoring, Netlify/config, lockfile y frozen product tree: ZERO DIFF.
+  C01–C21 y Master histórico permanecen intactos. C11/C12 afectados indirectamente
+  quedan protegidos por secondary contracts + journeys de ownership/versión.
+- Artefactos detallados sintéticos (screenshots/PDF/requests) quedan ignorados
+  bajo `.cvitae-state/`; resumen sin secretos:
+  `artifacts/release/parallel-b2c-local-evidence-20261008.json`.
+- Sin commit/product integration, push, deploy, Netlify, consultas/escrituras PROD,
+  migration apply, reconciliation, workers ni activación de release gate.
+
 ## ACTIVE CORRECTIVE LIST — SINGLE OPERATIONAL BIBLE
 
 El master historico 1-67 permanece intacto debajo de esta Biblia. `DO NOT REOPEN` se limita al contrato local probado; PROD continua pendiente donde se indica.
