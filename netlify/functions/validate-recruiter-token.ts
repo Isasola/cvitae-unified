@@ -5,14 +5,15 @@ const RESEND_KEY = process.env.RESEND_API_KEY
 const SITE_URL = process.env.SITE_URL || "https://cvitae.lat"
 
 async function sendEmail(to: string, subject: string, html: string) {
-  if (!RESEND_KEY) return
+  if (!RESEND_KEY) return false
   try {
-    await fetch("https://api.resend.com/emails", {
+    const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: "CVitae <contacto@cvitae.lat>", to: [to], subject, html }),
     })
-  } catch { /* non-fatal */ }
+    return response.ok
+  } catch { return false }
 }
 
 const handler: Handler = async (event) => {
@@ -90,13 +91,14 @@ const handler: Handler = async (event) => {
     // ─── Acción: Listar postulantes de una vacante ───
     if (action === "get_applicants" && body.vacancy_id) {
       // verify vacancy belongs to this token
-      const { data: vac } = await supabase
+      const { data: vac, error: vacancyError } = await supabase
         .from("recruiter_vacancies")
         .select("id")
         .eq("id", body.vacancy_id)
         .eq("recruiter_token_id", data.id)
-        .single()
+        .maybeSingle()
 
+      if (vacancyError) return { statusCode: 503, body: JSON.stringify({ error: 'No pudimos comprobar acceso a la vacante.', reason: 'OWNERSHIP_READ_FAILED' }) }
       if (!vac) {
         return { statusCode: 403, body: JSON.stringify({ error: "Vacante no pertenece a este token" }) }
       }
@@ -105,7 +107,7 @@ const handler: Handler = async (event) => {
       const pageSize = Math.min(100, Math.max(20, Math.floor(Number(body.page_size) || 60)))
       const from = page * pageSize
       const to = from + pageSize - 1
-      const { data: applicants, count: totalApplicants } = await supabase
+      const { data: applicants, count: totalApplicants, error: applicantsError } = await supabase
         .from("vacancy_applications")
         .select("id, name, email, cv_file_name, cv_storage_path, cv_parse_status, cover_letter, cv_text, ats_score, fit_score, recommendation, ai_summary, strengths, key_matches, key_gaps, analyzed_at, applied_at, recruiter_action, recruiter_notes, review_status, review_batch_number, batch_selected, progressive_shortlist, progressive_rank, triage_tier, selection_reason", { count: "exact" })
         .eq("vacancy_id", body.vacancy_id)
@@ -113,11 +115,13 @@ const handler: Handler = async (event) => {
         .order("progressive_rank", { ascending: true, nullsFirst: false })
         .order("applied_at", { ascending: false })
         .range(from, to)
+      if (applicantsError || totalApplicants == null) return { statusCode: 503, body: JSON.stringify({ error: 'No pudimos cargar las postulaciones. Reintentá.', reason: 'APPLICANTS_READ_FAILED' }) }
 
       const countRows = async (configure: (query: any) => any) => {
         const base = supabase.from("vacancy_applications").select("id", { count: "exact", head: true }).eq("vacancy_id", body.vacancy_id)
-        const { count } = await configure(base)
-        return count || 0
+        const { count, error } = await configure(base)
+        if (error || count == null) throw new Error('APPLICANTS_COUNTS_FAILED')
+        return count
       }
       const [analyzedCount, pendingCount, manualCount, strongCount, shortlistCount, batchesResult] = await Promise.all([
         countRows(query => query.eq("review_status", "analyzed")),
@@ -128,26 +132,13 @@ const handler: Handler = async (event) => {
         supabase.from("vacancy_review_batches").select("id", { count: "exact", head: true }).eq("vacancy_id", body.vacancy_id).eq("status", "completed"),
       ])
 
-      // Enrich with B2C badges
-      const emails = (applicants || []).map((a: any) => a.email).filter(Boolean)
-      let badgesByEmail: Record<string, string[]> = {}
-
-      if (emails.length > 0) {
-        const { data: profiles } = await supabase
-          .from("user_master_profiles")
-          .select("email, profile_data")
-          .in("email", emails)
-
-        if (profiles) {
-          for (const p of profiles) {
-            badgesByEmail[p.email] = p.profile_data?.badges || []
-          }
-        }
-      }
+      if (batchesResult.error || batchesResult.count == null) throw new Error('APPLICANTS_COUNTS_FAILED')
+      // The application authorizes this company's application data only.
+      // An email address never authorizes a lookup of a private B2C profile.
 
       const enrichedApplicants = await Promise.all((applicants || []).map(async (a: any) => {
         let cvDownloadUrl: string | null = null
-        if (a.cv_storage_path) {
+        if (a.cv_storage_path && a.cv_storage_path.startsWith(`${body.vacancy_id}/`)) {
           const { data: signed } = await supabase.storage.from("candidate-cvs").createSignedUrl(a.cv_storage_path, 600)
           cvDownloadUrl = signed?.signedUrl || null
         }
@@ -156,7 +147,7 @@ const handler: Handler = async (event) => {
           ...safeApplicant,
           cv_download_url: cvDownloadUrl,
           cv_reupload_required: Boolean(a.cv_file_name && !cvDownloadUrl),
-          badges: badgesByEmail[a.email] || [],
+          badges: [],
         }
       }))
 
@@ -185,44 +176,42 @@ const handler: Handler = async (event) => {
 
     // ─── Acción: Listar vacantes del reclutador (activas + cerradas) ───
     if (action === "get_vacancies") {
-      const { data: vacancies } = await supabase
+      const page = Math.max(0, Math.floor(Number(body.page) || 0))
+      if (!Number.isSafeInteger(page) || page > 1000000) return { statusCode: 400, body: JSON.stringify({ error: 'Página inválida' }) }
+      const { data: vacancies, error: listError, count } = await supabase
         .from("recruiter_vacancies")
-        .select("id, title, slug, location, modality, is_active, created_at, vacancy_applications(count)")
+        .select("id, title, slug, location, modality, is_active, created_at, vacancy_applications(count)", { count: 'exact' })
         .eq("recruiter_token_id", data.id)
         .order("created_at", { ascending: false })
-        .limit(100)
+        .order('id', { ascending: true })
+        .range(page * 100, page * 100 + 99)
+      if (listError || count == null) return { statusCode: 503, body: JSON.stringify({ error: 'No pudimos cargar las vacantes.', reason: 'VACANCIES_READ_FAILED' }) }
 
       return {
         statusCode: 200,
-        body: JSON.stringify({ vacancies: vacancies || [] }),
+        body: JSON.stringify({ vacancies: vacancies || [], pagination: { page, total: count, has_more: (page + 1) * 100 < count } }),
       }
     }
 
     // ─── Acción: Cerrar vacante ───
     if (action === "close_vacancy" && body.vacancy_id) {
-      const { data: vac } = await supabase
-        .from("recruiter_vacancies")
-        .select("id")
-        .eq("id", body.vacancy_id)
-        .eq("recruiter_token_id", data.id)
-        .single()
-
-      if (!vac) {
-        return { statusCode: 403, body: JSON.stringify({ error: "Vacante no pertenece a este token" }) }
+      const { data: closed, error: closeError } = await supabase.rpc('close_recruiter_vacancy_atomic', {
+        p_recruiter_token_id: String(data.id), p_vacancy_id: body.vacancy_id,
+      })
+      if (closeError || closed?.ok !== true || closed?.is_active !== false) {
+        const denied = String(closeError?.message || '').includes('vacancy_not_owned') || String(closeError?.message || '').includes('invalid_recruiter')
+        return { statusCode: denied ? 403 : 503, body: JSON.stringify({
+          error: denied ? 'Sin acceso a esta vacante.' : 'No pudimos confirmar el cierre. Reintentá la misma vacante.',
+          reason: denied ? 'VACANCY_NOT_OWNED' : 'CLOSE_UNCONFIRMED', stage: 'ATOMIC_CLOSE',
+        }) }
       }
-
-      await Promise.all([
-        supabase.from("recruiter_vacancies").update({ is_active: false }).eq("id", body.vacancy_id),
-        supabase.from("opportunities").update({ is_active: false }).eq("recruiter_vacancy_id", body.vacancy_id),
-      ])
-
-      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+      return { statusCode: 200, body: JSON.stringify(closed) }
     }
 
     // ─── Acción: Solicitar recarga de créditos ───
     if (action === "request_credits") {
       const requested = Math.min(500, Math.max(10, Math.floor(Number(body.amount) || 50)))
-      await sendEmail(
+      const requestedSuccessfully = await sendEmail(
         "contacto@cvitae.lat",
         `💳 Solicitud de créditos: ${data.company_name || data.email}`,
         `<h2>Solicitud de recarga de créditos</h2>
@@ -232,7 +221,8 @@ const handler: Handler = async (event) => {
          <p><strong>Balance actual:</strong> ${data.token_balance}</p>
          <p><a href="${SITE_URL}/admin">Ir al admin →</a></p>`,
       )
-      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+      if (!requestedSuccessfully) return { statusCode: 503, body: JSON.stringify({ ok: false, error: 'No pudimos confirmar la solicitud de créditos. Reintentá.', reason: 'CREDIT_REQUEST_UNCONFIRMED' }) }
+      return { statusCode: 200, body: JSON.stringify({ ok: true, intent: 'CREDIT_REQUEST', charged: false }) }
     }
 
     // ─── Acción: Actualizar estado de postulante ───
@@ -326,8 +316,8 @@ const handler: Handler = async (event) => {
       }),
     }
   } catch (err: any) {
-    console.error("validate-recruiter-token error:", err.message)
-    return { statusCode: 500, body: JSON.stringify({ valid: false, error: err.message }) }
+    console.error('validate-recruiter-token failed', { code: err?.code || 'REQUEST_FAILED' })
+    return { statusCode: 503, body: JSON.stringify({ valid: false, error: 'No pudimos completar la solicitud. Reintentá.', reason: 'RECRUITER_SERVICE_UNAVAILABLE' }) }
   }
 }
 

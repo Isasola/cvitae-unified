@@ -234,6 +234,26 @@ assert.equal(canonicalUnknown.source_matching_state, 'UNKNOWN')
 assert.equal(canonicalUnknown.source_matching_operational_state, 'ALLOWED', 'operational default is independent of UNKNOWN advisory permission; row gates decide final consumer')
 assert.equal(canonicalUnknown.final_matching_state, 'READY')
 
+const recruiterPolicy: UniversePolicy = { source:'recruiter_b2b', is_enabled:true, catalog_enabled:true,
+  matching_enabled:true, alerts_enabled:true, seo_enabled:true, web_catalog_allowed:false,
+  search_engine_indexing_allowed:null, google_jobs_distribution_allowed:false,
+  third_party_job_distribution_allowed:false, consumer_permission_states:{} }
+const recruiterRow = { ...rich, source:'recruiter_b2b', id:'recruiter-row', slug:'b2b-recruiter-role' }
+const recruiterBlocked = classifyOpportunityUniverse(recruiterRow,[recruiterPolicy],null,now,permission)
+assert.equal(recruiterBlocked.catalog_state,'NOT_READY'); assert.equal(recruiterBlocked.final_matching_state,'UNKNOWN')
+assert.equal(recruiterBlocked.alerts_state,'UNKNOWN'); assert.equal(recruiterBlocked.seo_state,'UNKNOWN')
+assert.equal((recruiterBlocked.provenance as any).controlled_consumer_gates.catalog.reason,'WEB_CATALOG_DENIED')
+assert.equal((recruiterBlocked.provenance as any).controlled_consumer_gates.matching.reason,'MATCHING_PERMISSION_UNKNOWN')
+const recruiterMatchingOnly = classifyOpportunityUniverse(recruiterRow,[{ ...recruiterPolicy,
+  consumer_permission_states:{matching:'ALLOWED'} }],null,now,permission)
+assert.equal(recruiterMatchingOnly.final_matching_state,'READY')
+assert.equal(recruiterMatchingOnly.catalog_state,'NOT_READY'); assert.equal(recruiterMatchingOnly.alerts_state,'UNKNOWN'); assert.equal(recruiterMatchingOnly.seo_state,'UNKNOWN')
+const recruiterClosed = classifyOpportunityUniverse({ ...recruiterRow,is_active:false },[{ ...recruiterPolicy,
+  consumer_permission_states:{catalog:'ALLOWED',matching:'ALLOWED',alerts:'ALLOWED',seo_index:'ALLOWED'} }],null,now,permission)
+assert.equal(recruiterClosed.lifecycle_state,'INACTIVE_VALID'); assert.equal(recruiterClosed.lifecycle_reason,'PUBLISHER_CLOSED')
+assert.equal(recruiterClosed.catalog_state,'NOT_READY'); assert.equal(recruiterClosed.final_matching_state,'NOT_READY')
+assert.equal(recruiterClosed.alerts_state,'NOT_READY'); assert.equal(recruiterClosed.seo_state,'NOT_READY')
+
 assert.equal(canonicalPermissionSource('wwr'), canonicalPermissionSource('weworkremotely'))
 assert.equal(sourcePermissionTruth('jobicy','catalog').state, 'ALLOWED')
 assert.equal(sourcePermissionTruth('jobicy','matching').state, 'ALLOWED')

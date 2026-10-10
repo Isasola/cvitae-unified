@@ -2,6 +2,7 @@ import { canonicalSource, effectiveSourceSwitches, registeredSourceOperationalDe
 import { catalogReadiness, deadlineLifecycle, seoContentReadinessIndependentOfLifecycle, seoReadiness } from './opportunity-truth'
 import { hasProfessionalEvidence } from '../../shared/professional-evidence'
 import { SOURCE_PERMISSION_DIMENSIONS, sourcePermissionDimensionTruth, sourcePermissionTruth } from './source-permission-truth'
+import { controlledProducer, controlledPermission } from '../../shared/controlled-source-permissions'
 
 export type UniverseState = 'READY' | 'NOT_READY' | 'UNKNOWN'
 export type LifecycleState = 'ACTIVE_VALID' | 'EXPIRED' | 'DELETED' | 'ARCHIVED' | 'HARD_DEAD' | 'SUPERSEDED_DUPLICATE' | 'INACTIVE_VALID' | 'STALE_DERIVED_STATE' | 'LIFECYCLE_UNKNOWN'
@@ -97,6 +98,7 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
   if (deleted) { lifecycle_state = 'DELETED'; lifecycle_reason = 'ROW_DELETED' }
   else if (archived) { lifecycle_state = 'ARCHIVED'; lifecycle_reason = 'ROW_ARCHIVED' }
   else if (deadline === 'EXPIRED') { lifecycle_state = 'EXPIRED'; lifecycle_reason = 'DEADLINE_EXPIRED' }
+  else if (controlledProducer(source) && row.is_active === false) { lifecycle_state = 'INACTIVE_VALID'; lifecycle_reason = 'PUBLISHER_CLOSED'; lifecycle_repair = null }
   else if (hardDead) { lifecycle_state = 'HARD_DEAD'; lifecycle_reason = 'LATEST_HARD_DEAD_OBSERVATION'; lifecycle_repair = row.is_active === false ? null : { is_active: false } }
   else if (row.is_active !== true && latestLive) { lifecycle_state = 'STALE_DERIVED_STATE'; lifecycle_reason = row.is_active === false ? 'LATEST_LIVE_OBSERVATION_CONTRADICTS_INACTIVE' : 'LATEST_LIVE_OBSERVATION_RESOLVES_UNKNOWN_ACTIVE'; lifecycle_repair = row.verification_status === 'verified' ? { is_active: true } : null }
   else if (row.is_active === true && row.verification_status === 'verified' && deadline !== 'INVALID') { lifecycle_state = 'ACTIVE_VALID'; lifecycle_reason = deadline === 'UNKNOWN' ? 'ACTIVE_VERIFIED_NO_DEADLINE' : 'ACTIVE_VERIFIED_DEADLINE_OPEN' }
@@ -166,7 +168,7 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
   if (lifecycleReady && catalogRow.state === 'READY' && catalogOperational === 'UNKNOWN') unresolved_dimensions.push(aliasConflicts.includes('catalog_enabled') ? 'SOURCE_POLICY_ALIAS_CONFLICT:catalog_enabled' : 'CATALOG_SWITCH_UNKNOWN')
   if (professional && alertsOperational === 'UNKNOWN' && lifecycleReady) unresolved_dimensions.push(aliasConflicts.includes('alerts_enabled') ? 'SOURCE_POLICY_ALIAS_CONFLICT:alerts_enabled' : 'ALERT_SWITCH_UNKNOWN')
   const source_permission_unknown_dimensions = SOURCE_PERMISSION_DIMENSIONS.filter(dimension => sourcePermissionDimensionTruth(source, dimension).state === 'UNKNOWN')
-  return {
+  const result: OpportunityUniverseDecision = {
     id: String(row.id || ''), inventory_state: 'PRESENT', lifecycle_state, lifecycle_reason, lifecycle_repair,
     professional_readiness, professional_reason, catalog_row_state: !lifecycleReady ? (lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE' ? 'UNKNOWN' : 'NOT_READY') : catalogRow.state === 'READY' ? 'READY' : catalogRow.state === 'UNKNOWN' ? 'UNKNOWN' : 'NOT_READY', catalog_state,
     alerts_row_state: !lifecycleReady ? (lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE' ? 'UNKNOWN' : 'NOT_READY') : professional ? 'READY' : 'NOT_READY',
@@ -185,6 +187,22 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
       consumer_switch_states: { catalog: catalogOperational, matching: source_matching_operational_state, alerts: alertsOperational, seo: seoOperational },
     },
   }
+  if (controlledProducer(source)) {
+    const gates: Record<string, any> = {}
+    for (const [consumer, field] of Object.entries({ catalog: 'catalog_state', matching: 'final_matching_state', alerts: 'alerts_state', seo: 'seo_state' })) {
+      const gate = controlledPermission(source, consumer as 'catalog' | 'matching' | 'alerts' | 'seo', policy)!
+      gates[consumer] = gate
+      // Permissions only restrict the existing reducer; they never promote row quality.
+      if (gate.state !== 'ALLOWED' && (result as any)[field] === 'READY') (result as any)[field] = gate.state === 'DENIED' ? 'NOT_READY' : 'UNKNOWN'
+      if (gate.state === 'UNKNOWN') result.unresolved_dimensions.push(`${consumer.toUpperCase()}_PERMISSION_UNKNOWN`)
+    }
+    result.source_matching_state = gates.matching.state
+    result.source_matching_reason = gates.matching.reason
+    if (result.seo_row_state === 'READY' && gates.seo.state !== 'ALLOWED') result.seo_effective_reason = gates.seo.reason
+    result.provenance = { ...result.provenance, first_party_permission_role: 'CONTROLLED_PRODUCER_PERMISSION',
+      controlled_consumer_gates: gates, consumer_permission_states: Object.fromEntries(Object.entries(gates).map(([name, gate]: [string, any]) => [name, gate.state])) }
+  }
+  return result
 }
 
 /** Exact-row Admin presentation uses the current canonical RPC, preserving the

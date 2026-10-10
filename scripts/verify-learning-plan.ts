@@ -56,8 +56,9 @@ const endpoint = readFileSync(new URL('../netlify/functions/gemini-courses.ts', 
 const migration = readFileSync(new URL('../supabase/migrations/202608130009_learning_recommendations.sql', import.meta.url), 'utf8')
 const page = readFileSync(new URL('../src/hub/LearningPlan.tsx', import.meta.url), 'utf8')
 
-assert(endpoint.includes(".eq('is_active', true).eq('verification_status', 'verified')"), 'Las brechas deben provenir de oportunidades activas y verificadas')
-assert(endpoint.includes(".eq('match_eligible', true)"), 'Las brechas deben provenir de oportunidades elegibles para matching')
+assert(endpoint.includes("from('opportunity_final_matching_universe')"), 'Las brechas deben provenir de la autoridad efectiva de Matching')
+assert(!endpoint.includes(".eq('is_active', true).eq('verification_status', 'verified')"), 'El consumidor no debe duplicar filtros lifecycle ya resueltos por el Universo')
+assert(!endpoint.includes(".eq('match_eligible', true)"), 'El consumidor no debe sustituir el resultado efectivo por un flag legado')
 assert(endpoint.includes("normalizedSkill.length < 2"), 'Debe rechazar skills demasiado cortas que generen falsos positivos')
 assert(endpoint.includes("insertError.code === '23505'"), 'La recomendación debe tolerar solicitudes concurrentes idempotentes')
 assert(endpoint.includes('liked_opportunity_ids'), 'El plan debe incorporar oportunidades marcadas por el usuario')

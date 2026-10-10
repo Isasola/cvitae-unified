@@ -1,6 +1,7 @@
 import registry from '../generated/source-intelligence-registry.json'
 import { alertsReadiness, catalogReadiness, jobPostingReadiness, matchingReadiness, seoReadiness, type OpportunityTruthInput, type ReadinessResult } from './opportunity-truth'
 import { sourcePermissionDimensionTruth, sourcePermissionTruth } from './source-permission-truth'
+import { controlledProducer, controlledPermission } from '../../shared/controlled-source-permissions'
 
 export type SourcePolicyRow = {
   source: string; is_enabled?: boolean | null; catalog_enabled?: boolean | null
@@ -10,6 +11,7 @@ export type SourcePolicyRow = {
   web_catalog_allowed?: boolean | null; search_engine_indexing_allowed?: boolean | null
   google_jobs_distribution_allowed?: boolean | null; third_party_job_distribution_allowed?: boolean | null
   source_attribution_required?: boolean | null
+  consumer_permission_states?: Record<string, 'ALLOWED' | 'DENIED' | 'UNKNOWN'>
   /** Explicit operator intent projected from existing admin_policy_events. */
   consumer_switch_overrides?: Partial<Record<'source' | 'catalog' | 'matching' | 'alerts' | 'seo', boolean | null>>
 }
@@ -21,13 +23,13 @@ export type PolicyDecision = {
   storedGateState: 'TRUE' | 'FALSE' | 'UNKNOWN' | 'NOT_APPLICABLE'
   reasons: string[]
   permissionReasons: string[]
-  permissionRole: 'ADVISORY_FIRST_PARTY' | 'EXTERNAL_DISTRIBUTION_GATE'
+  permissionRole: 'ADVISORY_FIRST_PARTY' | 'EXTERNAL_DISTRIBUTION_GATE' | 'CONTROLLED_PRODUCER_PERMISSION'
   temporaryException: null
 }
 const profiles = (registry as any).sources as Array<{ canonical_source:string; emitted_aliases:string[]; producer_execution?: {state:string; entrypoints:string[]; operational_default:string} }>
 
 export function sourceProducerExecution(raw: string) {
-  return profiles.find(item => item.canonical_source === canonicalSource(raw))?.producer_execution
+  return controlledProducer(canonicalSource(raw)) || profiles.find(item => item.canonical_source === canonicalSource(raw))?.producer_execution
     || { state:'NO_EXECUTABLE_PRODUCER', entrypoints:[] as string[], operational_default:'INACTIVE' }
 }
 
@@ -58,7 +60,7 @@ export function effectiveSourceSwitches<T extends SourcePolicyRow>(row: T, _perm
     const field = `${consumer}_enabled` as const
     const override = row.consumer_switch_overrides?.[consumer]
     if (override !== undefined) effective[field] = override
-    else if (effective.is_enabled === true) effective[field] = true
+    else if (effective.is_enabled === true && !controlledProducer(canonicalSource(row.source))) effective[field] = true
   }
   return effective
 }
@@ -84,6 +86,8 @@ const legacySwitchState = (policy: SourcePolicyRow | undefined, switches: Array<
   return switches.some(value => value === false) ? 'LEGACY_CONFIG_DISABLED' : switches.some(value => value == null) ? 'UNKNOWN' : 'ENABLED'
 }
 const capabilityFor = (canonical: string, consumer: Consumer, _policy: SourcePolicyRow | undefined, permissionResolver = sourcePermissionDimensionTruth): CapabilityState => {
+  const controlled = controlledPermission(canonical, consumer, _policy)
+  if (controlled) return controlled.state
   // Missing operational configuration cannot erase explicit permission evidence.
   const capability = (dimension: Parameters<typeof sourcePermissionDimensionTruth>[1]): CapabilityState => {
     const state = permissionResolver(canonical, dimension).state
@@ -100,6 +104,7 @@ const decision = (canonicalSource: string, consumer: Consumer, rowReadiness: Rea
   const adminSwitchState = legacySwitchState(policy, admin)
   const projectionSwitch = consumer === 'catalog' ? policy?.catalog_enabled : consumer === 'matching' ? policy?.matching_enabled : consumer === 'alerts' ? policy?.alerts_enabled : consumer === 'seo' || consumer === 'jobPosting' ? policy?.seo_enabled : true
   const firstParty = ['catalog','matching','alerts','seo'].includes(consumer)
+  const controlled = controlledPermission(canonicalSource, consumer, policy)
   const permissionReasons = [
     ...(!firstParty && capabilityState !== 'ALLOWED' ? [`${consumer === 'googleJobs' || consumer === 'jobPosting' ? 'GOOGLE_JOBS' : 'THIRD_PARTY'}_SOURCE_PERMISSION_${capabilityState}`] : []),
     ...(capabilityState === 'ALLOWED' ? [] : [capabilityState === 'UNKNOWN' ? 'SOURCE_CAPABILITY_UNKNOWN' : 'SOURCE_CAPABILITY_DENIED']),
@@ -114,13 +119,14 @@ const decision = (canonicalSource: string, consumer: Consumer, rowReadiness: Rea
       ? [projectionSwitch === false ? `SOURCE_${consumer.toUpperCase()}_OPERATOR_DISABLED` : `SOURCE_${consumer.toUpperCase()}_SWITCH_UNKNOWN`] : []),
     ...(live ? [] : ['ROW_LIFECYCLE_NOT_ROUTABLE']),
     ...extraReasons,
+    ...(controlled && controlled.state !== 'ALLOWED' ? [controlled.reason] : []),
   ]
   // First-party organic SEO is gated by lifecycle, row facts and global source
   // operation. Canonical permission remains diagnostic; external distribution
   // uses its own JobPosting/Google Jobs decisions below.
   const effectiveReasons = firstParty ? reasons : [...reasons, ...permissionReasons]
   return { allowed: effectiveReasons.length === 0 && (firstParty || capabilityState === 'ALLOWED'), canonicalSource, rowReadiness, capabilityState, adminSwitchState, storedGateState: storedGateState(storedGate, storedApplicable), reasons: effectiveReasons, permissionReasons,
-    permissionRole: firstParty ? 'ADVISORY_FIRST_PARTY' : 'EXTERNAL_DISTRIBUTION_GATE', temporaryException: null }
+    permissionRole: controlled ? 'CONTROLLED_PRODUCER_PERMISSION' : firstParty ? 'ADVISORY_FIRST_PARTY' : 'EXTERNAL_DISTRIBUTION_GATE', temporaryException: null }
 }
 
 /** One fail-closed evaluation for runtime/build projections. Canonical DB row wins over legacy alias rows. */

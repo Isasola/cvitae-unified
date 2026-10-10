@@ -1,0 +1,9 @@
+{
+  "recruiter_b2b": {
+    "state": "EXECUTABLE_PRODUCER",
+    "entrypoints": ["netlify/functions/create-vacancy.ts"],
+    "operational_default": "ACTIVE",
+    "permission_mode": "EXPLICIT_PER_CONSUMER",
+    "identity_authority": "verified recruiter token inside atomic RPC"
+  }
+}

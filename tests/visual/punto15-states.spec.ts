@@ -127,7 +127,8 @@ function mockRecruiterToken(page: Page, opts: {
     if (opts.responseOverride) {
       const override = opts.responseOverride(action ?? '')
       if (override !== undefined) {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(override) })
+        const { __status = 200, ...payload } = override
+        await route.fulfill({ status: __status, contentType: 'application/json', body: JSON.stringify(payload) })
         return
       }
     }
@@ -144,7 +145,7 @@ function mockRecruiterToken(page: Page, opts: {
     }
 
     if (action === 'get_vacancies') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ vacancies }) })
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ vacancies, pagination: { page: 0, total: vacancies.length, has_more: false } }) })
       return
     }
     if (action === 'get_history') {
@@ -259,7 +260,7 @@ test.describe('/empresas — estados de carga y vacío', () => {
     page.route('/.netlify/functions/create-vacancy', async (route) => {
       await route.fulfill({
         status: 200, contentType: 'application/json',
-        body: JSON.stringify({ url: 'https://cvitae.lat/vacante/dev-test-qa-2026' }),
+        body: JSON.stringify({ success: true, id: 'vac-created', url: 'https://cvitae.lat/vacante/dev-test-qa-2026', idempotent: false }),
       })
     })
 
@@ -275,7 +276,7 @@ test.describe('/empresas — estados de carga y vacío', () => {
     await page.fill('textarea[placeholder*="Experiencia requerida"]', 'Requisitos del puesto de prueba para el test de QA completo.')
 
     await page.click('button[type="submit"]')
-    await expect(page.locator('text=¡Vacante creada!')).toBeVisible({ timeout: 5_000 })
+    await expect(page.locator('text=Vacante registrada. Enlace de postulación directa:')).toBeVisible({ timeout: 5_000 })
     await expect(page.locator('text=cvitae.lat/vacante/dev-test-qa-2026')).toBeVisible({ timeout: 3_000 })
   })
 
@@ -405,6 +406,20 @@ test.describe('/empresas — estados de carga y vacío', () => {
     await page.locator('button', { hasText: 'Historial' }).click()
     await expect(page.getByRole('alert')).toContainText('No pudimos recuperar el historial')
     await expect(page.getByRole('button', { name: 'Reintentar' })).toBeVisible()
+  })
+
+  test('P15-R11 - failed close is not optimistic success', async ({ page }) => {
+    await injectRecruiterSession(page)
+    const vacancy = { id: 'vac-close', title: 'Vacante que sigue activa', slug: 'vac-close', location: 'Asuncion', modality: 'Remoto', is_active: true, created_at: new Date().toISOString(), vacancy_applications: [{ count: 0 }] }
+    mockRecruiterToken(page, { vacancies: [vacancy], responseOverride: action => action === 'close_vacancy'
+      ? { __status: 503, ok: false, error: 'No pudimos confirmar el cierre' } : undefined })
+    await openRecruiterPanel(page)
+    await page.locator('button', { hasText: 'Mis Vacantes' }).click()
+    await page.getByTitle('Cerrar vacante').click()
+    await page.getByRole('button', { name: 'Sí' }).click()
+    await expect(page.getByRole('alert')).toContainText('No pudimos confirmar el cierre')
+    await expect(page.getByText('Vacante que sigue activa')).not.toHaveClass(/line-through/)
+    await expect(page.getByText(/Confirmar/)).toBeVisible()
   })
 })
 

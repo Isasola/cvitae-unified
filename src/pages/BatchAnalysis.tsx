@@ -244,7 +244,7 @@ export default function BatchAnalysis() {
           const compRes = await fetch('/.netlify/functions/compare-candidates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: session.token, mode: 'batch_summary', jobTitle, jobDescription: jobDesc, candidates: processedCandidates, topN: 3 }),
+            body: JSON.stringify({ token: session.token, mode: 'batch_summary', operation_ids: updated.filter(c => c.status === 'done').map(c => c.operationId) }),
           })
           const compData = await compRes.json()
           if (compRes.ok) comparison = compData

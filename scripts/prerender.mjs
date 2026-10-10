@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { join } from 'path'
 import { fetchAllPages } from '../src/lib/paged-fetch.js'
 import { canonicalSitemapRows } from '../src/lib/sitemap-universe.js'
-import { aggregatedJobPosting, factualJobPosting } from '../src/lib/factual-job-posting.shared.js'
+import { aggregatedJobPosting } from '../src/lib/factual-job-posting.shared.js'
 import { toGoogleEmploymentType } from '../src/lib/seo/employment-type.shared.js'
 import { deadlineLifecycle, isScholarshipLike } from '../src/lib/opportunity-truth.ts'
 import { safeExternalUrl } from '../src/lib/safe-url.ts'
@@ -131,14 +131,15 @@ function markdownToSnapshotHtml(md, maxChars = 4000) {
 function injectPage(templateHtml, metaTagsBlock, contentHtml, publicDetail = false) {
   if (publicDetail) return withPublicDetailHead(templateHtml, metaTagsBlock)
     .replace('<div id="root"></div>', `<div id="root">${contentHtml}</div>`)
-  // Strip template-level canonical and robots BEFORE injecting metaTagsBlock so the injected
-  // page-specific tags are the sole authority. The home page (index.html) is not processed here
-  // and retains its own canonical/robots from the template.
+  // Non-Universe snapshots (blog, direct application and static shells) also
+  // get one coherent page-specific head. The home page is not processed here.
   const cleaned = templateHtml
-    .replace(/<link[^>]+rel="canonical"[^>]*>\s*/g, '')
-    .replace(/<meta[^>]+name="robots"[^>]*>\s*/g, '')
+    .replace(/<title\b[^>]*>[\s\S]*?<\/title>/gi, '')
+    .replace(/<link\b[^>]*\brel=["']canonical["'][^>]*>/gi, '')
+    .replace(/<meta\b[^>]*(?:\bname=["'](?:description|robots|twitter:[^"']+)["']|\bproperty=["']og:[^"']+["'])[^>]*>/gi, '')
+    .replace(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi, '')
   return cleaned
-    .replace('<title>CVitae | Empleos, oportunidades y CV en Paraguay y LATAM</title>', metaTagsBlock)
+    .replace('</head>', `${metaTagsBlock}</head>`)
     .replace('<div id="root"></div>', `<div id="root">${contentHtml}</div>`)
 }
 
@@ -684,29 +685,14 @@ async function prerender() {
     if (!title) throw new Error(`vacancy_missing_title:${vacancy.canonical_path}`)
     const canonical = `${SITE_URL}${vacancy.canonical_path}`
     const description = (vacancy.description || title).replace(/[#*`>]/g, '').substring(0, 160)
-    const factual = factualJobPosting(
-      {
-        ...vacancy,
-        opportunity_type: 'job',
-        first_party_direct_apply: true,
-      },
-      canonical,
-    )
-    const ld = factual.structuredData ?? {
-      '@context': 'https://schema.org',
-      '@type': 'WebPage',
-      name: title,
-      description,
-      url: canonical,
-    }
     const metaTags = `<title>${escapeHtml(title)} · CVitae</title>
 <meta name="description" content="${escapeHtml(description)}">
+<meta name="robots" content="noindex,nofollow">
 <meta property="og:title" content="${escapeHtml(title)} · CVitae">
 <meta property="og:description" content="${escapeHtml(description)}">
 <meta property="og:url" content="${canonical}">
 <meta property="og:type" content="article">
-<link rel="canonical" href="${canonical}">
-<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`
+<link rel="canonical" href="${canonical}">`
     const vacancyDir = join(distDir, family, slug)
     mkdirSync(vacancyDir, { recursive: true })
     writeFileSync(join(vacancyDir, 'index.html'), injectPage(templateHtml, metaTags, vacancySnapshotContent(vacancy)))

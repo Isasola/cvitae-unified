@@ -1,5 +1,6 @@
 import { Handler } from "@netlify/functions"
 import { makeSupabaseAdmin } from "./_supabase"
+import { createHash } from 'node:crypto'
 
 function toKebab(str: string): string {
   return str
@@ -13,16 +14,9 @@ function toKebab(str: string): string {
     .substring(0, 60)
 }
 
-function randomSuffix(n = 6): string {
-  return Math.random().toString(36).substring(2, 2 + n).toUpperCase()
-}
-
 function safeError(error: any) {
   return {
     code: error?.code || "unknown",
-    message: error?.message || "unknown error",
-    details: error?.details || null,
-    hint: error?.hint || null,
   }
 }
 
@@ -31,6 +25,10 @@ const handler: Handler = async (event) => {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
   }
 
+  let body: any
+  try { body = JSON.parse(event.body || '{}') } catch {
+    return { statusCode: 400, body: JSON.stringify({ error: 'JSON inválido', reason: 'INVALID_INPUT' }) }
+  }
   try {
     const {
       token,
@@ -42,16 +40,24 @@ const handler: Handler = async (event) => {
       salary_range,
       rubro,
       tags,
-    } = JSON.parse(event.body || "{}")
+      operation_id,
+    } = body || {}
 
-    if (!token?.trim()) {
+    if (typeof token !== 'string' || !token.trim()) {
       return { statusCode: 400, body: JSON.stringify({ error: "Token requerido" }) }
     }
-    if (!title?.trim() || !description?.trim() || !requirements?.trim() || !location?.trim()) {
+    if (![title, description, requirements, location, modality].every(value => typeof value === 'string' && value.trim())
+      || title.length > 200 || description.length > 30000 || requirements.length > 15000 || location.length > 500
+      || (salary_range != null && (typeof salary_range !== 'string' || salary_range.length > 1000))
+      || (rubro != null && (typeof rubro !== 'string' || rubro.length > 200))
+      || (tags != null && (!Array.isArray(tags) || tags.length > 40 || tags.some((tag: any) => typeof tag !== 'string' || tag.length > 100)))) {
       return {
         statusCode: 400,
         body: JSON.stringify({ error: "Faltan campos requeridos: título, descripción, requisitos, ubicación" }),
       }
+    }
+    if (typeof operation_id !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(operation_id)) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'La publicación requiere una operación válida. Recargá el formulario.', reason: 'OPERATION_ID_REQUIRED' }) }
     }
 
     const supabase = makeSupabaseAdmin()
@@ -79,7 +85,10 @@ const handler: Handler = async (event) => {
       return { statusCode: 409, body: JSON.stringify({ error: "La empresa verificada no tiene un nombre registrado" }) }
     }
 
-    const slug = `${toKebab(title)}-${randomSuffix()}`
+    // Stable across timeout/retry/reload; company identity is part of the key.
+    // The DB owns durable idempotency and rejects changed input for the same key.
+    const suffix = createHash('sha256').update(`${tokenData.id}:${operation_id}`).digest('hex').slice(0, 16)
+    const slug = `${toKebab(title) || 'vacante'}-${suffix}`
     const vacancyUrl = `${process.env.SITE_URL || "https://cvitae.lat"}/vacante/${slug}`
 
     // Both inserts live in one PostgreSQL transaction. An error rolls back
@@ -96,10 +105,16 @@ const handler: Handler = async (event) => {
       p_rubro: rubro?.trim() || "General",
       p_tags: Array.isArray(tags) ? tags.map(String) : [],
       p_application_url: vacancyUrl,
+      p_operation_id: operation_id,
     })
 
     if (createError || !vacancy?.success || !vacancy?.id || !vacancy?.opportunity_id) {
       const internalMessage = String(createError?.message || "")
+      const reason = internalMessage.includes('operation_conflict') ? 'OPERATION_CONFLICT'
+        : internalMessage.includes('invalid_recruiter') ? 'RECRUITER_NOT_AUTHORIZED'
+        : createError?.code === '23505' ? 'IDENTITY_COLLISION'
+        : createError?.code === 'PGRST202' || createError?.code === '42883' ? 'SCHEMA_NOT_READY'
+        : 'PUBLICATION_UNCONFIRMED'
       const failureStage = internalMessage.includes("RECRUITER_VACANCY_INSERT_FAILED")
         ? "INSERT_FAILED"
         : internalMessage.includes("OPPORTUNITY_MIRROR_INSERT_FAILED")
@@ -113,16 +128,18 @@ const handler: Handler = async (event) => {
         result_complete: Boolean(vacancy?.success && vacancy?.id && vacancy?.opportunity_id),
       })
       return {
-        statusCode: 500,
+        statusCode: reason === 'RECRUITER_NOT_AUTHORIZED' ? 403 : ['OPERATION_CONFLICT', 'IDENTITY_COLLISION'].includes(reason) ? 409 : 503,
         body: JSON.stringify({
-          error: "No se pudo publicar la vacante de forma consistente. No quedó activa; intentá nuevamente.",
+          error: 'No pudimos confirmar la publicación. Reintentá la misma operación para recuperar su resultado.',
+          reason, stage: failureStage,
         }),
       }
     }
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true, slug: vacancy.slug, url: vacancy.url, id: vacancy.id }),
+      body: JSON.stringify({ success: true, slug: vacancy.slug, url: vacancy.url, id: vacancy.id, idempotent: vacancy.idempotent === true,
+        distribution: 'PENDING_INDEPENDENT_GATES' }),
     }
   } catch (error: any) {
     console.error("[create-vacancy][UNEXPECTED_ERROR]", safeError(error))

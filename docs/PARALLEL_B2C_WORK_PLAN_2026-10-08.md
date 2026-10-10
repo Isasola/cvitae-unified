@@ -293,3 +293,84 @@ se valida junto al primer paquete si sus dependencias permiten un cable completo
 BLOCKED_UNTIL_PROD sigue: current-site deploy/smoke y créditos; provider semántico
 real, SQL/RLS/locks, entrega/retención real, C16/C17/C18 y canary futuro. No
 empezarlos por avanzar R2. PD-006/PD-007 no entran en scope local B2C.
+
+## R2 V2 — 2026-10-09 — lectura dirigida / STOP A
+
+Orden actual del operador supersede únicamente la prohibición histórica de
+preparar B2B LOCAL. No abre 54–55, deploy ni escritura/consulta PROD por el agente.
+Git observado por el agente: `work/b2c-r2-20261008`, HEAD
+`c633f5d8ec238829c98e69d9dcba00d401ffee70`, limpio antes de esta pasada.
+R1 y su tag no se modificaron. Ningún test/build/SQL fue ejecutado.
+
+### Matriz única de contratos y evidencia
+
+Los hallazgos STATIC siguientes son discrepancias inspeccionadas; aún NO tienen
+la clasificación `REPRODUCED_LOCAL_BUG`. Los probes pendientes deben discriminar
+el fallo antes de modificar producto. `EVIDENCE_GAP_ONLY` no significa que el
+código sea correcto. `CLOSED_LOCAL` no se concede en esta pasada.
+
+| Master / OUTCOME | Base reutilizada / clasificación | ACTUAL_GAP y último gate probado → primero no probado | Autoridad / paths dirigidos | Verificación pendiente / frontera externa |
+|---|---|---|---|---|
+| 42 perfil y Application Workspace | REUSED_CLOSED_R1 | Profile9, application26, grounding60 + browser/build PASS R1 → sin nuevo gap demostrado en esos subcontratos | ProfileBuilder, application-workspace; Candidate Truth | Excluir implementación cerrada; repetir sólo si el diff futuro afecta autoridad/consumer. Provider real BLOCKED_UNTIL_PROD |
+| 43 Free/Beta/Dashboard | EVIDENCE_GAP_ONLY | Top-3 presentación y regresiones R1 → adquisición/entitlement/acción/fallo/reload integrado. STATIC: catch de get_status deja enrollment=null/programFull=false/loading=false; showModal puede resultar true en error. accept sin sesión retorna sin error | Dashboard → useFoundingBeta/FoundingBetaModal → founding-beta-action → enrollment/profile | Probe hook + browser integrado con Free/Beta, error, retry, otro usuario, consentimiento. Servicio/email BLOCKED_UNTIL_PROD |
+| 44 retorno/Learning | EVIDENCE_GAP_ONLY | Retorno perfil/Workspace R1 y secondary contracts → loop Dashboard → intent → gemini-courses → learning_recommendations/status → reload | LearningPlan, gemini-courses, b2c-profile save_intent; Matching canónico existente | verify-learning-plan + browser de avance/recarga/gap no corroborado; retención comercial no probada |
+| 42 CVVivo privado externo a Workspace | EVIDENCE_GAP_ONLY | C11/C12/private snapshot → generación/versionado/edición/PDF completo. STATIC: generate-cv-vivo persiste markdown proveedor sin validador factual de salida; cache retorna antes del gate de evidencias pendientes | CVVivo → generate-cv-vivo/cv-workspace → create_cv_version/generated_cvs/cv_evidence_items | Provider inventa hecho/no números, vacío, evidencia cambiada, parent ajeno, PDF elegido/reload. SQL/provider reales BLOCKED_UNTIL_PROD |
+| 42 auth/entrada/extracción | EVIDENCE_GAP_ONLY | Guardado/carga perfil R1 → callback/extracción/revisión/confirmación anterior. STATIC: callback no comprueba res.ok; entrada conserva el archivo antes de extracción y deja revisión manual | AuthCallback → ProfileBuilder → extract-pdf-text/analyze-cv-candidate → b2c-profile draft/save | E2E retorno, PDF/DOCX/TXT/imagen, parcial/vacío/error/cancelación, confirmación explícita/otra sesión. OAuth/OCR real BLOCKED_UNTIL_PROD |
+| 58 MVP vendible | NOT_TOUCHED (definición local abajo) | Rutas reales identificadas → aceptación empresarial completa | Mismo grafo B2B 59–64 | No declaración de vendibilidad validada hasta E2E y piloto |
+| 59 identidad/onboarding empresa | EVIDENCE_GAP_ONLY | create-vacancy preflight + RPC exigen verified/active → alta/verificación/invite/retorno real no demostrado | Recruiters → submit-lead/recruiter_leads → revisión/tokens; send-b2b-invite/prospects | Empresa no verificada 403, ownership y errores. Verificación humana/email BLOCKED_UNTIL_PROD |
+| 60 create → truth → Universe | BLOCKED_UNTIL_PROD (compatibilidad esquema STOP A); EVIDENCE_GAP_ONLY local | RPC transaccional existente STATIC → contrato de campos/idempotencia/consumidores. STATIC: suffix uppercase vs regex lowercase; espejo omite requirements/salary_range, fija PY/verified100; retry genera nuevo slug | Recruiters/create-vacancy → create_recruiter_vacancy_atomic → recruiter_vacancies + opportunities → triggers/reducer/policy → vistas/API/Admin | Probe handler; después SQL local real rollback/retry/campos. requirements canónico jsonb según 202609240001; salario textual canónico aún por determinar, nunca inventar números |
+| 60 close/reload/publicación | BLOCKED_UNTIL_PROD (compatibilidad STOP A); EVIDENCE_GAP_ONLY local | Ownership previo STATIC → cierre atómico no demostrado. STATIC: Promise.all de updates ignora errores; UI ignora res.ok y marca cerrada | validate-recruiter-token/Recruiters → ambas filas → Universe; VacantePage activa por recruiter_vacancies | Negativo espejo falla, empresa ajena, retry/no-op, todas las vistas y Admin, página abierta/reload; no editor UPDATE encontrado en ruta inspeccionada, no construir uno |
+| 60 permisos/distribución | BLOCKED_UNTIL_PROD | C09.1/SEO histórico cerrado → registro efectivo de recruiter_b2b no demostrado. STATIC: no está en array ejecutable de canonical_opportunity_source_policy, cuyo final fuerza is_enabled=false | opportunity_sources/identity aliases/permissions/admin events → 040001 policy → reducer/vistas; 080001 SEO | No replicar UPDATE histórico 202608110016. Preservar first-party advisory existente; UNKNOWN externo no autoriza JobPosting/Google Jobs/distribución. Revisión sin cambiar policy cerrada hasta prueba específica |
+| 61 postulación privada | EVIDENCE_GAP_ONLY | PDF privado/manual_review y consentimiento opcional presentes STATIC → privacidad cross-account end-to-end. STATIC: get_applicants cruza email con user_master_profiles y devuelve badges sin contrato de autorización | VacantePage/submit-lead → vacancy_applications/storage → validate-recruiter-token → ApplicantsPanel | Probe handler dos empresas/perfil B2C privado; archivo inválido, fallo storage/DB, retry/reload. Bucket/RLS reales BLOCKED_UNTIL_PROD |
+| 62 batch/créditos | EVIDENCE_GAP_ONLY | Endpoint legacy 410; operación por CV y claim/settle/refund RPC presentes → locks/doble cargo/retry/recarga real | BatchAnalysis/analyze-cv-candidate; analyze-vacancy-applicants; ledger + review batches | SQL local tras preflight + transporte provider simulado, fallo parcial/retry/reanudar; no reactivar legacy |
+| 63 filtros/comparación | EVIDENCE_GAP_ONLY | ATS/fit separados en UI y decisión humana persistida → abstención/misma vacante/comparación. STATIC: head_to_head permite dos vacantes distintas propias y contexto vacancy_id distinto | Recruiters/compare-candidates → aplicaciones/vacantes/analyses; cv-ats-workspace es B2C autenticado, no autoridad B2B por defecto | Probe cross-vacancy/empresa/contexto/IDs duplicados; ranking sin evidencia y filtros sobre denominador completo |
+| 64 landing/activación | EVIDENCE_GAP_ONLY | /empresas usa submit-lead; invite/prospects/tokens presentes → lead → verificación → primer uso/errores/retorno | Recruiters, LandingPage sólo enlace dependiente, submit-lead/send-b2b-invite | Browser/provider email fixture; no enviar invitaciones. submit-beta no se considera automáticamente autoridad de alta B2B |
+| 65 piloto real | BLOCKED_UNTIL_REAL_COMPANY_VALIDATION | Sin evidencia de empresa real → time_to_first_vacancy/shortlist, CVs procesados, usefulness, repetición, willingness-to-pay | Reusar timestamps/ledger/acciones y analytics consentidos; feedback humano | Instrumentación aún NOT_TOUCHED; ninguna métrica/ingreso inventados |
+| 66 adquisición/demanda/conversión | EVIDENCE_GAP_ONLY | Item56 R1 consent/eventos → correlación B2B sin PII/doble efecto no demostrada. STATIC: analytics.b2bLeadSent admite company; no demuestra que sea llamado | src/lib/analytics + productores reales/credit request | Verifier consent/dedupe sin PII + browser; cobro integrado no identificado, solicitud != ingreso |
+
+### Grafo de ejecución y scope del STOP
+
+R1 confirmado → residual B2C con pruebas discriminantes → empresa verificada →
+create atómico/idempotente → campos/provenance → lifecycle/policy/quality →
+decisiones independientes Catalog/Matching/Alerts/SEO/external → API/UI/Admin →
+acción/efecto → cierre/retry/reload. Rama privada: postulación autorizada → CV
+privado por empresa/vacante → cola → reserva/settlement/refund → explicación/
+comparación → acción humana → persistencia. El tracking existente observa
+efectos confirmados; ninguna rama publica perfiles privados automáticamente.
+
+Denominador a reconciliar después de autorización: TODAS las recruiter_vacancies
+y sus mirrors recruiter_vacancy_id/source recruiter_b2b, incluidos cerrados,
+duplicados y huérfanos, por fuente y proyección. Cantidad real NOT_VERIFIED.
+Histórico y futuro usarán el mismo reducer. Un fixture no reemplaza ese total.
+
+MVP propuesto por rutas existentes: solicitud y verificación manual de empresa,
+publicación con enlace de postulación, CV privado y revisión manual si parsing
+falla, revisión progresiva y batch por CV, ATS/fit explicados, créditos y acciones
+del reclutador persistidas. Está IMPLEMENTADO EN BASELINE de forma parcial, NO
+validado como flujo vendible LOCAL en R2. Bloqueos: puente/cierre/privacidad,
+evidencia de batch/ranking, servicios/esquema reales y piloto. No se identificó
+editor de vacantes ni facturación integrada en estas rutas; no se prometen.
+
+### Clasificación de paths antes de implementación
+
+| Paths del bloque | Clase / productor y consumidor | Regresión mínima |
+|---|---|---|
+| WORKING_PRINCIPLES.md (append), este plan, GRAND_CHECKPOINT (append), artifacts/release/r2-* | SAFE_NEW_SCOPE; governance/evidencia → operador | Diff pequeño; historia/R1 intactos; ningún PASS inventado |
+| scripts/operator/verify-r2-b2b-20261009.ps1; scripts/verify-r2-b2b-baseline.mjs | SAFE_NEW_SCOPE; handlers reales + frontera DB/provider fixture → operador | Runtime exacto, sin red/credenciales, resultados por caso y exit no cero ante fallo; NO sustituye E2E ni SQL real |
+| Recruiters/BatchAnalysis y handlers B2B | SHARED_SURFACE; empresa → vacante/CV/ledger → B2B y puente B2C | Handler + browser/tenant/retry/reload; crear/cerrar SQL atómico en DB local |
+| Dashboard/LearningPlan/CVVivo/ProfileBuilder/AuthCallback/useFoundingBeta/FoundingBetaModal y autoridades B2C nombradas arriba | PROTECTED_SURFACE; residual B2C → perfil/CV/plan/retorno | Regression targeted R1 según diff, secondary/analytics y E2E específico |
+| Nuevo SQL futuro, source policy/Universe/field contract; VacantePage/metadata si resulta indispensable | PROTECTED_SURFACE; puente → todos los consumidores afectados | Preflight primero; SQL real, historical/future, policy/Universe + rutas/JobPosting/SEO afectadas |
+
+Esta primera parada agrega sólo documentación/preflight/probes. No modifica
+producto, migrations, R1 ni superficies compartidas. La separación B2C/B2B
+queda conservada: diff productivo desde c633f5d8 = vacío; R2 no se promueve.
+
+LAST_PROVEN_GATE=identidad Git + evidencia R1 reutilizada.
+UNPROVEN_GATE=compatibilidad esquema real y reproducción LOCAL de hallazgos STATIC.
+EXACT_OPERATOR_ACTION=SQL catalog-only artifacts/release/r2-b2b-preflight-20261009.sql;
+probe offline scripts/operator/verify-r2-b2b-20261009.ps1.
+EVIDENCE_REF=artifacts/release/r2-b2b-state-20261009.json (preparación, NOT_RUN).
+NEXT_SAFE_ACTION=recibir preflight/probes, clasificar fallos demostrados y realizar
+la pasada de implementación; SQL dependiente sólo tras compatibilidad probada.
+Si el operador no habilita SQL, registrar BLOCKED_UNTIL_PROD y continuar los
+contratos locales independientes. No se requiere permiso para cada edit local.

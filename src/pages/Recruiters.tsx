@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { B2BInfoPopover } from '@/components/cv/B2BInfoPopover'
 import { clearPendingOperation, pendingOperationId } from '@/lib/pendingOperation'
+import { beginVacancy, completeVacancy, pendingVacancy } from '@/lib/vacancy-operation'
+import { analytics } from '@/lib/analytics'
 import { FeedbackReporter } from '@/components/cv/FeedbackReporter'
 import {
   Building2, Key, AlertCircle, ChevronRight,
@@ -17,6 +19,13 @@ import {
 } from 'lucide-react'
 
 const ease = [0.22, 1, 0.36, 1] as const
+const PILOT_START_KEY = 'cvitae_b2b_pilot_started_at'
+function pilotElapsedSeconds() {
+  try {
+    const started = Number(sessionStorage.getItem(PILOT_START_KEY))
+    return Number.isFinite(started) && started > 0 ? Math.max(0, Math.round((Date.now() - started) / 1000)) : 0
+  } catch { return 0 }
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -647,6 +656,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, 
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'No pudimos guardar el estado del candidato')
       setApplicants(prev => prev.map(a => a.id === applicationId ? { ...a, recruiter_action: action } : a))
+      analytics.b2bRecruiterAction(action, pilotElapsedSeconds())
     } catch (error: any) { setRankError(error?.message || 'No pudimos guardar el estado del candidato') }
     finally { setUpdatingAction(null) }
   }
@@ -669,6 +679,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, 
       setReview(data.review || null)
       setPage(requestedPage)
       setHasMore(data.pagination?.has_more === true)
+      if (!append) analytics.b2bApplicantsViewed(Number(data.pagination?.total) || nextApplicants.length)
     } catch (error: any) { setLoadError(error?.message || 'No pudimos cargar los candidatos') }
     finally {
       setLoading(false)
@@ -699,6 +710,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, 
         : `Tanda ${data.batchNumber || ''}: ${data.analyzed} CVs analizados${data.failed > 0 ? ` · ${data.failed} se reintentará` : ''}`)
       if (data.summary) setAiSummary(data.summary)
       if (data.review) setReview(data.review)
+      analytics.b2bBatchCompleted(Number(data.analyzed) || 0, data.complete === true)
 
       // Merge results into applicants list
       if (data.results?.length) {
@@ -1185,7 +1197,7 @@ interface VacancyRecord {
 
 const RUBROS = ['Tecnología', 'Administración', 'Contabilidad / Finanzas', 'Marketing / Ventas', 'Recursos Humanos', 'Logística / Operaciones', 'Producción / Manufactura', 'Salud', 'Educación', 'Gastronomía / Turismo', 'Construcción / Inmobiliaria', 'Legal', 'Otro']
 
-function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: string; companyName: string; onAnalyzeApplicant: (cvText: string, name: string) => void }) {
+function VacancyPanel({ token, organizationId, companyName, onAnalyzeApplicant }: { token: string; organizationId: string; companyName: string; onAnalyzeApplicant: (cvText: string, name: string) => void }) {
   const [form, setForm] = useState({
     title: '', description: '', requirements: '',
     location: '', modality: 'Presencial', salary_range: '', company_name: companyName, rubro: '',
@@ -1201,19 +1213,32 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
   const [closingVacancy, setClosingVacancy] = useState<string | null>(null)
   const [closingInProgress, setClosingInProgress] = useState(false)
 
-  useEffect(() => { loadVacancies() }, [])
+  useEffect(() => {
+    try { const pending = pendingVacancy(organizationId); if (pending) setForm(pending.payload as typeof form) }
+    catch { setSaveError('No pudimos recuperar el formulario pendiente. No se inició otra publicación.') }
+    loadVacancies()
+  }, [organizationId])
 
   const loadVacancies = async () => {
     setLoadingList(true)
     setListError('')
     try {
+      const collected: VacancyRecord[] = []
+      let page = 0
+      let hasMore = true
+      while (hasMore) {
       const res = await fetch('/.netlify/functions/validate-recruiter-token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, action: 'get_vacancies' }),
+        body: JSON.stringify({ token, action: 'get_vacancies', page }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'No pudimos cargar las vacantes')
-      setVacancies(data.vacancies || [])
+      if (!res.ok || !Array.isArray(data.vacancies)) throw new Error(data.error || 'No pudimos cargar las vacantes')
+      collected.push(...data.vacancies)
+      hasMore = data.pagination?.has_more === true
+      if (hasMore && !data.vacancies.length) throw new Error('No pudimos continuar la lista de vacantes.')
+      page++
+      }
+      setVacancies(collected)
     } catch (error: any) { setListError(error?.message || 'No pudimos cargar las vacantes') }
     finally { setLoadingList(false) }
   }
@@ -1225,14 +1250,18 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
   const closeVacancy = async (id: string) => {
     setClosingInProgress(true)
     try {
-      await fetch('/.netlify/functions/validate-recruiter-token', {
+      const response = await fetch('/.netlify/functions/validate-recruiter-token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, action: 'close_vacancy', vacancy_id: id }),
       })
+      const result = await response.json()
+      if (!response.ok || result.ok !== true || result.is_active !== false) throw new Error(result.error || 'No pudimos confirmar el cierre. Reintentá.')
       setVacancies(vs => vs.map(v => v.id === id ? { ...v, is_active: false } : v))
+      setClosingVacancy(null)
+    } catch (error: any) {
+      setListError(error?.message || 'No pudimos confirmar el cierre. Reintentá.')
     } finally {
       setClosingInProgress(false)
-      setClosingVacancy(null)
     }
   }
 
@@ -1240,13 +1269,16 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
     e.preventDefault()
     setSaving(true); setSaveError(''); setCreatedUrl('')
     try {
+      const operationId = beginVacancy(organizationId, form)
       const res = await fetch('/.netlify/functions/create-vacancy', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, ...form }),
+        body: JSON.stringify({ token, ...form, operation_id: operationId }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error al crear la vacante')
+      if (!res.ok || data.success !== true || !data.id || !data.url) throw new Error(data.error || 'No pudimos confirmar la creación')
+      completeVacancy(organizationId)
       setCreatedUrl(data.url)
+      analytics.b2bVacancyCreated(pilotElapsedSeconds(), data.idempotent === true)
       setForm({ title: '', description: '', requirements: '', location: '', modality: 'Presencial', salary_range: '', company_name: companyName, rubro: '' })
       loadVacancies()
     } catch (err: any) {
@@ -1281,6 +1313,10 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
         </div>
       )}
       {/* First-vacancy banner — only when list is loaded and empty */}
+      {saveError && <button type="button" onClick={() => {
+        try { const pending = pendingVacancy(organizationId); if (pending) setForm(pending.payload as typeof form) }
+        catch { setSaveError('No pudimos recuperar la operación. Contactá soporte antes de crear otra.') }
+      }} className="text-sm underline">Recuperar formulario pendiente</button>}
       {!loadingList && vacancies.length === 0 && (
         <motion.div
           initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
@@ -1386,7 +1422,8 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
         {createdUrl && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
             className="mt-5 rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] p-5">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[#c9a84c] mb-2">¡Vacante creada! Tu link de postulación:</p>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[#c9a84c] mb-2">Vacante registrada. Enlace de postulación directa:</p>
+            <p className="mb-3 text-xs text-white/50">La distribución en catálogo, alertas y buscadores requiere autorizaciones y verificaciones independientes.</p>
             <div className="flex items-center gap-3">
               <code className="flex-1 min-w-0 truncate text-sm text-white/90 font-mono">{createdUrl}</code>
               <button type="button" onClick={() => copyToClipboard(createdUrl, 'new')}
@@ -1549,13 +1586,15 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
 
   const requestCredits = async () => {
     try {
-      await fetch('/.netlify/functions/validate-recruiter-token', {
+      const response = await fetch('/.netlify/functions/validate-recruiter-token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: session.token, action: 'request_credits', amount: 50 }),
       })
-    } finally {
+      const data = await response.json()
+      if (!response.ok || data.ok !== true) throw new Error(data.error || 'No pudimos confirmar la solicitud de créditos.')
       setCreditRequestSent(true)
-    }
+      analytics.b2bCreditIntent(50)
+    } catch { setError('No pudimos confirmar la solicitud de créditos. Intentá nuevamente.') }
   }
 
   const handleFile = (f: File) => {
@@ -1863,7 +1902,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
               </motion.div>
             ) : (
               <motion.div key="vacancies" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <VacancyPanel token={session.token} companyName={session.company_name} onAnalyzeApplicant={handleAnalyzeApplicant} />
+                <VacancyPanel key={session.token_id} token={session.token} organizationId={session.token_id} companyName={session.company_name} onAnalyzeApplicant={handleAnalyzeApplicant} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -1924,6 +1963,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
       if (!res.ok || data.error) throw new Error(data.error || 'No pudimos enviar la solicitud')
       setRequestEmailSent(data.confirmationSent === true)
       setRequestSent(true)
+      analytics.b2bLeadSent()
     } catch (requestError: any) { setError(requestError.message) }
     finally { setLoading(false) }
   }
@@ -2128,6 +2168,8 @@ export default function Recruiters() {
 
   const handleLogin = (s: RecruiterSession) => {
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(s))
+    sessionStorage.setItem(PILOT_START_KEY, String(Date.now()))
+    analytics.b2bSessionStarted()
     setSession(s)
   }
 

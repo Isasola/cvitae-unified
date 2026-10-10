@@ -27,7 +27,13 @@ export type OpportunityAnalyticsContext = {
 
 export const analytics = {
   cvAnalyzed: (mode: string) => track('cv_analyzed', { mode }),
-  b2bLeadSent: (company: string) => track('b2b_lead_sent', { company }),
+  b2bLeadSent: () => track('b2b_lead_sent'),
+  b2bSessionStarted: () => track('b2b_session_started'),
+  b2bVacancyCreated: (elapsedSeconds: number, idempotent: boolean) => track('b2b_vacancy_created', { elapsed_seconds: elapsedSeconds, idempotent }),
+  b2bApplicantsViewed: (applicationCount: number) => track('b2b_applicants_viewed', { application_count: applicationCount }),
+  b2bBatchCompleted: (processedCount: number, complete: boolean) => track('b2b_batch_completed', { processed_count: processedCount, complete }),
+  b2bRecruiterAction: (action: string, elapsedSeconds: number) => track('b2b_recruiter_action', { action, elapsed_seconds: elapsedSeconds }),
+  b2bCreditIntent: (creditCount: number) => track('b2b_credit_intent', { credit_count: creditCount, revenue: 0 }),
   batchStarted: (count: number) => track('batch_started', { cv_count: count }),
   opportunityViewed: (opportunityId: string, source: string, context: OpportunityAnalyticsContext = {}) => track('opportunity_viewed', { ...context, opportunity_id: opportunityId, source }),
   prepareClicked: (context: OpportunityAnalyticsContext) => track('prepare_clicked', context),

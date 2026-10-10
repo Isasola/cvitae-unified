@@ -350,3 +350,22 @@ retrieval, sitemap, Factory, Automation, Observation recovery, Universe
 reconciliation, embeddings y Admin. Las muestras pueden limitarse; los totales
 deben ser aggregates exactos. Los workers deben conservar cursor y cobertura
 eventual; los sitemaps paginados deben cubrir todas las URLs elegibles.
+
+## Human-operated verification / Agent handoff
+
+Cuando la orden establece verificación humana, ChatGPT es arquitecto/orquestador,
+el coding agent implementa y el humano con el chat opera tests PowerShell, SQL y
+deploy. Una orden sustancial cubre un bloque coherente con un mapa de productores,
+estados y consumidores; no repite auditorías de contratos cerrados.
+
+El agente prepara comandos y artefactos con READ_ONLY/WRITE, resultado esperado,
+STOP y rollback/compensación cuando corresponda; no se atribuye su ejecución ni
+resultado. `LOCAL CODE != PASS`; `PASS != CLOSED_LOCAL` sin E2E;
+`CLOSED_LOCAL != PROD_VALIDATED`. La evidencia recibida manda.
+
+Cada pausa conserva `LAST_PROVEN_GATE`, `UNPROVEN_GATE`,
+`EXACT_OPERATOR_ACTION`, `EVIDENCE_REF` y `NEXT_SAFE_ACTION`. Los gates mantienen
+decisiones independientes por Universo, supervivencia factual/semántica/de
+provenance, acciones y efectos del usuario, filas históricas y automatización
+futura. CVs, postulaciones y evaluaciones B2B privados no autorizan publicación
+global ni cruces de perfiles por email entre empresas.

@@ -42,13 +42,14 @@ async function invokeModel(system: string | null, userPrompt: string, maxTokens:
 
 async function validateRecruiter(token: unknown) {
   if (typeof token !== "string" || !token.trim()) return null
-  const { data } = await makeSupabaseAdmin()
+  const { data, error } = await makeSupabaseAdmin()
     .from("recruiter_tokens")
     .select("id")
     .eq("access_token", token.trim())
     .eq("is_active", true)
     .eq("verification_status", "verified")
     .single()
+  if (error && error.code !== 'PGRST116') throw new Error('RECRUITER_READ_FAILED')
   return data
 }
 
@@ -58,17 +59,28 @@ const handler: Handler = async (event) => {
   }
   try {
     const body = JSON.parse(event.body || "{}")
-    const { token, mode, jobTitle, jobDescription, topN, candidates, ids } = body
+    const { token, mode, ids } = body
 
     // ── Modo batch_summary: recibe resúmenes ya procesados
-    if (mode === 'batch_summary' && candidates?.length >= 2) {
+    if (mode === 'batch_summary') {
       const tokenData = await validateRecruiter(token)
       if (!tokenData) {
         return { statusCode: 403, body: JSON.stringify({ error: "Token de empresa inválido o inactivo" }) }
       }
-      if (candidates.length > 30) {
-        return { statusCode: 400, body: JSON.stringify({ error: "Máximo 30 candidatos por comparación" }) }
+      const operationIds = body.operation_ids
+      if (!Array.isArray(operationIds) || operationIds.length < 2 || operationIds.length > 30
+        || operationIds.some((id: any) => typeof id !== 'string') || new Set(operationIds).size !== operationIds.length) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Seleccioná entre 2 y 30 operaciones propias distintas.' }) }
       }
+      const { data: operations, error } = await makeSupabaseAdmin().from('recruiter_credit_operations')
+        .select('operation_id,metadata,result').eq('recruiter_token_id', String(tokenData.id)).eq('status', 'completed').in('operation_id', operationIds)
+      if (error) throw new Error('COMPARISON_READ_FAILED')
+      if (!operations || operations.length !== operationIds.length) return { statusCode: 403, body: JSON.stringify({ error: 'Los análisis deben pertenecer a esta empresa y estar completados.' }) }
+      const labels = new Set(operations.map((op: any) => String(op.metadata?.vacancy_label || '').trim()))
+      if (labels.size !== 1 || labels.has('')) return { statusCode: 409, body: JSON.stringify({ error: 'Los análisis no comparten un contexto de puesto declarado.' }) }
+      const jobTitle = [...labels][0]
+      const candidates = operations.map((op: any) => ({ ...op.result, name: op.result?.candidateName || 'Candidato' }))
+      if (candidates.some((c: any) => !Number.isFinite(c.fitScore) || !c.summary)) return { statusCode: 200, body: JSON.stringify({ abstained: true, finalRecommendation: 'Falta evidencia analizada para comparar.', interviewOrder: [] }) }
       const candidatesText = candidates.map((c: any, i: number) =>
         `Candidato ${i + 1}: ${c.name}
   - Fit: ${c.fitScore}/100 | ATS: ${c.atsScore}/100 | Decisión: ${c.recommendation}
@@ -82,9 +94,9 @@ const handler: Handler = async (event) => {
         `Sos un director de RRHH revisando candidatos para: "${jobTitle}".
 
 DESCRIPCIÓN DEL PUESTO:
-${jobDescription || 'No especificada'}
+Comparación de análisis privados del mismo contexto declarado. No representa elegibilidad ni una decisión de contratación.
 
-TOP ${topN || 5} CANDIDATOS:
+CANDIDATOS SELECCIONADOS:
 ${candidatesText}
 
 Respondé ÚNICAMENTE con JSON:
@@ -100,8 +112,13 @@ Respondé ÚNICAMENTE con JSON:
     }
 
     // ── Modo head_to_head: compara 2 candidatos específicos contra requisitos de la vacante
-    if (mode === 'head_to_head' && body.application_ids?.length === 2) {
-      if (!token?.trim()) {
+    if (mode === 'head_to_head') {
+      if (!Array.isArray(body.application_ids) || body.application_ids.length !== 2
+        || body.application_ids.some((id: any) => typeof id !== 'string' || !id)
+        || new Set(body.application_ids).size !== 2 || typeof body.vacancy_id !== 'string' || !body.vacancy_id) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Dos postulaciones distintas y su vacante son obligatorias.' }) }
+      }
+      if (typeof token !== 'string' || !token.trim()) {
         return { statusCode: 401, body: JSON.stringify({ error: "Token requerido" }) }
       }
 
@@ -115,42 +132,36 @@ Respondé ÚNICAMENTE con JSON:
       }
 
       // Fetch applications and verify they belong to this recruiter's vacancies
-      const { data: apps } = await supabase
+      const { data: apps, error: appsError } = await supabase
         .from("vacancy_applications")
         .select("id, name, fit_score, ats_score, strengths, key_matches, key_gaps, ai_summary, recommendation, vacancy_id")
         .in("id", body.application_ids)
+      if (appsError) throw new Error('APPLICATIONS_READ_FAILED')
 
       if (!apps || apps.length < 2) {
         return { statusCode: 400, body: JSON.stringify({ error: "No se encontraron los dos candidatos" }) }
       }
 
-      // Verify ownership: both vacancy_ids must belong to this recruiter token
-      const vacancyIds = [...new Set(apps.map((a: any) => a.vacancy_id).filter(Boolean))]
-      if (vacancyIds.length > 0) {
-        const { data: ownedVacancies } = await supabase
-          .from("recruiter_vacancies")
-          .select("id")
-          .in("id", vacancyIds)
-          .eq("recruiter_token_id", tokenData.id)
-
-        const ownedIds = new Set((ownedVacancies || []).map((v: any) => v.id))
-        const allOwned = apps.every((a: any) => !a.vacancy_id || ownedIds.has(a.vacancy_id))
-        if (!allOwned) {
-          return { statusCode: 403, body: JSON.stringify({ error: "Sin acceso a una o más postulaciones" }) }
-        }
+      if (!apps.every((app: any) => app.vacancy_id === body.vacancy_id)) {
+        return { statusCode: 403, body: JSON.stringify({ error: 'Ambas postulaciones deben corresponder a la vacante seleccionada.', reason: 'COMPARISON_SCOPE_MISMATCH' }) }
       }
 
       let vacancyContext = ""
       if (body.vacancy_id) {
-        const { data: vac } = await supabase
+        const { data: vac, error: vacError } = await supabase
           .from("recruiter_vacancies")
           .select("title, description, requirements, company")
           .eq("id", body.vacancy_id)
           .eq("recruiter_token_id", tokenData.id)
-          .single()
+          .maybeSingle()
+        if (vacError) throw new Error('VACANCY_READ_FAILED')
+        if (!vac) return { statusCode: 403, body: JSON.stringify({ error: 'Sin acceso a esta vacante.' }) }
         if (vac) {
           vacancyContext = `\nPUESTO: ${vac.title} en ${vac.company}\nDESCRIPCIÓN: ${vac.description}\nREQUISITOS: ${vac.requirements}`
         }
+      }
+      if (apps.some((app: any) => app.fit_score == null || !app.ai_summary)) {
+        return { statusCode: 200, body: JSON.stringify({ mode: 'head_to_head', abstained: true, verdict: 'Falta evidencia analizada. Revisá los CVs antes de comparar.' }) }
       }
 
       const [a, b] = apps
@@ -186,7 +197,7 @@ Respondé ÚNICAMENTE con JSON válido:
     "advantage": "qué tiene B que A no tiene",
     "weakness": "qué le falta a B comparado con A"
   },
-  "hire_recommendation": "recomendación concreta de 1-2 oraciones sobre a quién contratar"
+  "hire_recommendation": "aspectos que la persona reclutadora debe corroborar en entrevista; nunca decidir contratación ni rechazo"
 }`
 
       const responseText = await invokeModel(
@@ -199,7 +210,7 @@ Respondé ÚNICAMENTE con JSON válido:
     }
 
     // ── Modo legacy: comparar por IDs del historial
-    if (!ids || !Array.isArray(ids) || ids.length < 2) {
+    if (!Array.isArray(ids) || ids.length < 2 || ids.length > 30 || new Set(ids).size !== ids.length || ids.some((id: any) => typeof id !== 'string')) {
       return { statusCode: 400, body: JSON.stringify({ error: "Se necesitan al menos 2 CVs para comparar" }) }
     }
 
@@ -210,13 +221,16 @@ Respondé ÚNICAMENTE con JSON válido:
     }
     const { data: analyses, error: dbError } = await supabase
       .from("recruiter_analyses")
-      .select("raw_cv_text, candidate_name, file_name")
+      .select("raw_cv_text, candidate_name, file_name, vacancy_label")
       .in("id", ids)
       .eq("token_id", tokenData.id)
 
     if (dbError || !analyses || analyses.length !== ids.length) {
       return { statusCode: 403, body: JSON.stringify({ error: "Uno o más CVs no pertenecen a esta empresa" }) }
     }
+    const contexts = new Set(analyses.map((item: any) => String(item.vacancy_label || '').trim()))
+    if (contexts.size !== 1 || contexts.has('')) return { statusCode: 409, body: JSON.stringify({ error: 'Seleccioná análisis del mismo puesto declarado.' }) }
+    if (analyses.some((item: any) => !item.raw_cv_text?.trim())) return { statusCode: 200, body: JSON.stringify({ abstained: true, top3: [], finalRecommendation: 'Falta evidencia para comparar.' }) }
 
     const cvsString = analyses.map((a, i) =>
       `Candidato ${i + 1} (${a.candidate_name || a.file_name}):\n${a.raw_cv_text.substring(0, 2000)}`
@@ -244,7 +258,7 @@ ${cvsString}`
     return { statusCode: 200, body: JSON.stringify(extractJSON(responseText)) }
 
   } catch (error: any) {
-    return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
+    return { statusCode: 503, body: JSON.stringify({ error: 'No pudimos completar la comparación. Reintentá.', reason: 'COMPARISON_UNAVAILABLE' }) }
   }
 }
 

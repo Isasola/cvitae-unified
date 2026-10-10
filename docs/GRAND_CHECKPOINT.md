@@ -2059,3 +2059,102 @@ OPPORTUNITY UNIVERSE SQL COMPILE FIX — 29 SEP 2026
   semantics without a new invariant failure`.
 - This update is documentation-only. The Netlify ignore-build contract skips
   docs-only changes; it does not initiate a second site deploy.
+
+## R2 V2 local authorization / STOP A prepared — 2026-10-09
+
+Current user order authorizes residual B2C and preparation/implementation LOCAL
+of Master 58–66 on `work/b2c-r2-20261008` only. Observed initial HEAD
+`c633f5d8ec238829c98e69d9dcba00d401ffee70`, clean worktree. Historical release
+and 54–55 gates remain closed to execution. R1/tag/checkpoint stay immutable.
+
+Directed contract matrix and path classification appended to
+`PARALLEL_B2C_WORK_PLAN_2026-10-08.md`; no new operational authority document.
+Profile9/application26/grounding60 and R1 build remain REUSED_CLOSED_R1.
+Residual 42–44 are evidence gaps with static hypotheses, not closed bugs.
+B2B static findings: uppercase slug conflicts with RPC constraint; mirror drops
+requirements/salary text and supplies PY/verified100; non-atomic close ignores
+errors; applicant listing enriches private B2C badges by email; cross-vacancy
+comparison permitted; canonical producer policy does not include recruiter_b2b.
+None is labelled runtime-reproduced before operator evidence.
+
+Prepared one catalog-only query, `artifacts/release/r2-b2b-preflight-20261009.sql`,
+and offline real-handler probes with explicit SDK/DB/provider simulated boundary.
+Operator entry: `scripts/operator/verify-r2-b2b-20261009.ps1`; this phase is a
+baseline diagnostic, not the future STOP B integration gate. No agent test,
+build, SQL, network, migration, production write, commit, push or deploy.
+No runtime product changes. R1 remains independently selectable.
+
+LAST_PROVEN_GATE=Git checkpoint + reused R1 evidence.
+UNPROVEN_GATE=real target schema compatibility / operator runtime reproduction.
+EVIDENCE_REF=`artifacts/release/r2-b2b-state-20261009.json` (NOT_RUN).
+NEXT_SAFE_ACTION=operator returns preflight/probes; local implementation then
+proceeds on demonstrated contracts. If SQL inspection is not enabled, keep
+dependent SQL BLOCKED_UNTIL_PROD and continue independent local work.
+`R2_INTEGRATION_READY_LOCAL=FALSE`; `PROD_VALIDATED=FALSE`;
+`UNEXPLAINED_DIVERGENCES=NOT_VERIFIED`. Master65 remains
+`BLOCKED_UNTIL_REAL_COMPANY_VALIDATION`. No release advancement is implied.
+
+## R2 V2 implementation / STOP B prepared — 2026-10-09
+
+STOP A was closed by operator evidence: PostgreSQL 17.6 catalog blockers were
+empty; handler probes reproduced six failures; 8 recruiter vacancies (6 active,
+2 inactive) had no mirrors. `recruiter_b2b` had no executable producer in the
+canonical policy, no consumer permissions, Web Catalog denied, SEO unknown and
+external distribution denied.
+
+The local uncommitted implementation now provides durable organization-scoped
+publication operations, faithful declared-field/provenance mapping, one guarded
+mirror, atomic/idempotent close, private applicant reads, same-vacancy comparison,
+controlled producer recognition and independent fail-closed consumer permissions.
+Direct `/vacante/:slug` application pages remain reachable but noindex, emit no
+JobPosting and are absent from sitemap. Historical PREVIEW, guarded reconciliation,
+post-verify, data compensation and schema rollback are separate operator artifacts;
+none was applied.
+
+Residual factual fixes only: Auth callback preserves return intent on status
+failure; Founding Beta does not show/confirm effects on service failure; CVVivo
+cache reuse requires current confirmed evidence and exact vacancy snapshot.
+New model output remains an un-attested draft; PDF export is unavailable until
+the person explicitly reviews and persists a confirmed version (with or without
+text edits). Existing R1 profile/Application/grounding contracts are unchanged.
+Learning remains `EVIDENCE_GAP_ONLY`; R1 profile/Application/grounding stay reused.
+B2B funnel metrics are consent-gated and omit company/CV/email; credit request is
+instrumented as intent with zero revenue. Master65 remains blocked on a real pilot.
+
+| Master | State before operator STOP B |
+|---|---|
+| 42 | LOCAL fixes prepared for auth/CVVivo; protected R1 subcontracts reused; targeted evidence pending |
+| 43 | LOCAL Founding Beta failure/retry fix prepared; integrated browser evidence pending |
+| 44 | REUSED_CLOSED_R1 where proven; Learning loop EVIDENCE_GAP_ONLY |
+| 58–60 | LOCAL bridge/create/close/policy implementation prepared; DB-real STOP C pending |
+| 61–63 | LOCAL privacy/comparison changes prepared; batch/credit regression and E2E pending |
+| 64 | Existing onboarding path retained; local browser evidence pending |
+| 65 | BLOCKED_UNTIL_REAL_COMPANY_VALIDATION |
+| 66 | LOCAL consented non-PII intent instrumentation prepared; no billing/revenue claim |
+
+MVP claim remains deliberately bounded: verified organization, vacancy link,
+private application, manual review on parse failure, progressive/batch review,
+explainable scores, human actions and credit-request intent. No vacancy editor,
+integrated billing, automatic hiring decision or public distribution is claimed.
+
+LAST_PROVEN_GATE=STOP A catalog + reproduced simulated failures.
+UNPROVEN_GATE=grouped STOP B tests/build/browser; DB-real migration/transaction/RLS
+and reconciliation remain STOP C with explicit per-WRITE authorization.
+EVIDENCE_REF=`artifacts/release/r2-b2b-state-20261009.json` and the prepared SQL set.
+NEXT_SAFE_ACTION=operator runs `scripts/operator/verify-r2-b2b-20261009.ps1` and
+returns complete output. No commit, SQL apply, push or deploy before evidence.
+`R2_INTEGRATION_READY_LOCAL=FALSE`; `PROD_VALIDATED=FALSE`;
+`UNEXPLAINED_DIVERGENCES=NOT_VERIFIED`.
+
+### STOP B grouped correction prepared — operator rerun pending
+
+Operator evidence passed diff, 21/21 simulated B2B contracts, bridge/private
+review/source policy/Universe reducer, B2C residual/auth/analytics and both
+build gates. Five gate discrepancies remain unproven after a surgical local
+correction: explicit override versus copied legacy switches for Himalayas;
+Learning consumption of the final Matching Universe; direct recruiter routes
+excluded from sitemap and kept `noindex`; attribute-order-independent canonical
+and coherent-head verification; and Vite transpilation/module resolution in
+place of an inapplicable projectless `tsc --noEmit`. No permission, SQL,
+migration or PROD state changed. Full grouped operator rerun is required before
+any local-ready claim or commit.

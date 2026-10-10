@@ -705,16 +705,16 @@ export default function Dashboard() {
                                 <p className="mt-2 text-sm text-white/50 max-w-xs mx-auto">
                                   Los primeros 50 usuarios aprobados acceden a todos sus matches como <strong className="text-white/70">Founding Users</strong>.
                                 </p>
-                                {!foundingBeta.programFull ? (
+                                {foundingBeta.available && !foundingBeta.programFull ? (
                                   <button
                                     onClick={foundingBeta.triggerModal}
                                     className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-6 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-[#e6cf8a] transition"
                                   >
                                     Solicitar acceso Founding Beta
                                   </button>
-                                ) : (
+                                ) : foundingBeta.available ? (
                                   <p className="mt-4 text-xs text-white/40">El programa Founding Beta está completo. Próximamente disponible como Pro.</p>
-                                )}
+                                ) : <p className="mt-4 text-xs text-white/40">{foundingBeta.serviceError}</p>}
                               </>
                             )}
                           </div>
@@ -827,7 +827,7 @@ export default function Dashboard() {
                       ) : (
                         <>
                           <p className="mt-1 text-xs text-muted-foreground">Los primeros 50 usuarios aprobados acceden a todos sus matches.</p>
-                          {!foundingBeta.programFull && (
+                          {foundingBeta.available && !foundingBeta.programFull && (
                             <button
                               onClick={foundingBeta.triggerModal}
                               className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c9a84c] py-2 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]"
@@ -835,6 +835,7 @@ export default function Dashboard() {
                               Solicitar acceso Founding
                             </button>
                           )}
+                          {!foundingBeta.available && <p className="mt-3 text-xs text-white/40">{foundingBeta.serviceError}</p>}
                         </>
                       )}
                     </div>

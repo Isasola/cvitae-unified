@@ -8,6 +8,7 @@ const jobDetail = read('src/pages/JobDetail.tsx')
 const opportunityDetail = read('src/pages/OpportunityDetail.tsx')
 const intent = read('src/lib/application-intent.ts')
 const authCallback = read('src/pages/AuthCallback.tsx')
+const recruiters = read('src/pages/Recruiters.tsx')
 
 const required = (source: string, marker: string, label: string) => {
   if (!source.includes(marker)) throw new Error(`${label}: missing ${marker}`)
@@ -28,6 +29,7 @@ required(jobDetail, "opportunityKind:job.opportunity_kind||job.opportunity_type"
 required(opportunityDetail, "opportunityKind:item.opportunity_kind||item.opportunity_type", 'OpportunityDetail CTA opportunity kind')
 
 for (const event of ['opportunity_viewed', 'prepare_clicked', 'application_workspace_opened', 'profile_ready', 'preparation_completed', 'apply_clicked']) required(analytics, event, `analytics event ${event}`)
+for (const event of ['b2b_session_started','b2b_vacancy_created','b2b_applicants_viewed','b2b_batch_completed','b2b_recruiter_action','b2b_credit_intent']) required(analytics,event,`B2B funnel event ${event}`)
 required(analytics, "readConsent()?.analytics === true", 'analytics consent gate')
 required(workspace, 'prepared_version_id', 'factual preparation state')
 required(workspace, 'analytics.workspaceOpened', 'workspace opened event')
@@ -48,6 +50,9 @@ required(authCallback, 'analytics.authCompleted', 'auth completed event')
 required(authCallback, "if (returnTo)", 'auth only for application intent')
 required(jobDetail, "surface:'public_detail'", 'JobDetail direct apply surface')
 required(opportunityDetail, "surface:'public_detail'", 'OpportunityDetail direct apply surface')
+for (const marker of ['analytics.b2bLeadSent','analytics.b2bSessionStarted','analytics.b2bVacancyCreated','analytics.b2bApplicantsViewed','analytics.b2bBatchCompleted','analytics.b2bRecruiterAction','analytics.b2bCreditIntent']) required(recruiters,marker,`B2B instrumentation ${marker}`)
+if (/b2bLeadSent:\s*\(company|b2b_[a-z_]+[^\n]*\{[^\n]*company/.test(analytics)) throw new Error('B2B analytics must not send company names')
+required(analytics, 'revenue: 0', 'credit request is intent, never fabricated revenue')
 
 for (const file of ['src/components/cvitae/OpportunityPresentation.tsx', 'src/hub/ApplicationWorkspace.tsx']) {
   if (/window\.gtag/.test(read(file))) throw new Error(`${file}: direct gtag call bypasses shared analytics`)
