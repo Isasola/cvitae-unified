@@ -3,7 +3,7 @@ import { useLocation } from 'wouter'
 import { supabase } from '@/lib/supabase'
 import { isProfileComplete } from '@/lib/profile'
 import { motion } from 'framer-motion'
-import { consumeApplicationReturnTo } from '@/lib/application-intent'
+import { consumeApplicationReturnTo, peekApplicationReturnTo } from '@/lib/application-intent'
 import { analytics } from '@/lib/analytics'
 
 export default function AuthCallback() {
@@ -25,12 +25,16 @@ export default function AuthCallback() {
           body: JSON.stringify({ action: 'status' }),
         })
         const payload = await res.json().catch(() => ({}))
-        const returnTo = consumeApplicationReturnTo()
+        if (!res.ok) throw new Error('PROFILE_STATUS_UNAVAILABLE')
+        const returnTo = peekApplicationReturnTo()
         if (returnTo) analytics.authCompleted({ opportunity_slug: decodeURIComponent(returnTo.split('/').pop() || ''), route_family: 'application_auth', auth_state: 'authenticated' })
         const destination = returnTo && isProfileComplete(payload.profile) ? returnTo : (returnTo ? `/mi-carrera/perfil?returnTo=${encodeURIComponent(returnTo)}` : (isProfileComplete(payload.profile) ? '/mi-carrera' : '/mi-carrera/perfil'))
+        consumeApplicationReturnTo(returnTo)
         if (isMounted) setTimeout(() => setLocation(destination), 700)
       } catch {
-        if (isMounted) setTimeout(() => setLocation('/mi-carrera/perfil'), 700)
+        const returnTo = peekApplicationReturnTo()
+        const fallback = returnTo ? `/mi-carrera/perfil?returnTo=${encodeURIComponent(returnTo)}` : '/mi-carrera/perfil'
+        if (isMounted) setTimeout(() => setLocation(fallback), 700)
       }
     }
 

@@ -12,6 +12,12 @@ import {
 } from "./lib/b2c-security"
 import { confirmedEvidence, evidenceFromProfile, syncEvidence } from './lib/cv-evidence'
 
+function stableJson(value: any): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`
+  return JSON.stringify(value) ?? 'null'
+}
+
 const MODEL_ID = "global.anthropic.claude-sonnet-4-6"
 const bedrockClient = new BedrockRuntimeClient({
   region: process.env.CVITAE_AWS_REGION || "us-east-1",
@@ -119,24 +125,6 @@ export const handler = async (event: any) => {
       ? `custom-${createHash('sha256').update(`${vacancy.titulo}:${vacancy.cuerpo}`).digest('hex').slice(0, 20)}`
       : vacancy ? (vacancy.id || vacancy.slug) : 'base_cv'
 
-    const { data: latestVersion, error: latestError } = await supabase
-      .from('generated_cvs')
-      .select('id,vacancy_id,version_number,parent_version_id,label,generation_kind,cv_markdown,evidence_snapshot,vacancy_snapshot,content_hash,user_attested,created_at,updated_at')
-      .eq('user_id', profile.user_id)
-      .eq('vacancy_id', vacancyId)
-      .order('version_number', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (latestError) throw latestError
-
-    if (latestVersion && force !== true) {
-      return jsonResponse(event, 200, {
-        cv: latestVersion.cv_markdown,
-        version: latestVersion,
-        fromCache: true,
-      })
-    }
-
     const [{ count: pendingCount, error: pendingError }, confirmed] = await Promise.all([
       supabase
         .from('cv_evidence_items')
@@ -166,6 +154,33 @@ export const handler = async (event: any) => {
       ...confirmed,
       ...(user.email ? [{ category: 'contact', value: user.email, context: 'Correo de la cuenta', source: 'Cuenta autenticada' }] : []),
     ]
+
+    const vacancySnapshot = vacancy ? {
+      id: vacancy.id,
+      title: vacancy.titulo,
+      category: vacancy.categoria,
+      location: vacancy.ubicacion,
+      description: vacancy.cuerpo || '',
+      skills: vacancy.vacancySkills || [],
+    } : {}
+    const { data: latestVersion, error: latestError } = await supabase
+      .from('generated_cvs')
+      .select('id,vacancy_id,version_number,parent_version_id,label,generation_kind,cv_markdown,evidence_snapshot,vacancy_snapshot,content_hash,user_attested,created_at,updated_at')
+      .eq('user_id', profile.user_id)
+      .eq('vacancy_id', vacancyId)
+      .order('version_number', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (latestError) throw latestError
+
+    // A cached document is reusable only for the exact currently-confirmed
+    // evidence and exact vacancy snapshot. Pending/revoked evidence is checked
+    // above and an updated vacancy cannot silently reuse an older adaptation.
+    if (latestVersion && force !== true
+      && stableJson(latestVersion.evidence_snapshot || []) === stableJson(generationEvidence)
+      && stableJson(latestVersion.vacancy_snapshot || {}) === stableJson(vacancySnapshot)) {
+      return jsonResponse(event, 200, { cv: latestVersion.cv_markdown, version: latestVersion, fromCache: true })
+    }
 
     const rateLimit = await consumeRateLimit({
       scope: 'b2c-cv-generation',
@@ -231,13 +246,6 @@ Respondé ÚNICAMENTE con el CV en markdown, sin explicaciones ni texto adiciona
 
     const cvMarkdown = await invokeModel(prompt, 1500)
 
-    const vacancySnapshot = vacancy ? {
-      id: vacancy.id,
-      title: vacancy.titulo,
-      category: vacancy.categoria,
-      location: vacancy.ubicacion,
-      ...(vacancy.id === 'custom' ? { description: vacancy.cuerpo } : {}),
-    } : {}
     const { data: versionRows, error: versionError } = await supabase.rpc('create_cv_version', {
       p_user_id: user.id,
       p_vacancy_id: vacancyId,
@@ -247,7 +255,9 @@ Respondé ÚNICAMENTE con el CV en markdown, sin explicaciones ni texto adiciona
       p_parent_version_id: parentVersionId || latestVersion?.id || null,
       p_evidence_snapshot: generationEvidence,
       p_vacancy_snapshot: vacancySnapshot,
-      p_user_attested: true,
+      // Model output is a reviewable draft. Only the explicit
+      // save_manual_version action may create a user-attested version.
+      p_user_attested: false,
     })
     if (versionError) throw versionError
     const version = Array.isArray(versionRows) ? versionRows[0] : versionRows

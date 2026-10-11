@@ -21,7 +21,7 @@ export function opportunitySitemapPage(path: string, inventory: Array<{ canonica
   if (page > parts) return { statusCode:404, body:'Unknown sitemap' }
   return response(urlset(inventory.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)))
 }
-export function sitemapIndexEntries(inventoryLength: number, blogLength = 0, vacancyLength = 0): string[] { return sitemapIndexEntriesForUniverse(inventoryLength, blogLength, vacancyLength, PAGE_SIZE) }
+export function sitemapIndexEntries(inventoryLength: number, blogLength = 0): string[] { return sitemapIndexEntriesForUniverse(inventoryLength, blogLength, PAGE_SIZE) }
 export function singletonSitemapPage(path: string, expectedPath: string, rows: Array<{ canonical_path:string; updated_at?:string | null }>) {
   return path === expectedPath && rows.length ? response(urlset(rows)) : { statusCode:404, body:'Unknown sitemap' }
 }
@@ -50,12 +50,10 @@ export async function opportunitySitemapSize(supabase: ReturnType<typeof makeSup
   for await (const batch of seoUniversePages(supabase, 'id')) size += batch.length
   return size
 }
-async function publicRows(supabase: ReturnType<typeof makeSupabaseAdmin>, table: 'content_hub' | 'recruiter_vacancies', prefix: '/blog' | '/vacante') {
+async function publicRows(supabase: ReturnType<typeof makeSupabaseAdmin>, table: 'content_hub', prefix: '/blog') {
   const rows = await fetchAllPages(PAGE_SIZE, async (offset, size) => {
-    const orderColumn = table === 'recruiter_vacancies' ? 'created_at' : 'updated_at'
-    const columns = table === 'recruiter_vacancies' ? 'id,slug,created_at' : 'id,slug,created_at,updated_at'
-    let query: any = supabase.from(table).select(columns).not('slug', 'is', null).order(orderColumn, { ascending:false }).order('id', { ascending:true }).range(offset, offset + size - 1)
-    query = table === 'content_hub' ? query.eq('tipo', 'blog').eq('is_active', true) : query.eq('is_active', true)
+    let query: any = supabase.from(table).select('id,slug,created_at,updated_at').not('slug', 'is', null).order('updated_at', { ascending:false }).order('id', { ascending:true }).range(offset, offset + size - 1)
+    query = query.eq('tipo', 'blog').eq('is_active', true)
     const { data, error } = await query; if (error) throw error
     return data || []
   })
@@ -68,16 +66,15 @@ export const handler: Handler = async (event) => {
     if (path === '/sitemap-static.xml') return response(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${STATIC_PUBLIC_SITEMAP_ROUTES.map(route => `<url><loc>${esc(`${SITE_URL}${route.url}`)}</loc></url>`).join('')}</urlset>`)
     if (/^\/sitemap-opportunities(?:\/|-)\d+\.xml$/.test(path)) return await opportunitySitemapPageFromUniverse(supabase, path)
     if (path === '/sitemap-blog.xml') return singletonSitemapPage(path, '/sitemap-blog.xml', await publicRows(supabase, 'content_hub', '/blog'))
-    if (path === '/sitemap-vacancies.xml') return singletonSitemapPage(path, '/sitemap-vacancies.xml', await publicRows(supabase, 'recruiter_vacancies', '/vacante'))
+    if (path === '/sitemap-vacancies.xml') return { statusCode:404, body:'Recruiter application routes are not an authorized SEO universe' }
     if (path !== '/sitemap.xml') return { statusCode:404, body:'Unknown sitemap' }
-    const [opportunityCount, { count: blogCount, error: blogCountError }, { count: vacancyCount, error: vacancyCountError }] = await Promise.all([
+    const [opportunityCount, { count: blogCount, error: blogCountError }] = await Promise.all([
       opportunitySitemapSize(supabase),
       supabase.from('content_hub').select('id', { count: 'exact', head: true }).eq('tipo', 'blog').eq('is_active', true).not('slug', 'is', null),
-      supabase.from('recruiter_vacancies').select('id', { count: 'exact', head: true }).eq('is_active', true).not('slug', 'is', null),
     ])
-    if (blogCountError || vacancyCountError) throw blogCountError || vacancyCountError
+    if (blogCountError) throw blogCountError
     if (path === '/sitemap.xml') {
-      const today = new Date().toISOString().slice(0,10); const entries = sitemapIndexEntries(opportunityCount || 0, blogCount || 0, vacancyCount || 0)
+      const today = new Date().toISOString().slice(0,10); const entries = sitemapIndexEntries(opportunityCount || 0, blogCount || 0)
       return response(`<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map(name => `  <sitemap><loc>${SITE_URL}/${name}</loc><lastmod>${today}</lastmod></sitemap>`).join('\n')}\n</sitemapindex>`)
     }
     return { statusCode:404, body:'Unknown sitemap' }

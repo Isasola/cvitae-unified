@@ -80,6 +80,7 @@ export default function CVVivo() {
   const pendingEvidence = evidence.filter((item) => item.status === 'pending')
   const confirmedEvidence = evidence.filter((item) => item.status === 'confirmed')
   const selectedVersion = versions.find((version) => version.id === selectedVersionId) || null
+  const canExportSelectedVersion = Boolean(selectedVersion?.user_attested && !editMode)
   const readinessChecks = [
     { label: 'Nombre', ok: Boolean(profile?.full_name || confirmedEvidence.some((item) => item.category === 'identity')) },
     { label: 'Título profesional', ok: Boolean(profile?.professional_title || confirmedEvidence.some((item) => item.category === 'title')) },
@@ -306,8 +307,11 @@ export default function CVVivo() {
   }
 
   const downloadPDF = () => {
-    const source = (editMode ? editableCV : generatedCV).trim()
-    if (!source) return
+    const source = generatedCV.trim()
+    if (!source || !canExportSelectedVersion) {
+      setWorkspaceError('Revisá y confirmá esta versión antes de descargar el PDF.')
+      return
+    }
 
     // Export a real text PDF instead of rasterizing the preview. This keeps the
     // document selectable/searchable and avoids image-only PDFs for ATS readers.
@@ -721,7 +725,7 @@ export default function CVVivo() {
                     <button
                       type="button"
                       onClick={saveManualVersion}
-                      disabled={!manualAttested || savingVersion || editableCV === selectedVersion?.cv_markdown}
+                      disabled={!manualAttested || savingVersion || !editableCV.trim()}
                       className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-xs font-medium text-[#0a0a0a] disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {savingVersion ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
@@ -729,8 +733,18 @@ export default function CVVivo() {
                     </button>
                   </div>
                 )}
-                <button onClick={downloadPDF}
-                  className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]">
+                {selectedVersion && !selectedVersion.user_attested && (
+                  <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2.5 text-xs leading-relaxed text-amber-100/75">
+                    Borrador generado por IA. Revisalo y guardalo con tu confirmación antes de exportar.
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={downloadPDF}
+                  disabled={!canExportSelectedVersion}
+                  title={!canExportSelectedVersion ? 'Confirmá una versión guardada antes de descargar' : undefined}
+                  className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:cursor-not-allowed disabled:opacity-40"
+                >
                   <Download size={16} /> Descargar PDF
                 </button>
                 <button onClick={handleCopy}
@@ -750,9 +764,11 @@ export default function CVVivo() {
                   <span className="font-medium text-white">{selectedVersion.label}</span>
                   <span>· v{selectedVersion.version_number}</span>
                 </div>
-                <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-300/80">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  {(selectedVersion.evidence_snapshot || []).length} evidencias registradas
+                <span className={`inline-flex items-center gap-1.5 text-[10px] ${selectedVersion.user_attested ? 'text-emerald-300/80' : 'text-amber-200/80'}`}>
+                  {selectedVersion.user_attested ? <ShieldCheck className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                  {selectedVersion.user_attested
+                    ? `${(selectedVersion.evidence_snapshot || []).length} evidencias registradas · confirmada`
+                    : `${(selectedVersion.evidence_snapshot || []).length} evidencias registradas · revisión pendiente`}
                 </span>
               </div>
             )}

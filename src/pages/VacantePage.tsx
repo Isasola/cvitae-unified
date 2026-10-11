@@ -1,6 +1,5 @@
 import { useRef, useState, useEffect, type DragEvent, type ChangeEvent, type FormEvent } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { factualJobPosting } from '@/lib/factual-job-posting'
 import { Link, useParams } from 'wouter'
 import { motion } from 'framer-motion'
 import {
@@ -250,13 +249,14 @@ export default function VacantePage() {
   const metaDescription = vacancy
     ? `${vacancy.title} en ${vacancy.company} — ${vacancy.location}. Postulá directamente desde CVitae.`
     : `Postulá a ${pageTitle}. Tu perfil queda guardado en CVitae para futuras búsquedas.`
-  const factual = vacancy ? factualJobPosting({ ...vacancy, opportunity_type:'job', first_party_direct_apply:true }, canonical) : null
-  const structuredData = vacancy ? JSON.stringify(factual?.structuredData ?? { '@context':'https://schema.org', '@type':'WebPage', name:vacancy.title, description:vacancy.description, url:canonical }) : null
+  // Direct application is not authorization for indexing or JobPosting. The
+  // independent canonical B2C route is controlled by Opportunity Universe.
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
       <Ambient />
       <Helmet>
+        <meta name="robots" content="noindex,nofollow" />
         <title>{pageTitle} · CVitae</title>
         <meta name="description" content={metaDescription} />
         <link rel="canonical" href={canonical} />
@@ -264,7 +264,6 @@ export default function VacantePage() {
         <meta property="og:description" content={metaDescription} />
         <meta property="og:url" content={canonical} />
         <meta property="og:type" content="article" />
-        {structuredData && <script type="application/ld+json">{structuredData}</script>}
       </Helmet>
 
       {/* Top bar */}

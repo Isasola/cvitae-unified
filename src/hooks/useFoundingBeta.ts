@@ -20,6 +20,8 @@ interface FoundingBetaState {
   enrollment: FoundingBetaEnrollment | null
   programFull: boolean
   slotsRemaining: number
+  available: boolean
+  serviceError: string
   showModal: boolean
   accept: () => Promise<void>
   decline: () => Promise<void>
@@ -53,6 +55,8 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
   const [enrollment, setEnrollment] = useState<FoundingBetaEnrollment | null>(null)
   const [programFull, setProgramFull] = useState(false)
   const [slotsRemaining, setSlotsRemaining] = useState(50)
+  const [available, setAvailable] = useState(false)
+  const [serviceError, setServiceError] = useState('')
   const [dismissed, setDismissed] = useState(() => sessionStorage.getItem('founding_beta_modal_seen') === '1')
 
   useEffect(() => {
@@ -61,7 +65,7 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
     const load = async () => {
       try {
         const token = await getToken()
-        if (!token) { setLoading(false); return }
+        if (!token) throw new Error('Tu sesión expiró. Volvé a ingresar.')
 
         const data = await callFoundingAction(token, 'get_status')
         if (data.ineligible) {
@@ -76,6 +80,8 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
         setEnrollment(currentEnrollment)
         setProgramFull(isFull)
         setSlotsRemaining(slots)
+        setAvailable(true)
+        setServiceError('')
 
         // Wire mark_offered: call when modal would be shown.
         const wouldShowModal = currentEnrollment === null
@@ -86,6 +92,8 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
           callFoundingAction(token, 'mark_offered').catch(() => {})
         }
       } catch {
+        setAvailable(false)
+        setServiceError('Founding Beta no está disponible en este momento.')
         // Non-critical — modal won't show but dashboard continues
       } finally {
         setLoading(false)
@@ -96,7 +104,7 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
 
   // Show modal when: not dismissed, enrollment is null/eligible/offered.
   // Do NOT show when status='accepted' (pending review), 'active', 'completed', or 'declined'.
-  const showModal = !loading && !dismissed && (
+  const showModal = !loading && available && !dismissed && (
     enrollment === null
       ? !programFull
       : enrollment.status === 'eligible' || enrollment.status === 'offered'
@@ -104,7 +112,7 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
 
   const accept = useCallback(async () => {
     const token = await getToken()
-    if (!token) return
+    if (!token) throw new Error('Tu sesión expiró. Volvé a ingresar.')
     const data = await callFoundingAction(token, 'accept')
     if (data.ok) {
       const newStatus = data.status === 'pending_review' ? 'accepted' : (data.status || 'accepted')
@@ -115,12 +123,12 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
 
   const decline = useCallback(async () => {
     // Explicit permanent opt-out — persisted in DB for cross-device suppression
+    const token = await getToken()
+    if (!token) throw new Error('Tu sesión expiró. Volvé a ingresar.')
+    await callFoundingAction(token, 'decline')
+    setEnrollment(prev => ({ ...prev, status: 'declined' } as FoundingBetaEnrollment))
     setDismissed(true)
     localStorage.setItem('founding_beta_declined', '1')
-    const token = await getToken()
-    if (token) {
-      callFoundingAction(token, 'decline').catch(() => {})
-    }
   }, [])
 
   const dismiss = useCallback(() => {
@@ -133,8 +141,8 @@ export function useFoundingBeta(userId: string | null): FoundingBetaState {
 
   const triggerModal = useCallback(() => {
     sessionStorage.removeItem('founding_beta_modal_seen')
-    setDismissed(false)
-  }, [])
+    if (available) setDismissed(false)
+  }, [available])
 
-  return { loading, enrollment, programFull, slotsRemaining, showModal, accept, decline, dismiss, triggerModal }
+  return { loading, enrollment, programFull, slotsRemaining, available, serviceError, showModal, accept, decline, dismiss, triggerModal }
 }
