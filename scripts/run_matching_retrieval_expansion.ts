@@ -83,7 +83,13 @@ async function evaluatePage(profile: any, opportunities: any[], profileSig: stri
     if (error) throw error
     for (const row of data ?? []) universe.set(String(row.opportunity_id), String(row.final_matching_state))
   }
-  const eligible = opportunities.filter(row => universe.get(String(row.id)) === 'READY')
+  // FULL rows already carry the view annotation; DELTA rows are hydrated from
+  // raw truth and must receive the canonical admission result explicitly.
+  // Otherwise a controlled publisher row with factual verification pending is
+  // admitted by the Universe and then incorrectly denied by the ranker.
+  const eligible = opportunities
+    .filter(row => universe.get(String(row.id)) === 'READY')
+    .map(row => ({ ...row, universe_final_matching_state: 'READY', source_match_state: 'ALLOWED' }))
   const ids = eligible.map((row) => String(row.id))
   const similarities = new Map<string, number>()
   if (profile.embedding && ids.length) {

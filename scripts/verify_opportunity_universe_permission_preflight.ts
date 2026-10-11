@@ -373,7 +373,12 @@ function sqlEquivalent(row: Record<string, any>, policies: UniversePolicy[], obs
   const matchingRow = !lifecycleReady ? ['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(lifecycle) ? 'UNKNOWN' : 'NOT_READY' : professional ? 'READY' : 'NOT_READY'
   const matchingReason = !lifecycleReady ? lifecycleReason : professional ? 'PROFESSIONAL_EVIDENCE_SUFFICIENT' : 'INSUFFICIENT_PROFESSIONAL_EVIDENCE'
   const matchingPermission = permission(src,'matching')
-  const finalMatching = matchingRow !== 'READY' ? matchingRow : matchingOperational === 'DENIED' || sourceOperational === 'DISABLED' ? 'NOT_READY' : matchingOperational === 'UNKNOWN' || sourceOperational === 'UNKNOWN' || sourceOperational === 'CONFLICT' ? 'UNKNOWN' : 'READY'
+  const sourceIdentityResolved = Boolean(src && src !== 'unknown')
+  const finalMatching = lifecycle !== 'ACTIVE_VALID' ? ['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(lifecycle) ? 'UNKNOWN' : 'NOT_READY'
+    : matchingRow !== 'READY' ? matchingRow
+    : !sourceIdentityResolved ? 'UNKNOWN'
+    : matchingPermission.state === 'DENIED' || matchingOperational === 'DENIED' || sourceOperational === 'DISABLED' ? 'NOT_READY'
+    : sourceOperational === 'CONFLICT' || conflicts.matching_enabled ? 'UNKNOWN' : 'READY'
   const unknownLifecycle = ['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(lifecycle)
   const catalogRow = !lifecycleReady ? unknownLifecycle ? 'UNKNOWN' : 'NOT_READY' : !String(row.title || '').trim() || !String(row.slug || '').trim() ? 'NOT_READY' : 'READY'
   const alertsRow = !lifecycleReady ? unknownLifecycle ? 'UNKNOWN' : 'NOT_READY' : professional ? 'READY' : 'NOT_READY'
@@ -391,6 +396,7 @@ function sqlEquivalent(row: Record<string, any>, policies: UniversePolicy[], obs
   if (unknownLifecycle) unresolved.push('LIFECYCLE')
   if (matchingRow === 'UNKNOWN') unresolved.push('ROW_MATCH_READINESS')
   if (matchingOperational === 'UNKNOWN') unresolved.push('SOURCE_MATCHING_SWITCH')
+  if (matchingPermission.state === 'UNKNOWN') unresolved.push('MATCHING_PERMISSION_UNKNOWN:ADVISORY_PRIVATE_MATCHING')
   if (sourceOperational === 'UNKNOWN') unresolved.push('SOURCE_OPERATIONAL_STATE')
   if (sourceOperational === 'CONFLICT') unresolved.push('SOURCE_POLICY_ALIAS_CONFLICT:is_enabled')
   if (matchingOperational === 'UNKNOWN' && conflicts.matching_enabled) unresolved.push('SOURCE_POLICY_ALIAS_CONFLICT:matching_enabled')
@@ -398,7 +404,7 @@ function sqlEquivalent(row: Record<string, any>, policies: UniversePolicy[], obs
   if (lifecycleReady && alertsRow === 'READY' && alertsOperational === 'UNKNOWN') unresolved.push(conflicts.alerts_enabled ? 'SOURCE_POLICY_ALIAS_CONFLICT:alerts_enabled' : 'ALERT_SWITCH_UNKNOWN')
   const sourcePermissionUnknownDimensions = SOURCE_PERMISSION_DIMENSIONS.filter(dimension => sourcePermissionDimensionTruth(src,dimension).state === 'UNKNOWN')
   const permissionStates = Object.fromEntries((['catalog','matching','alerts','seo'] as const).map(consumer => [consumer,permission(src,consumer).state]))
-  const firstFailure = lifecycle !== 'ACTIVE_VALID' ? `LIFECYCLE_${lifecycle}` : matchingRow === 'NOT_READY' ? `MATCH_ROW_${matchingReason}` : matchingRow === 'UNKNOWN' ? 'MATCH_ROW_UNKNOWN' : sourceOperational === 'CONFLICT' || conflicts.matching_enabled ? 'SOURCE_POLICY_ALIAS_CONFLICT' : matchingOperational === 'DENIED' ? 'SOURCE_MATCHING_DISABLED' : matchingOperational === 'UNKNOWN' ? 'SOURCE_MATCHING_UNKNOWN' : sourceOperational === 'DISABLED' ? 'SOURCE_DISABLED' : sourceOperational === 'UNKNOWN' ? 'SOURCE_OPERATIONAL_UNKNOWN' : sourceOperational !== 'ENABLED' ? `SOURCE_${sourceOperational}` : 'FINAL_MATCHING_UNIVERSE'
+  const firstFailure = lifecycle !== 'ACTIVE_VALID' ? `LIFECYCLE_${lifecycle}` : matchingRow === 'NOT_READY' ? `MATCH_ROW_${matchingReason}` : matchingRow === 'UNKNOWN' ? 'MATCH_ROW_UNKNOWN' : !sourceIdentityResolved ? 'SOURCE_IDENTITY_UNRESOLVED' : sourceOperational === 'CONFLICT' || conflicts.matching_enabled ? 'SOURCE_POLICY_ALIAS_CONFLICT' : matchingPermission.state === 'DENIED' ? 'SOURCE_MATCHING_PERMISSION_DENIED' : matchingOperational === 'DENIED' ? 'SOURCE_MATCHING_DISABLED' : sourceOperational === 'DISABLED' ? 'SOURCE_DISABLED' : finalMatching === 'READY' ? 'FINAL_MATCHING_UNIVERSE' : `FINAL_MATCHING_${finalMatching}`
   return { lifecycle_state:lifecycle, lifecycle_reason:lifecycleReason, lifecycle_repair:lifecycleRepair, professional_readiness:professionalState, professional_reason:professionalReason,
     catalog_row_state:catalogRow, catalog_state:catalogState, alerts_row_state:alertsRow, alerts_state:alertsState,
     matching_row_state:matchingRow, matching_row_reason:matchingReason, source_matching_state:matchingPermission.state, source_matching_reason:matchingPermission.reason, source_matching_provenance:matchingPermission.provenance,
@@ -415,8 +421,9 @@ const fixtures: Array<{ row: Record<string,any>; policies: UniversePolicy[]; obs
   { row:{...active,id:'structured-requirements',description:'',requirements:[{text:'Applicants must demonstrate five years of relevant programme delivery experience.',required:true}]}, policies:[enabled()], expected:expected('ACTIVE_VALID','READY','READY','READY','NOT_READY','FINAL_MATCHING_UNIVERSE') },
   { row:{...active,id:'optional-professional-keys-absent',description:'',requirements:null}, policies:[enabled()], expected:expected('ACTIVE_VALID','READY','NOT_READY','NOT_READY','NOT_READY','MATCH_ROW_INSUFFICIENT_PROFESSIONAL_EVIDENCE') },
   { row:{...active,id:'thin',description:'',tags:['remote','LATAM']}, policies:[enabled()], expected:expected('ACTIVE_VALID','READY','NOT_READY','NOT_READY','NOT_READY','MATCH_ROW_INSUFFICIENT_PROFESSIONAL_EVIDENCE') },
-  // Deliberately retained: executable producer defaults currently route WWR despite explicit contractual DENIED evidence.
-  { row:{...active,id:'unknown-permission',source:'weworkremotely'}, policies:[enabled('wwr')], expected:expected('ACTIVE_VALID','READY','READY','READY','READY','FINAL_MATCHING_UNIVERSE') },
+  // WWR is executable, but its explicit matching/presentation restriction is
+  // independent and must still block the private matching consumer.
+  { row:{...active,id:'unknown-permission',source:'weworkremotely'}, policies:[enabled('wwr')], expected:expected('ACTIVE_VALID','READY','NOT_READY','READY','READY','SOURCE_MATCHING_PERMISSION_DENIED') },
   { row:{...active,id:'expired',deadline:'2020-01-01'}, policies:[enabled()], expected:expected('EXPIRED','NOT_READY','NOT_READY','NOT_READY','NOT_READY','LIFECYCLE_EXPIRED') },
   { row:{...active,id:'dead',is_active:false}, policies:[enabled()], observation:{id:'o1',identity_status:'DEAD',http_status:404,observed_at:'2026-09-20T00:00:00Z'}, expected:expected('HARD_DEAD','NOT_READY','NOT_READY','NOT_READY','NOT_READY','LIFECYCLE_HARD_DEAD') },
   { row:{...active,id:'unknown-activity-live-observation',is_active:null}, policies:[enabled()], observation:{id:'o-live',source:'himalayas',identity_status:'IDENTITY_CONFIRMED',http_status:200,observed_at:'2026-09-20T00:00:00Z'}, expected:expected('STALE_DERIVED_STATE','UNKNOWN','UNKNOWN','UNKNOWN','UNKNOWN','LIFECYCLE_STALE_DERIVED_STATE') },
@@ -428,7 +435,7 @@ const fixtures: Array<{ row: Record<string,any>; policies: UniversePolicy[]; obs
   { row:{...active,id:'seo-unknown-switch-off',source:'jobicy',seo_eligible:false,seo_status:'review'}, policies:[{...enabled('jobicy'),consumer_switch_overrides:{seo:false}}], expected:expected('ACTIVE_VALID','READY','READY','READY','NOT_READY','FINAL_MATCHING_UNIVERSE') },
   { row:{...active,id:'seo-unknown-switch-on',source:'jobicy'}, policies:[enabled('jobicy')], expected:expected('ACTIVE_VALID','READY','READY','READY','READY','FINAL_MATCHING_UNIVERSE') },
   { row:{...active,id:'source-switch-off'}, policies:[{source:'himalayas',is_enabled:true,matching_enabled:true,catalog_enabled:true,alerts_enabled:true,seo_enabled:true,consumer_switch_overrides:{source:false}}], expected:expected('ACTIVE_VALID','NOT_READY','NOT_READY','NOT_READY','NOT_READY','SOURCE_DISABLED') },
-  { row:{...active,id:'source-policy-missing'}, policies:[], expected:expected('ACTIVE_VALID','UNKNOWN','UNKNOWN','UNKNOWN','UNKNOWN','SOURCE_MATCHING_UNKNOWN') },
+  { row:{...active,id:'source-policy-missing'}, policies:[], expected:expected('ACTIVE_VALID','UNKNOWN','READY','UNKNOWN','UNKNOWN','FINAL_MATCHING_UNIVERSE') },
   { row:{...active,id:'catalog-alias-conflict'}, policies:[enabled(),{...enabled('HIMALAYAS'),consumer_switch_overrides:{catalog:false}}], expected:expected('ACTIVE_VALID','UNKNOWN','READY','READY','READY','FINAL_MATCHING_UNIVERSE') },
   { row:{...active,id:'matching-alias-conflict'}, policies:[enabled(),{...enabled('HIMALAYAS'),consumer_switch_overrides:{matching:false}}], expected:expected('ACTIVE_VALID','READY','UNKNOWN','READY','READY','SOURCE_POLICY_ALIAS_CONFLICT') },
   { row:{...active,id:'seo-description-missing',description:''}, policies:[enabled()], expected:expected('ACTIVE_VALID','READY','NOT_READY','NOT_READY','NOT_READY','MATCH_ROW_INSUFFICIENT_PROFESSIONAL_EVIDENCE') },
@@ -460,8 +467,8 @@ for (const fixture of fixtures) {
   parityMatrix.push({fixture:fixture.row.id,lifecycle:ts.lifecycle_state,catalog:ts.catalog_state,matching:ts.final_matching_state,alerts:ts.alerts_state,seo:ts.seo_state,first_failure:tsFirstFailure})
 }
 const wwrDivergences = policyDivergences.filter(item => item.fixture === 'unknown-permission').sort((a,b) => a.consumer.localeCompare(b.consumer))
-assert.deepEqual(wwrDivergences.map(item => item.consumer),['alerts','catalog','matching','seo'],'WWR contractual DENIED evidence is not hidden by operational fixture parity')
-const wwrPolicyRemediation = { status:'POLICY_REMEDIATION_REQUIRED', current_effective_gate:'ABSENT_FOR_NON_CONTROLLED_FIRST_PARTY_PRODUCER', proposal:'Add an explicitly reviewed DENIED-only contractual gate or disable WWR consumer switches; never promote executable-producer status into permission.' }
+assert.deepEqual(wwrDivergences.map(item => item.consumer),['alerts','catalog','seo'],'Matching enforces its explicit presentation DENIED; unresolved public-consumer divergences remain visible')
+const wwrPolicyRemediation = { status:'POLICY_REMEDIATION_REQUIRED', current_effective_gate:'MATCHING_DENIED_ENFORCED_PUBLIC_CONSUMERS_PENDING', proposal:'Review explicit DENIED gates for Catalog, Alerts and SEO independently; never promote executable-producer status into permission or infer external distribution.' }
 assert.equal(wwrPolicyRemediation.status,'POLICY_REMEDIATION_REQUIRED')
 const unknownSeoDecision = classifyOpportunityUniverse(fixtures.find(fixture => fixture.row.id==='seo-unknown-switch-off')!.row,fixtures.find(fixture => fixture.row.id==='seo-unknown-switch-off')!.policies,null,now)
 assert.equal((unknownSeoDecision.provenance.consumer_permission_states as any).seo,'UNKNOWN')

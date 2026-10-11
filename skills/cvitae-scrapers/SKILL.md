@@ -82,6 +82,14 @@ contract says so. Registry V2 is canonical identity authority: resolve aliases
 and source families deterministically; unknown identity fails closed. Never
 add source-specific downstream bias merely to make a source pass.
 
+Private authenticated B2C matching is a core first-party consumer, not public
+distribution. Catalog/SEO/Alerts/Google Jobs/third-party states cannot veto it.
+An explicit matching/presentation DENIED does block that use; matching UNKNOWN
+remains recorded evidence and is not promoted to ALLOWED, but is not by itself
+a veto. Retrieval consumes the canonical final Matching Universe and must not
+reapply public gates or copied legacy defaults. Candidate eligibility and fit
+are evaluated afterward and remain independent of source confidence.
+
 When routing is in scope, evaluate separately: source capability/permission,
 row intrinsic readiness, stored operational gate, effective decision, and
 downstream reachability. A stored false is configuration evidence, not proof

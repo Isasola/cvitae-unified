@@ -119,7 +119,8 @@ const decision = (canonicalSource: string, consumer: Consumer, rowReadiness: Rea
       ? [projectionSwitch === false ? `SOURCE_${consumer.toUpperCase()}_OPERATOR_DISABLED` : `SOURCE_${consumer.toUpperCase()}_SWITCH_UNKNOWN`] : []),
     ...(live ? [] : ['ROW_LIFECYCLE_NOT_ROUTABLE']),
     ...extraReasons,
-    ...(controlled && controlled.state !== 'ALLOWED' ? [controlled.reason] : []),
+    ...(consumer === 'matching' && capabilityState === 'DENIED' ? ['SOURCE_MATCHING_PERMISSION_DENIED'] : []),
+    ...(controlled && consumer !== 'matching' && controlled.state !== 'ALLOWED' ? [controlled.reason] : []),
   ]
   // First-party organic SEO is gated by lifecycle, row facts and global source
   // operation. Canonical permission remains diagnostic; external distribution

@@ -2158,3 +2158,100 @@ and coherent-head verification; and Vite transpilation/module resolution in
 place of an inapplicable projectless `tsc --noEmit`. No permission, SQL,
 migration or PROD state changed. Full grouped operator rerun is required before
 any local-ready claim or commit.
+
+## R2 STOP C4 — private matching / SEO Plus implementation local — 2026-10-11
+
+Explicit product authority now defines authenticated B2C matching as a core
+consumer independent of public Catalog, SEO, Alerts and external distribution.
+The demonstrated regression is a duplicated raw `is_enabled &&
+matching_enabled` filter after `opportunity_final_matching_universe`, plus the
+controlled-producer wrapper treating matching UNKNOWN like a public permission
+veto. Proposed migration `202610110001` makes the final Matching Universe the
+single admission authority, retains explicit matching DENIED, preserves UNKNOWN
+as advisory evidence and moves bounded vector retrieval inside the same universe.
+It does not change weights, public permissions or Opportunity Truth. Historical
+derived state for every snapshotted canonical source is reconciled separately in
+bounded, durable-cursor batches with per-source before/after accounting; future
+writes continue through the same `refresh_opportunity_universe` authority.
+
+SEO Plus is implemented as an optional B2B request, not an entitlement or
+payment. Proposed migration `202610110002` persists actor, vacancy, explicit
+public/indexing consent, time, contract version and orthogonal request,
+entitlement, authorization and delivery states. Initial state is REQUESTED /
+NOT_CONTRACTED / CONSENT_RECORDED / NOT_EVALUATED; no consumer switch or
+permission changes. The same migration adds idempotent owned vacancy updates;
+slug, URL, owner and lifecycle identity remain immutable.
+
+CURRENT_DENOMINATOR=local synthetic routing inventory 13 evaluated = 6 included
++ 7 excluded with explicit reasons; PROD inventory remains unchanged at the
+operator-proven 8 vacancies / 5 mirrors / 3 OWNER_MISSING.
+LAST_PROVEN_GATE=LOCAL_PASS under Node 26.3.1: focused C4 contract/accounting,
+Universe, permission oracle, source policy, retrieval, Matching V2.1 and B2C
+consumer regressions; Vite compile; offline full fixture build; and one browser
+E2E with simulated HTTP persistence covering create, update retry, SEO Plus
+consent/reload/withdraw and close. This is not PostgreSQL or PROD runtime proof.
+UNPROVEN_GATE=operator rerun on required Node 24.21.0/pnpm 11.8.0, READ ONLY
+PROD compatibility preflight, then separately authorized migrations and dirty
+runtime canary. NEXT_SAFE_ACTION=run
+`scripts/operator/verify-r2-stop-c4-20261011.ps1`, then review
+`artifacts/release/r2-c4-preflight-readonly-20261011.sql`; do not authorize a
+WRITE from static/local evidence alone.
+DO_NOT_REOPEN=STOP B/C1/C2/C3, the 8=5+3 historical reconciliation, public SEO
+permissions, source scrapers and Matching V2/V2.1 weights without new evidence.
+`PROD_VALIDATED=FALSE`; SEO Plus billing/activation and real-company pilot remain
+pending external evidence.
+
+Focused C4 vector-contract correction is `LOCAL_PASS`: operator-supplied
+READ_ONLY PROD evidence fixed the RPC identity at
+`match_opportunities(public.vector,double precision,integer)` with defaults
+`0.3/20`, ten return columns and SECURITY INVOKER. The proposed migration now
+guards the exact OID/overload count, return/default/property contract and
+preserves owner and every unrelated ACL entry; the only proposed ACL delta
+removes direct/effective execution from PUBLIC/anon/authenticated while retaining
+service_role execution. It remains NOT_APPLIED. The first grouped operator harness
+completed its individual browser assertion but did not terminate after
+Playwright. This is a harness-termination incident, not a demonstrated product
+regression; the already-passing full build/browser gates are not reopened by
+this schema-only correction.
+
+Independent review rejected WRITE 001 until private-matching semantics and
+historical convergence were hardened. The local proposal now treats plain
+permission/switch UNKNOWN as advisory for authenticated private matching while
+preserving it in `unresolved_dimensions`; explicit matching DENIED, explicit
+source/matching disable, identity/policy conflicts and lifecycle barriers remain
+blocking. CLOSED, EXPIRED and HARD_DEAD cannot become READY; unresolved lifecycle
+remains UNKNOWN. Reducer delegate access is copied from the installed reducer,
+the matching view preserves OID/owner/ACL/options/columns/dependents and verifies
+base relations through catalog dependencies, and the vector RPC preserves its
+installed identity, owner and non-public ACL entries while using qualified
+`OPERATOR(public.<=>)` under an empty search path.
+
+The C4 historical proposal now materializes an immutable global membership keyed
+by `opportunity_id`, including explicit identity-review members; it never rebuilds
+membership from later source, alias or timestamp values. One canonical resolver
+is used for preparation and drift diagnostics. Batches page only stored IDs,
+audit selected/attempted/succeeded identity, require a persisted derived state,
+accumulate per-source outcome histograms and leave cursor/counters unchanged on
+failure. `FAILED` is excluded from automatic selection and requires an explicit
+compare-and-set recovery call with an operator note. Global and `recruiter_b2b`
+permission digests use the same reproducible before/after algorithm; legacy
+`c6dcc71299db2237f17d455729d238a7` remains reference-only for its original,
+different serialization. No public consumer permission or Opportunity Truth row
+is changed by preparation.
+
+Focused verifier `scripts/verify-r2-c4-backfill-identity.ts` covers snapshot
+identity, alias collision/ambiguity, post-snapshot insertion, source drift,
+failed cursor/recovery, unique denominators and exact histograms. PostgreSQL
+compilation/runtime, READ ONLY contract checks, migration application and the
+historical reconciliation remain `PROD_PENDING`. `202610110001` remains
+NOT_APPLIED / WRITE_NOT_AUTHORIZED pending review of the consolidated preflight.
+
+PROD READ ONLY preflight isolated one compatibility condition: the exact vector
+RPC has input ACL digest `791d2b1e22edbb03f97770724fbb588b` and is executable
+by anon/authenticated through its current ACL. Repository caller tracing found
+only `supabase/functions/match-batch/index.ts`, whose Supabase client uses
+`SUPABASE_SERVICE_ROLE_KEY`. Migration 001 now records that exact input,
+calculates the normalized expected ACL, applies the narrowly scoped revoke/grant
+inside its transaction, and rejects changes to OID, owner, signature, return
+columns or unrelated grants. Preflight reports `ACL_REMEDIATION_REQUIRED`, not a
+false PASS. PostgreSQL application remains separately unauthorized.

@@ -6,7 +6,7 @@ import { EDGE_SOURCE_IDENTITIES } from '../_shared/generated-source-registry.ts'
 import { classifyMatchingCoverage } from '../../../src/lib/matching-coverage.ts';
 import { matchingProfileSignature } from '../../../shared/matching-profile-signature.ts';
 import { canonicalCandidateProfile } from '../../../shared/candidate-profile.ts';
-import { buildCanonicalSourcePolicyIndex, classifyBackgroundCoverage, mergeRetrievalSimilarities, normalizeSourcePolicyRow, opportunityCacheIsCurrent, retrievalCacheIsCurrent, sourceMatchingAllowed, sourcePolicyFor, sourcePolicySignature, unionRetrievalLanes } from '../../../shared/matching-retrieval.ts';
+import { classifyBackgroundCoverage, mergeRetrievalSimilarities, normalizeSourcePolicyRow, opportunityCacheIsCurrent, retrievalCacheIsCurrent, sourcePolicySignature, unionRetrievalLanes } from '../../../shared/matching-retrieval.ts';
 const DEFAULT_SITE_URL = 'https://cvitae.lat';
 const canonicalSource = (raw: unknown) => {
   const source = String(raw || '').trim().toLowerCase()
@@ -183,7 +183,6 @@ Deno.serve(async (req)=>{
     if (allSourcePoliciesError) throw allSourcePoliciesError;
     if (sourcePermissionError) throw sourcePermissionError;
     const sourcePolicyRows = (allSourcePolicies ?? []).map(normalizeSourcePolicyRow);
-    const sourcePolicyIndex = buildCanonicalSourcePolicyIndex(sourcePolicyRows, EDGE_SOURCE_IDENTITIES, canonicalSource);
     const currentSourcePolicySignature = await sourcePolicySignature(sourcePolicyRows, canonicalSource, sourcePermissions ?? []);
     const { data: retrievalState } = await supabase.from('matching_retrieval_states').select('*').eq('user_id', user.id).maybeSingle();
     const backgroundCoverageStatus = classifyBackgroundCoverage(retrievalState, profileSignature, currentSourcePolicySignature);
@@ -307,12 +306,11 @@ Deno.serve(async (req)=>{
       { lane: 'BACKGROUND_MATCH', rows: backgroundHydratedOpportunities.filter((row) => row._retrieval_lane === 'BACKGROUND_MATCH') },
       { lane: 'BACKGROUND_POTENTIAL', rows: backgroundHydratedOpportunities.filter((row) => row._retrieval_lane === 'BACKGROUND_POTENTIAL') },
     ]).map(({ opportunity, lanes }) => ({ ...opportunity, _retrieval_lanes: [...lanes] }));
-    // Default Matching requests enforce Matching source routing here. Alerts
-    // have already been admitted by opportunity_alert_universe and must not
-    // inherit Matching permission/switch state.
+    // Each consumer view is the canonical admission authority. Re-applying raw
+    // source switches here used to couple private matching to legacy/default
+    // distribution configuration and could silently discard admitted rows.
     const prePolicyCount = opportunities.length
     opportunities = opportunities
-      .filter((item) => requestMode === 'alerts' || sourceMatchingAllowed(sourcePolicyFor(sourcePolicyIndex, item.source)))
       .map((item) => ({ ...item, source_match_state: 'ALLOWED' }))
     activeUserId = user.id;
     const sourceAllowedCount = opportunities.length
@@ -371,6 +369,8 @@ Deno.serve(async (req)=>{
         downstreamTrusted: !potential && decision.outcome === 'MATCH' && decision.confidence === 'HIGH' && decision.eligibility === 'ELIGIBLE',
         presentationState: potential ? 'POTENTIAL' : 'CONFIRMED',
         eligibilityPending: potential,
+        dataConfidence: item.verification_status === 'verified' ? 'FACTUALLY_VERIFIED' : 'PUBLISHER_DECLARED_PENDING',
+        dataConfidenceNote: item.verification_status === 'verified' ? null : 'Datos declarados por el publicador; verificaci\u00f3n factual pendiente.',
         source: item.source ?? ''
       })
     const ranked = rankedV2.filter(({ decision }) => isVisibleMatchDecision(decision)).map((item)=>toClientMatch(item));

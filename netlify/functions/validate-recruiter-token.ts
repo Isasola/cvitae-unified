@@ -180,17 +180,95 @@ const handler: Handler = async (event) => {
       if (!Number.isSafeInteger(page) || page > 1000000) return { statusCode: 400, body: JSON.stringify({ error: 'Página inválida' }) }
       const { data: vacancies, error: listError, count } = await supabase
         .from("recruiter_vacancies")
-        .select("id, title, slug, location, modality, is_active, created_at, vacancy_applications(count)", { count: 'exact' })
+        .select("id, title, slug, description, requirements, location, modality, salary_range, is_active, created_at, vacancy_applications(count)", { count: 'exact' })
         .eq("recruiter_token_id", data.id)
         .order("created_at", { ascending: false })
         .order('id', { ascending: true })
         .range(page * 100, page * 100 + 99)
       if (listError || count == null) return { statusCode: 503, body: JSON.stringify({ error: 'No pudimos cargar las vacantes.', reason: 'VACANCIES_READ_FAILED' }) }
 
+      const vacancyIds = (vacancies || []).map((vacancy: any) => vacancy.id)
+      let seoRequests: any[] = []
+      if (vacancyIds.length) {
+        const { data: requestRows, error: seoRequestError } = await supabase
+          .from('recruiter_seo_plus_requests')
+          .select('vacancy_id,request_status,entitlement_status,authorization_status,delivery_status,contract_version,consented_at,withdrawn_at,updated_at')
+          .eq('recruiter_token_id', String(data.id))
+          .in('vacancy_id', vacancyIds)
+        if (seoRequestError) return { statusCode: 503, body: JSON.stringify({ error: 'No pudimos cargar el estado de SEO Plus.', reason: 'SEO_PLUS_STATUS_READ_FAILED' }) }
+        seoRequests = requestRows || []
+      }
+      const seoByVacancy = new Map(seoRequests.map((request: any) => [String(request.vacancy_id), request]))
+
       return {
         statusCode: 200,
-        body: JSON.stringify({ vacancies: vacancies || [], pagination: { page, total: count, has_more: (page + 1) * 100 < count } }),
+        body: JSON.stringify({ vacancies: (vacancies || []).map((vacancy: any) => ({
+          ...vacancy, seo_plus: seoByVacancy.get(String(vacancy.id)) || null,
+        })), pagination: { page, total: count, has_more: (page + 1) * 100 < count } }),
       }
+    }
+
+    // Actualiza los hechos declarados sin cambiar slug, owner ni lifecycle.
+    if (action === 'update_vacancy' && body.vacancy_id) {
+      const fields = ['title', 'description', 'requirements', 'location', 'modality']
+      if (!fields.every(field => typeof body[field] === 'string' && body[field].trim())
+        || typeof body.operation_id !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(body.operation_id)
+        || (body.salary_range != null && (typeof body.salary_range !== 'string' || body.salary_range.length > 1000))) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Datos u operaci\u00f3n de edici\u00f3n inv\u00e1lidos.', reason: 'INVALID_VACANCY_UPDATE' }) }
+      }
+      const { data: updated, error: updateError } = await supabase.rpc('update_recruiter_vacancy_atomic', {
+        p_recruiter_token_id: String(data.id), p_vacancy_id: body.vacancy_id, p_operation_id: body.operation_id,
+        p_title: body.title.trim(), p_description: body.description.trim(), p_requirements: body.requirements.trim(),
+        p_location: body.location.trim(), p_modality: body.modality.trim(), p_salary_range: body.salary_range?.trim() || null,
+      })
+      if (updateError || updated?.ok !== true || updated?.id !== body.vacancy_id || updated?.is_active !== true) {
+        const message = String(updateError?.message || '')
+        const denied = message.includes('vacancy_not_owned') || message.includes('invalid_recruiter')
+        const conflict = message.includes('operation_conflict') || message.includes('closed_vacancy_immutable')
+        return { statusCode: denied ? 403 : conflict ? 409 : 503, body: JSON.stringify({
+          error: denied ? 'Sin acceso a esta vacante.' : conflict ? 'La vacante cambi\u00f3 o ya est\u00e1 cerrada.' : 'No pudimos confirmar la edici\u00f3n. Reintent\u00e1 la misma operaci\u00f3n.',
+          reason: denied ? 'VACANCY_NOT_OWNED' : conflict ? 'VACANCY_UPDATE_CONFLICT' : 'VACANCY_UPDATE_UNCONFIRMED', stage: 'ATOMIC_UPDATE',
+        }) }
+      }
+      return { statusCode: 200, body: JSON.stringify(updated) }
+    }
+
+    if (action === 'request_seo_plus' && body.vacancy_id) {
+      if (body.public_indexing_consent !== true || body.contract_version !== 'seo-plus-publication-v1-2026-10-11'
+        || typeof body.operation_id !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(body.operation_id)) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Necesitamos tu consentimiento expl\u00edcito y la versi\u00f3n vigente del servicio.', reason: 'SEO_PLUS_CONSENT_REQUIRED' }) }
+      }
+      const { data: request, error: requestError } = await supabase.rpc('request_recruiter_seo_plus', {
+        p_recruiter_token_id: String(data.id), p_vacancy_id: body.vacancy_id, p_operation_id: body.operation_id,
+        p_public_indexing_consent: true, p_contract_version: body.contract_version,
+      })
+      if (requestError || request?.ok !== true || request?.charged !== false || request?.distribution_changed !== false) {
+        const message = String(requestError?.message || '')
+        const denied = message.includes('vacancy_not_owned') || message.includes('invalid_recruiter')
+        const conflict = message.includes('operation_conflict') || message.includes('vacancy_closed')
+        return { statusCode: denied ? 403 : conflict ? 409 : 503, body: JSON.stringify({
+          error: denied ? 'Sin acceso a esta vacante.' : conflict ? 'La vacante ya no admite esta solicitud.' : 'No pudimos guardar la solicitud de SEO Plus. Reintent\u00e1.',
+          reason: denied ? 'VACANCY_NOT_OWNED' : conflict ? 'SEO_PLUS_REQUEST_CONFLICT' : 'SEO_PLUS_REQUEST_UNCONFIRMED', stage: 'SEO_PLUS_REQUEST',
+        }) }
+      }
+      return { statusCode: 200, body: JSON.stringify(request) }
+    }
+
+    if (action === 'withdraw_seo_plus' && body.vacancy_id) {
+      if (typeof body.operation_id !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(body.operation_id)) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Operaci\u00f3n de retiro inv\u00e1lida.', reason: 'INVALID_OPERATION_ID' }) }
+      }
+      const { data: withdrawn, error: withdrawError } = await supabase.rpc('withdraw_recruiter_seo_plus', {
+        p_recruiter_token_id: String(data.id), p_vacancy_id: body.vacancy_id, p_operation_id: body.operation_id,
+      })
+      if (withdrawError || withdrawn?.ok !== true || withdrawn?.distribution_changed !== false) {
+        const denied = String(withdrawError?.message || '').includes('vacancy_not_owned')
+        return { statusCode: denied ? 403 : 503, body: JSON.stringify({
+          error: denied ? 'Sin acceso a esta vacante.' : 'No pudimos confirmar el retiro de SEO Plus. Reintent\u00e1.',
+          reason: denied ? 'VACANCY_NOT_OWNED' : 'SEO_PLUS_WITHDRAW_UNCONFIRMED', stage: 'SEO_PLUS_WITHDRAW',
+        }) }
+      }
+      return { statusCode: 200, body: JSON.stringify(withdrawn) }
     }
 
     // ─── Acción: Cerrar vacante ───

@@ -369,3 +369,28 @@ decisiones independientes por Universo, supervivencia factual/semántica/de
 provenance, acciones y efectos del usuario, filas históricas y automatización
 futura. CVs, postulaciones y evaluaciones B2B privados no autorizan publicación
 global ni cruces de perfiles por email entre empresas.
+
+## PRIVATE B2C MATCHING IS A CORE CONSUMER, NOT PUBLIC DISTRIBUTION
+
+El matching B2C autenticado compara una Opportunity Truth con un candidato en
+su perfil privado. No es Catálogo público, SEO, Alertas, JobPosting, Google Jobs
+ni distribución a terceros. Un DENIED/UNKNOWN de esos consumidores nunca veta
+por sí solo el matching privado. La dimensión matching conserva su evidencia:
+un DENIED explícito de presentación a candidatos sí bloquea ese uso; UNKNOWN se
+registra y no se transforma en ALLOWED, pero tampoco es un veto automático.
+
+El orden es `INVENTORY → LIFECYCLE → INTRINSIC MATCH READINESS → PRIVATE
+MATCHING RESTRICTION → RETRIEVAL → CANDIDATE ELIGIBILITY → FIT/DECISION`.
+Calidad/confianza de fuente, elegibilidad del candidato, modalidad y ubicación
+son dimensiones distintas. Una fila puede evaluarse con confianza factual
+pendiente, indicándolo al usuario; una inelegibilidad confirmada nunca se
+presenta como gran match y evidencia insuficiente produce POTENTIAL/ABSTAIN
+según el contrato vigente. No se cambian pesos ni thresholds para resolver
+puertas de routing.
+
+Todo descubrimiento conserva resultado y motivo (`included`, `rejected`,
+`failed`, `skipped`, `review`, `stale`, `UNKNOWN`). Los límites son presupuesto
+por corrida con cursor, no un denominador ficticio. El Universo final de
+matching es la autoridad de admisión; retrieval y ranking no reaplican puertas
+públicas ni filtros fuente-específicos. Histórico y futuras filas se contabilizan
+como `previo → evaluado → incluido/no incluido por razón`, sin pérdida silenciosa.

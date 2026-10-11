@@ -48,6 +48,8 @@ export type OpportunityUniverseDecision = {
   source_operational_reason: string
   source_policy_alias_conflicts: string[]
   final_matching_state: UniverseState
+  final_matching_reason: string
+  first_failure: string
   seo_state: UniverseState
   alerts_state: UniverseState
   unresolved_dimensions: string[]
@@ -102,6 +104,7 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
   else if (hardDead) { lifecycle_state = 'HARD_DEAD'; lifecycle_reason = 'LATEST_HARD_DEAD_OBSERVATION'; lifecycle_repair = row.is_active === false ? null : { is_active: false } }
   else if (row.is_active !== true && latestLive) { lifecycle_state = 'STALE_DERIVED_STATE'; lifecycle_reason = row.is_active === false ? 'LATEST_LIVE_OBSERVATION_CONTRADICTS_INACTIVE' : 'LATEST_LIVE_OBSERVATION_RESOLVES_UNKNOWN_ACTIVE'; lifecycle_repair = row.verification_status === 'verified' ? { is_active: true } : null }
   else if (row.is_active === true && row.verification_status === 'verified' && deadline !== 'INVALID') { lifecycle_state = 'ACTIVE_VALID'; lifecycle_reason = deadline === 'UNKNOWN' ? 'ACTIVE_VERIFIED_NO_DEADLINE' : 'ACTIVE_VERIFIED_DEADLINE_OPEN' }
+  else if (controlledProducer(source) && row.is_active === true && deadline !== 'INVALID') { lifecycle_state = 'ACTIVE_VALID'; lifecycle_reason = 'PUBLISHER_DECLARED_OPEN_FACTUAL_PENDING' }
   else if (row.is_active === false && ['rejected', 'quarantined'].includes(String(row.verification_status || ''))) { lifecycle_state = 'INACTIVE_VALID'; lifecycle_reason = `VERIFICATION_${String(row.verification_status).toUpperCase()}` }
   else { lifecycle_state = 'LIFECYCLE_UNKNOWN'; lifecycle_reason = deadline === 'INVALID' ? 'DEADLINE_INVALID_OR_TIMEZONE_UNKNOWN' : 'INSUFFICIENT_LIFECYCLE_EVIDENCE' }
 
@@ -116,7 +119,18 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
   const source_matching_operational_reason = globalPolicyConflict || aliasConflicts.includes('matching_enabled') ? 'SOURCE_POLICY_ALIAS_CONFLICT' : matchingPolicyUnknown ? 'SOURCE_MATCHING_SWITCH_UNKNOWN' : source_matching_operational_state === 'DENIED' ? 'SOURCE_MATCHING_DISABLED' : 'SOURCE_MATCHING_ENABLED'
   const source_operational_state = globalPolicyConflict ? 'CONFLICT' : policyUnknown ? 'UNKNOWN' : policy?.is_enabled ? 'ENABLED' : 'DISABLED'
   const source_operational_reason = globalPolicyConflict ? 'SOURCE_POLICY_ALIAS_CONFLICT' : policyUnknown ? 'SOURCE_POLICY_STATE_UNKNOWN' : !registeredSourceOperationalDefault(source) ? 'NO_EXECUTABLE_PRODUCER' : source_operational_state === 'ENABLED' ? 'SOURCE_OPERATIONALLY_ENABLED' : 'SOURCE_DISABLED'
-  const final_matching_state: UniverseState = matching_row_state !== 'READY' ? matching_row_state : source_matching_operational_state === 'DENIED' || source_operational_state === 'DISABLED' ? 'NOT_READY' : source_matching_operational_state === 'UNKNOWN' || source_operational_state === 'UNKNOWN' || source_operational_state === 'CONFLICT' ? 'UNKNOWN' : 'READY'
+  const sourceIdentityResolved = Boolean(source && source !== 'unknown')
+  // Private authenticated matching is neither public catalog nor onward
+  // distribution. UNKNOWN permission remains visible evidence; only an
+  // explicit matching/presentation DENIED is a permission veto.
+  const final_matching_state: UniverseState = lifecycle_state !== 'ACTIVE_VALID'
+    ? (lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE' ? 'UNKNOWN' : 'NOT_READY')
+    : matching_row_state !== 'READY' ? matching_row_state
+    : !sourceIdentityResolved ? 'UNKNOWN'
+    : sourcePermission.state === 'DENIED' ? 'NOT_READY'
+    : source_matching_operational_state === 'DENIED' || source_operational_state === 'DISABLED' ? 'NOT_READY'
+    : source_operational_state === 'CONFLICT' || aliasConflicts.includes('matching_enabled') ? 'UNKNOWN'
+    : 'READY'
   const catalogRow = catalogReadiness({ ...row, is_active: lifecycleReady, verification_status: lifecycleReady ? 'verified' : row.verification_status }, now)
   const seoRow = seoReadiness({ ...row, is_active: lifecycleReady, verification_status: lifecycleReady ? 'verified' : row.verification_status }, now)
   const catalogPermission = permissionResolver(source, 'catalog')
@@ -162,6 +176,7 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
   if (lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE') unresolved_dimensions.push('LIFECYCLE')
   if (matching_row_state === 'UNKNOWN') unresolved_dimensions.push('ROW_MATCH_READINESS')
   if (source_matching_operational_state === 'UNKNOWN') unresolved_dimensions.push('SOURCE_MATCHING_SWITCH')
+  if (sourcePermission.state === 'UNKNOWN') unresolved_dimensions.push('MATCHING_PERMISSION_UNKNOWN:ADVISORY_PRIVATE_MATCHING')
   if (source_operational_state === 'UNKNOWN') unresolved_dimensions.push('SOURCE_OPERATIONAL_STATE')
   if (source_operational_state === 'CONFLICT') unresolved_dimensions.push('SOURCE_POLICY_ALIAS_CONFLICT:is_enabled')
   if (source_matching_operational_state === 'UNKNOWN' && aliasConflicts.includes('matching_enabled')) unresolved_dimensions.push('SOURCE_POLICY_ALIAS_CONFLICT:matching_enabled')
@@ -176,12 +191,18 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
     lifecycle_unresolved_reason, lifecycle_recovery_class,
     matching_row_state, matching_row_reason, source_matching_state: sourcePermission.state, source_matching_reason: sourcePermission.reason,
     source_matching_provenance: sourcePermission.provenance, source_matching_operational_state, source_matching_operational_reason, catalog_operational_state: catalogOperational, alerts_operational_state: alertsOperational, seo_operational_state: seoOperational, source_operational_state, source_operational_reason, source_policy_alias_conflicts: aliasConflicts, final_matching_state,
+    final_matching_reason: 'PENDING_FINAL_REASON', first_failure: 'PENDING_FIRST_FAILURE',
     seo_state, alerts_state, unresolved_dimensions, source_permission_unknown_dimensions,
     provenance: {
       source, observation_id: observation?.id ?? null, observation_status: observation?.identity_status ?? null, observation_http_status: observation?.http_status ?? null, observation_at: observation?.observed_at ?? null,
       source_policy_rows: sourcePolicies.map(item => item.source), source_policy_alias_conflicts: aliasConflicts, source_permission: sourcePermission.provenance,
       consumer_switch_overrides: policy?.consumer_switch_overrides || {},
       first_party_permission_role: 'ADVISORY_ONLY',
+      private_matching_operational_effect: source_matching_operational_state === 'DENIED' ? 'EXPLICIT_OPERATOR_DISABLE'
+        : source_operational_state === 'DISABLED' ? 'EXPLICIT_SOURCE_DISABLE'
+        : source_operational_state === 'CONFLICT' || aliasConflicts.includes('matching_enabled') ? 'BLOCKING_SOURCE_POLICY_CONFLICT'
+        : source_matching_operational_state === 'UNKNOWN' || source_operational_state === 'UNKNOWN' ? 'ADVISORY_ABSENCE_OF_DECISION'
+        : 'OPERATIONALLY_ENABLED',
       switch_authority: 'REGISTRY_OPERATION_WITH_ADMIN_POLICY_EVENTS',
       consumer_permission_states: { catalog: permissionResolver(source, 'catalog').state, matching: sourcePermission.state, alerts: permissionResolver(source, 'alerts').state, seo: permissionResolver(source, 'seo').state },
       consumer_switch_states: { catalog: catalogOperational, matching: source_matching_operational_state, alerts: alertsOperational, seo: seoOperational },
@@ -193,15 +214,45 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
       const gate = controlledPermission(source, consumer as 'catalog' | 'matching' | 'alerts' | 'seo', policy)!
       gates[consumer] = gate
       // Permissions only restrict the existing reducer; they never promote row quality.
-      if (gate.state !== 'ALLOWED' && (result as any)[field] === 'READY') (result as any)[field] = gate.state === 'DENIED' ? 'NOT_READY' : 'UNKNOWN'
-      if (gate.state === 'UNKNOWN') result.unresolved_dimensions.push(`${consumer.toUpperCase()}_PERMISSION_UNKNOWN`)
+      // Matching UNKNOWN is advisory for the private B2C consumer. An explicit
+      // DENIED still blocks candidate presentation. Other controlled consumers
+      // keep their exact fail-closed permission contract.
+      const privateMatching = consumer === 'matching'
+      if ((gate.state === 'DENIED' || (!privateMatching && gate.state === 'UNKNOWN')) && (result as any)[field] === 'READY') {
+        (result as any)[field] = gate.state === 'DENIED' ? 'NOT_READY' : 'UNKNOWN'
+      }
+      if (privateMatching && gate.state === 'UNKNOWN'
+        && !result.unresolved_dimensions.includes('MATCHING_PERMISSION_UNKNOWN:ADVISORY_PRIVATE_MATCHING')) {
+        result.unresolved_dimensions.push('MATCHING_PERMISSION_UNKNOWN:ADVISORY_PRIVATE_MATCHING')
+      }
+      if (!privateMatching && gate.state === 'UNKNOWN') result.unresolved_dimensions.push(`${consumer.toUpperCase()}_PERMISSION_UNKNOWN`)
     }
     result.source_matching_state = gates.matching.state
     result.source_matching_reason = gates.matching.reason
     if (result.seo_row_state === 'READY' && gates.seo.state !== 'ALLOWED') result.seo_effective_reason = gates.seo.reason
     result.provenance = { ...result.provenance, first_party_permission_role: 'CONTROLLED_PRODUCER_PERMISSION',
+      private_matching_permission_effect: gates.matching.state === 'DENIED' ? 'EXPLICIT_PRESENTATION_DENY' : 'ADVISORY_EVIDENCE',
       controlled_consumer_gates: gates, consumer_permission_states: Object.fromEntries(Object.entries(gates).map(([name, gate]: [string, any]) => [name, gate.state])) }
   }
+  result.final_matching_reason = result.lifecycle_state !== 'ACTIVE_VALID'
+    ? `LIFECYCLE_${result.lifecycle_state}:${result.lifecycle_reason}`
+    : result.matching_row_state !== 'READY' ? `MATCH_ROW_${result.matching_row_state}:${result.matching_row_reason}`
+    : !sourceIdentityResolved ? 'SOURCE_IDENTITY_UNRESOLVED'
+    : result.source_matching_state === 'DENIED' ? `SOURCE_MATCHING_PERMISSION_DENIED:${result.source_matching_reason}`
+    : result.source_operational_state === 'DISABLED' ? `SOURCE_EXPLICITLY_DISABLED:${result.source_operational_reason}`
+    : result.source_matching_operational_state === 'DENIED' ? `SOURCE_MATCHING_EXPLICITLY_DISABLED:${result.source_matching_operational_reason}`
+    : result.source_operational_state === 'CONFLICT' || result.source_policy_alias_conflicts.includes('matching_enabled') ? 'SOURCE_POLICY_CONFLICT:MATCHING_OR_SOURCE_STATE'
+    : result.source_matching_state === 'UNKNOWN' || result.source_operational_state === 'UNKNOWN' || result.source_matching_operational_state === 'UNKNOWN'
+      ? 'PRIVATE_MATCHING_READY_WITH_ADVISORY_UNKNOWN' : 'PRIVATE_MATCHING_READY'
+  result.first_failure = result.final_matching_state === 'READY' ? 'FINAL_MATCHING_UNIVERSE' : result.final_matching_reason
+  result.provenance = { ...result.provenance, private_matching_contract: {
+    consumer: 'AUTHENTICATED_CANDIDATE_PROFILE', permission_state: result.source_matching_state,
+    permission_effect: result.source_matching_state === 'DENIED' ? 'EXPLICIT_PRESENTATION_DENY' : 'ADVISORY_EVIDENCE',
+    source_operational_state: result.source_operational_state,
+    matching_switch_state: result.source_matching_operational_state,
+    final_reason: result.final_matching_reason, first_failure: result.first_failure,
+    public_distribution_independent: true,
+  } }
   return result
 }
 
@@ -254,11 +305,13 @@ export function summarizeOpportunityUniverse(decisions: OpportunityUniverseDecis
       : item.matching_row_state === 'UNKNOWN' ? 'MATCH_ROW_UNKNOWN'
       : item.source_operational_state === 'CONFLICT' ? 'SOURCE_POLICY_ALIAS_CONFLICT'
       : item.source_policy_alias_conflicts.includes('matching_enabled') ? 'SOURCE_POLICY_ALIAS_CONFLICT'
+      : item.source_matching_state === 'DENIED' ? 'SOURCE_MATCHING_PERMISSION_DENIED'
       : item.source_matching_operational_state === 'DENIED' ? 'SOURCE_MATCHING_DISABLED'
-      : item.source_matching_operational_state === 'UNKNOWN' ? 'SOURCE_MATCHING_UNKNOWN'
       : item.source_operational_state === 'DISABLED' ? 'SOURCE_DISABLED'
+      : item.final_matching_state === 'READY' ? 'FINAL_MATCHING_UNIVERSE'
+      : item.source_matching_operational_state === 'UNKNOWN' ? 'SOURCE_MATCHING_UNKNOWN'
       : item.source_operational_state === 'UNKNOWN' ? 'SOURCE_OPERATIONAL_UNKNOWN'
-      : item.source_operational_state !== 'ENABLED' ? `SOURCE_${item.source_operational_state}` : 'FINAL_MATCHING_UNIVERSE'
+      : `FINAL_MATCHING_${item.final_matching_state}`
     firstFailure[key] = (firstFailure[key] || 0) + 1
   }
   const lifecycleUnresolved = decisions.filter(item => ['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(item.lifecycle_state))

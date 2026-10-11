@@ -40,6 +40,8 @@ interface MatchItem {
   downstreamTrusted?: boolean
   presentationState?: 'CONFIRMED' | 'POTENTIAL'
   eligibilityPending?: boolean
+  dataConfidence?: 'FACTUALLY_VERIFIED' | 'PUBLISHER_DECLARED_PENDING'
+  dataConfidenceNote?: string | null
   opportunityKind?: string | null
   matchDecision?: MatchDecision
 }
@@ -321,6 +323,11 @@ function OpportunityCard({ m, featured, liked, onToggleLike }: { m: MatchItem; f
             <span className="rounded-full border border-white/10 px-2 py-0.5">{m.categoria}</span>
           </div>
           {explanation && <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{explanation}</p>}
+          {m.dataConfidence === 'PUBLISHER_DECLARED_PENDING' && (
+            <p className="mt-2 rounded-lg border border-amber-300/15 bg-amber-300/[0.04] px-2.5 py-2 text-[11px] leading-relaxed text-amber-100/70">
+              {m.dataConfidenceNote || 'Datos declarados por el publicador; verificaci\u00f3n factual pendiente.'}
+            </p>
+          )}
         </div>
         <div className={featured ? 'w-full sm:w-56' : 'w-44'}>
           <CompatibilityTrace score={m.finalScore} />

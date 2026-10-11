@@ -17,6 +17,11 @@ maintenance task, read `skills/cvitae-scrapers/SKILL.md` and
 `skills/cvitae-scrapers/references/operational-maintenance.md`. They are the
 authoritative shared Codex/Claude source contract.
 
+Before changing matching, sources, source policy, any Universe or retrieval,
+read and apply `PRIVATE B2C MATCHING IS A CORE CONSUMER, NOT PUBLIC
+DISTRIBUTION` in `WORKING_PRINCIPLES.md`. Preserve the private matching/public
+distribution separation and whole-inventory accounting in every affected path.
+
 For source identity use the core resolver: canonical source, emitted source
 and source family are distinct. Never guess aliases. AUTO requires certified
 maintenance; a confirmed live observation may be audited as RESTORE but cannot

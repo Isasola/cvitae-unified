@@ -34,6 +34,7 @@ export const analytics = {
   b2bBatchCompleted: (processedCount: number, complete: boolean) => track('b2b_batch_completed', { processed_count: processedCount, complete }),
   b2bRecruiterAction: (action: string, elapsedSeconds: number) => track('b2b_recruiter_action', { action, elapsed_seconds: elapsedSeconds }),
   b2bCreditIntent: (creditCount: number) => track('b2b_credit_intent', { credit_count: creditCount, revenue: 0 }),
+  b2bSeoPlusIntent: (status: 'requested' | 'withdrawn') => track('b2b_seo_plus_intent', { status, revenue: 0 }),
   batchStarted: (count: number) => track('batch_started', { cv_count: count }),
   opportunityViewed: (opportunityId: string, source: string, context: OpportunityAnalyticsContext = {}) => track('opportunity_viewed', { ...context, opportunity_id: opportunityId, source }),
   prepareClicked: (context: OpportunityAnalyticsContext) => track('prepare_clicked', context),

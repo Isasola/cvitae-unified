@@ -159,7 +159,12 @@ await probe('PREFLIGHT_DIRECT_DEPENDENCY_COVERAGE', async () => {
   const preflight = source('artifacts/release/r2-b2b-preflight-20261009.sql')
   const relations = new Set([...preflight.split('function_manifest(')[0].matchAll(/\('(?:public|storage|auth)','([^']+)'/g)].map(match => match[1]))
   const functions = new Set([...preflight.split('function_manifest(')[1].split('relations AS (')[0].matchAll(/\('public','([^']+)'/g)].map(match => match[1]))
-  const proposedSql = source('supabase/migrations/202610090002_recruiter_opportunity_bridge.sql')
+  const proposedSql = [
+    'supabase/migrations/202610090002_recruiter_opportunity_bridge.sql',
+    'supabase/migrations/202610110001_private_b2c_matching_consumer.sql',
+    'supabase/migrations/202610110002_recruiter_update_and_seo_plus_request.sql',
+  ].map(source).join('\n')
+  for (const match of proposedSql.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?public\.([a-z0-9_]+)/gi)) relations.add(match[1])
   for (const match of proposedSql.matchAll(/create\s+or\s+replace\s+function\s+public\.([a-z0-9_]+)/gi)) functions.add(match[1])
   const entrypoints = [
     'create-vacancy', 'validate-recruiter-token', 'submit-lead', 'analyze-cv-candidate',

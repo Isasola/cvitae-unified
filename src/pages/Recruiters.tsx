@@ -1188,12 +1188,26 @@ interface VacancyRecord {
   id: string
   title: string
   slug: string
+  description: string
+  requirements: string
   location: string
   modality: string
+  salary_range: string | null
   is_active: boolean
   created_at: string
   vacancy_applications: { count: number }[]
+  seo_plus: null | {
+    request_status: 'REQUESTED' | 'PENDING_CONTRACT' | 'ACTIVE' | 'WITHDRAWN' | 'EXPIRED'
+    entitlement_status: 'NOT_CONTRACTED' | 'ACTIVE' | 'EXPIRED'
+    authorization_status: 'CONSENT_RECORDED' | 'WITHDRAWN'
+    delivery_status: 'NOT_EVALUATED' | 'SEO_READY' | 'PUBLISHED' | 'BLOCKED_QUALITY' | 'WITHDRAWN' | 'EXPIRED'
+    contract_version: string
+    consented_at: string
+    withdrawn_at: string | null
+  }
 }
+
+const SEO_PLUS_CONTRACT_VERSION = 'seo-plus-publication-v1-2026-10-11'
 
 const RUBROS = ['Tecnología', 'Administración', 'Contabilidad / Finanzas', 'Marketing / Ventas', 'Recursos Humanos', 'Logística / Operaciones', 'Producción / Manufactura', 'Salud', 'Educación', 'Gastronomía / Turismo', 'Construcción / Inmobiliaria', 'Legal', 'Otro']
 
@@ -1212,6 +1226,13 @@ function VacancyPanel({ token, organizationId, companyName, onAnalyzeApplicant }
   const [selectedVacancy, setSelectedVacancy] = useState<VacancyRecord | null>(null)
   const [closingVacancy, setClosingVacancy] = useState<string | null>(null)
   const [closingInProgress, setClosingInProgress] = useState(false)
+  const [editingVacancy, setEditingVacancy] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ title: '', description: '', requirements: '', location: '', modality: 'Presencial', salary_range: '' })
+  const [updatingVacancy, setUpdatingVacancy] = useState(false)
+  const [seoVacancyId, setSeoVacancyId] = useState<string | null>(null)
+  const [seoConsent, setSeoConsent] = useState(false)
+  const [seoBusy, setSeoBusy] = useState(false)
+  const [seoError, setSeoError] = useState('')
 
   useEffect(() => {
     try { const pending = pendingVacancy(organizationId); if (pending) setForm(pending.payload as typeof form) }
@@ -1263,6 +1284,54 @@ function VacancyPanel({ token, organizationId, companyName, onAnalyzeApplicant }
     } finally {
       setClosingInProgress(false)
     }
+  }
+
+  const beginEdit = (vacancy: VacancyRecord) => {
+    setSeoVacancyId(null)
+    setEditingVacancy(vacancy.id)
+    setEditForm({ title: vacancy.title, description: vacancy.description, requirements: vacancy.requirements,
+      location: vacancy.location, modality: vacancy.modality, salary_range: vacancy.salary_range || '' })
+  }
+
+  const updateVacancy = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!editingVacancy) return
+    setUpdatingVacancy(true); setListError('')
+    const fingerprint = `${editingVacancy}:${JSON.stringify(editForm)}`
+    const operationId = pendingOperationId('vacancy-update', fingerprint)
+    try {
+      const response = await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action: 'update_vacancy', vacancy_id: editingVacancy, operation_id: operationId, ...editForm }),
+      })
+      const result = await response.json()
+      if (!response.ok || result.ok !== true || result.id !== editingVacancy) throw new Error(result.error || 'No pudimos confirmar la edici\u00f3n.')
+      clearPendingOperation(operationId)
+      setEditingVacancy(null)
+      await loadVacancies()
+    } catch (error: any) { setListError(error?.message || 'No pudimos confirmar la edici\u00f3n. Reintent\u00e1.') }
+    finally { setUpdatingVacancy(false) }
+  }
+
+  const changeSeoPlus = async (vacancy: VacancyRecord, action: 'request_seo_plus' | 'withdraw_seo_plus') => {
+    setSeoBusy(true); setSeoError('')
+    const scope = action === 'request_seo_plus' ? 'seo-plus' : 'seo-plus-withdraw'
+    const operationId = pendingOperationId(scope, `${vacancy.id}:${action}:${SEO_PLUS_CONTRACT_VERSION}`)
+    try {
+      const response = await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action, vacancy_id: vacancy.id, operation_id: operationId,
+          public_indexing_consent: action === 'request_seo_plus' ? seoConsent : undefined,
+          contract_version: action === 'request_seo_plus' ? SEO_PLUS_CONTRACT_VERSION : undefined }),
+      })
+      const result = await response.json()
+      if (!response.ok || result.ok !== true || result.distribution_changed !== false) throw new Error(result.error || 'No pudimos confirmar la operaci\u00f3n.')
+      clearPendingOperation(operationId)
+      analytics.b2bSeoPlusIntent(action === 'request_seo_plus' ? 'requested' : 'withdrawn')
+      setSeoConsent(false)
+      await loadVacancies()
+    } catch (error: any) { setSeoError(error?.message || 'No pudimos confirmar la operaci\u00f3n. Reintent\u00e1.') }
+    finally { setSeoBusy(false) }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1512,7 +1581,19 @@ function VacancyPanel({ token, organizationId, companyName, onAnalyzeApplicant }
                             <button onClick={() => setClosingVacancy(null)} className="text-[11px] text-white/30 hover:text-white/60">No</button>
                           </div>
                         ) : (
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            {!closed && (
+                              <button onClick={() => { setEditingVacancy(null); setSeoVacancyId(seoVacancyId === v.id ? null : v.id); setSeoConsent(false); setSeoError('') }}
+                                className="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-400/[0.05] px-2.5 py-1 text-[11px] text-emerald-300 transition hover:bg-emerald-400/[0.12]">
+                                <Search strokeWidth={1.5} className="h-3 w-3" /> SEO Plus
+                              </button>
+                            )}
+                            {!closed && (
+                              <button onClick={() => beginEdit(v)}
+                                className="inline-flex items-center rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/40 transition hover:border-white/25 hover:text-white/70">
+                                Editar
+                              </button>
+                            )}
                             <button
                               onClick={() => setSelectedVacancy(v)}
                               className="inline-flex items-center gap-1 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-2.5 py-1 text-[11px] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
@@ -1544,6 +1625,48 @@ function VacancyPanel({ token, organizationId, companyName, onAnalyzeApplicant }
             </table>
           </div>
         )}
+
+        {editingVacancy && (() => {
+          const vacancy = vacancies.find(item => item.id === editingVacancy)
+          if (!vacancy) return null
+          return (
+            <form onSubmit={updateVacancy} className="mt-5 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div><p className="text-sm font-medium text-white">Editar vacante</p><p className="mt-1 text-xs text-white/40">Conserva identidad, slug, propiedad y postulaciones.</p></div>
+                <button type="button" onClick={() => setEditingVacancy(null)} className="text-white/35 hover:text-white"><X className="h-4 w-4" /></button>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <input required value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} aria-label="Titulo editado" className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white" />
+                <input required value={editForm.location} onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))} aria-label="Ubicacion editada" className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white" />
+                <select required value={editForm.modality} onChange={e => setEditForm(f => ({ ...f, modality: e.target.value }))} aria-label="Modalidad editada" className="rounded-xl border border-white/10 bg-[#111] px-3 py-2 text-sm text-white"><option>Presencial</option><option>Remoto</option><option value={'H\u00edbrido'}>{'H\u00edbrido'}</option></select>
+                <input value={editForm.salary_range} onChange={e => setEditForm(f => ({ ...f, salary_range: e.target.value }))} aria-label="Rango salarial editado" placeholder="Rango salarial opcional" className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white" />
+                <textarea required value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} aria-label="Descripcion editada" rows={4} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white md:col-span-2" />
+                <textarea required value={editForm.requirements} onChange={e => setEditForm(f => ({ ...f, requirements: e.target.value }))} aria-label="Requisitos editados" rows={4} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white md:col-span-2" />
+              </div>
+              <div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setEditingVacancy(null)} className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/55">Cancelar</button><button disabled={updatingVacancy} className="rounded-full bg-[#c9a84c] px-4 py-2 text-xs font-medium text-black disabled:opacity-50">{updatingVacancy ? 'Guardando\u2026' : 'Guardar cambios'}</button></div>
+            </form>
+          )
+        })()}
+
+        {seoVacancyId && (() => {
+          const vacancy = vacancies.find(item => item.id === seoVacancyId)
+          if (!vacancy) return null
+          const request = vacancy.seo_plus
+          const activeRequest = request && request.request_status !== 'WITHDRAWN' && request.request_status !== 'EXPIRED'
+          return (
+            <section className="mt-5 rounded-3xl border border-emerald-400/20 bg-emerald-400/[0.035] p-6" aria-label="SEO Plus">
+              <div className="flex items-start justify-between gap-5"><div><p className="text-[10px] uppercase tracking-[0.2em] text-emerald-300">Servicio B2B premium opcional</p><h3 className="mt-1 font-display text-2xl text-white">{'SEO Plus \u2014 Impuls\u00e1 la visibilidad de tu vacante'}</h3><p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/55">{'Preparamos una p\u00e1gina p\u00fablica con t\u00edtulo, descripci\u00f3n, estructura y metadatos basados en tus datos reales. Cuando la vacante cumpla las condiciones, puede incluir JobPosting e incorporarse a mecanismos de descubrimiento de CVitae para b\u00fasqueda tradicional y asistida por IA (SEO/AEO/GEO).'}</p></div><button type="button" onClick={() => setSeoVacancyId(null)} className="text-white/35 hover:text-white"><X className="h-4 w-4" /></button></div>
+              <div className="mt-4 grid gap-2 text-xs text-white/50 md:grid-cols-2"><p>{'\u2022 Ver\u00e1s si est\u00e1 solicitada, lista, publicada o bloqueada por calidad.'}</p><p>{'\u2022 Pod\u00e9s actualizar la vacante, cerrarla o retirar la solicitud.'}</p><p>{'\u2022 No garantiza posiciones, indexaci\u00f3n, tr\u00e1fico ni aparici\u00f3n en Google Jobs.'}</p><p>{'\u2022 No cambia el matching ni la gesti\u00f3n privada de candidatos.'}</p></div>
+              {request && <div className="mt-4 rounded-xl border border-white/8 bg-black/15 p-3 text-xs text-white/55">Solicitud: <span className="text-white">{request.request_status}</span>{' \u00b7 Contrataci\u00f3n: '}<span className="text-white">{request.entitlement_status}</span>{' \u00b7 Autorizaci\u00f3n: '}<span className="text-white">{request.authorization_status}</span>{' \u00b7 Publicaci\u00f3n: '}<span className="text-white">{request.delivery_status}</span></div>}
+              {seoError && <p className="mt-3 text-sm text-red-300" role="alert">{seoError}</p>}
+              {!activeRequest ? <>
+                <label className="mt-5 flex items-start gap-3 text-sm text-white/65"><input type="checkbox" checked={seoConsent} onChange={e => setSeoConsent(e.target.checked)} className="mt-1" /><span>{'Autorizo expresamente a CVitae a preparar una p\u00e1gina p\u00fablica y solicitar su indexaci\u00f3n con la informaci\u00f3n real de '}<strong className="text-white">{vacancy.title}</strong>, bajo {SEO_PLUS_CONTRACT_VERSION}. {'Entiendo que esta solicitud no activa el servicio ni garantiza distribuci\u00f3n.'}</span></label>
+                <button type="button" disabled={!seoConsent || seoBusy} onClick={() => changeSeoPlus(vacancy, 'request_seo_plus')} className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-300 px-5 py-2.5 text-sm font-medium text-[#07110c] disabled:cursor-not-allowed disabled:opacity-40">{seoBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Solicitar SEO Plus</button>
+                <p className="mt-2 text-xs text-white/35">{'Guardaremos tu solicitud y consentimiento. El equipo confirmar\u00e1 contrataci\u00f3n y activaci\u00f3n; no se realiza ning\u00fan cobro desde este bot\u00f3n.'}</p>
+              </> : <button type="button" disabled={seoBusy} onClick={() => changeSeoPlus(vacancy, 'withdraw_seo_plus')} className="mt-4 rounded-full border border-white/15 px-4 py-2 text-xs text-white/60 disabled:opacity-40">{seoBusy ? 'Retirando\u2026' : 'Retirar autorizaci\u00f3n y solicitud'}</button>}
+            </section>
+          )
+        })()}
       </div>
     </div>
   )

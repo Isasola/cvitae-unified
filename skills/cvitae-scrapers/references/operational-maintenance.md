@@ -129,6 +129,15 @@ Catalog, SEO, AEO, GEO, sitemap and JobPosting use existing gates. A cleaner
 never grants SEO eligibility. Hard-dead must not stay catalog-active,
 match-active, sitemap-active or active JobPosting.
 
+Private candidate matching reads its canonical final Matching Universe. Never
+filter that consumer again with Catalog, SEO, Alerts, Google Jobs or third-party
+distribution permission. Preserve a matching-specific explicit presentation
+DENIED; retain UNKNOWN as diagnostic evidence without silently granting it or
+using it as the sole veto. Source quality/data confidence may require a visible
+warning or abstention, but it is not professional affinity. Discovery coverage
+is accounted separately from bounded retrieval/embedding work so LIMIT and
+budget exhaustion never become silent inventory loss.
+
 ## New-source checklist
 
 1. Inspect permitted public source structure and classify Tier A/B/C.

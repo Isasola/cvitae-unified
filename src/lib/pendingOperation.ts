@@ -8,7 +8,7 @@ function read(): Record<string, string> {
   }
 }
 
-export function pendingOperationId(scope: 'single' | 'batch', fingerprint: string): string {
+export function pendingOperationId(scope: 'single' | 'batch' | 'vacancy-update' | 'seo-plus' | 'seo-plus-withdraw', fingerprint: string): string {
   const key = `${scope}:${fingerprint}`
   const operations = read()
   if (operations[key]) return operations[key]

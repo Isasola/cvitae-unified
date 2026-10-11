@@ -89,6 +89,10 @@ const unknownPermissionNoSwitch = evaluateOpportunityDistribution({ ...himalayas
 assert.equal(unknownPermissionNoSwitch.seo.capabilityState,'UNKNOWN')
 assert.equal(unknownPermissionNoSwitch.seo.allowed,true,'UNKNOWN source permission is not rewritten into a veto for a ready first-party page')
 assert.equal(unknownSeoPermissionReady.googleJobs.allowed, false, 'external Google Jobs remains fail-closed on unknown permission')
+const explicitPresentationDenied = evaluateOpportunityDistribution({ ...himalayasRow, source:'weworkremotely' }, [policy('wwr')])
+assert.equal(explicitPresentationDenied.matching.capabilityState,'DENIED')
+assert.equal(explicitPresentationDenied.matching.allowed,false,'explicit candidate-presentation DENIED survives executable producer defaults')
+assert(explicitPresentationDenied.matching.reasons.includes('SOURCE_MATCHING_PERMISSION_DENIED'))
 const recruiterPolicy = policy('recruiter_b2b', {
   web_catalog_allowed:false, search_engine_indexing_allowed:null,
   google_jobs_distribution_allowed:false, third_party_job_distribution_allowed:false,
@@ -98,7 +102,9 @@ const recruiterRow = { ...rich, source:'recruiter_b2b', slug:'b2b-fixture-role' 
 const recruiterBlocked = evaluateOpportunityDistribution(recruiterRow,[recruiterPolicy])
 assert.equal(recruiterBlocked.policyFound,true)
 assert.equal(recruiterBlocked.catalog.allowed,false); assert(recruiterBlocked.catalog.reasons.includes('WEB_CATALOG_DENIED'))
-assert.equal(recruiterBlocked.matching.allowed,false); assert(recruiterBlocked.matching.reasons.includes('MATCHING_PERMISSION_UNKNOWN'))
+assert.equal(recruiterBlocked.matching.allowed,true,'private Matching keeps UNKNOWN permission as evidence, not an invented denial')
+assert(recruiterBlocked.matching.permissionReasons.includes('SOURCE_MATCHING_PERMISSION_UNKNOWN'))
+assert.equal(recruiterBlocked.matching.reasons.includes('MATCHING_PERMISSION_UNKNOWN'),false)
 assert.equal(recruiterBlocked.alerts.allowed,false); assert(recruiterBlocked.alerts.reasons.includes('ALERTS_PERMISSION_UNKNOWN'))
 assert.equal(recruiterBlocked.seo.allowed,false); assert(recruiterBlocked.seo.reasons.includes('SEO_INDEX_PERMISSION_UNKNOWN'))
 assert.equal(recruiterBlocked.googleJobs.allowed,false); assert.equal(recruiterBlocked.thirdParty.allowed,false)

@@ -511,8 +511,9 @@ function preliminaryDecision(profile: any, opp: any, dictionary: any, now: strin
   // receives a fit decision.
   if (opp.source_match_state === 'DISABLED') hard_denials.push('SOURCE_DISABLED')
   if (opp.source_match_state === 'UNKNOWN') hard_denials.push('SOURCE_POLICY_UNKNOWN')
-  if (opp.is_active !== true || opp.verification_status !== 'verified' || opp.deleted_at != null || opp.archived_at != null || (opp.deadline != null && opp.deadline <= now)) hard_denials.push('ROW_LIFECYCLE_NOT_ROUTABLE')
-  if (opp.match_eligible !== true) hard_denials.push('ROW_MATCH_NOT_ELIGIBLE')
+  const admittedByPrivateUniverse = opp.universe_final_matching_state === 'READY'
+  if (!admittedByPrivateUniverse && (opp.is_active !== true || opp.verification_status !== 'verified' || opp.deleted_at != null || opp.archived_at != null || (opp.deadline != null && opp.deadline <= now))) hard_denials.push('ROW_LIFECYCLE_NOT_ROUTABLE')
+  if (!admittedByPrivateUniverse && opp.match_eligible !== true) hard_denials.push('ROW_MATCH_NOT_ELIGIBLE')
   if (isTender(opp)) hard_denials.push('NOT_APPLICABLE_TENDER')
   if (applicable === 'CONFLICT') hard_denials.push(`PROFESSIONAL_CONFLICT:${candidateFamily.family}->${vacancyFamily.family}`)
   if (eligibility === 'INELIGIBLE') hard_denials.push('CANDIDATE_INELIGIBLE', eligibilityEvaluation.reason)
