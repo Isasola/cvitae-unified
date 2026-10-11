@@ -17,7 +17,7 @@ drop trigger if exists recruiter_vacancy_bridge_after_write on public.recruiter_
 drop trigger if exists zz_recruiter_mirror_lifecycle on public.opportunities;
 drop function if exists public.recruiter_vacancy_bridge_after_write();
 drop function if exists public.guard_recruiter_mirror_lifecycle();
-drop function if exists public.reconcile_recruiter_vacancies_r2(integer,text,integer,integer);
+drop function if exists public.reconcile_recruiter_vacancies_r2(integer,text,integer,integer,integer);
 drop function if exists public.close_recruiter_vacancy_atomic(text,uuid);
 drop function if exists public.create_recruiter_vacancy_atomic(text,text,text,text,text,text,text,text,text,text[],text,text);
 drop function if exists public.sync_recruiter_vacancy_mirror(uuid,text);

@@ -2,7 +2,8 @@
 -- Requires separate approval after the READ_ONLY preview. Replace the marker
 -- with denominator.row_digest from that exact preview. The function re-locks,
 -- rejects drift, reconciles the 5 eligible rows and preserves/diagnoses the 3
--- OWNER_MISSING rows. It never grants publication.
+-- OWNER_MISSING rows. The final zero binds the WRITE to the observed absence
+-- of mirrors; any preexisting mirror aborts the whole transaction.
 begin;
 set local lock_timeout='5s';
 set local statement_timeout='60s';
@@ -13,6 +14,6 @@ begin
   end if;
 end $guard$;
 select public.reconcile_recruiter_vacancies_r2(
-  8,'__EXPECTED_DIGEST_FROM_PREVIEW__',5,3
+  8,'__EXPECTED_DIGEST_FROM_PREVIEW__',5,3,0
 ) reconciliation_result;
 commit;

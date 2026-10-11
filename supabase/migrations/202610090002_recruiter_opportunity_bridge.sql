@@ -80,6 +80,9 @@ begin
   if v_existing is not null and exists(select 1 from public.opportunities where id=v_existing and source<>'recruiter_b2b') then
     raise exception 'mirror_source_conflict';
   end if;
+  if p_origin='HISTORICAL_RECONCILIATION' and v_existing is not null then
+    raise exception 'historical_preexisting_mirror:%',v_existing;
+  end if;
   if v_url is null then select application_url into v_url from public.recruiter_vacancy_operations where vacancy_id=v.id; end if;
   v_url:=coalesce(v_url,'https://cvitae.lat/vacante/'||v.slug);
   v_id:=coalesce(v_existing,'recruiter-'||v.id::text);
@@ -128,6 +131,7 @@ begin
       'requirements_source','recruiter_vacancies.requirements',
       'value_semantics','COMPENSATION_TEXT','value_source','recruiter_vacancies.salary_range',
       'work_arrangement_source','recruiter_vacancies.modality','country_evidence','NOT_PROVIDED',
+      'historical_created_by_reconciliation',p_origin='HISTORICAL_RECONCILIATION' and v_outcome='INSERTED',
       'observation','NOT_PERFORMED','distribution','INDEPENDENT_CANONICAL_GATES')
   );
   -- Existing opportunity after-write trigger is the Universe authority.
@@ -250,23 +254,33 @@ begin
 end $$;
 
 create or replace function public.reconcile_recruiter_vacancies_r2(
-  p_expected_count integer,p_expected_digest text,p_expected_reconcilable integer,p_expected_pending integer
+  p_expected_count integer,p_expected_digest text,p_expected_reconcilable integer,p_expected_pending integer,
+  p_expected_existing_mirrors integer
 )
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare v_count integer; v_digest text; v record; v_reconciled integer:=0; v_pending integer:=0;
+  v_existing_mirrors integer; v_opportunity_id text;
   v_pending_rows jsonb:='[]'::jsonb; v_pending_by_reason jsonb;
 begin
   -- Explicit operator transaction only. No scheduler calls this function.
   lock table public.recruiter_vacancies in share row exclusive mode;
+  lock table public.opportunities in share row exclusive mode;
   -- RECRUITER_VACANCY_V1 is schema-stable: unrelated future columns do not
   -- invalidate the operator preview or silently enter the reconciliation scope.
   select count(*),md5(coalesce(string_agg(jsonb_build_array(
     r.id::text,r.title,r.description,r.requirements,r.location,r.modality,r.salary_range,
     r.company,r.slug,r.recruiter_token_id::text,r.is_active,r.created_at
   )::text,'|' order by r.id),'')) into v_count,v_digest from public.recruiter_vacancies r;
+  select count(*)::integer into v_existing_mirrors
+  from public.opportunities o where exists(
+    select 1 from public.recruiter_vacancies r where r.id=o.recruiter_vacancy_id);
   if p_expected_count is null or p_expected_digest is null or p_expected_reconcilable is null or p_expected_pending is null
+    or p_expected_existing_mirrors is null
     or v_count<>p_expected_count or v_digest<>p_expected_digest then
     raise exception 'historical_preview_changed';
+  end if;
+  if p_expected_existing_mirrors<>0 or v_existing_mirrors<>p_expected_existing_mirrors then
+    raise exception 'historical_existing_mirrors_detected:expected=%,actual=%',p_expected_existing_mirrors,v_existing_mirrors;
   end if;
   for v in
     with facts as (
@@ -288,6 +302,7 @@ begin
       when slug is null or slug !~ '^[A-Za-z0-9-]{3,80}$' then 'INVALID_SLUG'
       when mirror_count>1 then 'DUPLICATE_MIRROR'
       when mirror_source_conflicts>0 then 'MIRROR_SOURCE_CONFLICT'
+      when mirror_count>0 then 'PREEXISTING_MIRROR'
       when expected_slug_collisions>0 then 'EXPECTED_SLUG_COLLISION'
       when application_url_collisions>0 then 'APPLICATION_URL_COLLISION'
       when quality_missing then 'QUALITY_MISSING'
@@ -295,7 +310,13 @@ begin
     end inventory_gate from facts order by id
   loop
     if v.inventory_gate='INVENTORY_RECONCILABLE' then
-      perform public.sync_recruiter_vacancy_mirror(v.id,'HISTORICAL_RECONCILIATION');
+      v_opportunity_id:=public.sync_recruiter_vacancy_mirror(v.id,'HISTORICAL_RECONCILIATION');
+      if not exists(
+        select 1 from public.opportunity_ingestion_events e
+        where e.opportunity_id=v_opportunity_id and e.adapter_id='recruiter-vacancy-declared-fields'
+          and e.reason='HISTORICAL_RECONCILIATION' and e.outcome='INSERTED'
+          and e.evidence->>'historical_created_by_reconciliation'='true'
+      ) then raise exception 'historical_insert_lineage_missing:%',v_opportunity_id; end if;
       v_reconciled:=v_reconciled+1;
     else
       v_pending:=v_pending+1;
@@ -308,6 +329,7 @@ begin
   select coalesce(jsonb_object_agg(reason,n),'{}'::jsonb) into v_pending_by_reason
   from (select value->>'reason' reason,count(*) n from jsonb_array_elements(v_pending_rows) group by value->>'reason') q;
   return jsonb_build_object('total',v_count,'reconciled',v_reconciled,'pending',v_pending,
+    'created',v_reconciled,'existing_mirrors_before',v_existing_mirrors,
     'accounted',v_reconciled+v_pending,'row_digest_contract','RECRUITER_VACANCY_V1',
     'pending_by_reason',v_pending_by_reason,'pending_rows',v_pending_rows,'publication_authorized',false);
 end $$;
@@ -318,10 +340,10 @@ revoke all on function public.recruiter_vacancy_bridge_after_write() from public
 revoke all on function public.create_recruiter_vacancy_atomic(text,text,text,text,text,text,text,text,text,text[],text,text) from public,anon,authenticated;
 revoke all on function public.create_recruiter_vacancy_atomic(text,text,text,text,text,text,text,text,text,text[],text) from public,anon,authenticated;
 revoke all on function public.close_recruiter_vacancy_atomic(text,uuid) from public,anon,authenticated;
-revoke all on function public.reconcile_recruiter_vacancies_r2(integer,text,integer,integer) from public,anon,authenticated;
+revoke all on function public.reconcile_recruiter_vacancies_r2(integer,text,integer,integer,integer) from public,anon,authenticated;
 grant execute on function public.sync_recruiter_vacancy_mirror(uuid,text) to service_role;
 grant execute on function public.create_recruiter_vacancy_atomic(text,text,text,text,text,text,text,text,text,text[],text,text) to service_role;
 grant execute on function public.create_recruiter_vacancy_atomic(text,text,text,text,text,text,text,text,text,text[],text) to service_role;
 grant execute on function public.close_recruiter_vacancy_atomic(text,uuid) to service_role;
-grant execute on function public.reconcile_recruiter_vacancies_r2(integer,text,integer,integer) to service_role;
+grant execute on function public.reconcile_recruiter_vacancies_r2(integer,text,integer,integer,integer) to service_role;
 commit;

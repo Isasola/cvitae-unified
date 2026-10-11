@@ -33,6 +33,7 @@ with policy as (
       when slug is null or slug !~ '^[A-Za-z0-9-]{3,80}$' then 'INVALID_SLUG'
       when mirror_count>1 then 'DUPLICATE_MIRROR'
       when mirror_source_conflicts>0 then 'MIRROR_SOURCE_CONFLICT'
+      when mirror_count>0 then 'PREEXISTING_MIRROR'
       when expected_slug_collisions>0 then 'EXPECTED_SLUG_COLLISION'
       when application_url_collisions>0 then 'APPLICATION_URL_COLLISION'
       when nullif(trim(title),'') is null or nullif(trim(description),'') is null
@@ -73,17 +74,19 @@ with policy as (
 ), accounting as (
   select count(*) filter(where reconciliation_state='ELIGIBLE')::integer reconcilable,
     count(*) filter(where reconciliation_state='HISTORICAL_UNRESOLVED')::integer pending,
-    count(*) filter(where inventory_gate='OWNER_MISSING')::integer owner_missing
+    count(*) filter(where inventory_gate='OWNER_MISSING')::integer owner_missing,
+    coalesce(sum(mirror_count),0)::integer existing_mirrors,
+    count(*) filter(where mirror_count>0)::integer rows_with_existing_mirror
   from rows
 ), pending_by_reason as (
   select coalesce(jsonb_object_agg(inventory_gate,n),'{}'::jsonb) value
   from (select inventory_gate,count(*) n from rows where reconciliation_state='HISTORICAL_UNRESOLVED' group by inventory_gate) q
 )
 select jsonb_build_object(
-  'mode','READ_ONLY','expected_from_stop_c1',jsonb_build_object('total',8,'active',6,'inactive',2,'reconcilable',5,'pending',3,'owner_missing',3),
+  'mode','READ_ONLY','expected_from_stop_c2',jsonb_build_object('total',8,'active',6,'inactive',2,'reconcilable',5,'pending',3,'owner_missing',3,'existing_mirrors',0),
   'denominator',to_jsonb(digest)||jsonb_build_object('row_digest_contract','RECRUITER_VACANCY_V1'),
   'accounting',to_jsonb(accounting)||jsonb_build_object('accounted',accounting.reconcilable+accounting.pending,'pending_by_reason',(select value from pending_by_reason)),
-  'evidence_matches_stop_c1',(digest.total,digest.active,digest.inactive,accounting.reconcilable,accounting.pending,accounting.owner_missing)=(8,6,2,5,3,3),
+  'reconciliation_write_allowed',(digest.total,digest.active,digest.inactive,accounting.reconcilable,accounting.pending,accounting.owner_missing,accounting.existing_mirrors)=(8,6,2,5,3,3,0),
   'policy',(select value from policy),'permissions',(select value from permissions),
   'public_distribution_authorized',false,
   'rows',coalesce((select jsonb_agg(to_jsonb(rows) order by id) from rows),'[]'::jsonb)
