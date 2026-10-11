@@ -1,25 +1,48 @@
 -- WRITE COMPENSATION / NOT AUTHORIZED BY DEFAULT.
--- Removes ONLY mirrors whose lineage proves this historical reconciliation.
--- Refuses to proceed if the candidate set is no longer exactly 8 or if any
--- candidate has subsequent non-historical recruiter bridge lineage.
+-- Replace the digest marker with compensation_scope.mirror_digest from the
+-- post-apply verifier. Removes only the exact historical reconciliation set;
+-- the 3 unresolved recruiter rows remain untouched.
 begin;
 set local lock_timeout='5s';
 set local statement_timeout='60s';
+lock table public.opportunities in share row exclusive mode;
+lock table public.opportunity_ingestion_events in share mode;
 do $guard$
-declare v_count integer; v_future integer;
+declare v_count integer; v_digest text; v_future integer;
 begin
-  select count(distinct o.id) into v_count
-  from public.opportunities o join public.opportunity_ingestion_events e on e.opportunity_id=o.id
-  where o.source='recruiter_b2b' and e.adapter_id='recruiter-vacancy-declared-fields'
-    and e.reason='HISTORICAL_RECONCILIATION';
-  select count(distinct o.id) into v_future
-  from public.opportunities o join public.opportunity_ingestion_events e on e.opportunity_id=o.id
-  where o.source='recruiter_b2b' and e.adapter_id='recruiter-vacancy-declared-fields'
+  if '__EXPECTED_HISTORICAL_MIRROR_DIGEST_FROM_POST_VERIFY__' like '\_\_%' escape '\' then
+    raise exception 'replace_expected_historical_mirror_digest';
+  end if;
+  with candidates as (
+    select distinct o.id
+    from public.opportunities o
+    join public.opportunity_ingestion_events e on e.opportunity_id=o.id
+    where o.source='recruiter_b2b' and e.adapter_id='recruiter-vacancy-declared-fields'
+      and e.reason='HISTORICAL_RECONCILIATION'
+  )
+  select count(*),md5(coalesce(string_agg(id::text,'|' order by id),'')) into v_count,v_digest from candidates;
+  with candidates as (
+    select distinct o.id
+    from public.opportunities o
+    join public.opportunity_ingestion_events e on e.opportunity_id=o.id
+    where o.source='recruiter_b2b' and e.adapter_id='recruiter-vacancy-declared-fields'
+      and e.reason='HISTORICAL_RECONCILIATION'
+  )
+  select count(distinct c.id) into v_future
+  from candidates c
+  join public.opportunity_ingestion_events e on e.opportunity_id=c.id
+  where e.adapter_id='recruiter-vacancy-declared-fields'
     and e.reason in ('FUTURE_CREATE','FUTURE_UPDATE','CLOSE_RETRY');
-  if v_count<>8 or v_future<>0 then raise exception 'compensation_scope_changed:historical=%,future=%',v_count,v_future; end if;
+  if v_count<>5 or v_digest<>'__EXPECTED_HISTORICAL_MIRROR_DIGEST_FROM_POST_VERIFY__' or v_future<>0 then
+    raise exception 'compensation_scope_changed:historical=%,digest=%,future_on_candidates=%',v_count,v_digest,v_future;
+  end if;
 end $guard$;
-delete from public.opportunities o
-where o.source='recruiter_b2b' and exists(
-  select 1 from public.opportunity_ingestion_events e where e.opportunity_id=o.id
-    and e.adapter_id='recruiter-vacancy-declared-fields' and e.reason='HISTORICAL_RECONCILIATION');
+with candidates as (
+  select distinct o.id
+  from public.opportunities o
+  join public.opportunity_ingestion_events e on e.opportunity_id=o.id
+  where o.source='recruiter_b2b' and e.adapter_id='recruiter-vacancy-declared-fields'
+    and e.reason='HISTORICAL_RECONCILIATION'
+)
+delete from public.opportunities o using candidates c where o.id=c.id;
 commit;

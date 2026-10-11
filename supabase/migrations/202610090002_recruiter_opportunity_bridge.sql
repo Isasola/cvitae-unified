@@ -159,14 +159,19 @@ create or replace function public.create_recruiter_vacancy_atomic(
 ) returns jsonb language plpgsql security definer set search_path='' as $$
 declare v_token public.recruiter_tokens%rowtype; v_vacancy public.recruiter_vacancies%rowtype;
   v_typed public.recruiter_vacancies%rowtype; v_operation public.recruiter_vacancy_operations%rowtype;
-  v_request jsonb; v_id uuid; v_mirror text;
+  v_request jsonb; v_id uuid; v_mirror text; v_slug text; v_application_url text;
 begin
   if p_operation_id is null or p_operation_id !~ '^[A-Za-z0-9._:-]{8,128}$' then raise exception 'operation_id_required'; end if;
   if nullif(trim(p_title),'') is null or nullif(trim(p_description),'') is null or nullif(trim(p_requirements),'') is null
     or nullif(trim(p_location),'') is null or nullif(trim(p_modality),'') is null then raise exception 'required_vacancy_fields_missing'; end if;
-  if p_slug is null or p_slug !~ '^[a-z0-9-]{3,80}$' then raise exception 'invalid_vacancy_slug'; end if;
-  if p_application_url is null or p_application_url !~ '^https://[A-Za-z0-9.-]+(:[0-9]+)?/vacante/[a-z0-9-]+$'
-    or right(p_application_url,length(p_slug)+1)<>'/'||p_slug then raise exception 'invalid_vacancy_url'; end if;
+  v_slug:=lower(trim(p_slug));
+  v_application_url:=trim(p_application_url);
+  if v_slug is null or v_slug !~ '^[a-z0-9-]{3,80}$' then raise exception 'invalid_vacancy_slug'; end if;
+  if v_application_url is null or v_application_url !~ '^https://[A-Za-z0-9.-]+(:[0-9]+)?/vacante/[A-Za-z0-9-]+$'
+    or lower(right(v_application_url,length(trim(p_slug))+1))<>'/'||v_slug then raise exception 'invalid_vacancy_url'; end if;
+  -- R1 generated uppercase random suffixes. Canonicalize the matching path
+  -- suffix with the slug so the compatibility overload survives the rollout.
+  v_application_url:=left(v_application_url,length(v_application_url)-length(trim(p_slug)))||v_slug;
   select * into v_token from public.recruiter_tokens where id::text=p_recruiter_token_id
     and is_active=true and verification_status='verified' for share;
   if not found then raise exception 'invalid_recruiter'; end if;
@@ -175,7 +180,8 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('recruiter-create:'||v_token.id::text||':'||p_operation_id,0));
   v_request:=jsonb_build_object('title',trim(p_title),'description',trim(p_description),'requirements',trim(p_requirements),
     'location',trim(p_location),'modality',trim(p_modality),'salary_range',nullif(trim(p_salary_range),''),
-    'rubro',nullif(trim(p_rubro),''),'tags',coalesce(p_tags,'{}'::text[]));
+    'rubro',nullif(trim(p_rubro),''),'tags',coalesce(p_tags,'{}'::text[]),
+    'slug',v_slug,'application_url',v_application_url);
   select * into v_operation from public.recruiter_vacancy_operations where recruiter_token_id=v_token.id::text and operation_id=p_operation_id;
   if found then
     if v_operation.request<>v_request then raise exception 'operation_conflict'; end if;
@@ -187,26 +193,43 @@ begin
   end if;
   v_id:=gen_random_uuid();
   insert into public.recruiter_vacancy_operations(recruiter_token_id,operation_id,request,vacancy_id,application_url)
-    values(v_token.id::text,p_operation_id,v_request,v_id,p_application_url);
+    values(v_token.id::text,p_operation_id,v_request,v_id,v_application_url);
   v_typed:=jsonb_populate_record(null::public.recruiter_vacancies,jsonb_build_object('recruiter_token_id',v_token.id::text));
   -- The AFTER trigger creates the mirror and lineage in THIS transaction.
   insert into public.recruiter_vacancies(id,title,description,requirements,location,modality,salary_range,company,slug,recruiter_token_id,is_active)
     values(v_id,trim(p_title),trim(p_description),trim(p_requirements),trim(p_location),trim(p_modality),nullif(trim(p_salary_range),''),
-      trim(v_token.company_name),p_slug,v_typed.recruiter_token_id,true) returning * into v_vacancy;
+      trim(v_token.company_name),v_slug,v_typed.recruiter_token_id,true) returning * into v_vacancy;
   select id into v_mirror from public.opportunities where recruiter_vacancy_id=v_id;
   if v_mirror is null then raise exception 'OPPORTUNITY_MIRROR_INSERT_FAILED'; end if;
   -- Optional categorization is preserved without inventing factual tags.
   update public.opportunities set rubro=nullif(trim(p_rubro),''),tags=coalesce(p_tags,'{}'::text[]) where id=v_mirror;
-  return jsonb_build_object('success',true,'id',v_id,'opportunity_id',v_mirror,'slug',v_vacancy.slug,'url',p_application_url,'idempotent',false);
+  return jsonb_build_object('success',true,'id',v_id,'opportunity_id',v_mirror,'slug',v_vacancy.slug,'url',v_application_url,'idempotent',false);
 end $$;
 
--- Keep the old signature for safe rollout; an old client cannot bypass durable
--- operation identity. It fails closed and must upgrade, rather than create pairs.
+-- Transitional compatibility for the installed 11-argument client. It cannot
+-- bypass validation or ownership: the exact normalized request is fingerprinted
+-- and delegated to the authoritative 12-argument RPC. A later, separately
+-- authorized cutover removes this compatibility after all callers use operation_id.
 create or replace function public.create_recruiter_vacancy_atomic(
   p_recruiter_token_id text,p_title text,p_description text,p_requirements text,p_location text,p_modality text,
   p_salary_range text,p_slug text,p_rubro text,p_tags text[],p_application_url text
 ) returns jsonb language plpgsql security definer set search_path='' as $$
-begin raise exception 'operation_id_required'; end $$;
+declare v_operation_id text; v_result jsonb; v_slug text; v_application_url text;
+begin
+  v_slug:=lower(trim(p_slug));
+  v_application_url:=case when p_application_url is null or nullif(trim(p_slug),'') is null then trim(p_application_url)
+    else left(trim(p_application_url),greatest(length(trim(p_application_url))-length(trim(p_slug)),0))||v_slug end;
+  v_operation_id:='legacy:'||encode(extensions.digest(convert_to(jsonb_build_object(
+    'recruiter_token_id',p_recruiter_token_id,'title',trim(p_title),'description',trim(p_description),
+    'requirements',trim(p_requirements),'location',trim(p_location),'modality',trim(p_modality),
+    'salary_range',nullif(trim(p_salary_range),''),'slug',v_slug,
+    'rubro',nullif(trim(p_rubro),''),'tags',coalesce(p_tags,'{}'::text[]),
+    'application_url',v_application_url)::text,'UTF8'),'sha256'),'hex');
+  v_result:=public.create_recruiter_vacancy_atomic(
+    p_recruiter_token_id,p_title,p_description,p_requirements,p_location,p_modality,
+    p_salary_range,v_slug,p_rubro,p_tags,v_application_url,v_operation_id);
+  return v_result||jsonb_build_object('compatibility_mode','LEGACY_REQUEST_FINGERPRINT');
+end $$;
 
 create or replace function public.close_recruiter_vacancy_atomic(p_recruiter_token_id text,p_vacancy_id uuid)
 returns jsonb language plpgsql security definer set search_path='' as $$
@@ -217,7 +240,7 @@ begin
   select * into v from public.recruiter_vacancies where id=p_vacancy_id and recruiter_token_id::text=p_recruiter_token_id for update;
   if not found then raise exception 'vacancy_not_owned'; end if;
   v_already_closed:=v.is_active=false;
-  if not v_already_closed then update public.recruiter_vacancies set is_active=false,updated_at=now() where id=v.id; end if;
+  if not v_already_closed then update public.recruiter_vacancies set is_active=false where id=v.id; end if;
   v_id:=public.sync_recruiter_vacancy_mirror(v.id,'CLOSE_RETRY');
   if exists(select 1 from public.opportunities where id=v_id and is_active is distinct from false) then raise exception 'close_mirror_mismatch'; end if;
   if not exists(select 1 from public.opportunity_universe_state where opportunity_id=v_id) or exists(
@@ -226,30 +249,79 @@ begin
   return jsonb_build_object('ok',true,'id',v.id,'opportunity_id',v_id,'is_active',false,'idempotent',v_already_closed);
 end $$;
 
-create or replace function public.reconcile_recruiter_vacancies_r2(p_expected_count integer,p_expected_digest text)
+create or replace function public.reconcile_recruiter_vacancies_r2(
+  p_expected_count integer,p_expected_digest text,p_expected_reconcilable integer,p_expected_pending integer
+)
 returns jsonb language plpgsql security definer set search_path='' as $$
-declare v_count integer; v_digest text; v record; v_processed integer:=0;
+declare v_count integer; v_digest text; v record; v_reconciled integer:=0; v_pending integer:=0;
+  v_pending_rows jsonb:='[]'::jsonb; v_pending_by_reason jsonb;
 begin
   -- Explicit operator transaction only. No scheduler calls this function.
   lock table public.recruiter_vacancies in share row exclusive mode;
-  select count(*),md5(coalesce(string_agg(to_jsonb(r)::text,'|' order by r.id),'')) into v_count,v_digest from public.recruiter_vacancies r;
-  if p_expected_count is null or p_expected_digest is null or v_count<>p_expected_count or v_digest<>p_expected_digest then
+  -- RECRUITER_VACANCY_V1 is schema-stable: unrelated future columns do not
+  -- invalidate the operator preview or silently enter the reconciliation scope.
+  select count(*),md5(coalesce(string_agg(jsonb_build_array(
+    r.id::text,r.title,r.description,r.requirements,r.location,r.modality,r.salary_range,
+    r.company,r.slug,r.recruiter_token_id::text,r.is_active,r.created_at
+  )::text,'|' order by r.id),'')) into v_count,v_digest from public.recruiter_vacancies r;
+  if p_expected_count is null or p_expected_digest is null or p_expected_reconcilable is null or p_expected_pending is null
+    or v_count<>p_expected_count or v_digest<>p_expected_digest then
     raise exception 'historical_preview_changed';
   end if;
-  for v in select id from public.recruiter_vacancies order by id loop
-    perform public.sync_recruiter_vacancy_mirror(v.id,'HISTORICAL_RECONCILIATION'); v_processed:=v_processed+1;
+  for v in
+    with facts as (
+      select r.id,r.slug,t.id owner_id,t.is_active owner_active,t.verification_status,
+        (select count(*) from public.opportunities o where o.recruiter_vacancy_id=r.id) mirror_count,
+        (select count(*) from public.opportunities o where o.recruiter_vacancy_id=r.id and o.source<>'recruiter_b2b') mirror_source_conflicts,
+        (select count(*) from public.opportunities o where o.slug='b2b-'||lower(r.slug) and o.recruiter_vacancy_id is distinct from r.id) expected_slug_collisions,
+        (select count(*) from public.opportunities o where o.application_url='https://cvitae.lat/vacante/'||r.slug and o.recruiter_vacancy_id is distinct from r.id) application_url_collisions,
+        nullif(trim(r.title),'') is null or nullif(trim(r.description),'') is null
+          or nullif(trim(r.requirements),'') is null or nullif(trim(r.location),'') is null
+          or nullif(trim(r.modality),'') is null quality_missing
+      from public.recruiter_vacancies r
+      left join public.recruiter_tokens t on t.id::text=r.recruiter_token_id::text
+    )
+    select id,case
+      when owner_id is null then 'OWNER_MISSING'
+      when not coalesce(owner_active,false) then 'PUBLISHER_INACTIVE'
+      when verification_status is distinct from 'verified' then 'PUBLISHER_IDENTITY_NOT_VERIFIED'
+      when slug is null or slug !~ '^[A-Za-z0-9-]{3,80}$' then 'INVALID_SLUG'
+      when mirror_count>1 then 'DUPLICATE_MIRROR'
+      when mirror_source_conflicts>0 then 'MIRROR_SOURCE_CONFLICT'
+      when expected_slug_collisions>0 then 'EXPECTED_SLUG_COLLISION'
+      when application_url_collisions>0 then 'APPLICATION_URL_COLLISION'
+      when quality_missing then 'QUALITY_MISSING'
+      else 'INVENTORY_RECONCILABLE'
+    end inventory_gate from facts order by id
+  loop
+    if v.inventory_gate='INVENTORY_RECONCILABLE' then
+      perform public.sync_recruiter_vacancy_mirror(v.id,'HISTORICAL_RECONCILIATION');
+      v_reconciled:=v_reconciled+1;
+    else
+      v_pending:=v_pending+1;
+      v_pending_rows:=v_pending_rows||jsonb_build_array(jsonb_build_object('id',v.id,'reason',v.inventory_gate));
+    end if;
   end loop;
-  return jsonb_build_object('processed',v_processed,'expected',v_count,'publication_authorized',false);
+  if v_reconciled<>p_expected_reconcilable or v_pending<>p_expected_pending or v_reconciled+v_pending<>v_count then
+    raise exception 'historical_accounting_changed:reconcilable=%,pending=%,total=%',v_reconciled,v_pending,v_count;
+  end if;
+  select coalesce(jsonb_object_agg(reason,n),'{}'::jsonb) into v_pending_by_reason
+  from (select value->>'reason' reason,count(*) n from jsonb_array_elements(v_pending_rows) group by value->>'reason') q;
+  return jsonb_build_object('total',v_count,'reconciled',v_reconciled,'pending',v_pending,
+    'accounted',v_reconciled+v_pending,'row_digest_contract','RECRUITER_VACANCY_V1',
+    'pending_by_reason',v_pending_by_reason,'pending_rows',v_pending_rows,'publication_authorized',false);
 end $$;
 
 revoke all on function public.guard_recruiter_mirror_lifecycle() from public,anon,authenticated;
 revoke all on function public.sync_recruiter_vacancy_mirror(uuid,text) from public,anon,authenticated;
 revoke all on function public.recruiter_vacancy_bridge_after_write() from public,anon,authenticated;
 revoke all on function public.create_recruiter_vacancy_atomic(text,text,text,text,text,text,text,text,text,text[],text,text) from public,anon,authenticated;
+revoke all on function public.create_recruiter_vacancy_atomic(text,text,text,text,text,text,text,text,text,text[],text) from public,anon,authenticated;
 revoke all on function public.close_recruiter_vacancy_atomic(text,uuid) from public,anon,authenticated;
-revoke all on function public.reconcile_recruiter_vacancies_r2(integer,text) from public,anon,authenticated;
+revoke all on function public.reconcile_recruiter_vacancies_r2(integer,text,integer,integer) from public,anon,authenticated;
 grant execute on function public.sync_recruiter_vacancy_mirror(uuid,text) to service_role;
 grant execute on function public.create_recruiter_vacancy_atomic(text,text,text,text,text,text,text,text,text,text[],text,text) to service_role;
+grant execute on function public.create_recruiter_vacancy_atomic(text,text,text,text,text,text,text,text,text,text[],text) to service_role;
 grant execute on function public.close_recruiter_vacancy_atomic(text,uuid) to service_role;
-grant execute on function public.reconcile_recruiter_vacancies_r2(integer,text) to service_role;
+grant execute on function public.reconcile_recruiter_vacancies_r2(integer,text,integer,integer) to service_role;
 commit;
