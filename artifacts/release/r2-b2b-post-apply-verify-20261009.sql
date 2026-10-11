@@ -3,6 +3,18 @@
 -- explicitly diagnosed rows. Consumer decisions remain independent.
 with policy as (
   select public.canonical_opportunity_source_policy('recruiter_b2b') value
+), permissions as (
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'consumer',consumer,'permission_state',permission_state,'reason',reason,'provenance',provenance)
+    order by consumer),'[]'::jsonb) value
+  from public.opportunity_source_consumer_permissions where canonical_source='recruiter_b2b'
+), policy_snapshot as (
+  select jsonb_build_object(
+    'web_catalog_allowed',policy.value->'web_catalog_allowed',
+    'search_engine_indexing_allowed',policy.value->'search_engine_indexing_allowed',
+    'google_jobs_distribution_allowed',policy.value->'google_jobs_distribution_allowed',
+    'third_party_job_distribution_allowed',policy.value->'third_party_job_distribution_allowed',
+    'consumer_permissions',permissions.value) value from policy,permissions
 ), facts as (
   select r.*,t.id owner_id,t.is_active owner_active,t.verification_status owner_verification_status,
     (select count(*) from public.opportunities x where x.recruiter_vacancy_id=r.id)::integer mirror_count,
@@ -31,8 +43,9 @@ with policy as (
   select c.id,c.is_active recruiter_active,c.inventory_gate,
     case when c.inventory_gate='INVENTORY_RECONCILABLE' then 'ELIGIBLE' else 'HISTORICAL_UNRESOLVED' end reconciliation_state,
     c.mirror_count,o.id opportunity_id,o.is_active opportunity_active,o.source,o.country_code,
+    o.verification_status,o.original_source_verified,
     o.requirements,o.value,o.slug,o.application_url,u.lifecycle_state,u.catalog_state,
-    u.final_matching_state,u.alerts_state,u.seo_state,u.provenance
+    u.lifecycle_reason,u.final_matching_state,u.alerts_state,u.seo_state,u.provenance
   from classified c
   left join public.opportunities o on o.id=c.opportunity_id
   left join public.opportunity_universe_state u on u.opportunity_id=o.id
@@ -48,6 +61,12 @@ with policy as (
     count(*) filter(where mirror_count>1)::integer duplicate_mirrors,
     count(*) filter(where reconciliation_state='ELIGIBLE' and mirror_count<>1)::integer eligible_without_one_mirror,
     count(*) filter(where reconciliation_state='HISTORICAL_UNRESOLVED' and mirror_count<>0)::integer unresolved_with_mirror,
+    count(*) filter(where mirror_count=1 and recruiter_active)::integer mirrored_declared_open,
+    count(*) filter(where mirror_count=1 and not recruiter_active)::integer mirrored_declared_closed,
+    count(*) filter(where mirror_count=1 and recruiter_active and opportunity_active
+      and lifecycle_state='ACTIVE_VALID' and lifecycle_reason='PUBLISHER_DECLARED_OPEN_FACTUAL_PENDING')::integer open_lifecycle_correct,
+    count(*) filter(where mirror_count=1 and not recruiter_active and not opportunity_active
+      and lifecycle_state='INACTIVE_VALID' and lifecycle_reason='PUBLISHER_CLOSED')::integer closed_lifecycle_correct,
     count(*) filter(where mirror_count=1 and recruiter_active is distinct from opportunity_active)::integer lifecycle_mismatch,
     count(*) filter(where mirror_count=1 and opportunity_id is not null and lifecycle_state is null)::integer missing_universe_state,
     count(*) filter(where mirror_count=1 and (
@@ -55,6 +74,8 @@ with policy as (
       or (not recruiter_active and lifecycle_state='ACTIVE_VALID')))::integer lifecycle_state_contradictions,
     count(*) filter(where mirror_count=1 and not recruiter_active and ('READY' in (catalog_state,final_matching_state,alerts_state,seo_state)))::integer closed_ready_anywhere,
     count(*) filter(where mirror_count=1 and country_code is not null)::integer country_inferred,
+    count(*) filter(where mirror_count=1 and (verification_status is distinct from 'pending'
+      or original_source_verified is distinct from false))::integer factual_verification_mismatch,
     count(*) filter(where catalog_state='READY')::integer catalog_ready,
     count(*) filter(where final_matching_state='READY')::integer matching_ready,
     count(*) filter(where alerts_state='READY')::integer alerts_ready,
@@ -97,9 +118,17 @@ with policy as (
       select 1 from base b where b.opportunity_id=historical_candidates.id
         and b.reconciliation_state='ELIGIBLE' and b.mirror_count=1))::integer candidates_outside_linked_set
   from historical_candidates
+), correction_events as (
+  select count(*)::integer correction_event_count,
+    count(*) filter(where outcome not in ('UPDATED','UNCHANGED'))::integer invalid_correction_outcome,
+    count(distinct opportunity_id)::integer corrected_mirror_count
+  from public.opportunity_ingestion_events
+  where adapter_id='recruiter-vacancy-declared-fields'
+    and reason='HISTORICAL_LIFECYCLE_COUNTRY_REPAIR'
 )
 select jsonb_build_object(
   'mode','READ_ONLY','counts',to_jsonb(counts),'field_survival',to_jsonb(field_survival),
+  'permission_snapshot',policy_snapshot.value,'permission_digest',md5(policy_snapshot.value::text),
   'compensation_scope',to_jsonb(historical_summary)||to_jsonb(historical_event_summary),
   'acceptance',jsonb_build_object(
     'denominator_8',counts.total_vacancies=8,'active_6',counts.active_vacancies=6,'inactive_2',counts.inactive_vacancies=2,
@@ -108,9 +137,12 @@ select jsonb_build_object(
     'all_reconcilable_linked',counts.eligible_without_one_mirror=0 and counts.mirrors=5,
     'all_pending_preserved_unlinked',counts.unresolved_with_mirror=0 and counts.missing_mirror=3,
     'no_duplicate_mirrors',counts.duplicate_mirrors=0,
+    'exactly_3_open_mirrors_correct',counts.mirrored_declared_open=3 and counts.open_lifecycle_correct=3,
+    'exactly_2_closed_mirrors_correct',counts.mirrored_declared_closed=2 and counts.closed_lifecycle_correct=2,
     'lifecycle_aligned',counts.lifecycle_mismatch=0,'universe_state_present_for_linked',counts.missing_universe_state=0,
     'universe_lifecycle_not_contradictory',counts.lifecycle_state_contradictions=0,
     'closed_not_ready',counts.closed_ready_anywhere=0,'no_country_invented',counts.country_inferred=0,
+    'factual_verification_still_pending',counts.factual_verification_mismatch=0,
     'all_declared_fields_survive',field_survival.linked=5 and field_survival.title_exact=5
       and field_survival.company_exact=5 and field_survival.description_exact=5
       and field_survival.requirements_exact=5 and field_survival.compensation_text_exact=5
@@ -123,6 +155,8 @@ select jsonb_build_object(
       and historical_summary.candidates_outside_linked_set=0 and not exists(
         select 1 from base b where b.reconciliation_state='ELIGIBLE' and b.mirror_count=1
           and not exists(select 1 from historical_candidates h where h.id=b.opportunity_id)),
+    'correction_lineage_exactly_five',correction_events.correction_event_count=5
+      and correction_events.corrected_mirror_count=5 and correction_events.invalid_correction_outcome=0,
     'web_catalog_still_denied',(policy.value->>'web_catalog_allowed')='false',
     'seo_permission_still_unknown',(policy.value->>'search_engine_indexing_allowed') is null,
     'google_jobs_still_denied',(policy.value->>'google_jobs_distribution_allowed')='false',
@@ -131,4 +165,4 @@ select jsonb_build_object(
       select 1 from public.opportunity_source_consumer_permissions
       where canonical_source='recruiter_b2b' and permission_state='ALLOWED')),
   'rows',(select jsonb_agg(to_jsonb(base) order by id) from base)
-) from counts,field_survival,historical_summary,historical_event_summary,policy;
+) from counts,field_survival,historical_summary,historical_event_summary,correction_events,policy,policy_snapshot;

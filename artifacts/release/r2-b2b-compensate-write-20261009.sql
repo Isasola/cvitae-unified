@@ -40,7 +40,7 @@ begin
   from candidates c
   join public.opportunity_ingestion_events e on e.opportunity_id=c.id
   where e.adapter_id='recruiter-vacancy-declared-fields'
-    and e.reason in ('FUTURE_CREATE','FUTURE_UPDATE','CLOSE_RETRY');
+    and e.reason in ('FUTURE_CREATE','FUTURE_UPDATE','CLOSE_RETRY','HISTORICAL_LIFECYCLE_COUNTRY_REPAIR');
   if v_count<>5 or v_historical_events<>5 or v_ambiguous<>0
     or v_digest<>'__EXPECTED_HISTORICAL_MIRROR_DIGEST_FROM_POST_VERIFY__' or v_future<>0 then
     raise exception 'compensation_scope_changed:candidates=%,events=%,ambiguous=%,digest=%,future_on_candidates=%',
