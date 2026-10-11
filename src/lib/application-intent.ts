@@ -13,6 +13,13 @@ export function rememberApplicationReturnTo(value: string) {
   try { sessionStorage.setItem(KEY, value) } catch { /* storage is optional */ }
 }
 
+export function peekApplicationReturnTo() {
+  try {
+    const value = sessionStorage.getItem(KEY)
+    return isSafeApplicationReturnTo(value) ? value : null
+  } catch { return null }
+}
+
 export function consumeApplicationReturnTo(value?: string | null) {
   const candidate = value || (() => { try { return sessionStorage.getItem(KEY) } catch { return null } })()
   try { sessionStorage.removeItem(KEY) } catch { /* storage is optional */ }

@@ -82,19 +82,17 @@ const denied = buildEffectiveSeoInventory([{ ...ready(3000), slug:'expired', dea
 assert.equal(denied.length, 0)
 
 const blogRaw = Array.from({ length:1001 }, (_, index) => ({ id:`blog-${index}`, slug:`article-${index}`, updated_at:`2026-09-${String((index % 28) + 1).padStart(2, '0')}T00:00:00Z` }))
-const vacancyRaw = Array.from({ length:1001 }, (_, index) => ({ id:`vacancy-${index}`, slug:`opening-${index}`, updated_at:`2026-09-${String((index % 28) + 1).padStart(2, '0')}T00:00:00Z` }))
-const blogOffsets:number[] = [], vacancyOffsets:number[] = []
+const blogOffsets:number[] = []
 const blogs = canonicalSitemapRows('/blog', await fetchAllPages(1000, async (offset, size) => { blogOffsets.push(offset); return blogRaw.slice(offset, offset + size) }))
-const vacancies = canonicalSitemapRows('/vacante', await fetchAllPages(1000, async (offset, size) => { vacancyOffsets.push(offset); return vacancyRaw.slice(offset, offset + size) }))
-assert.deepEqual(blogOffsets, [0,1000]); assert.deepEqual(vacancyOffsets, [0,1000])
-assert.equal(blogs.length, 1001); assert.equal(vacancies.length, 1001)
-assert.ok(blogs.some(row => row.canonical_path === '/blog/article-1000')); assert.ok(vacancies.some(row => row.canonical_path === '/vacante/opening-1000'))
+assert.deepEqual(blogOffsets, [0,1000])
+assert.equal(blogs.length, 1001)
+assert.ok(blogs.some(row => row.canonical_path === '/blog/article-1000'))
 assert.equal(canonicalSitemapRows('/blog', [{ slug:'duplicate' }, { slug:'duplicate' }]).length, 1, 'canonical detail URLs dedupe within their family')
 // Exercise sitemap paging independently from source permission. These rows
 // represent an already-authorized effective SEO inventory, not permission evidence.
 const sitemapInventory = Array.from({ length:2501 }, (_, index) => ({ canonical_path:`/empleos/role-${index}`, updated_at:`2026-09-${String((index % 28) + 1).padStart(2, '0')}T00:00:00Z` }))
-const entries = sitemapIndexEntries(sitemapInventory.length, blogs.length, vacancies.length)
-assert.deepEqual(entries, ['sitemap-static.xml','sitemap-blog.xml','sitemap-vacancies.xml','sitemap-opportunities/1.xml','sitemap-opportunities/2.xml','sitemap-opportunities/3.xml'])
+const entries = sitemapIndexEntries(sitemapInventory.length, blogs.length)
+assert.deepEqual(entries, ['sitemap-static.xml','sitemap-blog.xml','sitemap-opportunities/1.xml','sitemap-opportunities/2.xml','sitemap-opportunities/3.xml'])
 for (const path of ['/sitemap-opportunities/1.xml','/sitemap-opportunities/2.xml','/sitemap-opportunities/3.xml']) {
   const expectedCount = path.endsWith('/3.xml') ? 501 : 1000
   assert.equal((opportunitySitemapPage(path, sitemapInventory).body.match(/<url>/g) || []).length, expectedCount)
@@ -104,31 +102,34 @@ for (const path of ['/sitemap-opportunities/0.xml','/sitemap-opportunities/4.xml
 assert.deepEqual(sitemapIndexEntries(0), ['sitemap-static.xml']); assert.equal(opportunitySitemapPage('/sitemap-opportunities/1.xml', []).statusCode, 404)
 assert.equal(singletonSitemapPage('/sitemap-blog.xml', '/sitemap-blog.xml', blogs).statusCode, 200)
 assert.match(singletonSitemapPage('/sitemap-blog.xml', '/sitemap-blog.xml', blogs).body, /article-1000/)
-assert.equal(singletonSitemapPage('/sitemap-vacancies.xml', '/sitemap-vacancies.xml', vacancies).statusCode, 200)
-assert.match(singletonSitemapPage('/sitemap-vacancies.xml', '/sitemap-vacancies.xml', vacancies).body, /opening-1000/)
 assert.equal(singletonSitemapPage('/sitemap-blog.xml', '/sitemap-blog.xml', []).statusCode, 404)
-assert.equal(singletonSitemapPage('/sitemap-vacancies.xml', '/sitemap-vacancies.xml', []).statusCode, 404)
-assert.deepEqual(sitemapIndexEntries(0, 0, 0), ['sitemap-static.xml'], 'empty/non-indexable fixture families are absent from the index')
+assert.deepEqual(sitemapIndexEntries(0, 0), ['sitemap-static.xml'], 'empty/non-indexable fixture families are absent from the index')
 const escaped = opportunitySitemapPage('/sitemap-opportunities/1.xml', [{ canonical_path:'/empleos/a?x=1&y=2' }]).body
 assert.match(escaped, /a\?x=1&amp;y=2/)
 const escapedBlog = singletonSitemapPage('/sitemap-blog.xml', '/sitemap-blog.xml', canonicalSitemapRows('/blog', [{ slug:'a?x=1&y=2' }])).body
 assert.match(escapedBlog, /a\?x=1&amp;y=2/)
-const allCanonical = [...STATIC_PUBLIC_SITEMAP_ROUTES.map(route => route.url), ...sitemapInventory.map(row => row.canonical_path), ...blogs.map(row => row.canonical_path), ...vacancies.map(row => row.canonical_path)]
+const allCanonical = [...STATIC_PUBLIC_SITEMAP_ROUTES.map(route => route.url), ...sitemapInventory.map(row => row.canonical_path), ...blogs.map(row => row.canonical_path)]
 assert.equal(new Set(allCanonical).size, allCanonical.length, 'no URL may appear in two sitemap families')
 assert.ok(sitemapInventory.every(row => !row.canonical_path.startsWith('/blog/') && !row.canonical_path.startsWith('/vacante/')), 'opportunity sitemap pages remain exclusive to authorized effective inventory')
 
 const build = fs.readFileSync('scripts/generate-sitemap.mjs', 'utf8'), runtime = fs.readFileSync('netlify/functions/sitemap.ts', 'utf8'), generator = fs.readFileSync('scripts/generate-seo-inventory.ts', 'utf8')
+const sitemapContract = fs.readFileSync('src/lib/sitemap-universe.js', 'utf8')
 assert.match(build, /STATIC_PUBLIC_SITEMAP_ROUTES/); assert.match(runtime, /STATIC_PUBLIC_SITEMAP_ROUTES/)
 assert.match(build, /canonicalSitemapRows/); assert.match(runtime, /canonicalSitemapRows/)
 assert.match(build, /fetchAllPages/); assert.match(runtime, /fetchAllPages/)
 assert.ok(!build.includes('.limit(') && !runtime.includes('.limit('), 'public sitemap families have no fixed fetch ceiling')
+assert.doesNotMatch(build, /recruiter_vacancies/, 'build sitemap has no recruiter-vacancy query or implicit publication path')
+assert.doesNotMatch(sitemapContract, /sitemap-vacancies/, 'shared sitemap index cannot add direct vacancy routes by count alone')
+assert.doesNotMatch(runtime, /publicRows\(supabase, 'recruiter_vacancies'/, 'direct recruiter application routes are absent from runtime sitemap')
+assert.match(runtime, /sitemap-vacancies\.xml'[\s\S]*statusCode:404/, 'legacy vacancy sitemap fails closed')
 assert.match(build, /generate\(\)\.catch\(\(error\) => \{[\s\S]*process\.exit\(1\)/, 'build sitemap failures terminate the build')
-assert.match(build, /content_hub/); assert.match(build, /recruiter_vacancies/)
+assert.match(build, /content_hub/)
 assert.match(runtime, /sitemap-blog\.xml/); assert.match(runtime, /sitemap-vacancies\.xml/)
 assert.match(fs.readFileSync('src/pages/BlogPost.tsx', 'utf8'), /<link rel="canonical"/)
 assert.match(fs.readFileSync('src/pages/VacantePage.tsx', 'utf8'), /<link rel="canonical"/)
 assert.ok(!fs.readFileSync('src/pages/BlogPost.tsx', 'utf8').includes('noindex'), 'BlogPost contract is indexable')
-assert.ok(!fs.readFileSync('src/pages/VacantePage.tsx', 'utf8').includes('noindex'), 'VacantePage contract is indexable')
+assert.match(fs.readFileSync('src/pages/VacantePage.tsx', 'utf8'), /name="robots" content="noindex,nofollow"/, 'direct application route remains reachable but non-indexable')
+assert.doesNotMatch(fs.readFileSync('src/pages/VacantePage.tsx', 'utf8'), /<script[^>]+application\/ld\+json|['"]@type['"]\s*:\s*['"]JobPosting/, 'direct application route cannot self-authorize structured job distribution')
 assert.ok(!build.includes(".in('tipo', ['oportunidad', 'empleo', 'beca'])"), 'content_hub opportunities cannot enter the build sitemap universe')
 const seoFetch=fs.readFileSync('src/lib/seo-universe-fetch.js','utf8')
 assert.match(generator,/for await .*seoUniversePages/)
@@ -139,4 +140,4 @@ assert.match(seoFetch,/order\('id', \{ ascending: true \}\)\.limit\(size\)/)
 assert.match(seoFetch,/query\.gt\('id', cursor\)/)
 assert(!seoFetch.includes('.range(') && !seoFetch.includes("order('updated_at'") && !seoFetch.includes("count:"))
 assert.equal(new Set(STATIC_PUBLIC_SITEMAP_ROUTES.map(route => route.url)).size, STATIC_PUBLIC_SITEMAP_ROUTES.length)
-console.log('verify_sitemap_universe_item30: PASS keyset=2501 pages=11 page_budget=250 cursor=strict no_cap errors=fail_closed runtime=full_coverage canonical=deterministic blog=1001 vacancies=1001 xml=escaped')
+console.log('verify_sitemap_universe_item30: PASS keyset=2501 pages=11 page_budget=250 cursor=strict no_cap errors=fail_closed runtime=full_coverage canonical=deterministic blog=1001 direct_vacancies=excluded xml=escaped')

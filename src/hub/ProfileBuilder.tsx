@@ -131,6 +131,11 @@ export default function ProfileBuilder() {
   const [saved, setSaved] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [profileLoad, setProfileLoad] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [currentCV, setCurrentCV] = useState<{
     file_name: string
     uploaded_at?: string
@@ -161,28 +166,43 @@ export default function ProfileBuilder() {
   const [matchingCoverage, setMatchingCoverage] = useState<any>(null)
 
   useEffect(() => {
+    let active = true
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!active) return
       setUser(session?.user || null)
+      setAuthLoading(false)
+    }).catch(() => {
+      if (!active) return
+      setUser(null)
       setAuthLoading(false)
     })
     const subscription = auth.onAuthStateChange((user) => {
       setUser(user)
       setAuthLoading(false)
     })
-    return () => { subscription?.unsubscribe() }
+    return () => { active = false; subscription?.unsubscribe() }
   }, [])
 
   useEffect(() => {
     if (!user) return
+    let active = true
+    setProfileLoad('loading')
+    setLoadedUserId(null)
+    setLoadError(null)
+    setSaveError(null)
+    setSaved(false)
+    setStep(0)
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session?.access_token) return
+      if (!session?.access_token || session.user.id !== user.id) throw new Error('Tu sesión expiró. Volvé a ingresar.')
       const response = await fetch('/.netlify/functions/b2c-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ action: 'status' }),
       })
-      if (!response.ok) return
-      const { profile: data } = await response.json()
+      const result = await response.json()
+      if (!response.ok) throw new Error(response.status === 401 ? 'Tu sesión expiró. Volvé a ingresar.' : (result.error || 'No pudimos cargar tu perfil. Intentá nuevamente.'))
+      if (!active) return
+      const data = result.profile
       if (data) {
           setMatchingCoverage(data.matching_coverage || null)
           const draft = data.profile_data?.cv_import_draft || {}
@@ -208,9 +228,20 @@ export default function ProfileBuilder() {
             uploaded_at: data.cv_uploaded_at,
             status: data.has_cv ? 'stored' : 'reupload_required',
           } : null)
+      } else {
+          setFormData({ full_name: '', professional_title: '', location: '', seniority: '', summary: '', modality: '', skills: [], cursos: [], career_route: '', desired_role_1y: '', career_interests: [], education: [], experience: [], languages: [], candidate_eligibility: { residence_country: '', citizenship_countries: [], work_authorization_countries: [] } })
+          setMatchingCoverage(null)
+          setCurrentCV(null)
       }
+      setLoadedUserId(user.id)
+      setProfileLoad('ready')
+    }).catch((error: any) => {
+      if (!active) return
+      setLoadError(error?.message === 'Failed to fetch' ? 'No pudimos cargar tu perfil. Revisá tu conexión e intentá nuevamente.' : (error?.message || 'No pudimos cargar tu perfil. Intentá nuevamente.'))
+      setProfileLoad('error')
     })
-  }, [user])
+    return () => { active = false }
+  }, [user?.id, loadAttempt])
 
   const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -546,22 +577,24 @@ export default function ProfileBuilder() {
   }
 
   const handleSave = async () => {
-    if (!user) return
+    if (!user || profileLoad !== 'ready' || loadedUserId !== user.id || saving || saved || analyzing) return
     setSaving(true)
+    setSaveError(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('Sesión expirada')
+      if (!session?.access_token || session.user.id !== user.id) throw new Error('Tu sesión expiró. Volvé a ingresar.')
       const response = await fetch('/.netlify/functions/b2c-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ action: 'save', profile: { ...formData } }),
       })
-      if (!response.ok) throw new Error('No pudimos guardar el perfil')
+      const result = await response.json()
+      if (!response.ok) throw new Error(response.status === 401 ? 'Tu sesión expiró. Volvé a ingresar.' : (result.error || 'No pudimos guardar el perfil. Intentá nuevamente.'))
       setSaved(true)
       const returnTo = consumeApplicationReturnTo(new URLSearchParams(window.location.search).get('returnTo'))
       setTimeout(() => setLocation(returnTo || '/mi-carrera'), 1500)
-    } catch {
-      alert('Error al guardar el perfil. Intentá de nuevo.')
+    } catch (error: any) {
+      setSaveError(error?.message === 'Failed to fetch' ? 'No pudimos guardar el perfil. Revisá tu conexión e intentá nuevamente.' : (error?.message || 'No pudimos guardar el perfil. Intentá nuevamente.'))
     } finally {
       setSaving(false)
     }
@@ -605,6 +638,23 @@ export default function ProfileBuilder() {
           >
             Ir al inicio
           </button>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (profileLoad !== 'ready' || loadedUserId !== user.id) {
+    return (
+      <DashboardLayout>
+        <div className="mx-auto max-w-3xl py-12 text-center">
+          {profileLoad === 'error' ? (
+            <>
+              <p role="alert" className="mb-4 text-sm text-red-400">{loadError}</p>
+              <button onClick={() => setLoadAttempt(attempt => attempt + 1)} className="inline-flex h-10 items-center gap-2 rounded-full bg-[#c9a84c] px-5 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]">Reintentar</button>
+            </>
+          ) : (
+            <p role="status" className="flex items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Cargando tu perfil…</p>
+          )}
         </div>
       </DashboardLayout>
     )
@@ -975,6 +1025,7 @@ export default function ProfileBuilder() {
             </AnimatePresence>
 
             {/* Navigation */}
+            {saveError && <p role="alert" className="mt-6 text-sm text-red-400">{saveError}</p>}
             <div className="mt-8 flex items-center justify-between border-t border-white/5 pt-6">
               <button
                 onClick={() => setStep(prev => Math.max(0, prev - 1))}
@@ -992,7 +1043,7 @@ export default function ProfileBuilder() {
                 </button>
               ) : (
                 <button
-                  onClick={handleSave} disabled={saving || saved}
+                  onClick={handleSave} disabled={saving || saved || analyzing}
                   className="inline-flex h-10 items-center gap-2 rounded-full bg-[#c9a84c] px-5 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-60"
                 >
                   {saving

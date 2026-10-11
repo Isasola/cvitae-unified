@@ -8,7 +8,7 @@ interface FoundingBetaModalProps {
   programFull: boolean
   onAccept: () => Promise<void>
   onDismiss: () => void
-  onDecline: () => void
+  onDecline: () => Promise<void>
 }
 
 export function FoundingBetaModal({ slotsRemaining, programFull, onAccept, onDismiss, onDecline }: FoundingBetaModalProps) {
@@ -29,6 +29,13 @@ export function FoundingBetaModal({ slotsRemaining, programFull, onAccept, onDis
     } finally {
       setAccepting(false)
     }
+  }
+
+  const handleDecline = async () => {
+    setAccepting(true); setError('')
+    try { await onDecline() }
+    catch { setError('No pudimos guardar tu decisión. Intentá de nuevo.') }
+    finally { setAccepting(false) }
   }
 
   return (
@@ -129,7 +136,8 @@ export function FoundingBetaModal({ slotsRemaining, programFull, onAccept, onDis
 
                   <div className="mt-4 text-center">
                     <button
-                      onClick={onDecline}
+                      onClick={handleDecline}
+                      disabled={accepting}
                       className="text-xs text-white/30 underline underline-offset-2 transition hover:text-white/50"
                     >
                       Prefiero no participar

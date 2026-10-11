@@ -55,6 +55,7 @@ type Workspace = {
   requirement_analysis: Requirement[]
   fit_summary: Record<string, any>
   tailored_cv_markdown: string
+  safety_checks?: Record<string, any>
   cover_message: string
   checklist: ChecklistItem[]
   checklist_progress: Record<string, boolean>
@@ -247,8 +248,11 @@ export default function ApplicationWorkspace() {
   }
 
   const saveChecklist = async (itemId: string) => {
-    if (!selectedWorkspace) return
+    if (!selectedWorkspace || busy === 'checklist') return
+    const previousProgress = selectedWorkspace.checklist_progress
     const progress = { ...selectedWorkspace.checklist_progress, [itemId]: !selectedWorkspace.checklist_progress[itemId] }
+    setBusy('checklist')
+    setError('')
     setData((current) => current ? {
       ...current,
       workspaces: current.workspaces.map((item) => item.id === selectedWorkspace.id ? { ...item, checklist_progress: progress } : item),
@@ -256,8 +260,13 @@ export default function ApplicationWorkspace() {
     try {
       applyPayload(await mutation({ action: 'checklist', workspaceId: selectedWorkspace.id, progress }))
     } catch (caught: any) {
+      setData((current) => current ? {
+        ...current,
+        workspaces: current.workspaces.map((item) => item.id === selectedWorkspace.id ? { ...item, checklist_progress: previousProgress } : item),
+      } : current)
       setError(caught?.message || 'No pudimos guardar el checklist.')
-      await loadOverview()
+    } finally {
+      setBusy('')
     }
   }
 
@@ -296,16 +305,45 @@ export default function ApplicationWorkspace() {
 
   const copyMessage = async () => {
     if (!selectedWorkspace) return
-    await navigator.clipboard.writeText(selectedWorkspace.cover_message)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1800)
+    setError('')
+    setCopied(false)
+    try {
+      await navigator.clipboard.writeText(selectedWorkspace.cover_message)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {
+      setError('No pudimos copiar el mensaje.')
+    }
   }
 
   const downloadPDF = async () => {
     if (!cvRef.current || !selectedWorkspace) return
     setBusy('pdf')
+    setError('')
     try {
-      const canvas = await html2canvas(cvRef.current, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false })
+      const canvas = await html2canvas(cvRef.current, {
+        scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false,
+        onclone: (document, element) => {
+          // html2canvas 1.x cannot parse Tailwind's modern color functions.
+          // Let the browser resolve them only in the temporary PDF copy.
+          const context = document.createElement('canvas').getContext('2d')
+          if (!context) throw new Error('No pudimos preparar los colores del PDF')
+          const properties = ['color', 'background-color', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'outline-color', 'text-decoration-color']
+          // The renderer also parses the copy's page background before the CV.
+          for (const node of [document.documentElement, document.body, element, ...element.querySelectorAll<HTMLElement>('*')]) {
+            const style = document.defaultView!.getComputedStyle(node)
+            for (const property of properties) {
+              const color = style.getPropertyValue(property)
+              if (!/(?:oklch|oklab|color-mix|lab|lch|color)\(/i.test(color)) continue
+              context.clearRect(0, 0, 1, 1)
+              context.fillStyle = color
+              context.fillRect(0, 0, 1, 1)
+              const [red, green, blue, alpha] = context.getImageData(0, 0, 1, 1).data
+              node.style.setProperty(property, `rgba(${red}, ${green}, ${blue}, ${alpha / 255})`)
+            }
+          }
+        },
+      })
       const pdf = new jsPDF('p', 'mm', 'a4')
       const width = pdf.internal.pageSize.getWidth()
       const pageHeight = pdf.internal.pageSize.getHeight()
@@ -321,6 +359,8 @@ export default function ApplicationWorkspace() {
         page += 1
       }
       pdf.save(`CV-${cleanFileName(selectedWorkspace.opportunity_snapshot.title || 'postulacion')}.pdf`)
+    } catch {
+      setError('No pudimos descargar el PDF. Intentá nuevamente.')
     } finally {
       setBusy('')
     }
@@ -377,11 +417,11 @@ export default function ApplicationWorkspace() {
 
               {tab === 'requirements' && <div className="space-y-3 p-4 sm:p-7">{selectedWorkspace.requirement_analysis.map((requirement, index) => { const style = REQUIREMENT_STYLE[requirement.status]; const open = expandedRequirement === requirement.id; return <article key={requirement.id} className="overflow-hidden rounded-2xl border border-white/8"><button type="button" onClick={() => setExpandedRequirement(open ? null : requirement.id)} className="flex w-full items-start gap-4 p-5 text-left"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 text-[10px] text-white/40">{index + 1}</span><span className="min-w-0 flex-1"><span className="text-sm leading-relaxed text-cream">{requirement.text}</span><span className="mt-2 flex flex-wrap gap-2"><span className={`rounded-full border px-2.5 py-1 text-[9px] uppercase tracking-wider ${style.className}`}>{style.label}</span><span className="rounded-full border border-white/8 px-2.5 py-1 text-[9px] uppercase tracking-wider text-white/30">{requirement.importance === 'essential' ? 'Esencial' : requirement.importance === 'preferred' ? 'Deseable' : 'Contexto'}</span></span></span>{open ? <ChevronUp className="h-4 w-4 text-white/30" /> : <ChevronDown className="h-4 w-4 text-white/30" />}</button>{open && <div className="border-t border-white/8 bg-white/[0.015] px-5 py-4 sm:pl-16"><p className="text-xs leading-relaxed text-white/45">{requirement.explanation}</p>{requirement.evidence?.length ? <div className="mt-4 flex flex-wrap gap-2">{requirement.evidence.map((evidence) => <span key={evidence.id} className="rounded-full border border-emerald-400/20 bg-emerald-400/[0.05] px-3 py-1.5 text-[10px] text-emerald-100"><strong>{CATEGORY_LABEL[evidence.category] || 'Evidencia'}:</strong> {evidence.value}</span>)}</div> : <p className="mt-3 text-[10px] text-white/30">No se agregó este requisito al CV como si fuera un hecho.</p>}</div>}</article>})}</div>}
 
-              {tab === 'cv' && <div className="p-4 sm:p-7"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs text-white/40">Versión propuesta para esta oportunidad</p><p className="mt-1 text-[10px] text-emerald-200">Cada bloque pasó por controles de evidencia.</p></div><button type="button" onClick={downloadPDF} disabled={busy === 'pdf'} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs text-white/60">{busy === 'pdf' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Descargar PDF</button></div><div ref={cvRef} className="mx-auto min-h-[720px] max-w-3xl rounded-sm bg-[#f4f1e9] px-8 py-10 text-[#151515] shadow-2xl sm:px-14 sm:py-14"><ReactMarkdown rehypePlugins={[rehypeSanitize]} components={{ h1: ({ children }) => <h1 className="font-serif text-3xl leading-tight">{children}</h1>, h2: ({ children }) => <h2 className="mt-8 border-b border-black/15 pb-2 font-serif text-lg font-semibold">{children}</h2>, p: ({ children }) => <p className="mt-3 text-[13px] leading-6">{children}</p>, ul: ({ children }) => <ul className="mt-3 list-disc space-y-1 pl-5 text-[13px] leading-6">{children}</ul>, li: ({ children }) => <li>{children}</li> }}>{selectedWorkspace.tailored_cv_markdown}</ReactMarkdown></div></div>}
+              {tab === 'cv' && <div className="p-4 sm:p-7"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs text-white/40">Versión propuesta para esta oportunidad</p><p className="mt-1 text-[10px] text-emerald-200">{selectedWorkspace.safety_checks?.candidate_claims_literal_evidence_backed && selectedWorkspace.safety_checks?.requirement_semantic_verified ? 'Cada bloque pasó por controles de evidencia.' : 'Versión histórica: volvé a preparar los documentos para aplicar los controles de evidencia actuales.'}</p></div><button type="button" onClick={downloadPDF} disabled={busy === 'pdf'} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs text-white/60">{busy === 'pdf' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Descargar PDF</button></div><div ref={cvRef} className="mx-auto min-h-[720px] max-w-3xl rounded-sm bg-[#f4f1e9] px-8 py-10 text-[#151515] shadow-2xl sm:px-14 sm:py-14"><ReactMarkdown rehypePlugins={[rehypeSanitize]} components={{ h1: ({ children }) => <h1 className="font-serif text-3xl leading-tight">{children}</h1>, h2: ({ children }) => <h2 className="mt-8 border-b border-black/15 pb-2 font-serif text-lg font-semibold">{children}</h2>, p: ({ children }) => <p className="mt-3 text-[13px] leading-6">{children}</p>, ul: ({ children }) => <ul className="mt-3 list-disc space-y-1 pl-5 text-[13px] leading-6">{children}</ul>, li: ({ children }) => <li>{children}</li> }}>{selectedWorkspace.tailored_cv_markdown}</ReactMarkdown></div></div>}
 
               {tab === 'message' && <div className="p-4 sm:p-7"><div className="mx-auto max-w-3xl rounded-3xl border border-white/8 bg-white/[0.02] p-6 sm:p-8"><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] uppercase tracking-[0.18em] text-[#c9a84c]">Borrador editable al copiar</p><h3 className="font-display mt-2 text-2xl text-cream">Mensaje de presentación</h3></div><button type="button" onClick={copyMessage} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs text-white/60">{copied ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}{copied ? 'Copiado' : 'Copiar'}</button></div><div className="mt-6 whitespace-pre-line border-l border-[#c9a84c]/40 pl-5 text-sm leading-7 text-white/65">{selectedWorkspace.cover_message}</div><p className="mt-6 text-[11px] leading-relaxed text-white/30">Personalizá el saludo y el cierre antes de enviarlo. No se genera ni se envía ningún correo automáticamente.</p></div></div>}
 
-              {tab === 'checklist' && <div className="p-4 sm:p-7"><div className="mx-auto max-w-3xl space-y-3">{selectedWorkspace.checklist.map((item) => <label key={item.id} className={`flex cursor-pointer items-start gap-4 rounded-2xl border p-4 transition ${selectedWorkspace.checklist_progress[item.id] ? 'border-emerald-400/20 bg-emerald-400/[0.04]' : 'border-white/8 bg-white/[0.015]'}`}><input type="checkbox" checked={Boolean(selectedWorkspace.checklist_progress[item.id])} onChange={() => saveChecklist(item.id)} className="mt-0.5 h-4 w-4 accent-[#c9a84c]" /><span className={`text-sm leading-relaxed ${selectedWorkspace.checklist_progress[item.id] ? 'text-white/40 line-through' : 'text-white/65'}`}>{item.label}</span></label>)}</div></div>}
+              {tab === 'checklist' && <div className="p-4 sm:p-7"><div className="mx-auto max-w-3xl space-y-3">{selectedWorkspace.checklist.map((item) => <label key={item.id} className={`flex cursor-pointer items-start gap-4 rounded-2xl border p-4 transition ${selectedWorkspace.checklist_progress[item.id] ? 'border-emerald-400/20 bg-emerald-400/[0.04]' : 'border-white/8 bg-white/[0.015]'}`}><input type="checkbox" checked={Boolean(selectedWorkspace.checklist_progress[item.id])} disabled={busy === 'checklist'} onChange={() => saveChecklist(item.id)} className="mt-0.5 h-4 w-4 accent-[#c9a84c]" /><span className={`text-sm leading-relaxed ${selectedWorkspace.checklist_progress[item.id] ? 'text-white/40 line-through' : 'text-white/65'}`}>{item.label}</span></label>)}</div></div>}
             </section>
 
             <section className={`rounded-3xl border p-6 sm:p-8 ${ready ? 'border-emerald-400/20 bg-emerald-400/[0.035]' : 'border-[#c9a84c]/20 bg-[#c9a84c]/[0.025]'}`}>
@@ -403,5 +443,5 @@ function Metric({ value, label, tone }: { value: number; label: string; tone: 'e
 }
 
 function ErrorBanner({ message }: { message: string }) {
-  return <div className="flex items-start gap-3 rounded-2xl border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-sm text-rose-100"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{message}</span></div>
+  return <div role="alert" className="flex items-start gap-3 rounded-2xl border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-sm text-rose-100"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{message}</span></div>
 }

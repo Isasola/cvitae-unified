@@ -12,6 +12,31 @@ const publicFixturePath = path.join(root, 'scripts/fixtures/prerender-public-fix
 const publicFixture = JSON.parse(fs.readFileSync(publicFixturePath, 'utf8'))
 const effective = buildEffectiveSeoInventory(fixture.opportunities, fixture.policies)
 const expected = seoCanonicalPaths(effective)
+
+const tagAttributes = (tag: string) => Object.fromEntries(
+  [...tag.matchAll(/\s+([^\s=/>]+)\s*=\s*(["'])(.*?)\2/gs)].map(match => [match[1].toLowerCase(), match[3]]),
+)
+const tags = (html: string, name: string) => [...html.matchAll(new RegExp(`<${name}\\b[^>]*>`, 'gi'))].map(match => tagAttributes(match[0]))
+const assertPageMetadata = (html: string, canonicalPath: string, indexable: boolean) => {
+  const expectedUrl = `https://cvitae.lat${canonicalPath}`
+  const canonicals = tags(html, 'link').filter(attributes => String(attributes.rel || '').toLowerCase().split(/\s+/).includes('canonical'))
+  assert.equal(canonicals.length, 1, `exactly one canonical: ${canonicalPath}`)
+  assert.equal(canonicals[0].href, expectedUrl, `canonical URL: ${canonicalPath}`)
+  const meta = tags(html, 'meta')
+  const ogUrls = meta.filter(attributes => String(attributes.property || '').toLowerCase() === 'og:url')
+  assert.equal(ogUrls.length, 1, `exactly one og:url: ${canonicalPath}`)
+  assert.equal(ogUrls[0].content, expectedUrl, `og:url agrees with canonical: ${canonicalPath}`)
+  const descriptions = meta.filter(attributes => String(attributes.name || '').toLowerCase() === 'description')
+  assert.equal(descriptions.length, 1, `exactly one description: ${canonicalPath}`)
+  const robots = meta.filter(attributes => String(attributes.name || '').toLowerCase() === 'robots')
+  if (indexable) {
+    assert.ok(robots.every(attributes => !String(attributes.content || '').toLowerCase().includes('noindex')), `authorized public route stays indexable: ${canonicalPath}`)
+  } else {
+    assert.equal(robots.length, 1, `direct application route has one robots policy: ${canonicalPath}`)
+    const directives = new Set(String(robots[0].content || '').toLowerCase().split(',').map(value => value.trim()))
+    assert.ok(directives.has('noindex') && directives.has('nofollow'), `direct application route fails closed: ${canonicalPath}`)
+  }
+}
 const opportunityDirectories = ['empleos', 'oportunidades']
   .flatMap(family => fs.existsSync(path.join(root, 'dist', family))
     ? fs.readdirSync(path.join(root, 'dist', family), { withFileTypes: true })
@@ -22,7 +47,7 @@ const opportunityDirectories = ['empleos', 'oportunidades']
 assert.deepEqual([...new Set(opportunityDirectories)].sort(), expected, 'prerendered opportunity set must equal effective SEO inventory')
 for (const canonicalPath of expected) {
   const html = fs.readFileSync(path.join(root, 'dist', ...canonicalPath.split('/').filter(Boolean), 'index.html'), 'utf8')
-  assert.match(html, new RegExp(`<link rel="canonical" href="https://cvitae\\.lat${canonicalPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}">`))
+  assertPageMetadata(html, canonicalPath, true)
   const wrongFamily = canonicalPath.startsWith('/empleos/') ? canonicalPath.replace('/empleos/', '/oportunidades/') : canonicalPath.replace('/oportunidades/', '/empleos/')
   assert.equal(fs.existsSync(path.join(root, 'dist', ...wrongFamily.split('/').filter(Boolean), 'index.html')), false, `wrong family absent: ${wrongFamily}`)
 }
@@ -36,8 +61,8 @@ assert.ok(!source.includes(".in('tipo', ['oportunidad', 'empleo', 'beca'])"), 'c
 assert.ok(!source.includes('for (const job of [])'), 'legacy alias prerender engine removed')
 assert.ok(!source.includes('description.length >= 100 && realOrg.length > 0'), 'prerender does not locally grant JobPosting permission')
 const vacancyBlock = source.slice(source.indexOf('let vacancyCount'))
-assert.match(vacancyBlock, /'@type': 'WebPage'/)
-assert.match(vacancyBlock, /factualJobPosting\(/); assert.ok(!vacancyBlock.includes("'@type': 'JobPosting'") && !vacancyBlock.includes('hiringOrganization') && !vacancyBlock.includes('employmentType'), 'vacancy prerender delegates JobPosting construction to shared factual builder')
+assert.match(vacancyBlock, /name="robots" content="noindex,nofollow"/)
+assert.doesNotMatch(vacancyBlock, /factualJobPosting\(|application\/ld\+json|JobPosting|hiringOrganization|employmentType/, 'direct recruiter application routes are not an authorized SEO/JobPosting universe')
 
 const blogRaw = Array.from({ length:1001 }, (_, index) => ({ id:`blog-${index}`, slug:`article-${index}`, updated_at:`2026-09-${String((index % 28) + 1).padStart(2, '0')}T00:00:00Z` }))
 const vacancyRaw = Array.from({ length:1001 }, (_, index) => ({ id:`vacancy-${index}`, slug:`opening-${index}`, updated_at:`2026-09-${String((index % 28) + 1).padStart(2, '0')}T00:00:00Z` }))
@@ -62,11 +87,14 @@ if (process.env.PRERENDER_PUBLIC_FIXTURE) {
     : []
   const prerenderedBlogs = prerenderedPaths('blog').filter(route => route !== '/blog/index.html')
   const prerenderedVacancies = prerenderedPaths('vacante')
-  assert.deepEqual(prerenderedBlogs, activeBlogs, 'sitemap blog canonical set equals prerendered blog detail set')
-  assert.deepEqual(prerenderedVacancies, activeVacancies, 'sitemap vacancy canonical set equals prerendered vacancy detail set')
+  assert.deepEqual(prerenderedBlogs, activeBlogs, 'authorized blog fixture set equals prerendered blog detail set')
+  assert.deepEqual(prerenderedVacancies, activeVacancies, 'direct application fixture set equals reachable noindex vacancy detail set')
   for (const canonicalPath of [...activeBlogs, ...activeVacancies]) {
     const html = fs.readFileSync(path.join(root, 'dist', ...canonicalPath.split('/').filter(Boolean), 'index.html'), 'utf8')
-    assert.match(html, new RegExp(`<link rel="canonical" href="https://cvitae\\.lat${canonicalPath}">`))
+    assertPageMetadata(html, canonicalPath, canonicalPath.startsWith('/blog/'))
+    if (canonicalPath.startsWith('/vacante/')) {
+      assert.doesNotMatch(html, /"@type":"JobPosting"/)
+    }
   }
   for (const row of [...publicFixture.blogs, ...publicFixture.vacancies].filter((item: any) => item.is_active === false)) {
     const family = publicFixture.blogs.includes(row) ? 'blog' : 'vacante'

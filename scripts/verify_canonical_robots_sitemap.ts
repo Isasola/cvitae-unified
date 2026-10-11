@@ -20,7 +20,12 @@ for (const path of ['/admin','/auth/callback','/mi-carrera/']) assert.match(robo
 assert.match(robots, /Sitemap: https:\/\/cvitae\.lat\/sitemap\.xml/)
 assert.ok(!robots.includes('/empleos\nDisallow'), 'public jobs remain crawlable')
 const dynamic = fs.readFileSync('netlify/functions/sitemap.ts','utf8')
-assert.match(dynamic, /buildEffectiveSeoInventory/)
+const seoUniverseHelper = fs.readFileSync('src/lib/seo-universe-fetch.js','utf8')
+assert.match(dynamic, /seoUniversePages/, 'runtime sitemap delegates to the canonical SEO Universe reader')
+assert.match(seoUniverseHelper, /from\('opportunity_seo_universe'\)/, 'shared reader owns the canonical SEO Universe dependency')
+assert.match(seoUniverseHelper, /if \(error\) throw error/, 'SEO Universe read failures fail closed')
+assert.doesNotMatch(dynamic, /from\(['"]opportunities['"]\)|from\(['"]recruiter_vacancies['"]\)/,
+  'runtime sitemap has no alternate public opportunity/vacancy read path')
 assert.match(dynamic, /canonical_path/)
 assert.ok(!dynamic.includes('/sistemap.xml'))
 console.log('verify_canonical_robots_sitemap: PASS')
