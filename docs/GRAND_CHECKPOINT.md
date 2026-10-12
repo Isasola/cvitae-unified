@@ -1958,3 +1958,20 @@ permission semantics solely to make a test pass. Do not equate local/preview
 evidence with production user validation.
 
 State: `POSTDEPLOY_BASELINE_FROZEN / BUGS_RECORDED / NEXT_PASS_READY`.
+
+
+---
+
+## Continuity addendum 2026-10-12 — production beta diagnosis and source decision
+
+This is a historical append-only update. It **does not reopen/reassign** the 67 original status items; see canonical `docs/BUG_REGISTRY.md` for bug evidence and `docs/SESSION_HANDOFF_2026-10-12.md` for counts/decisions.
+
+- Actual production user failure evidence now includes: rewrite provider success followed by a DB UNIQUE constraint failure in `generated_cvs_user_vacancy`; Netlify one 30s timeout (not definitively correlated to ATS); real matching `SUCCESS` / zero visible matches / 376 abstentions / 12 denials in 388 bounded candidates. No fix deployed.
+- PROD 2026-10-12 read-only Universe snapshot: `total_states=16541`, `matching_row_ready=6224`, `final_matching_ready=203` (all Himalayas), `catalog_now=204`, `seo_now=6021`. First-gate per-source breakdown of the matching-ready population: 5,830 stopped at matching-switch condition, 191 final-gap after gates checked (UNJobs=105; Computrabajo=86), 203 final READY. Explain flags by authoritative permission, overrides and provenance before modifications. Some source evaluations are older than the Oct 11 release.
+- User explicitly includes **reinforcing existing scrapers** and **adding Greenhouse/Lever adapters** in the **next LOCAL implementation pass**. They start inactive for consumer distribution and SEO until source/board-level permissions are verified; do not bypass any denied/unknown source. Historical backfill and future automation both required.
+- Sitemap generation is already automatic; do not add manual sitemap chores. Check live canonical/prerender freshness and Google Search Console separately from `seo_now` counts. Keep B2C beta availability and relevance as the immediate priority.
+- `CURRENT_BLOCKER`: PROD P0 matching and CV-version failures; ATS 502 needs exact timeout-stage linkage; scraper switch/reconciliation and permitted LATAM expansion; SEO trend unresolved.
+- `NEXT_EXACT_ACTION`: read the new handoff, sync DOCUMENTARY updates into the Windows worktree, then one grouped local implement-and-test pass with minimum Codex usage; no source policy broadening, push, deploy, Supabase DML/DDL or C4 activation. Produce local diff, focal tests and operator preflight before any later release approval.
+- `DO_NOT_REOPEN`: C3 scoped PROD validation, validated historic 1–67 work without regressions, old migrations, rejected source permissions, already-shipped sitemap and PR #4. Do not declare bugs closed from probes or code alone.
+
+State: `LOCAL_PASS_SCOPED / PRODUCTION_UNCHANGED / DOCUMENTARY_HANDOFF_UPDATED`.

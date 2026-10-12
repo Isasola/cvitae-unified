@@ -29,7 +29,7 @@ implementation, closure, or production validation.
 
 ## BUG-001 — Profile produces no matches
 
-- **Priority / state:** P0 / `OBSERVED_PROD`
+- **Priority / state:** P0 / `DIAG_PENDING`
 - **Affected route and symptom:** authenticated candidate profile/dashboard;
   a real account enters the profile but receives no recommendations.
 - **Expected:** the UI distinguishes a genuine zero-result outcome from a
@@ -63,12 +63,23 @@ implementation, closure, or production validation.
   one insufficient-evidence candidate; DB error versus success-zero; stale
   profile versus current signature; retrieval coverage accounting; different
   authenticated user isolation.
+### Evidence update — 2026-10-12
+
+- Status remains P0 / `DIAG_PENDING`; the previously recorded initial symptom is now backed by **read-only production diagnostics**, not merely the UI screenshot.
+- `matching_diagnostic_snapshots` default mode: 5 successful runs in 7 days (1 distinct account), latest 2026-10-12 00:45 UTC. Each: 388 unique candidates evaluated from windows of up to 300 recent + 120 semantic (these windows are NOT universe totals); 0 confirmed matches, 0 visible potential, 376 abstentions, 12 denials, `DATA_COVERAGE_GAP`, `NO_SCAN`, embedding `READY`, 70 potential-scoreable and 70 professional-fit-known. Repeated run counts are **not** additional inventory rows.
+- Same-time read-only source/Universe reconciliation, checked 2026-10-12 01:17 UTC: `opportunity_universe_state` 16,541; `matching_row_state=READY` 6,224; final matching 203; final catalog 204; final SEO 6,021. Matching final's 203 rows all report canonical source **himalayas**, remote=true; 202/203 have neither explicit eligible countries nor eligible regions; 21 have `remote_scope`; 1 has eligible countries. Remote is NOT eligibility or global permission.
+- Per-source first-gate query for the 6,224 matching-ready rows: 5,830 failed the queried matching-switch condition; 191 passed those queried source gates but did not reach `final_matching_state=READY` (UNJobs 105, Computrabajo 86); 203 final READY. Key blocked counts: Himalayas 5,238; We Work Remotely 472; OpportunityDesk 33; Arbeitnow 27; Jobicy 21; others. A matching switch denial may be intentional: NEVER bulk-activate it. Read exact policy, overrides, effective switches, permits, historical versions and lifecycle first.
+- Caution: `source_matching_state` uses values such as `ALLOWED/DENIED/UNKNOWN`; a previous count filtered on literal `READY` returned zero and is **not evidence of a fault**. `HARD_REQUIREMENTS_UNKNOWN=388` is recorded by the current diagnostics but was not independently proven to be the unique blocking gate. The 388 evaluated and 203 final rows may use different read paths, times and denoms; reconcile the actual match-batch RPC/joins and source set before claiming 185 rows lost.
+- The Learning Plan UI showed opportunity-backed learning suggestions (a 5-opportunity gap and 2-opportunity gaps), but it can consume a different or historical candidate set. Mark only that narrow UI outcome observed; it does NOT prove Dashboard matching, relevance or clickthrough. The shown customer-service suggestions may be poorly fitted to this candidate and need a professional-family factual canary.
+- First proven boundary: engine responds `SUCCESS_ZERO`, not client-only invisibility. Exact divergence between retrieval, source-policy/effective authority, eligibility evidence, professional fit and delivered `MATCH/POTENTIAL` remains to be localized.
+- Next targeted proof: stage-accounting against the same timestamped denominator and immutable opportunity IDs, historical & future reconciliation, no cross-user disclosure, explicit `MATCH/POTENTIAL/ABSTAIN/DENY/ERROR` states; do not merge/apply C4 merely to change this zero.
+
 - **Detected / fixed / closed:** detected `ce6dc7a`; fixed `—`; production
   closure `—`.
 
 ## BUG-002 — ATS diagnosis returns HTTP 502
 
-- **Priority / state:** P0 / `OBSERVED_PROD`
+- **Priority / state:** P0 / `DIAG_PENDING`
 - **Affected route and symptom:** ATS diagnosis flow shows “No pudimos
   completar la operación”; browser console reports HTTP 502.
 - **Expected:** a supported CV request reaches the actual ATS endpoint and
@@ -92,12 +103,18 @@ implementation, closure, or production validation.
 - **Minimum discriminating tests:** capture request correlation ID, function
   name/status/body shape, stage-safe log, provider timeout fixture, validation
   failure, persistence failure, retry and successful reload.
+### Evidence update — 2026-10-12
+
+- Operator supplied Netlify execution times with one **30,000 ms timeout** on 2026-10-11 at about 20:30 local, and an independently observed browser HTTP 502 on ATS. The timed-out entry did not include function identification in the supplied copy; the connection to `cv-ats-workspace` is therefore **plausible but unconfirmed**. Other invocations finished more quickly.
+- Function configuration/code should be consulted to correlate function name, request ID, timestamp, provider start/end and persistence stage; do not assert Bedrock caused the timeout. Avoid repeating paid generation only to reproduce an error. Timeout, provider error, server exception and database failure must produce safe, distinguishable UI states.
+- Remains P0 / `DIAG_PENDING`. No deployed fix or successful ATS E2E has been demonstrated.
+
 - **Detected / fixed / closed:** detected `ce6dc7a`; fixed `—`; production
   closure `—`.
 
 ## BUG-003 — CV rewrite preparation fails
 
-- **Priority / state:** P0 / `OBSERVED_PROD`
+- **Priority / state:** P0 / `DIAG_PENDING`
 - **Affected route and symptom:** CV improvement flow reports “No pudimos
   preparar la reescritura en este momento”.
 - **Expected:** the chosen CV and improvement intent produce a reviewable,
@@ -121,6 +138,14 @@ implementation, closure, or production validation.
 - **Minimum discriminating tests:** preparation without diagnostic, provider
   error, persistence error, duplicate retry, user isolation, grounded success,
   acceptance and reload.
+### Evidence update — 2026-10-12
+
+- Netlify `cv-rewrite-workspace` logs: a Bedrock `global.anthropic.claude-sonnet-4-6` call completed with telemetry status `success`; subsequent attempts logged repeated `duplicate key value violates unique constraint "generated_cvs_user_vacancy"` during the rewrite/version flow. This proves a persistence incompatibility in the observed workflow; the precise failed request action (prepare vs accept) must still be correlated before conflating the two UI states.
+- Operator's read-only PostgreSQL catalog confirms the **legacy** constraint `UNIQUE (user_id, vacancy_id)` named `generated_cvs_user_vacancy`, while `generated_cvs_user_vacancy_version_uidx` already uniquely indexes `(user_id, vacancy_id, version_number)`; `generated_cvs_pkey` also exists. This is incompatible with retaining multiple versions for the same user/vacancy.
+- Historical migration `202608130005_cv_versions_and_evidence.sql` reportedly drops an old differently named constraint; do not edit that migration in place. Next implementation: inspect dependencies, indexes, NULL vacancy semantics, versions/unique race handling, idempotent retry and legacy callers; prepare a **new migration** removing only obsolete uniqueness after a read-only preflight and explicit operator authorization. No production SQL write now.
+- Test across CV Vivo, rewrite acceptance, manual edit and Postulaciones with fake CVs. Preserve original and existing versions; verify exact new version ID, reload, download and at-most-once accept. Repeated AI generation is not required to validate the DB repair.
+- Remains P0 / `DIAG_PENDING` (root DB conflict evidenced, fix unapplied, full user flow not closed).
+
 - **Detected / fixed / closed:** detected `ce6dc7a`; fixed `—`; production
   closure `—`.
 
@@ -179,6 +204,11 @@ implementation, closure, or production validation.
 - **Minimum discriminating tests:** more than 100 mixed-kind rows, page 2/EOF,
   exact aggregate, filters, classification UNKNOWN, denied source, DB failure,
   direct detail and reload.
+### Evidence update — 2026-10-12
+
+- Source-code investigation indicates `/oportunidades` requests mixed opportunity kinds (`all`) while page copy emphasizes grants/programs; the UI presents a 100-row loaded page as “100 disponibles”. This is not the authoritative total. Same-time production view returned final Catalog **204** (not an indexation or country denominator); exact filtered totals and cross-page continuity still require runtime proof.
+- Proposed repair: keep category semantics truthful, account total filtered rows vs current page, support complete pagination and navigation; keep catalogs and permissions independent of Matching/SEO.
+
 - **Detected / fixed / closed:** detected `ce6dc7a`; fixed `—`; production
   closure `—`.
 
@@ -209,6 +239,12 @@ implementation, closure, or production validation.
 - **Minimum discriminating tests:** PY, another LATAM country, factual remote
   regional, unknown geography, hard-ineligible candidate, filter reset,
   pagination and source-permission denial.
+### Evidence update — 2026-10-12
+
+- Product expansion decision: strengthen existing PY/LATAM/global candidate-appropriate collectors and add **Greenhouse Job Board API** and **Lever Postings API** integrations (company-scoped, documented public GET, no automated applications). See `docs/BETA_NEXT_PASS.md` and `docs/source-coverage-known-gaps.md` for gates.
+- Source reality is not proven LATAM-wide by availability of an API. Discovery and a few demo employers are not publishing authorization; each employer board and usage must be validated. Job location ≠ applicant eligibility ≠ work arrangement; unknown does not mean worldwide, Paraguay eligibility, or source redistribution permission.
+- A 2026-10-12 same-time production snapshot had final Matching 203 (all Himalayas), Catalog 204, SEO 6,021. These independent denominators must not be collapsed into “LATAM available jobs”.
+
 - **Detected / fixed / closed:** detected `ce6dc7a`; fixed `—`; production
   closure `—`.
 
@@ -239,6 +275,11 @@ implementation, closure, or production validation.
 - **Minimum discriminating tests:** healthy, failed, skipped, stale, UNKNOWN,
   denied and conflicting source fixtures; exact row drill-down; DB error;
   pagination/aggregate reconciliation; unauthorized access.
+### Evidence update — 2026-10-12
+
+- Required operator reconciliation grounded by real data: 16,541 Universe state rows → 6,224 `matching_row_state=READY` → 5,830 stopped at matching-switch condition / 191 final-gap after checked gates / 203 final-ready. Provide per-source canonical identity, counts and first **effective** reason, with timestamps and override/permit provenance; do not display sample count as total or silently convert UNKNOWN to zero.
+- Historical evaluated timestamps of some sources are 2026-10-02 through 2026-10-07, so future automation and historical backfill both need evidence. Existing Registry V2/Admin/maintenance/C09 work must be reused before any new implementation. No C3 reopen or new parallel authority.
+
 - **Detected / fixed / closed:** detected `ce6dc7a`; fixed `—`; production
   closure `—`.
 
@@ -268,6 +309,12 @@ implementation, closure, or production validation.
 - **Minimum discriminating tests:** GSC page/query deltas, sitemap sample and
   full denominator, canonical uniqueness, noindex/robots, expired/closed rows,
   permission-denied sources, 404/soft-404 and recrawl follow-up.
+### Evidence update — 2026-10-12
+
+- Production read-only counts: final SEO Universe **6,021** as of 2026-10-12 01:17 UTC. Deploy Preview earlier generated 6,038 unique URLs; DIFFERENT run/time and scope, not an indexation drop of 17 and not proof of traffic recovery.
+- The build already generates prerender/sitemap/robots, with dynamic Netlify sitemap routing in the current release. Routine manual sitemap editing is NOT indicated. Verify the live response/index pagination, canonical URL, structured data, permission gates, expiry/noindex and what happens when a newly eligible URL is in the dynamic sitemap before its HTML is prerendered. Avoid new duplicate generators.
+- Search Console comparisons for last 28 days vs preceding 28 by page and query remain outstanding; do not prescribe re-submitting sitemap or assume a Google penalty. Check sitemap read-path efficiency using existing performance backlog item rather than creating a new issue.
+
 - **Detected / fixed / closed:** detected `ce6dc7a`; fixed `—`; production
   closure `—`.
 

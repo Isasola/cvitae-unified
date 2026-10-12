@@ -1,7 +1,7 @@
 {
-  "checkpoint_name": "CVITAE_BETA_MASTER_2026-10-11_CE6DC7A",
+  "checkpoint_name": "CVITAE_BETA_MASTER_2026-10-12_HANDOFF",
   "created_on": "2026-10-11",
-  "state": "POSTDEPLOY_BASELINE_FROZEN / BUGS_RECORDED / NEXT_PASS_READY",
+  "state": "PROD_BASELINE_VERIFIED / P0_EVIDENCE_CONFIRMED / LOCAL_PASS_SCOPED / NO_PUSH_NO_DEPLOY",
   "repository": "Isasola/cvitae-unified",
   "production": {
     "domain": "https://cvitae.lat",
@@ -17,7 +17,9 @@
     "branch": "work/beta-hardening-postdeploy-20261011",
     "base_commit": "ce6dc7aba3dec35c6785fb7100d6125cd0962dab",
     "mutation_scope": "DOCUMENTATION_ONLY",
-    "portable_archive_contains_git_metadata": false
+    "portable_archive_contains_git_metadata": false,
+    "original_documentary_commit": "36b722c46170e9f90c66899abaaae82a9e2a95a2",
+    "latest_zip_changes": "UNCOMMITTED_EXTERNAL_DOCUMENTATION_ONLY"
   },
   "release_contract": {
     "node": "24.21.0",
@@ -52,14 +54,16 @@
     "docs/B2C_READY_CHECKPOINT_R1_2026-10-08.md",
     "docs/R2_STOP_B_CLOSED_CHECKPOINT_2026-10-10.md",
     "docs/PENDING_C4_NOT_DEPLOYED/README.md",
-    "SHA256SUMS.txt"
+    "SHA256SUMS.txt",
+    "docs/SESSION_HANDOFF_2026-10-12.md"
   ],
   "evidence_limits": [
     "DEPLOYED_CODE_DOES_NOT_PROVE_COMPLETE_REAL_USER_E2E",
     "6038_DEPLOY_PREVIEW_URLS_DO_NOT_PROVE_INDEXATION_OR_TRAFFIC_RECOVERY",
     "LOCAL_C4_PASS_DOES_NOT_PROVE_SCHEMA_APPLY_RUNTIME_OR_PRODUCTION",
     "NO_REAL_CV_EMAIL_TOKEN_SECRET_OR_IDENTIFIABLE_SCREENSHOT_INCLUDED",
-    "NO_PRODUCT_FIX_IMPLEMENTED_IN_THIS_CHECKPOINT"
+    "NO_PRODUCT_FIX_IMPLEMENTED_IN_THIS_CHECKPOINT",
+    "HANDOFF_DOCUMENTATION_OUTSIDE_WINDOWS_WORKTREE_NOT_AUTOMATICALLY_COMMITTED"
   ],
   "excluded_from_archive": [
     ".git",
@@ -72,5 +76,29 @@
     "credentials",
     "private_user_data"
   ],
-  "next_exact_action": "Authorize one grouped read-only diagnostic pass for BUG-002 and BUG-003, locate their exact endpoints and last common proven/first divergent failure before any code change."
+  "next_exact_action": "Sync updated docs to Windows worktree safely (without replacing product code), run one grouped LOCAL-only repair/integration pass, test and update bug ledger; NO PUSH/DEPLOY/SQL writes/policy activation.",
+  "updated_on": "2026-10-12",
+  "continuity_note": "Documentation amended using operator-provided read-only PROD evidence in conversation; NOT yet synced or committed in local Windows Git worktree.",
+  "last_readonly_production_evidence": {
+    "at_utc": "2026-10-12T01:17:38Z",
+    "opportunity_universe_state": 16541,
+    "matching_row_ready": 6224,
+    "final_matching_ready": 203,
+    "final_matching_source": "himalayas",
+    "final_catalog": 204,
+    "final_seo": 6021,
+    "switch_gate_stopped": 5830,
+    "unexplained_post_checked_gates": 191,
+    "match_run_at_utc": "2026-10-12T00:45:05Z",
+    "match_run_evaluated_bounded": 388,
+    "match_confirmed": 0,
+    "match_abstained": 376,
+    "match_denied": 12
+  },
+  "new_sources_plan": {
+    "existing_scrapers": "REINFORCE_BOUNDED_COMPLETE_COVERAGE",
+    "greenhouse": "LOCAL_ADAPTER_PLANNED_REVIEW_REQUIRED_SWITCHES_OFF",
+    "lever": "LOCAL_ADAPTER_PLANNED_REVIEW_REQUIRED_SWITCHES_OFF",
+    "product_writes_or_policy_activation": "NOT_AUTHORIZED"
+  }
 }

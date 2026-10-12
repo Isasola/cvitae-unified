@@ -1,9 +1,15 @@
 # CVitae beta — next authorized pass
 
-Status: `PLAN_ONLY / IMPLEMENTATION_NOT_AUTHORIZED`
+Status: `SCOPE_APPROVED_BY_USER / LOCAL_IMPLEMENTATION_ONLY / PROD_WRITE_AND_DEPLOY_NOT_AUTHORIZED`
 
 Production base: `ce6dc7aba3dec35c6785fb7100d6125cd0962dab`.
 Canonical bugs: `docs/BUG_REGISTRY.md`.
+
+## Updated decision — 2026-10-12
+
+The user authorizes **planning/implementation of a coherent LOCAL correction pass** that strengthens existing scrapers and adds Greenhouse + Lever, along with P0 beta fixes and SEO/Universe reconciliation. This does NOT authorize deploy, push, SQL application or live consumer/source-policy switches. Minimize Codex calls: one pre-analyzed implementation pass, targeted fixtures/canaries, then operator review. Treat this as a change to previous `PLAN_ONLY`, not as permission to execute anything in production.
+
+Read `docs/SESSION_HANDOFF_2026-10-12.md` before changing code; it records the latest exact real-data evidence that supersedes earlier speculative diagnostics.
 
 ## Objective
 
@@ -12,13 +18,15 @@ shared failure boundaries once and repairing them end to end. Do not implement
 from screenshots, change scoring, broaden source permissions, or treat a page
 limit as the product universe.
 
-## Pass 1 — grouped P0 diagnosis: ATS and CV rewrite
+## Workstream A — P0 ATS timeout and CV version write failure
 
 Scope: BUG-002 and BUG-003, with BUG-004 as the downstream journey contract.
 
 Map once:
 
 `selected CV/version → request producer → validation/parser → provider → normalized result/proposal → persistence → UI state → retry/reload/download`
+
+New already-proven boundary: rewrite AI generation succeeded, then PostgreSQL rejected a new version because `generated_cvs_user_vacancy` `UNIQUE(user_id,vacancy_id)` conflicts with the newer version index. Prepare a new backward-compatible migration after checking NULL handling and all callers; never change old historical migrations. ATS has observed HTTP 502 and one 30s Netlify timeout not yet correlated to the ATS function. Do not conflate the two errors.
 
 Required evidence before a fix:
 
@@ -34,9 +42,9 @@ Required evidence before a fix:
 Decision gate: group the implementation only where the same proven cable is
 broken. Otherwise preserve separate failures and contracts.
 
-## Pass 2 — real matching delivery
+## Workstream B — real matching, Universe and source-gate reconciliation
 
-Scope: BUG-001 only after the P0 provider/persistence boundary is understood.
+Scope: BUG-001 (coordinated with BUG-006/007), retaining separate evidence and user outcomes. The read-only 2026-10-12 snapshot: 16,541 Universe states / 6,224 matching-row READY / 203 final Matching (all Himalayas) / 204 Catalog / 6,021 SEO. Of matching-row READY, 5,830 stopped on queried matching-switch gate, 191 remained final-gap after queried gates (UNJobs 105, Computrabajo 86), and 203 reached final. Do not equate mismatch with proof of broken policy: check effective source permissions, historical overrides, consumer switch provenance, eventual reconciliation and data freshness. Latest default match run evaluated 388 bounded candidates, 376 abstained, 12 denied, 0 MATCH, 0 POTENTIAL, `NO_SCAN` with 70 potentially scoreable. These are independent stage sets; track ID/timestamp lineage. C4 is still isolated and uninstalled.
 
 Trace:
 
@@ -57,9 +65,20 @@ Do not apply C4 merely because zero matches are observed. C4 remains a
 separately reviewed, not-deployed proposal until its database dependencies and
 write authorization are approved.
 
-## Pass 3 — opportunity coverage and operator truth
+## Workstream C — strengthen all relevant existing collectors + add Greenhouse/Lever + Admin truth
 
-Scope: BUG-005, BUG-006, BUG-007.
+Scope: BUG-005, BUG-006, BUG-007 plus scraper coverage. Preserve documented gaps in `docs/source-coverage-known-gaps.md` and source permission authorities (`docs/source-permission-matrix.md`, Registry V2 and operational state).
+
+**Required implementation intent, not permission to activate:**
+
+- Fix documented pagination/coverage for existing providers in cohesive clusters, without launching 81 sequential jobs under a 60-minute ceiling; use bounded cursor/shards and retries with telemetry. Do not silently turn limits (20/50/100/1,000) into totals. Use current adapters and observation sink, not direct public-table inserts.
+- Add two *company-scoped* adapters: `scrapers/greenhouse_scraper.py` (Greenhouse Board GET) and `scrapers/lever_scraper.py` (Lever Postings GET, `skip/limit` pagination). Introduce controlled board/site configuration resolved through the existing Registry V2 aliases and company attribution; no broad indiscriminate internet scanning. Prefer source identity that preserves original employer and ATS provider, and stable provider+employer+posting ID.
+- Both integrations begin as **REVIEW_REQUIRED, switches OFF for Catalog/Matching/Alerts/SEO/JobPosting/third-party** until provider/employer permission and use-case are reviewed. Public GET is technical accessibility, not publishing or indexing permission. Original-link attribution mandatory. No application submission.
+- Unit/canary tests: successful source pagination and EOF, rate/timeout/retry, duplicate/repeated page, HTTP 404/deleted job, updated/closed job, historical and future state, payload normalization/field survival, source denied/unknown, exact per-source counters and consumer decision.
+- Preserve Himalayas first-party SEO permission and its separate JobPosting/Google Jobs restriction; respect WWR and other DENIED/UNKNOWN sources. Audit UNJobs and Computrabajo 191 post-gate rows without assuming authorization.
+- Show from Admin the exact count at each gate, actual reason and authorized next action. UI count “100” must not mean full Catalog count; category `JOB` in grants/programs must be deliberate and truthful.
+
+
 
 Use one denominator map:
 
@@ -75,9 +94,11 @@ filtered, displayed, and excluded-by-reason totals. Preserve:
 - a batch/page budget never becomes the total universe;
 - Admin projects existing authorities rather than creating a new one.
 
-## Pass 4 — evidence-based SEO recovery
+## Workstream D — SEO automation, HTML parity and GSC
 
-Scope: BUG-008 after a Search Console evidence capture approved by the user.
+Scope: BUG-008. Production read-only final SEO 6,021 at 2026-10-12 01:17 UTC, historical preview URLs 6,038 (different snapshot). Existing sitemap is dynamic/automatic; do not hand-edit or create another generator. Audit same-timestamp coverage/permission/expiry, keyset pagination, canonical and robots, and *sitemap discovery versus prerender build freshness* (a new URL must have real HTML/structured data/404 semantics). Use existing performance backlog for first-page scan; evaluate measured necessity, not arbitrary microoptimization.
+
+Search Console verification remains a distinct external evidence requirement; do not assert traffic recovery from URL counts.
 
 Compare the last 28 days with the previous 28 for impressions, clicks,
 position, query, and page. Reconcile those changes with the authorized SEO
@@ -88,7 +109,7 @@ URLs are historical preview evidence, not an indexing or traffic target.
 No valid page is removed and no denied/unknown source is published merely to
 increase counts.
 
-## Pass 5 — CV journey clarity and shared loading pattern
+## Workstream E — CV flow clarity and shared loading pattern
 
 Scope: BUG-004 and BUG-009 after P0 operations function reliably.
 

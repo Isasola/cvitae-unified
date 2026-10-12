@@ -11,7 +11,8 @@ This snapshot is a documentary checkpoint based on the exact production tree
 3. `docs/GRAND_CHECKPOINT.md`
 4. `docs/BUG_REGISTRY.md`
 5. `docs/POST_RELEASE_BACKLOG.md`
-6. `docs/BETA_NEXT_PASS.md`
+6. `docs/SESSION_HANDOFF_2026-10-12.md` (LATEST VERIFIED EVIDENCE)
+7. `docs/BETA_NEXT_PASS.md`
 7. The relevant skill/source contract only when the task touches that area.
 
 The current user instruction always wins. Do not replace these authorities
@@ -42,16 +43,21 @@ with older portable handoffs.
 
 ## Current item
 
-`POSTDEPLOY_BASELINE_FROZEN / BUGS_RECORDED / NEXT_PASS_READY`
+`PROD_BASELINE_VERIFIED / P0_EVIDENCE_CONFIRMED / LOCAL_SCRAPER_AND_BETA_PASS_APPROVED / NO_DEPLOY`
 
-The next implementation is not authorized by this checkpoint. Begin with the
-grouped, read-only P0 diagnosis in `docs/BETA_NEXT_PASS.md`:
+The user approved **local implementation scope** for a grouped beta repair and
+reinforcing existing scrapers plus adding Greenhouse and Lever. This **does not**
+authorize push, deploy, SQL writes, granting source permissions, activating
+Catalog/Matching/SEO consumer switches, or touching C4. The local Windows repo
+has NOT automatically received this ZIP's new documentary updates.
 
-1. BUG-002 ATS HTTP 502 and BUG-003 rewrite preparation failure;
-2. BUG-001 real matching delivery;
-3. BUG-005/006/007 coverage and Admin truth;
-4. BUG-008 Search Console evidence and SEO recovery;
-5. BUG-004/009 CV journey clarity and loaders.
+Resume from `docs/SESSION_HANDOFF_2026-10-12.md` and `docs/BETA_NEXT_PASS.md`.
+Already-proven: CV rewrite Bedrock call succeeded but DB uniqueness prevented
+version save; default matching computed 0 MATCH on 388 bounded candidates;
+Universe reconciliation 16,541 state / 6,224 row-ready / 203 final Matching
+(all Himalayas) / 204 Catalog / 6,021 SEO; source switches vs final gaps
+are recorded. One 30s Netlify timeout not yet correlated to ATS's function.
+Do not ask operator to repeat these reads.
 
 ## Do not reopen or assume
 
