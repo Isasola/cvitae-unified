@@ -1,5 +1,6 @@
 import { makeSupabaseAdmin } from './_supabase'
 import { observeAiCall } from './lib/ai-telemetry'
+import { readProductMetrics, type ProductPeriod } from './lib/product-metrics'
 import {
   analyticsAiRequested,
   analyticsGeminiConfigured,
@@ -456,6 +457,22 @@ export default async function handler(req: Request) {
   const mode: 'standard' | 'launch' = body.mode === 'launch' ? 'launch' : 'standard'
   const launchEvents: any[]          = body.launchEvents ?? []
 
+  // Isolated, deterministic read: no GA4/GSC/Gemini calls for product metrics.
+  if (body.section === 'product_metrics') {
+    const days: ProductPeriod = [7, 30, 90].includes(body.days) ? body.days : 30
+    try {
+      const metrics = await readProductMetrics(supabase, days, body.includeTests === true)
+      return new Response(JSON.stringify({ product_metrics: metrics }), {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      })
+    } catch (err: any) {
+      console.error('admin-product-metrics:', err?.message)
+      return new Response(JSON.stringify({ error: 'product_metrics_unavailable', reason: err?.message || 'QUERY_FAILED' }), {
+        status: 503, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      })
+    }
+  }
+
   try {
     const now       = new Date()
     const today     = now.toISOString().split('T')[0]
@@ -469,8 +486,8 @@ export default async function handler(req: Request) {
       opportunitiesBySource, opportunitiesByType,
       blogPosts, b2bTokens,
     ] = await Promise.all([
-      supabase.from('user_master_profiles').select('id', { count: 'exact', head: true }),
-      supabase.from('user_master_profiles').select('id', { count: 'exact', head: true }).gte('created_at', weekAgo),
+      supabase.from('user_master_profiles').select('id', { count: 'exact', head: true }).eq('is_test', false),
+      supabase.from('user_master_profiles').select('id', { count: 'exact', head: true }).eq('is_test', false).gte('created_at', weekAgo),
       supabase.from('opportunities').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('verification_status', 'verified'),
       supabase.from('opportunities').select('id', { count: 'exact', head: true }).eq('verification_status', 'in_review'),
       supabase.from('opportunities').select('source').eq('is_active', true).eq('verification_status', 'verified'),

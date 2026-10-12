@@ -225,6 +225,133 @@ function SectionLabel({ text }: { text: string }) {
   )
 }
 
+type ProductMetricData = {
+  contract: string
+  period_days: 7 | 30 | 90
+  classification: { REAL: number; TEST: number; UNKNOWN: number }
+  lifetime: {
+    profile_rows: number; selected_profile_rows: number; selected_linked_user_ids: number
+    selected_unlinked_profile_rows: number; selected_duplicate_profile_rows: number
+    mixed_classification_user_ids: number; authentication_verified: boolean
+  }
+  registration: { cohort_unique_ids: number }
+  activation: {
+    profile_completed_in_cohort_current: number
+    cv_currently_stored_in_cohort: number
+    profile_current_completion_rate_pct: number | null
+    ats_diagnostics_saved_in_period: number
+    ats_diagnostic_users_in_period: number
+    cv_analysis_completed_users: null
+    cv_analysis_note: string
+  }
+  attribution: { channels: Array<{ channel: string; users: number }>; attributed_unique_users: number; scope: string }
+  observed_events: { coverage: 'NO_EVENTS' | 'PARTIAL_EVENTS'; events: number; unique_users: number; types: Array<{ type: string; events: number; users: number }> }
+  retention: { dau: null; wau: null; mau: null; d7: null; d30: null; reason: string }
+  funnel: { registered: number; profile_completed: number; first_successful_cv_analysis: null; returned_another_day: null; reason: string }
+}
+
+function ProductMetricsSection({ adminPassword }: Props) {
+  const [days, setDays] = useState<7 | 30 | 90>(30)
+  const [includeTests, setIncludeTests] = useState(false)
+  const [metrics, setMetrics] = useState<ProductMetricData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [revision, setRevision] = useState(0)
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError(null)
+    setMetrics(null)
+    fetch('/.netlify/functions/admin-analytics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminPassword}` },
+      body: JSON.stringify({ section: 'product_metrics', days, includeTests }),
+    }).then(async response => {
+      if (!response.ok) throw new Error(`Métricas de producto no disponibles (${response.status})`)
+      const payload = await response.json()
+      if (!payload?.product_metrics) throw new Error('Respuesta de métricas incompleta')
+      if (active) setMetrics(payload.product_metrics)
+    }).catch(err => {
+      if (active) setError(err instanceof Error ? err.message : 'Error de lectura')
+    }).finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [adminPassword, days, includeTests, revision])
+
+  const stat = (title: string, value: number | null, detail: string) => (
+    <div key={title} className="min-w-0 rounded border border-white/[0.07] bg-white/[0.03] p-3">
+      <div className="text-[11px] text-white/55">{title}</div>
+      <div className="mt-1 text-xl font-semibold text-[#e8e8e0]">{value === null ? '—' : value.toLocaleString('es-PY')}</div>
+      <div className="mt-1 text-[10px] leading-relaxed text-white/40">{detail}</div>
+    </div>
+  )
+
+  return <section className="rounded-lg border border-white/[0.09] bg-white/[0.02] p-4 space-y-4" aria-label="Métricas de producto">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <SectionLabel text="analytics / producto" />
+        <h2 className="text-base font-semibold text-[#e8e8e0]">Métricas de producto</h2>
+        <p className="mt-1 text-xs text-white/50">Cohortes por fecha de creación del perfil · Supabase, no sesiones anónimas de GA4</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex rounded border border-white/15 overflow-hidden" aria-label="Período de cohorte">
+          {([7, 30, 90] as const).map(period => <button key={period} onClick={() => setDays(period)}
+            aria-pressed={days === period}
+            className={`px-2.5 py-1.5 text-xs ${days === period ? 'bg-[#c9a84c]/20 text-[#e8d8a8]' : 'text-white/60 hover:bg-white/10'}`}>{period}d</button>)}
+        </div>
+        <label className="flex items-center gap-2 text-xs text-white/60">
+          <input type="checkbox" checked={includeTests} onChange={e => setIncludeTests(e.target.checked)} />
+          Incluir TEST
+        </label>
+        <button onClick={() => setRevision(x => x + 1)} className="rounded border border-white/15 p-1.5 text-white/65 hover:text-white" aria-label="Actualizar métricas de producto">
+          <RefreshCw size={14} />
+        </button>
+      </div>
+    </div>
+    {loading && <p className="text-xs text-white/50">Leyendo cohortes...</p>}
+    {error && <p role="alert" className="text-xs text-amber-300">{error}. No se muestran ceros inventados.</p>}
+    {metrics && <>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        {stat('Registros de cohorte', metrics.registration.cohort_unique_ids, 'IDs únicos con primer perfil creado en el período; no verificados contra auth.users')}
+        {stat('Perfiles completados', metrics.activation.profile_completed_in_cohort_current, 'Estado actual de usuarios de la cohorte, no fecha histórica del evento')}
+        {stat('CV referenciados', metrics.activation.cv_currently_stored_in_cohort, 'Estado actual dentro de la cohorte; archivo físico no verificado')}
+        {stat('Diagnósticos ATS guardados', metrics.activation.ats_diagnostic_users_in_period, `${metrics.activation.ats_diagnostics_saved_in_period} diagnósticos persistidos durante el período`)}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="rounded border border-white/[0.07] p-3 space-y-2">
+          <h3 className="text-xs font-semibold text-[#e8e8e0]">Identidad y calidad del denominador</h3>
+          <p className="text-xs text-white/60">Histórico: {metrics.lifetime.profile_rows} perfiles · {metrics.classification.REAL} REAL · {metrics.classification.TEST} TEST · {metrics.classification.UNKNOWN} desconocidos</p>
+          <p className="text-xs text-white/60">Seleccionados históricamente: {metrics.lifetime.selected_profile_rows} perfiles · {metrics.lifetime.selected_linked_user_ids} user_id distintos</p>
+          {(metrics.lifetime.selected_unlinked_profile_rows > 0 || metrics.lifetime.selected_duplicate_profile_rows > 0 || metrics.lifetime.mixed_classification_user_ids > 0) &&
+            <p className="text-xs text-amber-300">Revisión: {metrics.lifetime.selected_unlinked_profile_rows} perfiles sin user_id; {metrics.lifetime.selected_duplicate_profile_rows} perfiles adicionales; {metrics.lifetime.mixed_classification_user_ids} identidades REAL/TEST mixtas excluidas.</p>}
+          <p className="text-[11px] text-white/40">TEST se excluye por defecto; UNKNOWN y clasificaciones mixtas no son REAL. Vinculación con auth.users no verificada.</p>
+        </div>
+        <div className="rounded border border-white/[0.07] p-3 space-y-2">
+          <h3 className="text-xs font-semibold text-[#e8e8e0]">Embudo de activación</h3>
+          <p className="text-xs text-white/65">Nuevos IDs de cohorte {metrics.funnel.registered} → Perfil actualmente completo {metrics.funnel.profile_completed} ({metrics.activation.profile_current_completion_rate_pct === null ? "sin cohorte" : `${metrics.activation.profile_current_completion_rate_pct}%`})</p>
+          <p className="text-xs text-white/50">Primer análisis de CV exitoso → <strong>Sin datos suficientes</strong></p>
+          <p className="text-xs text-white/50">Regreso posterior → <strong>Sin datos suficientes</strong></p>
+          <p className="text-[11px] text-white/40">{metrics.funnel.reason}</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="rounded border border-white/[0.07] p-3 space-y-2">
+          <h3 className="text-xs font-semibold text-[#e8e8e0]">Adquisición atribuida</h3>
+          {metrics.attribution.channels.length ? metrics.attribution.channels.slice(0, 6).map(item =>
+            <div key={item.channel} className="flex justify-between gap-2 text-xs text-white/60"><span className="truncate">{item.channel}</span><span>{item.users}</span></div>)
+            : <p className="text-xs text-white/50">Sin datos suficientes</p>}
+          <p className="text-[11px] text-white/40">UTM source/medium de usuarios históricos seleccionados; no equivale a conversiones de la cohorte.</p>
+        </div>
+        <div className="rounded border border-white/[0.07] p-3 space-y-2">
+          <h3 className="text-xs font-semibold text-[#e8e8e0]">Actividad y retención</h3>
+          <p className="text-xs text-white/65">Eventos observados en {metrics.period_days} días (usuarios históricos): {metrics.observed_events.events}</p>
+          <p className="text-xs text-amber-300">DAU · WAU · MAU · D7 · D30: Sin datos suficientes</p>
+          <p className="text-[11px] text-white/40">{metrics.retention.reason}</p>
+        </div>
+      </div>
+    </>}
+  </section>
+}
+
 function AdminGrowthCenter({ adminPassword }: Props) {
   const [data, setData] = useState<GrowthResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -447,6 +574,8 @@ function AdminGrowthCenter({ adminPassword }: Props) {
         </div>
       </div>
 
+      <ProductMetricsSection adminPassword={adminPassword} />
+
       {/* Error */}
       {error && (
         <div className="rounded border border-red-500/30 bg-red-500/[0.05] p-4">
@@ -518,8 +647,8 @@ function AdminGrowthCenter({ adminPassword }: Props) {
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { label: 'Usuarios registrados', value: db?.registered_users },
-                  { label: 'Nuevos (7d)', value: db?.new_users_7d },
+                  { label: 'Perfiles REAL', value: db?.registered_users },
+                  { label: 'Perfiles REAL nuevos (7d)', value: db?.new_users_7d },
                   { label: 'Oportunidades activas', value: db?.active_opportunities },
                   { label: 'En revisión', value: db?.in_review_count },
                 ].map(({ label, value }) => (
