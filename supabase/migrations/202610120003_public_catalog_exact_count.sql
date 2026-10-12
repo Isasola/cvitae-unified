@@ -6,7 +6,7 @@ create or replace function public.count_public_opportunities(
 set search_path=public,extensions as $$
 declare result bigint;
 begin
-  if length(coalesce(p_query,'')) > 200 or p_mode not in ('all','jobs','non_jobs') then
+  if length(coalesce(p_query,'')) > 200 or p_mode is null or p_mode not in ('all','jobs','non_jobs') then
     raise exception 'invalid_public_page';
   end if;
   select count(*) into result

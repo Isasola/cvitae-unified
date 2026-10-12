@@ -11,7 +11,7 @@ language plpgsql stable security definer
 set search_path = public, extensions
 as $$
 begin
-  if consumer not in ('matching', 'alerts') or match_count < 1 or match_count > 500 then
+  if consumer is null or consumer not in ('matching', 'alerts') or match_count is null or match_count < 1 or match_count > 500 or match_threshold is null then
     raise exception 'invalid_matching_retrieval_request';
   end if;
 

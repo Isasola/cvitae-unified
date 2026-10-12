@@ -17,7 +17,7 @@ begin
     return;
   end if;
 
-  if regexp_replace(lower(legacy_definition), '\\s+', '', 'g') <> 'unique(user_id,vacancy_id)' then
+  if regexp_replace(lower(legacy_definition), '[[:space:]]+', '', 'g') <> 'unique(user_id,vacancy_id)' then
     raise exception 'Refusing to drop generated_cvs_user_vacancy with unexpected definition: %', legacy_definition;
   end if;
 
