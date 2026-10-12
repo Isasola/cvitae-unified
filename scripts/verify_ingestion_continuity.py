@@ -327,6 +327,92 @@ def test_j2_persistence_failure_reconciliation() -> None:
     assert_eq(summary.to_dict()["processed_attempted"], summary.inserted + summary.updated + summary.unchanged + summary.rejected + summary.failed, "J2: reconciliation identity holds")
 
 
+def test_j3_sparse_fields_keep_sql_defaults() -> None:
+    print("\nFixture J3: sparse fields retain absence, never synthetic NULL")
+    with_extra = _item(
+        application_url="https://example.com/sparse/with-extra",
+        verification_reasons=[],
+    )
+    without_extra = _item(
+        application_url="https://example.com/sparse/without-extra",
+    )
+    sink = _sink_with_existing({})
+    summary = sink.upsert([with_extra, without_extra])
+    calls = [
+        call.kwargs["json"] for call in sink.session.post.call_args_list
+        if "/opportunities?on_conflict=" in call.args[0]
+    ]
+    assert_eq(summary.inserted, 2, "J3: two rows inserted")
+    assert_eq(summary.failed, 0, "J3: no rows lost")
+    assert_eq(len(calls), 2, "J3: different field sets sent separately")
+    assert_true(
+        all(
+            "missing=default" in call.kwargs["headers"].get("Prefer", "")
+            for call in sink.session.post.call_args_list
+            if "/opportunities?on_conflict=" in call.args[0]
+        ),
+        "J3: PostgREST missing=default preference sent",
+    )
+    assert_eq(
+        [row["application_url"] for batch in calls for row in batch],
+        [with_extra["application_url"], without_extra["application_url"]],
+        "J3: input order preserved",
+    )
+    assert_true(
+        len(calls) >= 2 and "verification_reasons" not in calls[1][0],
+        "J3: absent field stays absent, no fabricated NULL",
+    )
+
+
+def test_j4_one_bad_row_does_not_poison_other_shape() -> None:
+    print("\nFixture J4: one explicit invalid NULL cannot fail a second shape")
+    bad = _item(
+        application_url="https://example.com/sparse/invalid",
+        verification_reasons=None,
+    )
+    good = _item(application_url="https://example.com/sparse/valid")
+    sink = _sink_with_existing({})
+    success = MagicMock(status_code=204, text="")
+    rejection = MagicMock(
+        status_code=400,
+        text='{"code":"23502","message":"NOT NULL verification_reasons"}',
+    )
+    rejection.json.return_value = {
+        "code": "23502",
+        "message": 'null value in column "verification_reasons" of relation "opportunities" violates not-null constraint',
+        "details": "Failing row contains SENSITIVE_RECORD",
+    }
+    original_post = sink.session.post
+
+    def post_result(url: str, **kwargs: Any) -> Any:
+        if "/opportunities?on_conflict=" not in url:
+            return success
+        rows = kwargs["json"]
+        if any("verification_reasons" in row and row["verification_reasons"] is None for row in rows):
+            return rejection
+        return success
+
+    original_post.side_effect = post_result
+    summary = sink.upsert([bad, good])
+    assert_eq(summary.failed, 1, "J4: only invalid row fails")
+    assert_eq(summary.inserted, 1, "J4: valid row persists")
+    assert_eq(summary.rejected, 0, "J4: persistence failure not misclassified as rejection")
+    assert_eq(summary.to_dict()["processed_attempted"], 2, "J4: reconciliation includes both")
+    assert_true(
+        any(
+            "code=23502" in error
+            and "column=verification_reasons" in error
+            and "affected_batch_rows=1" in error
+            for error in summary.errors
+        ),
+        "J4: SQLSTATE, actual failing column and batch impact visible",
+    )
+    assert_true(
+        all("SENSITIVE_RECORD" not in error for error in summary.errors),
+        "J4: raw failing row is not leaked into diagnostics",
+    )
+
+
 # ─── Lineage summary method ───────────────────────────────────────────────────
 def test_lineage_summary() -> None:
     print("\nLineage summary: lineage_summary() returns correct compact shape")
@@ -508,6 +594,8 @@ if __name__ == "__main__":
         test_i_aggregator_source,
         test_j_max_items_cap,
         test_j2_persistence_failure_reconciliation,
+        test_j3_sparse_fields_keep_sql_defaults,
+        test_j4_one_bad_row_does_not_poison_other_shape,
         test_lineage_summary,
         test_trigger_type_max_items,
         test_k_source_alias_stable,

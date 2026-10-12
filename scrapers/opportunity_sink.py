@@ -145,6 +145,27 @@ def _text(value: Any, limit: int) -> str:
     return " ".join(str(value or "").split())[:limit]
 
 
+def _postgrest_upsert_error(response: requests.Response, affected_batch_rows: int) -> str:
+    """Keep SQLSTATE and failing column before any potentially sensitive row details."""
+    try:
+        payload = response.json()
+    except (ValueError, TypeError):
+        payload = None
+    if not isinstance(payload, dict):
+        return (
+            f"Supabase {response.status_code}: code=UNSTRUCTURED "
+            f"column=UNKNOWN affected_batch_rows={affected_batch_rows}"
+        )
+    code = _text(payload.get("code"), 32) or "UNKNOWN"
+    message = _text(payload.get("message"), 300) or "message_unavailable"
+    match = re.search(r'column\s+"([^"]+)"', message, re.IGNORECASE)
+    column = match.group(1) if match else "UNKNOWN"
+    return (
+        f"Supabase {response.status_code}: code={code} column={column} "
+        f"affected_batch_rows={affected_batch_rows} message={message}"
+    )
+
+
 def _fingerprint(item: dict[str, Any], fields: tuple[str, ...]) -> str:
     payload: dict[str, Any] = {}
     for key in fields:
@@ -550,30 +571,38 @@ class OpportunitySink:
 
         items = changed_items
         for start in range(0, len(items), batch_size):
-            batch = items[start:start + batch_size]
-            # Normalize: all rows in batch must have identical keys for Supabase REST
-            all_keys = set().union(*(row.keys() for row in batch))
-            batch = [{k: row.get(k) for k in all_keys} for row in batch]
-            try:
-                response = self.session.post(
-                    f"{self.table_url}?on_conflict=application_url",
-                    headers={**self.headers, "Prefer": "resolution=merge-duplicates,return=minimal"},
-                    json=batch,
-                    timeout=60,
-                )
-                if response.status_code not in (200, 201, 204):
+            window = items[start:start + batch_size]
+            # PostgREST needs homogeneous column sets. Never synthesize absent
+            # fields as None: that overrides SQL defaults on INSERT and can
+            # erase existing evidence on UPDATE. Preserve input order and group
+            # only consecutive rows sharing the same explicit fields.
+            homogeneous_batches: list[list[dict[str, Any]]] = []
+            for row in window:
+                if homogeneous_batches and homogeneous_batches[-1][0].keys() == row.keys():
+                    homogeneous_batches[-1].append(row)
+                else:
+                    homogeneous_batches.append([row])
+            for batch in homogeneous_batches:
+                try:
+                    response = self.session.post(
+                        f"{self.table_url}?on_conflict=application_url",
+                        headers={**self.headers, "Prefer": "resolution=merge-duplicates,missing=default,return=minimal"},
+                        json=batch,
+                        timeout=60,
+                    )
+                    if response.status_code not in (200, 201, 204):
+                        summary.failed += len(batch)
+                        summary.errors.append(_postgrest_upsert_error(response, len(batch)))
+                        rejected_lineage.extend(({**item, "reason": f"OPPORTUNITY_UPSERT_HTTP_{response.status_code}"}, "PERSISTENCE_FAILED") for item in batch)
+                        continue
+                    updated = sum(item["application_url"] in existing for item in batch)
+                    summary.updated += updated
+                    summary.inserted += len(batch) - updated
+                    lineage_items.extend((item, "UPDATED" if item["application_url"] in existing else "INSERTED") for item in batch)
+                except requests.RequestException as exc:
                     summary.failed += len(batch)
-                    summary.errors.append(f"Supabase {response.status_code}: {_text(response.text, 800)}")
-                    rejected_lineage.extend(({**item, "reason": f"OPPORTUNITY_UPSERT_HTTP_{response.status_code}"}, "PERSISTENCE_FAILED") for item in batch)
-                    continue
-                updated = sum(item["application_url"] in existing for item in batch)
-                summary.updated += updated
-                summary.inserted += len(batch) - updated
-                lineage_items.extend((item, "UPDATED" if item["application_url"] in existing else "INSERTED") for item in batch)
-            except requests.RequestException as exc:
-                summary.failed += len(batch)
-                summary.errors.append(f"Error de red al insertar lote: {type(exc).__name__}")
-                rejected_lineage.extend(({**item, "reason": f"OPPORTUNITY_UPSERT_{type(exc).__name__}"}, "PERSISTENCE_FAILED") for item in batch)
+                    summary.errors.append(f"Error de red al insertar lote: {type(exc).__name__}")
+                    rejected_lineage.extend(({**item, "reason": f"OPPORTUNITY_UPSERT_{type(exc).__name__}"}, "PERSISTENCE_FAILED") for item in batch)
         self._persist_ingestion_lineage(lineage_items, [*rejected_lineage, *duplicate_lineage], existing)
         self._summarize_lineage(summary)
         try:
