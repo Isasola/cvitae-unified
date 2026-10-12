@@ -1,5 +1,22 @@
 # CVitae canonical bug registry
 
+## R3 local implementation evidence — 2026-10-12
+
+This updates the existing bugs; it does not create another registry.
+
+- **BUG-001 — `FIX_LOCAL / PROD_VALIDATION_PENDING`.** Semantic top-N is now selected inside the requested canonical private consumer universe through new, unapplied `match_consumer_opportunities`; Matching and Alerts stay separate and Catalog/SEO cannot consume it. Shared freshness reasons distinguish profile change, age, both, missing signature, no run, run error and invalid timestamp. Current counts are null unless the run is valid/current; historical results are explicitly historical. RR. II., coordination and project-management canaries cover confirmed MATCH and eligibility-unknown POTENTIAL. Recovery of the real anonymous beta case remains pending.
+- **BUG-002 — `FIX_LOCAL / PROD_VALIDATION_PENDING`.** ATS has request correlation and first-failing-stage diagnostics, a bounded provider call below the platform ceiling, and distinct validation/provider-timeout/provider/persistence errors. It never retries expensive generation internally. The observed production 502 remains uncorrelated and is not attributed to Bedrock.
+- **BUG-003 — `FIX_LOCAL / PROD_VALIDATION_PENDING`.** New idempotent migration `202610120001_remove_legacy_generated_cvs_uniqueness.sql` removes only the exact proven legacy constraint, preserving the version triple, non-null normalized vacancy identity, advisory locking, immutable history and owner-scoped endpoints. SQL is prepared, not applied.
+- **BUG-004 — `FIX_LOCAL / PROD_VALIDATION_PENDING`.** The existing choose → prepare → compare → attest → accept flow remains. Acceptance now classifies persistence/legacy-constraint failure without losing the proposal; success reloads the immutable resulting version. Deployed E2E remains required.
+- **BUG-005 — `FIX_LOCAL / PROD_VALIDATION_PENDING`.** An exact filtered Catalog count RPC feeds `X-Total-Count`; the UI no longer calls the current page length the inventory total. SQL is prepared, not applied.
+- **BUG-006 — `FIX_LOCAL / PROD_VALIDATION_PENDING`.** OpportunityDesk, Buscojobs, Becal and Arbeitnow have configurable larger budgets and repeat/EOF-versus-budget semantics. Greenhouse and Lever adapters, fixtures and Registry identities use an empty explicit allowlist. Collection and every consumer permission remain off/review-required. Jobicy and any unverified continuation contract remain open.
+- **BUG-007 — `FIX_LOCAL / PROD_VALIDATION_PENDING`.** `user_detail` now exposes confirmed-only candidate intelligence, exact freshness reason, current-versus-historical results and evidence-backed actions. “Actualizar matching” reuses the existing retrieval state with dedupe, cooldown and compare-before-update; no parallel queue, email or benefit grant. Sample and exact-total scopes remain distinct.
+- **BUG-008 — `FIX_LOCAL / PROD_VALIDATION_PENDING`.** Shared truth/SEO gates now reject captured navigation, generic titles, repeated-title descriptions and fact-free descriptions, and Eight Gates reports these reasons. The EU Delegation fixture rejects `Breadcrumb`, keeps job location separate and no longer invents candidate eligibility or independent verification. Google validation is pending.
+
+Directed evidence: `verify_r3_cv_version_migration.ts`, `verify_r3_matching_freshness.ts`, `verify_r3_matching_profile_canaries.ts`, `verify_item57_matching_observability.ts`, `verify-public-opportunity-pagination.ts`, `verify_eu_delegation_opportunity_truth.py`, `verify_ats_connectors.py`, source Registry/coverage/field-survival verifiers and a direct Vite production bundle. No production write was performed.
+
+Consolidation note: `git diff --check` passed (only LF/CRLF notices). The final `UserDetailDrawer.tsx` change was presentation-only and has no visual rerun; earlier desktop/mobile visual checks remain scoped to the prior presentation. No BUG is marked closed or production-validated by this evidence.
+
 This is the single canonical registry for observed product defects after the
 SEO/B2C production release at `ce6dc7aba3dec35c6785fb7100d6125cd0962dab`.
 It records evidence and acceptance criteria; it is not proof of diagnosis,

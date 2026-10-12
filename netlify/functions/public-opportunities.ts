@@ -33,8 +33,17 @@ return async (event) => {
         .order('updated_at', { ascending: false, nullsFirst: false }).order('id', { ascending: true }).limit(1),
     ]) : []
     for (const result of detailQueries) if (result.error) throw result.error
-    const listResult = slug ? null : await db.rpc('search_public_opportunities', queryParams)
+    const [listResult, countResult] = slug ? [null, null] : await Promise.all([
+      db.rpc('search_public_opportunities', queryParams),
+      db.rpc('count_public_opportunities', {
+        p_query: queryParams.p_query,
+        p_area: queryParams.p_area,
+        p_types: queryParams.p_types,
+        p_mode: queryParams.p_mode,
+      }),
+    ])
     if (listResult?.error) throw listResult.error
+    if (countResult?.error) throw countResult.error
     const detailRows = detailQueries.flatMap(result => result.data || []).sort((a, b) =>
       String(b.updated_at || '').localeCompare(String(a.updated_at || '')) || String(a.id).localeCompare(String(b.id)))
     const page = publicCatalogPage<any>(slug ? detailRows.slice(0, 1) : listResult?.data || [])
@@ -51,7 +60,7 @@ return async (event) => {
         seo: { allowed: seoIds.has(row.id), authority: 'opportunity_seo_universe' } },
     }))
     const response = publicOpportunityResponse(projected, slug)
-    return { statusCode: response.statusCode, headers: { 'Content-Type':'application/json', 'Cache-Control':'public, s-maxage=60', ...(page.nextCursor && !slug ? { 'X-Next-Cursor': page.nextCursor } : {}) }, body: JSON.stringify(response.body) }
+    return { statusCode: response.statusCode, headers: { 'Content-Type':'application/json', 'Cache-Control':'public, s-maxage=60', ...(!slug ? { 'X-Total-Count': String(countResult?.data ?? 0) } : {}), ...(page.nextCursor && !slug ? { 'X-Next-Cursor': page.nextCursor } : {}) }, body: JSON.stringify(response.body) }
   } catch (error) {
     console.error('[public-opportunities]', error)
     return { statusCode: 503, headers:{'Content-Type':'application/json'}, body: JSON.stringify({ error:'public_policy_unavailable' }) }

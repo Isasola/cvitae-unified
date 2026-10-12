@@ -12,6 +12,8 @@ import { evaluateEightGates } from "./lib/eight-gates"
 import { reconcileInventoryRows, reconciliationSummary, mergeReconciliationSummaries, accumulateReconciliationPerSource } from "../../src/lib/inventory-reconciliation"
 import { indexRowsBySource, latestRowsByKey, rowsForAliases, scopedMetric, summarizeSourceHealth } from "../../src/lib/source-intelligence-contract"
 import { matchingProfileSignature } from "../../shared/matching-profile-signature"
+import { matchingRunState } from "../../shared/matching-run-state"
+import { canonicalCandidateEligibility } from "../../shared/candidate-eligibility"
 import { SOURCE_PERMISSION_DIMENSIONS, sourcePermissionDimensionTruth, sourcePermissionEvidenceClass } from "../../src/lib/source-permission-truth"
 import { sourceDoorDiagnostics } from "../../src/lib/source-intelligence-contract"
 import { sourceProducerExecution } from "../../src/lib/effective-source-policy"
@@ -1039,6 +1041,8 @@ const handler: Handler = async (event) => {
       const p = profile as any
       const profileData = p.profile_data || {}
       const skills = Array.isArray(profileData.habilidades) ? profileData.habilidades : []
+      const candidateTruth = profileData.candidate_truth?.evidence || {}
+      const candidateEligibility = canonicalCandidateEligibility(profileData.candidate_eligibility)
       const hasLocation = Boolean(profileData.location && String(profileData.location).trim().length > 1)
       const hasCv = Boolean(p.cv_storage_path)
       const hasEmbedding = Boolean(p.embedding)
@@ -1051,13 +1055,10 @@ const handler: Handler = async (event) => {
       const snapshot = matchingSnapshotRes.data?.[0] as any | undefined
       const snapshotError = matchingSnapshotRes.error
       const currentMatchingSignature = matchingProfileSignature(profile)
-      const matchingStatus = snapshotError
-        ? "ERROR"
-        : !snapshot
-          ? "NO_RUN"
-          : snapshot.run_status === "ERROR"
-            ? "ERROR"
-            : (Date.now() - new Date(snapshot.run_at).getTime() > 24 * 60 * 60 * 1000 || !snapshot.profile_signature || snapshot.profile_signature !== currentMatchingSignature ? "STALE" : (snapshot.match_count > 0 ? "SUCCESS_WITH_RESULTS" : "SUCCESS_ZERO"))
+      const matchingState = snapshotError
+        ? { ...matchingRunState(null, currentMatchingSignature), status: "ERROR" as const, reason: "RUN_ERROR" as const }
+        : matchingRunState(snapshot, currentMatchingSignature)
+      const matchingStatus = matchingState.status
       const matchCount = snapshot?.match_count ?? null
       const topMatchScore = null
 
@@ -1071,6 +1072,31 @@ const handler: Handler = async (event) => {
       else if (snapshot?.coverage_state === "LOW_RETRIEVAL_COVERAGE") warnings.push("Cobertura de recuperación acotada; no equivale a baja oferta total")
       else if (snapshot?.coverage_state === "PROFESSIONAL_FIT_GAP") warnings.push("No encontramos suficiente evidencia profesional compatible")
       if (!hasCv && !hasCvText) warnings.push("Sin CV cargado")
+
+      const confirmed = (field: string) => candidateTruth[field] === "USER_CONFIRMED"
+      const currentCoverage = matchingState.is_current ? snapshot?.coverage_state ?? null : null
+      const recommendations = [
+        !matchingState.is_current ? {
+          code: "UPDATE_MATCHING", label: "Actualizar matching", owner: "Matching",
+          evidence: `Diagnóstico ${matchingState.reason}; última ejecución ${snapshot?.run_at || "sin ejecución"}`,
+          state: "ACTION_AVAILABLE", measurable_result: "Nueva ejecución vigente con firma actual",
+        } : null,
+        candidateEligibility.evidence.residence_country !== "USER_CONFIRMED" ? {
+          code: "COMPLETE_ELIGIBILITY", label: "Faltan datos de elegibilidad", owner: "Usuario",
+          evidence: "País de residencia no confirmado", state: "USER_INPUT_REQUIRED",
+          measurable_result: "Residencia confirmada sin inferirla desde ubicación laboral",
+        } : null,
+        (currentCoverage === "DATA_COVERAGE_GAP" || currentCoverage === "LOW_RETRIEVAL_COVERAGE") ? {
+          code: "SOURCE_COVERAGE_GAP", label: "Cobertura insuficiente para este perfil", owner: "Fuentes",
+          evidence: `${currentCoverage}; candidatos recuperados ${snapshot?.unique_policy_candidates_count ?? "sin dato"}`,
+          state: "SOURCE_REVIEW_REQUIRED", measurable_result: "Mayor cobertura explicada sin ampliar permisos automáticamente",
+        } : null,
+        matchingState.is_current && Number(snapshot?.match_count || 0) > 0 ? {
+          code: "VERIFIED_OPPORTUNITIES", label: "Tiene nuevas oportunidades verificadas", owner: "Retención",
+          evidence: `${snapshot.match_count} coincidencias confirmadas en ejecución vigente`,
+          state: "COMMUNICATION_REVIEW", measurable_result: "Comunicación consentida, deduplicada y entregada",
+        } : null,
+      ].filter(Boolean)
 
       return {
         statusCode: 200,
@@ -1091,12 +1117,44 @@ const handler: Handler = async (event) => {
             completeness_score: completeness,
             completeness_max: 6,
           },
+          b2c_intelligence: {
+            professional_area: confirmed("career_route") ? profileData.career_route || null : null,
+            professional_title: confirmed("professional_title") ? p.professional_title || null : null,
+            seniority: confirmed("seniority") ? profileData.seniority || null : null,
+            experience: confirmed("experience") && Array.isArray(profileData.experience) ? profileData.experience.slice(0, 6) : [],
+            top_skills: confirmed("skills") ? skills.slice(0, 8) : [],
+            desired_role_1y: confirmed("desired_role_1y") ? profileData.desired_role_1y || null : null,
+            career_interests: confirmed("career_interests") && Array.isArray(profileData.career_interests) ? profileData.career_interests.slice(0, 8) : [],
+            residence_country: candidateEligibility.evidence.residence_country === "USER_CONFIRMED" ? candidateEligibility.residence_country : null,
+            eligibility: candidateEligibility,
+            last_activity_at: eventsRes.data?.[0]?.occurred_at || p.updated_at || null,
+            recommendations,
+            communication_eligible: matchingState.is_current && Number(snapshot?.match_count || 0) > 0,
+            communication_blockers: [
+              !matchingState.is_current ? "MATCHING_NOT_CURRENT" : null,
+              Number(snapshot?.match_count || 0) <= 0 ? "NO_CONFIRMED_MATCH" : null,
+            ].filter(Boolean),
+          },
           matching: {
-            match_count: matchingStatus === "STALE" ? null : matchCount,
+            match_count: matchingState.is_current ? matchCount : null,
             top_score: topMatchScore,
             last_match_at: snapshot?.run_at || null,
             status: matchingStatus,
+            freshness_reason: matchingState.reason,
+            is_current: matchingState.is_current,
+            current_profile_signature: currentMatchingSignature,
             snapshot_profile_signature: snapshot?.profile_signature ?? null,
+            snapshot_profile_updated_at: snapshot?.profile_updated_at ?? null,
+            historical_result: snapshot ? {
+              run_status: snapshot.run_status,
+              run_at: snapshot.run_at,
+              match_count: snapshot.match_count ?? null,
+              visible_potential_count: snapshot.visible_potential_count ?? null,
+              potential_scoreable_count: snapshot.potential_scoreable_count ?? null,
+              coverage_state: snapshot.coverage_state ?? null,
+              abstain_count: snapshot.abstain_count ?? null,
+              deny_count: snapshot.deny_count ?? null,
+            } : null,
             potential_scoreable_count: snapshot?.potential_scoreable_count ?? null,
             visible_potential_count: snapshot?.visible_potential_count ?? null,
             diagnostics: snapshot ? {
@@ -1123,6 +1181,30 @@ const handler: Handler = async (event) => {
           warnings,
         })
       }
+    }
+
+    if (action === "request_user_matching_refresh") {
+      if (!payload?.userId) return { statusCode: 400, body: JSON.stringify({ error: "userId requerido" }) }
+      const userId = String(payload.userId)
+      const { data: state, error: stateError } = await supabase.from("matching_retrieval_states")
+        .select("user_id,scan_status,updated_at,last_error_code").eq("user_id", userId).maybeSingle()
+      if (stateError) return { statusCode: 503, body: JSON.stringify({ error: "No se pudo leer el estado de recuperación" }) }
+      if (!state) return { statusCode: 409, body: JSON.stringify({ error: "El scheduler todavía no creó estado para este usuario", code: "NO_RETRIEVAL_STATE", executed: false }) }
+      if (["PENDING", "SCANNING"].includes(state.scan_status)) {
+        return { statusCode: 200, body: JSON.stringify({ ok: true, executed: false, changed: false, status: state.scan_status, deduplicated: true }) }
+      }
+      const updatedAt = Date.parse(String(state.updated_at || ""))
+      if (Number.isFinite(updatedAt) && Date.now() - updatedAt < 5 * 60 * 1000) {
+        return { statusCode: 429, body: JSON.stringify({ error: "Ya hubo una solicitud reciente", code: "REFRESH_COOLDOWN", executed: false }) }
+      }
+      const { data: updated, error: updateError } = await supabase.from("matching_retrieval_states")
+        .update({ scan_status: "PENDING", last_error_code: null, completed_at: null, updated_at: new Date().toISOString() })
+        .eq("user_id", userId).eq("scan_status", state.scan_status)
+        .select("scan_status,updated_at").maybeSingle()
+      if (updateError) return { statusCode: 503, body: JSON.stringify({ error: "No se pudo solicitar la actualización", executed: false }) }
+      if (!updated) return { statusCode: 409, body: JSON.stringify({ error: "El estado cambió mientras se solicitaba la actualización", code: "CONCURRENT_CHANGE", executed: false }) }
+      await supabase.from("user_events").insert({ user_id: userId, event_type: "admin_matching_refresh_requested", occurred_at: updated.updated_at, event_data: { prior_status: state.scan_status, resulting_status: updated.scan_status } })
+      return { statusCode: 200, body: JSON.stringify({ ok: true, executed: true, changed: true, status: updated.scan_status, requested_at: updated.updated_at }) }
     }
 
     if (action === "enable_founding_offer") {

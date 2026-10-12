@@ -1,4 +1,5 @@
 import { sourcePermissionDimensionTruth, sourcePermissionEvidenceClass } from '../../../src/lib/source-permission-truth'
+import { opportunityContentQualityReasons } from '../../../src/lib/opportunity-truth'
 
 export type GateStatus = 'PASS' | 'WARNING' | 'FAIL' | 'NOT_APPLICABLE' | 'NOT_EVALUATED'
 
@@ -26,11 +27,18 @@ export function evaluateEightGates(profile: any, rows: any[], latestRun: any, ob
   // Fall back to full-inventory row computation only when run-specific gates are absent.
   const hasRunSpecificG46 = Boolean((runGates.gate_4 as any)?.metrics?._rows_source === 'run_specific')
   const qualityFailures: string[] = []
+  const contentReasonCounts = rows.reduce((acc: Record<string, number>, row) => {
+    for (const reason of opportunityContentQualityReasons(row)) acc[reason] = (acc[reason] || 0) + 1
+    return acc
+  }, {})
+  if (contentReasonCounts.GENERIC_OR_NAVIGATION_TITLE) qualityFailures.push('NAVIGATION_CAPTURED_AS_OPPORTUNITY')
+  if (contentReasonCounts.DESCRIPTION_REPEATS_TITLE) qualityFailures.push('DESCRIPTION_REPEATS_TITLE')
+  if (contentReasonCounts.DESCRIPTION_WITHOUT_FACTUAL_CONTENT) qualityFailures.push('DESCRIPTION_WITHOUT_FACTUAL_CONTENT')
   if (total && descriptionOk < total) qualityFailures.push('CONTENT_INSUFFICIENT')
   if (total && !organizationOk) qualityFailures.push('ORGANIZATION_MISSING')
   if (total && !countryOk && !rows.every(row => row.remote_scope && row.remote_scope !== 'UNKNOWN')) qualityFailures.push('COUNTRY_MISSING')
   if (total && rows.some(row => row.remote_scope === 'UNKNOWN')) qualityFailures.push('ARRANGEMENT_UNKNOWN')
-  const inventoryQuality = gate(!total ? 'NOT_EVALUATED' : qualityFailures.length ? 'FAIL' : 'PASS', qualityFailures[0] || 'NORMALIZED', { total, description_ok: descriptionOk, organization_ok: organizationOk, location_ok: locationOk, country_ok: countryOk, application_url_ok: appUrlOk, source_url_ok: sourceUrlOk, _rows_source: rowsScope }, { reasons: qualityFailures }, null)
+  const inventoryQuality = gate(!total ? 'NOT_EVALUATED' : qualityFailures.length ? 'FAIL' : 'PASS', qualityFailures[0] || 'NORMALIZED', { total, description_ok: descriptionOk, organization_ok: organizationOk, location_ok: locationOk, country_ok: countryOk, application_url_ok: appUrlOk, source_url_ok: sourceUrlOk, content_reason_counts: contentReasonCounts, _rows_source: rowsScope }, { reasons: qualityFailures }, null)
   const quality = hasRunSpecificG46 ? runGates.gate_4 as any as Gate : inventoryQuality
   const fieldEvidence = extracted?.description?.extracted || 0
   const provenLost = fieldEvidence > 0 && descriptionOk < Math.max(1, Math.floor(total * .25))

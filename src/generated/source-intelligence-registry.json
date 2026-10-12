@@ -4,12 +4,94 @@
   "ambiguous_patterns": [],
   "auto_enabled": 1,
   "certified": 2,
-  "emitted_aliases": 148,
-  "pending_certification": 103,
-  "profiles": 105,
-  "registry_hash": "fccedd5ec917f360dae38fe63404d40a36520b52f1fc1c16dd16c65424415db3",
+  "emitted_aliases": 150,
+  "pending_certification": 105,
+  "profiles": 107,
+  "registry_hash": "397d5ed716a1dc42f0fa3dc60829a82c693947126e358f466987a9e0bcd55d9a",
   "schema_version": "source-intelligence-registry:v2",
   "sources": [
+    {
+      "active": true,
+      "adapter_version": "greenhouse:v1.0.0",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "greenhouse",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": false,
+        "source_attribution_required": true,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "greenhouse"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/greenhouse_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
+      "refresh_capability": {
+        "adapter": "GreenhouseBoardAdapter",
+        "cleaner": null,
+        "detail_strategy": "api_bulk",
+        "discovery_strategy": "public_api_allowlist",
+        "scout": "configured_board_api"
+      },
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "employer_ats"
+    },
+    {
+      "active": true,
+      "adapter_version": "lever:v1.0.0",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "dry_run",
+        "live_validation"
+      ],
+      "canonical_source": "lever",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": false,
+        "source_attribution_required": true,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "lever"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/lever_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
+      "refresh_capability": {
+        "adapter": "LeverPostingAdapter",
+        "cleaner": null,
+        "detail_strategy": "api_paginated",
+        "discovery_strategy": "public_api_allowlist",
+        "scout": "configured_site_api"
+      },
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "employer_ats"
+    },
     {
       "active": true,
       "adapter_version": "unjobs:v2.0.0",

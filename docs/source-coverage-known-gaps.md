@@ -4,13 +4,13 @@ This is a narrow static diagnostic list for the next collection tranche, not a s
 
 | source | issue | status | next_fix |
 | --- | --- | --- | --- |
-| jooble | API was invoked only for page 1 | CONFIRMED_LIMIT | paginate until empty/repeated identities |
-| workday_multinacionales | Workday request used `offset=0`, `limit=20` only | CONFIRMED_LIMIT | advance offset until short page |
-| opportunitydesk | category walk is capped at 3 pages | CONFIRMED_LIMIT | make continuation explicit |
-| computrabajo | category walk is capped at 5 pages | CONFIRMED_LIMIT | make continuation explicit |
-| buscojobs | loop is fixed to pages 1-5 | CONFIRMED_LIMIT | continue to natural exhaustion |
-| arbeitnow | loop is fixed to pages 1-10 | CONFIRMED_LIMIT | use provider continuation |
-| becal | listing walk is capped at 3 pages | CONFIRMED_LIMIT | continue until empty |
+| jooble | earlier evidence described page 1 only; current adapter already advances until empty/repeated identities | EXISTING_CONTRACT_VERIFIED_LOCAL | retain fixture/live-authorized continuation canary |
+| workday_multinacionales | earlier evidence described offset 0 only; current adapter already advances offset until a short page | EXISTING_CONTRACT_VERIFIED_LOCAL | retain per-tenant bounded canary |
+| opportunitydesk | legacy category walk was capped at 3 pages | FIX_LOCAL / PROD_VALIDATION_PENDING | configurable bounded budget (default 50); prove provider EOF and resume behavior in isolated/live-authorized canary |
+| computrabajo | earlier fixed cap is now configuration-controlled | EXISTING_CONTRACT_VERIFIED_LOCAL | validate budget/resume with provider-safe canary; do not call budget EOF |
+| buscojobs | legacy loop was fixed to pages 1-5 | FIX_LOCAL / PROD_VALIDATION_PENDING | configurable bounded budget, repeat-page stop and explicit budget-not-EOF signal |
+| arbeitnow | legacy loop was fixed to pages 1-10 | FIX_LOCAL / PROD_VALIDATION_PENDING | configurable bounded budget and explicit budget-not-EOF signal; canonical sink modernization remains open |
+| becal | legacy listing walk was capped at 3 pages | FIX_LOCAL / PROD_VALIDATION_PENDING | configurable bounded budget, repeated-URL stop and explicit budget-not-EOF signal |
 | zonajobs / trabajos.com.py | listing walk is capped at 5 pages | CONFIRMED_LIMIT | continue until empty |
 | jobicy | requests 50 per industry without continuation | CONFIRMED_LIMIT | inspect provider continuation |
 | oya | homepage-only extraction | UNKNOWN | establish whether an inventory exists |
@@ -24,8 +24,8 @@ Use the existing certified source registry/identity/adapter/observation/sink/con
 
 | provider family | public read interface (official documentation) | planned adapter | source and permission safeguards | status |
 | --- | --- | --- | --- | --- |
-| Greenhouse | `GET https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs?content=true` for known employer board tokens; public job-board GET requires no API credentials | Company-board-scoped `greenhouse_scraper.py` adapter and source-scoped configurable allowlist, using existing sink/registry, employer + external post ID; preserve `absolute_url`, `updated_at`, title, location and only factual fields | Authentication-free GET does not grant republication/SEO/Google Jobs/matching rights; verify employer/provider terms and usage evidence per board and per consumer before enabling; no application POST | `PLANNED_REVIEW_REQUIRED / ALL_CONSUMER_SWITCHES_OFF` |
-| Lever | `GET https://api.lever.co/v0/postings/{SITE}?mode=json&skip={offset}&limit={page_size}` (check regional endpoints/tenant configuration); official Postings API supports public posting retrieval and pagination | `lever_scraper.py` company-site adapter with provider `id`, `hostedUrl`/`applyUrl`, categories, description, location and next-offset continuation | Apply the same company-level registry/permission checks; do not make unsupported LATAM / remote eligibility assertions or submit applications | `PLANNED_REVIEW_REQUIRED / ALL_CONSUMER_SWITCHES_OFF` |
+| Greenhouse | `GET https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs?content=true` for known employer board tokens; public job-board GET requires no API credentials | Implemented company-board-scoped `greenhouse_scraper.py`, stable provider+board+post identity, factual content and coverage total | Empty explicit allowlist; authentication-free GET does not grant republication/SEO/Google Jobs/matching rights; verify per board and consumer; no application POST | `FIX_LOCAL / REVIEW_REQUIRED / ALL_CONSUMERS_OFF` |
+| Lever | `GET https://api.lever.co/v0/postings/{SITE}?mode=json&skip={offset}&limit={page_size}` with global/EU base selection and `skip/limit` | Implemented `lever_scraper.py`, stable provider+site+post identity, repeated-page protection and continuation to short page | Empty explicit allowlist; no unsupported LATAM/remote eligibility assertion; no applications | `FIX_LOCAL / REVIEW_REQUIRED / ALL_CONSUMERS_OFF` |
 
 Official documentation: Greenhouse `https://docs.greenhouse.io/job-board.html`; Lever `https://github.com/lever/postings-api`. Before implementation re-check current API field contracts, provider guidance, legal basis and employer permissions. A company board having public JSON is NOT approval for indexing or redistribution.
 

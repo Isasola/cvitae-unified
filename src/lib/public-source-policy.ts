@@ -32,7 +32,9 @@ export async function loadPublicOpportunityPage<T = Record<string, any>>(mode: '
   if (filters.cursor) params.set('cursor', filters.cursor)
   const response = await fetch(`/.netlify/functions/public-opportunities?${params.toString()}`)
   const rows = await decodePublicOpportunityResponse<T[]>(response)
-  return { rows: (rows || []) as T[], nextCursor: response.headers.get('X-Next-Cursor') }
+  const totalHeader = response.headers.get('X-Total-Count')
+  const totalCount = totalHeader !== null && /^\d+$/.test(totalHeader) ? Number(totalHeader) : null
+  return { rows: (rows || []) as T[], nextCursor: response.headers.get('X-Next-Cursor'), totalCount }
 }
 
 /** Detail stays exact-ID; lists page through the full canonical result set. */

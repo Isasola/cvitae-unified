@@ -90,7 +90,8 @@ def main():
     total_inserted = 0
     seen = set()
 
-    for page in range(1, 11):  # 100 jobs per page = up to 1000
+    max_pages = int(os.getenv("CVITAE_MAX_PAGES", "50"))
+    for page in range(1, max_pages + 1):
         try:
             r = requests.get(
                 API_URL,
@@ -144,6 +145,8 @@ def main():
 
         print(f"  página {page}: {page_inserted} insertadas de {len(jobs_raw)} totales")
         time.sleep(0.5)
+    else:
+        print(f"  presupuesto de {max_pages} páginas agotado; cobertura pendiente, no EOF")
 
     print(f"\n=== Arbeitnow: {total_inserted}/{total_found} remotos/globales insertados ===")
 

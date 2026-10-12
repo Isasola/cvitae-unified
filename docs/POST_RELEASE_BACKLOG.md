@@ -10,6 +10,8 @@ Este archivo guarda la memoria persistente de bugs, mejoras, deuda técnica, nue
 4. Cuando un item entra a ejecución, registrar qué Cxx/release lo absorbe.
 5. Nunca borrar items terminados: marcar DONE y agregar evidencia.
 6. No usar este archivo para justificar cambios adicionales durante el release actual.
+
+R3 local deduplication note (2026-10-12): BUG-001 through BUG-008 are tracked only in `docs/BUG_REGISTRY.md`. Their local fixes are no longer duplicate ACTIVE backlog work; production validation, unapplied SQL, Jobicy continuation, isolated-DB E2E and external Google verification remain pending there. Historical rows below are preserved.
 7. Si aparece un bug mientras trabajamos, registrarlo inmediatamente aquí antes de seguir, salvo que bloquee el release actual.
 8. Si bloquea el release actual, debe entrar primero en la Biblia C01–C21 y el backlog sólo puede referenciarlo.
 

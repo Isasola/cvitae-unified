@@ -2,6 +2,16 @@
 
 Status: `SCOPE_APPROVED_BY_USER / LOCAL_IMPLEMENTATION_ONLY / PROD_WRITE_AND_DEPLOY_NOT_AUTHORIZED`
 
+## R3 implementation result — local only
+
+The coherent local pass is implemented on `work/beta-hardening-postdeploy-20261011`. Three migrations are prepared and unapplied: exact legacy CV constraint removal, consumer-scoped semantic retrieval, and exact Catalog counting. Admin freshness/current-history separation, safe refresh request, ATS stage errors, quality gates, bounded collector continuation, and inactive Greenhouse/Lever connectors have focused fixtures. Full production E2E is intentionally not claimed.
+
+Future beta communication contract: communicate only after a current profile-signature run proves new authorized MATCH rows; use the exact persisted count, consent/preferences/unsubscribe/frequency rules, and an idempotency key bound to user + profile signature + run. Operational notices and promotions are separate. A free-month benefit requires an explicit approved policy and audited grant. STALE, UNKNOWN, POTENTIAL, provider acceptance without delivery, Founding Beta `OFFERED`, FREE plan, and “Ahora no” cannot trigger a “new matches” claim. No email or benefit is sent in this pass.
+
+`NEXT_EXACT_ACTION`: ChatGPT/operator reviews the local commit and ZIP, runs the three unapplied migrations in an isolated database, executes the CV accept/reload/download and matching refresh/persist/reload E2E with synthetic users, then decides whether to authorize a Deploy Preview. Do not publish yet.
+
+Consolidation status: local checks were reused; only whitespace check was rerun for this handoff. The final Admin drawer wrapping/layout adjustment is not visually revalidated. Three migrations remain unapplied; production behavior, persisted multi-user isolation and Google outcomes remain unverified.
+
 Production base: `ce6dc7aba3dec35c6785fb7100d6125cd0962dab`.
 Canonical bugs: `docs/BUG_REGISTRY.md`.
 

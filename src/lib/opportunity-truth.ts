@@ -15,6 +15,17 @@ export interface OpportunityTruthInput {
 }
 const JOB_TYPES = new Set(['job', 'internship', 'consultancy', 'empleo'])
 const SCHOLARSHIP_TYPES = new Set(['scholarship', 'fellowship', 'grant', 'research_funding'])
+const GENERIC_OPPORTUNITY_TITLE = /^(?:breadcrumb(?:\s+\d+)?|vacantes?|empleos?|jobs?|oportunidades?|inicio|home|ver m[aá]s|read more|detalle)$/i
+export function opportunityContentQualityReasons(row: Pick<OpportunityTruthInput, 'title' | 'description'>): string[] {
+  const title = String(row.title || '').replace(/\s+/g, ' ').trim()
+  const description = String(row.description || '').replace(/\s+/g, ' ').trim()
+  const reasons: string[] = []
+  if (!title || GENERIC_OPPORTUNITY_TITLE.test(title)) reasons.push('GENERIC_OR_NAVIGATION_TITLE')
+  if (title && [title.toLowerCase(), `${title.toLowerCase()}.`].includes(description.toLowerCase())) reasons.push('DESCRIPTION_REPEATS_TITLE')
+  const factualTokens = new Set((description.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []))
+  if (description.length < 100 || factualTokens.size < 12) reasons.push('DESCRIPTION_WITHOUT_FACTUAL_CONTENT')
+  return reasons
+}
 export function canonicalOpportunityPath(slug: string, opportunityType?: string | null): string { return JOB_TYPES.has(String(opportunityType || '').toLowerCase()) ? `/empleos/${slug}` : `/oportunidades/${slug}` }
 export function canonicalOpportunityUrl(slug: string, opportunityType?: string | null, origin = 'https://cvitae.lat'): string { return `${origin.replace(/\/$/, '')}${canonicalOpportunityPath(slug, opportunityType)}` }
 export function isJobLike(row: OpportunityTruthInput): boolean { return JOB_TYPES.has(String(row.opportunity_type || row.opportunity_kind || '').toLowerCase()) }
@@ -59,6 +70,8 @@ export function deadlineLifecycle(deadline: string | null | undefined, now = new
 }
 export function catalogReadiness(row: OpportunityTruthInput, now = new Date()): ReadinessResult {
   if (!String(row.title || '').trim()) return notReady('MISSING_TITLE')
+  const contentReasons = opportunityContentQualityReasons(row)
+  if (contentReasons.includes('GENERIC_OR_NAVIGATION_TITLE')) return notReady('GENERIC_OR_NAVIGATION_TITLE')
   if (!String(row.slug || '').trim()) return notReady('MISSING_CANONICAL_IDENTITY')
   if (row.deleted_at || row.archived_at || row.is_active === false) return notReady('ROW_DISABLED')
   if (row.verification_status && row.verification_status !== 'verified') return notReady('LIFECYCLE_NOT_VERIFIED')
@@ -88,7 +101,8 @@ export function seoReadiness(row: OpportunityTruthInput, now = new Date()): Read
 export function seoContentReadinessIndependentOfLifecycle(row: Pick<OpportunityTruthInput, 'title' | 'slug' | 'description' | 'organization'>): ReadinessResult {
   if (!String(row.title || '').trim()) return notReady('MISSING_TITLE')
   if (!String(row.slug || '').trim()) return notReady('MISSING_CANONICAL_IDENTITY')
-  if (String(row.description || '').trim().length < 100) return notReady('THIN_CONTENT')
+  const contentReasons = opportunityContentQualityReasons(row)
+  if (contentReasons.length) return notReady(...contentReasons)
   if (!String(row.organization || '').trim()) return notReady('MISSING_ORGANIZATION')
   return ready()
 }

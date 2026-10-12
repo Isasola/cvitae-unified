@@ -81,9 +81,15 @@ def is_relevant(title, excerpt=""):
 def scrape_via_api():
     jobs = []
     seen = set()
-    for page in range(1, 4):
+    max_pages = int(os.getenv("CVITAE_MAX_PAGES", "50"))
+    for page in range(1, max_pages + 1):
         posts = fetch_via_api(page)
         if not posts:
+            break
+        page_urls = {str(post.get("link") or "") for post in posts}
+        page_urls.discard("")
+        if page_urls and page_urls.issubset(seen):
+            print(f"  WP página {page}: repetida; continuación detenida")
             break
         for post in posts:
             url = post.get("link", "")
@@ -110,6 +116,8 @@ def scrape_via_api():
                 "tags": ["beca", "gobierno", "paraguay", "posgrado"],
             })
         time.sleep(1)
+    else:
+        print(f"  presupuesto de {max_pages} páginas agotado; cobertura pendiente, no EOF")
     return jobs
 
 

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { observeAiCall } from './lib/ai-telemetry'
 import { makeSupabaseAdmin } from './_supabase'
@@ -154,7 +154,7 @@ ${cvText}`
       system: 'Sos un auditor de CV riguroso. Respondés solamente JSON válido y fundamentás cada conclusión en el texto recibido.',
       messages: [{ role: 'user', content: prompt }],
     }),
-  })))
+  }), { abortSignal: AbortSignal.timeout(20_000) }))
   const decoded = JSON.parse(new TextDecoder().decode(response.body))
   return normalizeAtsResult(extractJSON(decoded.content?.[0]?.text || '{}'))
 }
@@ -203,6 +203,8 @@ export const handler = async (event: any) => {
   if (event.httpMethod !== 'POST') return jsonResponse(event, 405, { error: 'Método no permitido' })
   if (!event.body || event.body.length > 250_000) return jsonResponse(event, 413, { error: 'La solicitud supera el límite permitido' })
 
+  const requestId = randomUUID()
+  let stage = 'AUTHORIZATION'
   try {
     const authResult = await authenticatedUser(event)
     if (!authResult.user) return jsonResponse(event, 401, { error: authResult.error })
@@ -223,7 +225,10 @@ export const handler = async (event: any) => {
       return jsonResponse(event, 200, { openQuestionCount: count || 0 })
     }
 
-    if (action === 'overview') return jsonResponse(event, 200, await loadWorkspace(supabase, user.id))
+    if (action === 'overview') {
+      stage = 'WORKSPACE_LOAD'
+      return jsonResponse(event, 200, await loadWorkspace(supabase, user.id), { 'X-Request-Id': requestId })
+    }
 
     if (action === 'analyze') {
       const sourceKind = body.sourceKind === 'generated_cv' ? 'generated_cv' : body.sourceKind === 'uploaded_cv' ? 'uploaded_cv' : null
@@ -244,6 +249,7 @@ export const handler = async (event: any) => {
       if (cvText.length < 120) return jsonResponse(event, 400, { error: 'El CV no contiene suficiente texto para un diagnóstico confiable' })
 
       const contentHash = createHash('sha256').update(cvText).digest('hex')
+      stage = 'IDEMPOTENCY_LOOKUP'
       const { data: existing, error: existingError } = await supabase.from('cv_ats_assessments')
         .select('id').eq('user_id', user.id).eq('content_hash', contentHash).eq('rubric_version', RUBRIC_VERSION).maybeSingle()
       if (existingError) throw existingError
@@ -256,7 +262,9 @@ export const handler = async (event: any) => {
         return jsonResponse(event, 429, { error: 'Alcanzaste el límite temporal de diagnósticos. Volvé a intentarlo más tarde.' }, rateLimitHeaders(rateLimit))
       }
 
+      stage = 'PROVIDER'
       const result = await invokeModel(cvText)
+      stage = 'PERSISTENCE'
       const { data: profile, error: profileError } = await supabase.from('user_master_profiles')
         .select('id').eq('user_id', user.id).maybeSingle()
       if (profileError) throw profileError
@@ -276,7 +284,8 @@ export const handler = async (event: any) => {
         p_analysis_model: MODEL_ID,
       })
       if (createError) throw createError
-      return jsonResponse(event, 200, { ...(await loadWorkspace(supabase, user.id)), idempotent: false }, rateLimitHeaders(rateLimit))
+      stage = 'RESPONSE'
+      return jsonResponse(event, 200, { ...(await loadWorkspace(supabase, user.id)), idempotent: false, request_id: requestId }, { ...rateLimitHeaders(rateLimit), 'X-Request-Id': requestId })
     }
 
     if (action === 'review_question') {
@@ -301,12 +310,22 @@ export const handler = async (event: any) => {
 
     return jsonResponse(event, 400, { error: 'Acción desconocida' })
   } catch (error: any) {
-    console.error('cv-ats-workspace error:', error?.message || error)
-    const unavailable = String(error?.message || '').startsWith('Rate limit unavailable')
-    return jsonResponse(event, unavailable ? 503 : 500, {
+    const rawMessage = String(error?.message || error || '')
+    const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError' || /timed?\s*out|abort/i.test(rawMessage)
+    const providerFailure = stage === 'PROVIDER'
+    const persistenceFailure = stage === 'PERSISTENCE'
+    const unavailable = rawMessage.startsWith('Rate limit unavailable')
+    const code = timedOut ? 'PROVIDER_TIMEOUT' : providerFailure ? 'PROVIDER_ERROR' : persistenceFailure ? 'PERSISTENCE_ERROR' : 'SERVER_ERROR'
+    console.error('cv-ats-workspace error', { request_id: requestId, stage, code, error_name: error?.name || 'Error' })
+    return jsonResponse(event, timedOut ? 504 : unavailable || providerFailure || persistenceFailure ? 503 : 500, {
+      code, stage, request_id: requestId,
+      retryable: timedOut || unavailable || providerFailure || persistenceFailure,
       error: unavailable
         ? 'El servicio está temporalmente ocupado. Intentá nuevamente en unos minutos.'
-        : 'No pudimos completar el diagnóstico ATS.',
-    })
+        : timedOut ? 'El proveedor no respondió dentro del tiempo seguro. No se guardó un diagnóstico incompleto.'
+          : providerFailure ? 'El proveedor no pudo completar el análisis. Podés reintentar sin duplicar un diagnóstico guardado.'
+            : persistenceFailure ? 'El análisis terminó, pero no pudo guardarse. No se mostrará como diagnóstico vigente.'
+              : 'No pudimos completar el diagnóstico ATS.',
+    }, { 'X-Request-Id': requestId, ...(timedOut || providerFailure ? { 'Retry-After': '30' } : {}) })
   }
 }

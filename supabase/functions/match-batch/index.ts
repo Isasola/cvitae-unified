@@ -253,10 +253,11 @@ Deno.serve(async (req)=>{
     let opportunities = recentOpportunities ?? [];
     const semanticHydratedOpportunities = [];
     if (embedding) {
-      const { data: vectorMatches, error: vectorError } = await supabase.rpc('match_opportunities', {
+      const { data: vectorMatches, error: vectorError } = await supabase.rpc('match_consumer_opportunities', {
         query_embedding: embedding,
         match_threshold: 0.10,
-        match_count: 120
+        match_count: 120,
+        consumer: requestMode === 'alerts' ? 'alerts' : 'matching',
       });
       if (vectorError) {
         console.error('vector matching unavailable:', vectorError.message);
@@ -399,7 +400,7 @@ Deno.serve(async (req)=>{
       primary_retrieval: recentOpportunities?.length ?? 0,
       primary_retrieval_scope: 'BOUNDED_RETRIEVAL_WINDOW',
       semantic_retrieval: semanticRetrievalCount,
-      semantic_retrieval_scope: 'BOUNDED_RETRIEVAL_WINDOW',
+        semantic_retrieval_scope: 'CONSUMER_UNIVERSE_BOUNDED_WINDOW',
       unique_policy_candidates: prePolicyCount,
       source_allowed: sourceAllowedCount,
       professional_evidence_ready: decisionCounts.professionalEvidenceReady,

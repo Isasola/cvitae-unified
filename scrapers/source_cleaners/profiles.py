@@ -16,6 +16,22 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 V2_PROFILES: dict[str, SourceProfile] = {
+    "greenhouse": SourceProfile(
+        source="greenhouse", adapter_version="greenhouse:v1.0.0", auto_enabled=False,
+        expected_description_coverage=.85, adapter="GreenhouseBoardAdapter", cleaner=None,
+        scout="configured_board_api", discovery_strategy="public_api_allowlist", detail_strategy="api_bulk",
+        source_family="employer_ats", opportunity_kinds=("job",), max_workers=2,
+        supports_eligibility=False, known_assumptions=("board_allowlist_required", "public_get_is_not_distribution_permission", "job_location_is_not_eligibility"),
+        source_attribution_required=True, search_engine_indexing_allowed=False,
+    ),
+    "lever": SourceProfile(
+        source="lever", adapter_version="lever:v1.0.0", auto_enabled=False,
+        expected_description_coverage=.85, adapter="LeverPostingAdapter", cleaner=None,
+        scout="configured_site_api", discovery_strategy="public_api_allowlist", detail_strategy="api_paginated",
+        source_family="employer_ats", opportunity_kinds=("job",), max_workers=2,
+        supports_eligibility=False, known_assumptions=("site_allowlist_required", "skip_limit_to_eof", "public_get_is_not_distribution_permission", "workplace_type_is_not_eligibility"),
+        source_attribution_required=True, search_engine_indexing_allowed=False,
+    ),
     "unjobs": SourceProfile(
         source="unjobs", adapter_version="unjobs:v2.0.0", auto_enabled=True,
         expected_description_coverage=.80, adapter="UNJobsAdapter", cleaner="UNJobsCleaner",

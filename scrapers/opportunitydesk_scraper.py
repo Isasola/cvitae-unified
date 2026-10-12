@@ -62,9 +62,10 @@ def insert_job(job):
         return "error"
 
 
-def scrape_category(path, opp_type, max_pages=3):
+def scrape_category(path, opp_type, max_pages=None):
     jobs = []
     seen = set()
+    max_pages = max_pages or int(os.getenv("CVITAE_MAX_PAGES", "50"))
 
     for page in range(1, max_pages + 1):
         url = BASE_URL + path
@@ -127,7 +128,7 @@ def main():
 
     for path, opp_type in CATEGORIES:
         print(f"\nRastreando: {path} ({opp_type})")
-        jobs = scrape_category(path, opp_type, max_pages=3)
+        jobs = scrape_category(path, opp_type)
         total_found += len(jobs)
 
         # Keep legacy discovery, but send every row through the common

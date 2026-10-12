@@ -118,7 +118,9 @@ def main():
 
     for code, slug, rubro in CATEGORIES:
         print(f"\nCategoría: {rubro} ({code}/{slug})")
-        for page in range(1, 6):
+        seen_page_ids = set()
+        max_pages = int(os.getenv("CVITAE_MAX_PAGES", "50"))
+        for page in range(1, max_pages + 1):
             html = fetch_page(code, slug, page)
             if not html:
                 print(f"  página {page}: sin respuesta")
@@ -128,6 +130,12 @@ def main():
             if not jobs:
                 print(f"  página {page}: sin ofertas (fin de paginación o sin Next.js data)")
                 break
+            page_ids = {str(job.get('IdOferta', '') or job.get('id', '')) for job in jobs}
+            page_ids.discard('')
+            if page_ids and page_ids.issubset(seen_page_ids):
+                print(f"  página {page}: repetida; continuación detenida de forma explícita")
+                break
+            seen_page_ids.update(page_ids)
 
             total_found += len(jobs)
             for job in jobs:
@@ -138,6 +146,8 @@ def main():
                 print(f"  [{title[:45]}] -> {status}")
 
             time.sleep(1)
+        else:
+            print(f"  presupuesto de {max_pages} páginas agotado; cobertura pendiente, no EOF")
 
         time.sleep(1.5)
 

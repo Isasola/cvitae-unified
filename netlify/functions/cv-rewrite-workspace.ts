@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { observeAiCall } from './lib/ai-telemetry'
 import { makeSupabaseAdmin } from './_supabase'
@@ -212,7 +212,7 @@ Respondé ÚNICAMENTE JSON válido:
       system: 'Sos un editor de CV riguroso. Solo reescribís hechos autorizados y respondés JSON válido.',
       messages: [{ role: 'user', content: prompt }],
     }),
-  })))
+  }), { abortSignal: AbortSignal.timeout(20_000) }))
   const decoded = JSON.parse(new TextDecoder().decode(response.body))
   return extractJSON(decoded.content?.[0]?.text || '{}')
 }
@@ -256,6 +256,8 @@ export const handler = async (event: any) => {
   if (event.httpMethod !== 'POST') return jsonResponse(event, 405, { error: 'Método no permitido' })
   if (!event.body || event.body.length > 200_000) return jsonResponse(event, 413, { error: 'La solicitud supera el límite permitido' })
 
+  const requestId = randomUUID()
+  let stage = 'AUTHORIZATION'
   try {
     const authResult = await authenticatedUser(event)
     if (!authResult.user) return jsonResponse(event, 401, { error: authResult.error })
@@ -264,7 +266,10 @@ export const handler = async (event: any) => {
     const action = plain(body.action || 'overview', 40)
     const supabase = makeSupabaseAdmin()
 
-    if (action === 'overview') return jsonResponse(event, 200, await loadWorkspace(supabase, user))
+    if (action === 'overview') {
+      stage = 'WORKSPACE_LOAD'
+      return jsonResponse(event, 200, await loadWorkspace(supabase, user), { 'X-Request-Id': requestId })
+    }
 
     if (action === 'create') {
       const sourceVersionId = plain(body.sourceVersionId, 80)
@@ -319,10 +324,12 @@ export const handler = async (event: any) => {
         .eq('user_id', user.id).eq('source_version_id', sourceVersion.id)
         .order('created_at', { ascending: false }).limit(1).maybeSingle()
       if (diagnosticError) throw diagnosticError
+      stage = 'PROVIDER'
       const modelResult = await invokeModel(sourceVersion.cv_markdown, objective, grounding, diagnostic || {})
       const normalized = normalizeRewriteResult(modelResult, grounding, sourceVersion.cv_markdown)
       const evidenceSnapshot = grounding.map((item) => ({ ...item }))
 
+      stage = 'PERSISTENCE'
       const { data: proposal, error: insertError } = await supabase.from('cv_rewrite_proposals').insert({
         user_id: user.id,
         source_version_id: sourceVersion.id,
@@ -342,6 +349,7 @@ export const handler = async (event: any) => {
     }
 
     if (action === 'accept') {
+      stage = 'VERSION_ACCEPTANCE'
       const proposalId = plain(body.proposalId, 80)
       if (!proposalId || body.attested !== true) return jsonResponse(event, 400, { error: 'Revisá la propuesta y confirmá su veracidad antes de aceptarla' })
       const rateLimit = await consumeRateLimit({ scope: 'b2c-cv-rewrite-actions', subject: user.id, limit: 40, windowSeconds: 60 * 60 })
@@ -367,15 +375,27 @@ export const handler = async (event: any) => {
 
     return jsonResponse(event, 400, { error: 'Acción desconocida' })
   } catch (error: any) {
-    console.error('cv-rewrite-workspace error:', error?.message || error)
-    const unavailable = String(error?.message || '').startsWith('Rate limit unavailable')
-    const validation = String(error?.message || '').startsWith('La propuesta')
-    return jsonResponse(event, unavailable ? 503 : validation ? 422 : 500, {
+    const rawMessage = String(error?.message || error || '')
+    const unavailable = rawMessage.startsWith('Rate limit unavailable')
+    const validation = rawMessage.startsWith('La propuesta')
+    const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError' || /timed?\s*out|abort/i.test(rawMessage)
+    const legacyConstraint = /generated_cvs_user_vacancy(?:\W|$)/.test(rawMessage)
+    const providerFailure = stage === 'PROVIDER'
+    const persistenceFailure = stage === 'PERSISTENCE' || stage === 'VERSION_ACCEPTANCE'
+    const code = legacyConstraint ? 'CV_VERSION_CONSTRAINT_CONFLICT' : timedOut ? 'PROVIDER_TIMEOUT' : providerFailure ? 'PROVIDER_ERROR' : persistenceFailure ? 'PERSISTENCE_ERROR' : validation ? 'VALIDATION_ERROR' : 'SERVER_ERROR'
+    console.error('cv-rewrite-workspace error', { request_id: requestId, stage, code, error_name: error?.name || 'Error' })
+    return jsonResponse(event, legacyConstraint ? 409 : timedOut ? 504 : unavailable || providerFailure || persistenceFailure ? 503 : validation ? 422 : 500, {
+      code, stage, request_id: requestId,
+      retryable: unavailable || timedOut || providerFailure || (persistenceFailure && !legacyConstraint),
       error: unavailable
         ? 'El servicio está temporalmente ocupado. Intentá nuevamente en unos minutos.'
+        : legacyConstraint ? 'La propuesta sigue guardada, pero la nueva versión no pudo crearse por una restricción antigua de versiones.'
+          : timedOut ? 'El proveedor no respondió dentro del tiempo seguro. No se guardó una propuesta incompleta.'
+            : providerFailure ? 'El proveedor no pudo preparar la propuesta. Podés reintentar; una propuesta ya guardada no se duplicará.'
+              : persistenceFailure ? 'La operación terminó, pero no pudo persistirse. El CV original no fue sobrescrito.'
         : validation
           ? 'La propuesta automática no superó los controles de evidencia. No se guardó ningún cambio.'
           : 'No pudimos preparar la reescritura en este momento.',
-    })
+    }, { 'X-Request-Id': requestId, ...(timedOut || providerFailure ? { 'Retry-After': '30' } : {}) })
   }
 }

@@ -1,5 +1,13 @@
 # CVITAE GRAND CHECKPOINT
 
+## R3 local implementation addendum — 2026-10-12
+
+Branch `work/beta-hardening-postdeploy-20261011` contains a local-only hardening pass. It prepares, but does not apply, migrations for BUG-003 legacy uniqueness, consumer-scoped semantic retrieval and exact Catalog counts. Matching current/history semantics and Admin refresh reuse existing authorities; quality signals feed existing truth/Eight Gates; Greenhouse/Lever remain inactive and review-required. Focused fixtures and a client production bundle pass; no production, permission, email or deployment action occurred. Canonical per-bug status and remaining validation are in `docs/BUG_REGISTRY.md`.
+
+`NEXT_EXACT_ACTION`: operator/ChatGPT review of the local commit and master ZIP, followed by isolated-DB SQL/E2E validation before any publication authorization.
+
+Consolidation: `git diff --check` passed with line-ending notices only. Prior focused tests/build and two-device-size visual checks are reused; the last drawer-only style tweak was not visually rerun. All three R3 SQL migrations are prepared, not applied. No local evidence here upgrades product status to `CLOSED_LOCAL` or `PROD_VALIDATED`.
+
 ## ACTIVE CORRECTIVE LIST — SINGLE OPERATIONAL BIBLE
 
 El master historico 1-67 permanece intacto debajo de esta Biblia. `DO NOT REOPEN` se limita al contrato local probado; PROD continua pendiente donde se indica.

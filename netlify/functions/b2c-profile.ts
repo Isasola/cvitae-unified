@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer'
 import { makeSupabaseAdmin } from './_supabase'
 import { confirmedCandidateTruth } from './lib/candidate-truth'
 import { matchingProfileSignature } from '../../shared/matching-profile-signature'
+import { matchingRunState } from '../../shared/matching-run-state'
 import { confirmedCandidateEligibility } from '../../shared/candidate-eligibility'
 import {
   authenticatedUser,
@@ -91,16 +92,15 @@ async function resolveProfile(supabase: any, user: any, create = false) {
 
 export function matchingCoverageFromSnapshot(data: any, profileSignature?: string | null, now = Date.now()) {
   if (!data) return { status: 'NO_RUN', coverage_state: 'NO_RUN', match: null, potential: null, potential_scoreable: null, background_scan_status: 'NO_SCAN', total_inventory_count: null, inventory_funnel: {} }
-  const stale = (now - new Date(data.run_at).getTime() > 24 * 60 * 60 * 1000) || !data.profile_signature || !profileSignature || data.profile_signature !== profileSignature
+  const state = matchingRunState(data, profileSignature, now)
   const background = { background_scan_status: data.background_scan_status ?? 'NO_SCAN', background_examined_count: data.background_examined_count ?? 0, background_target_count: data.background_target_count ?? 0, background_completed_at: data.background_completed_at ?? null, total_inventory_count: data.total_inventory_count ?? null, inventory_funnel: data.inventory_funnel ?? {}, inventory_funnel_at: data.inventory_funnel_at ?? null }
-  if (data.run_status === 'ERROR') return { status: 'ERROR', coverage_state: 'ERROR', match: null, potential: null, potential_scoreable: null, run_at: data.run_at, ...background }
-  if (stale) return { status: 'STALE', coverage_state: 'STALE', match: null, potential: null, potential_scoreable: null, run_at: data.run_at, ...background }
-  return { status: data.match_count > 0 ? 'SUCCESS_WITH_RESULTS' : 'SUCCESS_ZERO', coverage_state: data.coverage_state, match: data.match_count, potential: data.visible_potential_count, potential_scoreable: data.potential_scoreable_count, run_at: data.run_at, ...background }
+  if (!state.is_current) return { ...state, coverage_state: state.status === 'ERROR' ? 'ERROR' : state.status === 'NO_RUN' ? 'NO_RUN' : 'STALE', match: null, potential: null, potential_scoreable: null, ...background }
+  return { ...state, coverage_state: data.coverage_state, match: data.match_count, potential: data.visible_potential_count, potential_scoreable: data.potential_scoreable_count, ...background }
 }
 
 async function latestMatchingCoverage(supabase: any, userId: string, profileSignature?: string | null) {
   const { data, error } = await supabase.from('matching_diagnostic_snapshots')
-    .select('run_status,run_at,profile_signature,coverage_state,match_count,potential_scoreable_count,visible_potential_count,background_scan_status,background_examined_count,background_target_count,background_completed_at,total_inventory_count,inventory_funnel,inventory_funnel_at')
+    .select('run_status,run_at,profile_updated_at,profile_signature,coverage_state,match_count,potential_scoreable_count,visible_potential_count,background_scan_status,background_examined_count,background_target_count,background_completed_at,total_inventory_count,inventory_funnel,inventory_funnel_at')
     .eq('user_id', userId).order('run_at', { ascending: false }).limit(1).maybeSingle()
   if (error) return { status: 'ERROR', coverage_state: 'ERROR', match: null, potential: null, potential_scoreable: null }
   return matchingCoverageFromSnapshot(data, profileSignature)

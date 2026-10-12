@@ -20,6 +20,8 @@ with older portable handoffs.
 
 ## Current truth
 
+R3 is implemented locally and remains unshipped. Read the R3 section at the top of `docs/BUG_REGISTRY.md`; do not repeat the original diagnosis. `NEXT_EXACT_ACTION` is review of the local commit/ZIP, isolated-DB application of the three new migrations, and synthetic CV/matching persistence E2E before any Deploy Preview decision. Greenhouse/Lever have an empty allowlist and no permissions. No email should be sent.
+
 - Production domain: `https://cvitae.lat`.
 - Netlify site: `cvitae-lata`.
 - Production branch: `feature/aws-migration`.

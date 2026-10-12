@@ -41,6 +41,7 @@ EXCLUDE_RE = re.compile(
     r"inicio|noticias|prensa|acerca de|europa\.eu/web|login|newsletter)\b",
     re.IGNORECASE,
 )
+GENERIC_TITLE_RE = re.compile(r"^(?:breadcrumb(?:\s+\d+)?|vacantes?|empleos?|jobs?|oportunidades?|inicio|home|ver m[aá]s|read more|detalle)$", re.I)
 
 TENDER_RE = re.compile(r"\b(licitaci[oó]n|tender|concurso de contratos?|procurement)\b", re.I)
 TRAINEESHIP_RE = re.compile(r"\b(traine|pr[aá]cticas?|pasant|internship)\b", re.I)
@@ -127,6 +128,8 @@ def _parse_vacancies_page(page: str) -> list[dict]:
         text = " ".join(heading.get_text(" ", strip=True).split())
         if not text or len(text) < 8:
             continue
+        if GENERIC_TITLE_RE.fullmatch(text):
+            continue
         if EXCLUDE_RE.search(text):
             continue
 
@@ -138,6 +141,9 @@ def _parse_vacancies_page(page: str) -> list[dict]:
         seen.add(full_url)
 
         context = " ".join(card.get_text(" ", strip=True).split())
+        context_without_title = context.replace(text, "", 1).strip(" .:-")
+        if not _parse_deadline(context) and len(context_without_title) < 60:
+            continue
         deadline = _parse_deadline(context)
         opp_type, opp_kind = _infer_type(text + " " + context[:400])
 
@@ -154,9 +160,9 @@ def _parse_vacancies_page(page: str) -> list[dict]:
             "source": SOURCE_ID,
             "source_authority": "original",
             "original_source_url": full_url,
-            "original_source_verified": True,
-            "eligible_regions": ["PY"],
-            "eligible_countries": ["PY"],
+            "original_source_verified": False,
+            "eligible_regions": [],
+            "eligible_countries": [],
             "tags": ["EU", "Union Europea", "EEAS", "Paraguay", opp_type],
             "description": context[:4000],
         }
@@ -169,7 +175,7 @@ def _parse_vacancies_page(page: str) -> list[dict]:
 
 def extract() -> list[dict]:
     rows: list[dict] = []
-    for url, label in ((VACANCIES_URL, "vacantes"), (DELEGATION_URL, "delegacion")):
+    for url, label in ((VACANCIES_URL, "vacantes"),):
         try:
             response = requests.get(url, timeout=45, headers=HEADERS)
             response.raise_for_status()

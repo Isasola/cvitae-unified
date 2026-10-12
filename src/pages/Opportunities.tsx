@@ -89,6 +89,7 @@ export default function Opportunities() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [totalCount, setTotalCount] = useState<number | null>(null)
   const requestSequence = useRef(0)
   const [category, setCategory] = useState<Category>('Todas')
   const [query, setQuery] = useState('')
@@ -99,7 +100,7 @@ export default function Opportunities() {
     setLoading(true)
     setError('')
     void loadPublicOpportunityPage<Opportunity>('all', { ...{ q: query, types: category === 'Todas' ? undefined : [...CATEGORY_TYPES[category], ...(category === 'Programas' ? ['programa'] : [])] }, cursor: append ? nextCursor || undefined : undefined })
-      .then(page => { if (request !== requestSequence.current) return; setItems(current => append ? [...current, ...page.rows] : page.rows); setNextCursor(page.nextCursor) })
+      .then(page => { if (request !== requestSequence.current) return; setItems(current => append ? [...current, ...page.rows] : page.rows); setNextCursor(page.nextCursor); setTotalCount(page.totalCount) })
       .catch(() => { if (request === requestSequence.current) setError('No pudimos cargar las oportunidades. Revisá tu conexión e intentá de nuevo.') })
       .finally(() => { if (request === requestSequence.current) setLoading(false) })
   }
@@ -122,10 +123,10 @@ export default function Opportunities() {
   }, [category, items, query])
 
   const stats = useMemo(() => ({
-    total: items.length,
+    total: totalCount,
     funded: items.filter(i => i.fully_funded).length,
     closingSoon: items.filter(i => { const d = daysUntil(i.deadline); return d !== null && d <= 14 }).length,
-  }), [items])
+  }), [items, totalCount])
 
   return (
     <>
@@ -155,8 +156,8 @@ export default function Opportunities() {
           {!loading && items.length > 0 && (
             <div className="mt-8 flex flex-wrap gap-px overflow-hidden border border-white/[0.07]">
               <div className="flex min-w-[120px] flex-1 flex-col bg-white/[0.02] px-5 py-3">
-                <span className="text-2xl font-light tabular-nums text-cream">{stats.total}</span>
-                <span className="mt-0.5 text-[10px] uppercase tracking-[0.14em] text-white/35">disponibles</span>
+                <span className="text-2xl font-light tabular-nums text-cream">{stats.total ?? '—'}</span>
+                <span className="mt-0.5 text-[10px] uppercase tracking-[0.14em] text-white/35">total exacto</span>
               </div>
               <div className="flex min-w-[120px] flex-1 flex-col bg-white/[0.02] px-5 py-3">
                 <span className="text-2xl font-light tabular-nums text-[#c9a84c]">{stats.funded}</span>

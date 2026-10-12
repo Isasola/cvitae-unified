@@ -3011,6 +3011,9 @@ export default function Admin() {
         onEnableFoundingOffer={async (userId) => {
           await adminFetch('enable_founding_offer', { userId })
         }}
+        onRequestMatchingRefresh={async (userId) => {
+          await adminFetch('request_user_matching_refresh', { userId })
+        }}
         onFoundingApprove={async (userId) => {
           const result = await adminFetch('founding_approve', { userId })
           if (result.status === 'full') throw new Error('El programa está lleno (50 cupos ocupados)')

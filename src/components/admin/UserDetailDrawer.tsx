@@ -3,7 +3,7 @@
 // Data is fetched by the parent (Admin.tsx) via the user_detail action.
 
 import { useState } from 'react'
-import { X, AlertTriangle } from 'lucide-react'
+import { X, AlertTriangle, RefreshCw } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface UserDetailDrawerProps {
@@ -15,6 +15,7 @@ interface UserDetailDrawerProps {
   onDetailRefresh?: (profileId: string) => void
   onFoundingApprove?: (userId: string) => Promise<void>
   onFoundingReject?: (userId: string) => Promise<void>
+  onRequestMatchingRefresh?: (userId: string) => Promise<void>
 }
 
 interface UserDetailData {
@@ -39,6 +40,19 @@ interface UserDetailData {
     top_score: number | null
     last_match_at: string | null
     status?: string
+    freshness_reason?: string
+    is_current?: boolean
+    snapshot_profile_updated_at?: string | null
+    historical_result?: {
+      run_status?: string
+      run_at?: string | null
+      match_count?: number | null
+      visible_potential_count?: number | null
+      potential_scoreable_count?: number | null
+      coverage_state?: string | null
+      abstain_count?: number | null
+      deny_count?: number | null
+    } | null
     potential_scoreable_count?: number | null
     visible_potential_count?: number | null
     diagnostics?: {
@@ -49,6 +63,20 @@ interface UserDetailData {
       semantic_retrieval?: number
       top_reason_codes?: Record<string, number>
     } | null
+  }
+  b2c_intelligence?: {
+    professional_area: string | null
+    professional_title: string | null
+    seniority: string | null
+    experience: any[]
+    top_skills: string[]
+    desired_role_1y: string | null
+    career_interests: string[]
+    residence_country: string | null
+    last_activity_at: string | null
+    communication_eligible: boolean
+    communication_blockers: string[]
+    recommendations: Array<{ code: string; label: string; owner: string; evidence: string; state: string; measurable_result: string }>
   }
   warnings?: string[]
 }
@@ -64,9 +92,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between gap-4 text-sm">
-      <span className="text-white/50">{label}</span>
-      <span className="text-right text-xs text-white/70">{value}</span>
+    <div className="flex min-w-0 items-start justify-between gap-3 text-sm">
+      <span className="shrink-0 text-white/50">{label}</span>
+      <span className="min-w-0 max-w-[60%] break-all text-right text-xs text-white/70">{value}</span>
     </div>
   )
 }
@@ -74,7 +102,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 export function UserDetailDrawer({
   profileId, data, loading, onClose,
   onEnableFoundingOffer, onDetailRefresh,
-  onFoundingApprove, onFoundingReject,
+  onFoundingApprove, onFoundingReject, onRequestMatchingRefresh,
 }: UserDetailDrawerProps) {
   const isOpen = !!profileId
   const [confirmingEnable, setConfirmingEnable] = useState(false)
@@ -83,6 +111,21 @@ export function UserDetailDrawer({
   const [rejectingFounding, setRejectingFounding] = useState(false)
   const [confirmingReject, setConfirmingReject] = useState(false)
   const [foundingActionMsg, setFoundingActionMsg] = useState('')
+  const [matchingRefreshState, setMatchingRefreshState] = useState<'idle' | 'confirm' | 'running' | 'done' | 'error'>('idle')
+
+  const matchingLabels: Record<string, string> = {
+    NO_RUN: 'Sin diagnóstico', ERROR: 'Error de ejecución', STALE: 'Diagnóstico desactualizado',
+    SUCCESS_ZERO: 'Diagnóstico vigente sin coincidencias', SUCCESS_WITH_RESULTS: 'Diagnóstico vigente',
+  }
+  const staleReasonLabels: Record<string, string> = {
+    PROFILE_CHANGED: 'El perfil cambió después de la última ejecución.',
+    AGE_EXPIRED: 'La última ejecución superó las 24 horas.',
+    PROFILE_CHANGED_AND_AGE_EXPIRED: 'El perfil cambió y la última ejecución superó las 24 horas.',
+    MISSING_PROFILE_SIGNATURE: 'La ejecución no conserva una firma de perfil comparable.',
+    NO_RUN: 'Nunca se ejecutó un diagnóstico para este perfil.',
+    RUN_ERROR: 'La última ejecución terminó con error.',
+    INVALID_RUN_TIMESTAMP: 'La ejecución no tiene una fecha válida.',
+  }
 
   return (
     <AnimatePresence>
@@ -96,7 +139,7 @@ export function UserDetailDrawer({
           <motion.div
             initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed right-0 top-0 z-50 h-full w-full max-w-lg overflow-y-auto border-l border-white/10 bg-[#0d0d0d] p-6 shadow-2xl"
+            className="fixed right-0 top-0 z-50 h-full w-full max-w-lg overflow-x-hidden overflow-y-auto border-l border-white/10 bg-[#0d0d0d] p-4 shadow-2xl sm:p-6"
           >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-sm font-semibold text-white">Detalle de usuario</h2>
@@ -118,7 +161,7 @@ export function UserDetailDrawer({
                   <div className="mb-5 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-1.5">
                     <p className="text-[10px] uppercase tracking-widest text-amber-400/60 mb-2">Advertencias</p>
                     {data.warnings.map((w, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs text-amber-300/80">
+                      <div key={i} className="flex min-w-0 items-start gap-2 break-words text-xs text-amber-300/80">
                         <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0 text-amber-400/60" />
                         {w}
                       </div>
@@ -131,7 +174,7 @@ export function UserDetailDrawer({
                   <div className="space-y-1.5 text-sm">
                     <Row label="Nombre" value={data.profile.full_name || '—'} />
                     <Row label="Email" value={
-                      <span className="font-mono text-xs">
+                      <span className="break-all font-mono text-xs">
                         {data.profile.email || data.auth_email || <span className="text-zinc-500 italic">sin email</span>}
                       </span>
                     } />
@@ -208,6 +251,29 @@ export function UserDetailDrawer({
                       <Row label="Ubicación" value={data.profile_health.has_location ? 'Sí' : <span className="text-amber-400/80">Sin ubicación</span>} />
                       <Row label="Skills" value={data.profile_health.skills_count > 0 ? `${data.profile_health.skills_count} skills` : <span className="text-amber-400/80">Sin skills</span>} />
                       <Row label="Embedding" value={data.profile_health.has_embedding ? 'Sí' : <span className="text-amber-400/80">Pendiente</span>} />
+                    </div>
+                  </Section>
+                )}
+
+                {data.b2c_intelligence && (
+                  <Section title="Inteligencia del candidato">
+                    <div className="rounded-xl border border-cyan-300/10 bg-cyan-300/[0.03] p-4 space-y-3">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <Row label="País confirmado" value={data.b2c_intelligence.residence_country || 'Sin información'} />
+                        <Row label="Rubro" value={data.b2c_intelligence.professional_area || 'Sin información'} />
+                        <Row label="Título profesional" value={data.b2c_intelligence.professional_title || 'Sin información'} />
+                        <Row label="Experiencia" value={data.b2c_intelligence.seniority || 'Sin información'} />
+                        <Row label="Objetivo" value={data.b2c_intelligence.desired_role_1y || 'Sin información'} />
+                        <Row label="Última actividad" value={data.b2c_intelligence.last_activity_at ? new Date(data.b2c_intelligence.last_activity_at).toLocaleString('es-PY') : 'Sin información'} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-white/35">Habilidades principales</p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {data.b2c_intelligence.top_skills.length
+                            ? data.b2c_intelligence.top_skills.map(skill => <span key={skill} className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-white/65">{skill}</span>)
+                            : <span className="text-xs text-white/35">Sin información · completar habilidades en el perfil</span>}
+                        </div>
+                      </div>
                     </div>
                   </Section>
                 )}
@@ -301,23 +367,52 @@ export function UserDetailDrawer({
                 {/* Matching health */}
                 {data.matching && (
                   <Section title="Matching">
-                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 space-y-1.5">
-                      <Row label="Estado" value={data.matching.status || "UNKNOWN"} />
-                      {data.matching.status === 'STALE' && <Row label="Diagnóstico" value="Anterior a la última versión del perfil; no es estado actual" />}
-                      {data.matching.status !== 'STALE' && <Row label="Matches confirmados" value={data.matching.match_count ?? "UNKNOWN"} />}
-                      {data.matching.status !== 'STALE' && data.matching.visible_potential_count != null && <Row label="Potenciales visibles" value={data.matching.visible_potential_count} />}
-                      {data.matching.status !== 'STALE' && data.matching.potential_scoreable_count != null && <Row label="Candidatos potenciales scoreables" value={data.matching.potential_scoreable_count} />}
-                      {data.matching.diagnostics?.coverage_state && <Row label="Cobertura" value={data.matching.diagnostics.coverage_state} />}
-                      {data.matching.diagnostics?.eligibility_unknown != null && <Row label="Elegibilidad UNKNOWN" value={data.matching.diagnostics.eligibility_unknown} />}
-                      {data.matching.top_score !== null && <Row label="Top score" value={`${Math.round(data.matching.top_score)}/100`} />}
-                      {data.matching.last_match_at && <Row label="Último run" value={new Date(data.matching.last_match_at).toLocaleDateString('es-PY')} />}
-                      <Row label="Matches visibles" value={
-                        data.matching.match_count == null
-                          ? "UNKNOWN — no inferir cero"
-                          : data.profile.is_subscribed
-                            ? `${data.matching.match_count} (PRO — todos)`
-                            : `${Math.min(data.matching.match_count, 3)} / ${data.matching.match_count} (FREE — máx 3)`
-                      } />
+                    <div className={`rounded-xl border p-4 ${data.matching.is_current ? 'border-emerald-400/20 bg-emerald-400/[0.04]' : 'border-amber-400/20 bg-amber-400/[0.04]'}`}>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-white/85">{matchingLabels[data.matching.status || ''] || 'Estado no disponible'}</p>
+                          {!data.matching.is_current && <p className="mt-1 text-xs leading-relaxed text-amber-100/65">{staleReasonLabels[data.matching.freshness_reason || ''] || 'No hay un resultado vigente para mostrar.'}</p>}
+                        </div>
+                        {!data.matching.is_current && onRequestMatchingRefresh && (
+                          <div className="shrink-0">
+                            {matchingRefreshState === 'confirm' ? <div className="flex items-center gap-2">
+                              <button onClick={async () => { setMatchingRefreshState('running'); try { await onRequestMatchingRefresh(data.profile.user_id); setMatchingRefreshState('done'); if (profileId) onDetailRefresh?.(profileId) } catch { setMatchingRefreshState('error') } }} className="rounded-md bg-[#c9a84c]/20 px-2.5 py-1.5 text-[10px] text-[#e4ca79]">Confirmar</button>
+                              <button onClick={() => setMatchingRefreshState('idle')} className="text-[10px] text-white/40">Cancelar</button>
+                            </div> : <button disabled={matchingRefreshState === 'running' || matchingRefreshState === 'done'} onClick={() => setMatchingRefreshState('confirm')} className="inline-flex items-center gap-1.5 rounded-md border border-[#c9a84c]/30 px-2.5 py-1.5 text-[10px] text-[#e4ca79] disabled:opacity-50">
+                              <RefreshCw className={`h-3 w-3 ${matchingRefreshState === 'running' ? 'animate-spin' : ''}`} />
+                              {matchingRefreshState === 'done' ? 'Solicitado' : matchingRefreshState === 'error' ? 'Reintentar' : 'Solicitar actualización'}
+                            </button>}
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-4 space-y-1.5 border-t border-white/[0.06] pt-3">
+                        <Row label="Última ejecución" value={data.matching.last_match_at ? new Date(data.matching.last_match_at).toLocaleString('es-PY') : 'Sin ejecución'} />
+                        <Row label="Perfil usado" value={data.matching.snapshot_profile_updated_at ? new Date(data.matching.snapshot_profile_updated_at).toLocaleString('es-PY') : 'Firma no fechada'} />
+                        {data.matching.is_current ? <>
+                          <Row label="Matches confirmados actuales" value={data.matching.match_count ?? 'Sin información'} />
+                          <Row label="Potenciales actuales" value={data.matching.visible_potential_count ?? 'Sin información'} />
+                          <Row label="Cobertura actual" value={data.matching.diagnostics?.coverage_state || 'Sin información'} />
+                        </> : <>
+                          <p className="pt-2 text-[10px] uppercase tracking-wider text-white/35">Último resultado histórico · no es estado actual</p>
+                          <Row label="Matches históricos" value={data.matching.historical_result?.match_count ?? 'Sin información'} />
+                          <Row label="Potenciales históricos" value={data.matching.historical_result?.visible_potential_count ?? 'Sin información'} />
+                          <Row label="Cobertura histórica" value={data.matching.historical_result?.coverage_state || 'Sin información'} />
+                          <Row label="Abstenciones históricas" value={data.matching.historical_result?.abstain_count ?? 'Sin información'} />
+                        </>}
+                        <Row label="Coincidencias visibles" value={data.matching.match_count == null ? 'Sin resultado actual · no inferir cero' : data.profile.is_subscribed ? `${data.matching.match_count} (PRO)` : `${Math.min(data.matching.match_count, 3)} / ${data.matching.match_count} (FREE)`} />
+                      </div>
+                    </div>
+                  </Section>
+                )}
+
+                {!!data.b2c_intelligence?.recommendations.length && (
+                  <Section title="Acciones recomendadas">
+                    <div className="space-y-2">
+                      {data.b2c_intelligence.recommendations.map(item => <div key={item.code} className="rounded-lg border border-white/[0.07] bg-white/[0.02] p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-medium text-white/80">{item.label}</p><span className="rounded-full bg-white/[0.05] px-2 py-1 text-[9px] uppercase tracking-wider text-white/40">{item.owner} · {item.state}</span></div>
+                        <p className="mt-2 text-[11px] leading-relaxed text-white/45">Evidencia: {item.evidence}</p>
+                        <p className="mt-1 text-[11px] text-cyan-100/55">Resultado medible: {item.measurable_result}</p>
+                      </div>)}
                     </div>
                   </Section>
                 )}

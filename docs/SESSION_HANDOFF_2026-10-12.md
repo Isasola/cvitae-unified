@@ -2,6 +2,16 @@
 
 **Estado:** `PROD_BASELINE_VERIFIED / P0_ROOT_EVIDENCE_OBTAINED / SOURCE_EXPANSION_APPROVED_LOCAL_ONLY / NO_DEPLOY`.
 
+## R3 local handoff update
+
+Local implementation now exists; production is unchanged. Main contracts: exact-only removal of `generated_cvs_user_vacancy`; semantic top-N scoped to Matching or Alerts universe before limiting; one shared current/stale classifier used by authenticated profile and Admin; Admin refresh reuses `matching_retrieval_states`; exact Catalog count is not page length; quality failures propagate to Eight Gates; Greenhouse/Lever have no enabled boards or consumer permissions. Tests are listed in `BUG_REGISTRY.md` and status remains `PROD_VALIDATION_PENDING` for all affected bugs.
+
+`CURRENT_BLOCKER`: the three SQL migrations are unapplied and real persistence/reload flows cannot be certified locally without an isolated DB or later authorized environment. The production ATS 502 still needs a correlated request ID to identify its actual stage. Google recrawl/index effects are external.
+
+`NEXT_EXACT_ACTION`: review the single local diff/ZIP; validate SQL in an isolated DB; run synthetic two-user matching and CV-version E2E; only then consider Deploy Preview authorization. Do not send beta communications until a current persisted run proves authorized new matches.
+
+Consolidation note: branch/HEAD and complete worktree were captured before staging. Reused the R3 focused verifier/build results listed in `BUG_REGISTRY.md`; final drawer style-only wrapping change was not visually rerun. `git diff --check` passed apart from LF/CRLF notices. No production writes, permission changes, email, push or deploy occurred.
+
 > Este documento es el puntero de sesión y registro de decisiones nuevas. No sustituye `AGENTS.md`, `WORKING_PRINCIPLES.md`, el histórico `GRAND_CHECKPOINT.md`, el registro canónico `BUG_REGISTRY.md`, el backlog ni el Registry V2. Leerlos en ese orden. Actualizado desde evidencia suministrada por el operador después del ZIP documental `36b722c4` y sin nuevas mutaciones de producción.
 
 ## 1. Identidad y límites
