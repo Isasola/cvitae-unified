@@ -1,0 +1,35 @@
+{
+  "status": "REFERENCE_ONLY_NOT_DEPLOYED",
+  "source_branch": "checkpoint/r2-c4-beta-wip-20261011",
+  "source_commit": "b014b3f278b5b68066170dbab4be5f2ee18a44da",
+  "production_comparison_commit": "ce6dc7aba3dec35c6785fb7100d6125cd0962dab",
+  "selected_blob_count": 14,
+  "selected_paths": [
+    "artifacts/release/r2-c4-matching-post-apply-readonly-20261011.sql",
+    "artifacts/release/r2-c4-post-apply-readonly-20261011.sql",
+    "artifacts/release/r2-c4-preflight-readonly-20261011.sql",
+    "artifacts/release/r2-c4-private-matching-backfill-batch-write-20261011.sql",
+    "artifacts/release/r2-c4-private-matching-backfill-prepare-write-20261011.sql",
+    "artifacts/release/r2-c4-private-matching-backfill-preview-readonly-20261011.sql",
+    "artifacts/release/r2-c4-private-matching-backfill-resume-write-20261011.sql",
+    "artifacts/release/r2-c4-private-matching-backfill-verify-readonly-20261011.sql",
+    "artifacts/release/r2-c4-rollback-write-20261011.sql",
+    "scripts/verify-r2-c4.ts",
+    "scripts/verify-r2-c4-backfill-identity.ts",
+    "scripts/verify-r2-c4-match-rpc-acl.ts",
+    "supabase/migrations/202610110001_private_b2c_matching_consumer.sql",
+    "supabase/migrations/202610110002_recruiter_update_and_seo_plus_request.sql"
+  ],
+  "complete_tree_delta": "C4_TREE_DIFF_REFERENCE_ONLY.patch",
+  "changed_path_inventory": "C4_CHANGED_PATHS.txt",
+  "blob_digests": "C4_SNAPSHOT_SHA256.txt",
+  "activation_requires": [
+    "CURRENT_PRODUCTION_REIMPLEMENTATION_OR_REBASE_REVIEW",
+    "POSTGRES_READ_ONLY_DEPENDENCY_PREFLIGHT",
+    "SEPARATE_SQL_WRITE_AUTHORIZATION",
+    "SEPARATE_RECONCILIATION_WRITE_AUTHORIZATION",
+    "RUNTIME_AND_PRIVATE_ACCESS_VALIDATION",
+    "CONTROLLED_DEPLOY_AUTHORIZATION"
+  ],
+  "warning": "DO_NOT_APPLY_PATCH_OR_WRITE_SQL_AUTOMATICALLY"
+}

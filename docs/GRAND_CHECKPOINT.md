@@ -1902,3 +1902,59 @@ OPPORTUNITY UNIVERSE SQL COMPILE FIX — 29 SEP 2026
   semantics without a new invariant failure`.
 - This update is documentation-only. The Netlify ignore-build contract skips
   docs-only changes; it does not initiate a second site deploy.
+
+## POSTDEPLOY BETA FREEZE — 2026-10-11
+
+This appendix records the current release without rewriting the historical
+Master 1–67 or its evidence. It supersedes only older release-position notes
+that said the SEO/B2C release had not yet shipped.
+
+- `PRODUCTION_BASE_SHA=ce6dc7aba3dec35c6785fb7100d6125cd0962dab`.
+- PR #4 is merged and Netlify site `cvitae-lata` published that commit to
+  `https://cvitae.lat` from `feature/aws-migration`.
+- The SEO/B2C release is deployed. Deploy Preview evidence included 6,038
+  unique sitemap URLs and targeted runtime checks; this does not prove 6,038
+  indexed URLs, traffic recovery, complete authentication journeys, or global
+  product validation.
+- C3 remains `PROD_VALIDATED` for its scoped historical B2B bridge repair. Do
+  not reopen it without a concrete regression.
+- C4 remains separate at
+  `checkpoint/r2-c4-beta-wip-20261011` / `b014b3f278b5b68066170dbab4be5f2ee18a44da`.
+  Its local tests do not authorize activation. Migrations `202610110001` and
+  `202610110002`, private matching reconciliation, and SEO Plus are not applied
+  or active in production.
+- The canonical postdeploy incident authority is `docs/BUG_REGISTRY.md`:
+  BUG-001 profile without matches; BUG-002 ATS HTTP 502; BUG-003 rewrite
+  preparation failure; BUG-004 unclear CV improvement journey; BUG-005 catalog
+  count/category mismatch; BUG-006 apparently Paraguay-only employment;
+  BUG-007 incomplete Admin E2E; BUG-008 SEO decline; BUG-009 overlapping
+  loaders.
+- At least nine real users exist. The beta objective is to restore the real
+  user actions before broadening architecture or declaring checklist closure.
+- The Master 1–67 status remains exactly as historically recorded above. No
+  bulk reclassification and no `67/67` claim is made. Items with local,
+  read-only, deployed, or production evidence retain those distinct levels.
+
+`LAST_PROVEN_GATE`: production branch and deployed SHA confirmed; release
+build/preview and public SEO artifacts passed their recorded gates; C3 scoped
+historical repair is production-validated. Authentication and complete real
+ATS/CV/matching/Admin journeys remain unproven after this release.
+
+`CURRENT_BLOCKER`: P0 user outcomes BUG-001, BUG-002 and BUG-003; the exact
+shared failure boundary for ATS/rewrite and the real profile matching boundary
+have not yet been localized with sanitized production evidence. SEO decline
+also requires Search Console evidence rather than URL-count inference.
+
+`NEXT_EXACT_ACTION`: authorize one grouped, read-only diagnostic pass for
+BUG-002 and BUG-003. Capture each exact endpoint, HTTP response contract,
+sanitized request correlation and function/provider/persistence stages; locate
+their last common proven gate and first divergent failure before changing code.
+Then diagnose BUG-001 end to end using the current candidate and opportunity
+authorities.
+
+`DO_NOT_REOPEN`: C3; R1 closed contracts; C4 SQL/design without its separate
+review and authorization; source, Universe, SEO, Matching scoring, or
+permission semantics solely to make a test pass. Do not equate local/preview
+evidence with production user validation.
+
+State: `POSTDEPLOY_BASELINE_FROZEN / BUGS_RECORDED / NEXT_PASS_READY`.

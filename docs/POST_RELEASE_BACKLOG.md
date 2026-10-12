@@ -19,6 +19,23 @@ TYPE admite: BUG | SOURCE | PERFORMANCE | INFRASTRUCTURE | UX | SEO | MATCHING |
 
 STATUS admite: BACKLOG | READY_FOR_NEXT_DEPLOY | BLOCKED | DONE.
 
+### Canonical postdeploy bug linkage — 2026-10-11
+
+Observed user-facing defects live only in `docs/BUG_REGISTRY.md`; this backlog
+must reference their stable IDs instead of duplicating facts, hypotheses, or
+closure evidence.
+
+| Bug IDs | Backlog relationship |
+|---|---|
+| BUG-001, BUG-002, BUG-003 | P0 beta restoration; next grouped diagnostic pass. |
+| BUG-004, BUG-009 | CV journey and shared loader work after the P0 operation is reliable. |
+| BUG-005, BUG-006, BUG-007 | Opportunity coverage, classification and Admin projection pass. |
+| BUG-008 | Evidence-based SEO recovery; PD-006 is separate first-page performance debt, not the explanation for traffic decline. |
+
+None is `DONE`, `CLOSED_LOCAL`, or `PROD_VALIDATED` merely because the release
+is deployed. When work is authorized, update the canonical bug ID and refer to
+the absorbing Cxx/release here rather than creating a duplicate PD incident.
+
 PD-002 conserva la excepción de gobernanza `TYPE=OTHER / PROCESS` y `STATUS=DONE_AS_GOVERNANCE_RULE`, definida explícitamente por el usuario. Los bloqueos del release actual se registran primero en C01–C21; aquí sólo se referencian.
 
 ### PD-001 — Añadir UNICEF Jobs como fuente de oportunidades

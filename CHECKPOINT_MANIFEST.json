@@ -1,0 +1,76 @@
+{
+  "checkpoint_name": "CVITAE_BETA_MASTER_2026-10-11_CE6DC7A",
+  "created_on": "2026-10-11",
+  "state": "POSTDEPLOY_BASELINE_FROZEN / BUGS_RECORDED / NEXT_PASS_READY",
+  "repository": "Isasola/cvitae-unified",
+  "production": {
+    "domain": "https://cvitae.lat",
+    "netlify_site": "cvitae-lata",
+    "branch": "feature/aws-migration",
+    "deployed_commit": "ce6dc7aba3dec35c6785fb7100d6125cd0962dab",
+    "pull_request": 4,
+    "release_state": "MERGED_AND_PUBLISHED",
+    "authentication_and_real_user_journeys": "NOT_FULLY_VALIDATED"
+  },
+  "documentary_worktree": {
+    "path_at_creation": "C:/Users/isaso/cvitae-beta-postdeploy-20261011",
+    "branch": "work/beta-hardening-postdeploy-20261011",
+    "base_commit": "ce6dc7aba3dec35c6785fb7100d6125cd0962dab",
+    "mutation_scope": "DOCUMENTATION_ONLY",
+    "portable_archive_contains_git_metadata": false
+  },
+  "release_contract": {
+    "node": "24.21.0",
+    "pnpm": "11.8.0",
+    "build_or_test_run_for_this_documentary_checkpoint": false
+  },
+  "closed_and_pending": {
+    "c3": "PROD_VALIDATED_SCOPED_DO_NOT_REOPEN_WITHOUT_REGRESSION",
+    "c4_branch": "checkpoint/r2-c4-beta-wip-20261011",
+    "c4_commit": "b014b3f278b5b68066170dbab4be5f2ee18a44da",
+    "c4_state": "LOCAL_PASS_REFERENCE_ONLY_NOT_DEPLOYED",
+    "c4_migrations_001_002": "NOT_APPLIED",
+    "admin_e2e": "PENDING",
+    "master_1_67": "PRESERVED_NO_67_OF_67_CLAIM"
+  },
+  "bug_counts": {
+    "P0": 3,
+    "P1": 5,
+    "P2": 1,
+    "total": 9
+  },
+  "principal_files": [
+    "README_START_HERE.md",
+    "AGENTS.md",
+    "WORKING_PRINCIPLES.md",
+    "docs/GRAND_CHECKPOINT.md",
+    "docs/BUG_REGISTRY.md",
+    "docs/POST_RELEASE_BACKLOG.md",
+    "docs/ANY_LLM_START_HERE.md",
+    "docs/BETA_NEXT_PASS.md",
+    "docs/MASTER_1_67_STATUS_INDEX.md",
+    "docs/B2C_READY_CHECKPOINT_R1_2026-10-08.md",
+    "docs/R2_STOP_B_CLOSED_CHECKPOINT_2026-10-10.md",
+    "docs/PENDING_C4_NOT_DEPLOYED/README.md",
+    "SHA256SUMS.txt"
+  ],
+  "evidence_limits": [
+    "DEPLOYED_CODE_DOES_NOT_PROVE_COMPLETE_REAL_USER_E2E",
+    "6038_DEPLOY_PREVIEW_URLS_DO_NOT_PROVE_INDEXATION_OR_TRAFFIC_RECOVERY",
+    "LOCAL_C4_PASS_DOES_NOT_PROVE_SCHEMA_APPLY_RUNTIME_OR_PRODUCTION",
+    "NO_REAL_CV_EMAIL_TOKEN_SECRET_OR_IDENTIFIABLE_SCREENSHOT_INCLUDED",
+    "NO_PRODUCT_FIX_IMPLEMENTED_IN_THIS_CHECKPOINT"
+  ],
+  "excluded_from_archive": [
+    ".git",
+    "local .env and secret-bearing environment files (.env.example contains placeholders only)",
+    "node_modules",
+    "dist",
+    "caches",
+    "temporary_files",
+    "old_zip_archives",
+    "credentials",
+    "private_user_data"
+  ],
+  "next_exact_action": "Authorize one grouped read-only diagnostic pass for BUG-002 and BUG-003, locate their exact endpoints and last common proven/first divergent failure before any code change."
+}

@@ -350,3 +350,21 @@ retrieval, sitemap, Factory, Automation, Observation recovery, Universe
 reconciliation, embeddings y Admin. Las muestras pueden limitarse; los totales
 deben ser aggregates exactos. Los workers deben conservar cursor y cobertura
 eventual; los sitemaps paginados deben cubrir todas las URLs elegibles.
+
+## CANONICAL BUG AND POSTDEPLOY CONTINUITY
+
+`docs/BUG_REGISTRY.md` is the single authority for observed product defects.
+Backlogs and checkpoints reference stable bug IDs instead of copying divergent
+descriptions. Every bug keeps observed facts separate from hypotheses, records
+the real input, producer, transformations, authority, consumer, last proven
+gate, first unproven gate, failure/recovery, discriminating tests, detected and
+fixed versions, and actual production closure evidence.
+
+A release, local PASS, Deploy Preview, HTTP 200, or populated sitemap does not
+close a user journey. Prefer small releases whose dependencies and rollback are
+known, but validate the real action through persistence, reload, error and
+retry before marking `PROD_VALIDATED`. Preserve one authority per datum and one
+canonical incident record. Portable handoffs must start from an exact released
+commit, isolate undeployed proposals, exclude secrets and personal data, and
+state `LAST_PROVEN_GATE`, `CURRENT_BLOCKER`, `NEXT_EXACT_ACTION`, and
+`DO_NOT_REOPEN` so another operator or model can continue without archaeology.

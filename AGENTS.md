@@ -6,6 +6,11 @@ Before substantial CVitae work, agents must read, in this order:
 2. `WORKING_PRINCIPLES.md`
 3. `docs/GRAND_CHECKPOINT.md`
 
+For postdeploy beta work, then read `docs/BUG_REGISTRY.md` for the canonical
+incident ID/evidence and `docs/BETA_NEXT_PASS.md` for the currently authorized
+sequence. `docs/ANY_LLM_START_HERE.md` is the portable handoff index; it does
+not replace the authorities above. Do not create a second bug registry.
+
 The Grand Checkpoint defines the CURRENT ITEM and its scope. Closed items
 must not be re-audited without concrete regression evidence. If instructions
 conflict, an explicit current user instruction wins; then the Grand
