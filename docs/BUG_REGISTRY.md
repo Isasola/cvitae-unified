@@ -355,6 +355,19 @@ implementation, closure, or production validation.
   worker and release-gated schedule. Matching invalidation is stopped for an
   architecture decision; see the 2026-10-13 session handoff.
 
+## 2026-10-13 continuation — routing epoch implemented locally
+
+The explicit routing-epoch decision in the continuation order supersedes the
+architecture STOP above. A new additive migration now advances one global
+matching epoch only on real READY membership transitions, and a service-role
+RPC locks that epoch and candidate state before finalization. The retrieval
+worker uses FULL scans for routing drift, preserves page cursors, and returns
+RESUMABLE while the durable Universe queue remains pending. Matching cache
+metadata is epoch-aware; live matching and alert eligibility still use their
+own canonical Universes. Local PGlite and focused consumer contracts pass;
+there is no production validation. See the current handoff for the remaining
+end-to-end and Registry-route gaps.
+
 ## BUG-009 — Duplicate and overlapping loaders
 
 - **Priority / state:** P2 / `OBSERVED_PROD`

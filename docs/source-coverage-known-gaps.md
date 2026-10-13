@@ -18,6 +18,33 @@ This is a narrow static diagnostic list for the next collection tranche, not a s
 | scrapers workflow | 81 sequential steps under a 60-minute job timeout | CONFIRMED_LIMIT | shard/matrix only in a dedicated workflow-scale change |
 | write collectors | production Supabase URL fallback literals | CONFIRMED_LIMIT | require explicit URL or audit/local default in a dedicated security pass |
 
+## 2026-10-13 Registry/route evidence from the current checkout
+
+The current generated Registry V2 projection and Python runtime registry each
+contain 107 canonical profiles, not the 105 reported by the earlier master ZIP.
+The current projection declares 98 `EXECUTABLE_PRODUCER` profiles and 9
+`NO_EXECUTABLE_PRODUCER` profiles. The existing `scrapers.yml` contains 81
+distinct direct monitored runner steps. These are separate dimensions; do not
+infer 17 missing producers from the count difference because several workflow
+steps are grouped producers. The Admin enumerates the full 107-profile
+projection and shows zero-inventory/no-run rows.
+
+The nine no-direct-step producers named in the earlier evidence
+(`aptitus`, `bumeran`, `indeed`, `laborum`, `hireon`, `idealist`,
+`pivot_jobs`, `reliefweb`, `scholarship_corner`) have local scraper entrypoint
+files, but no matching execution statement was found in the reviewed dispatch
+workflows/scripts; `update-opportunities-script.mjs` contains a Reliefweb
+collector, but is not enough by itself to establish its operational dispatch
+route. Their routes remain `UNKNOWN` until an existing authorized mechanism is
+demonstrated. No producer was enabled or launched.
+
+The scraper workflow previously invoked `cleanup_old_opportunities` before
+scheduled or `all` runs. That invocation was removed to honor the explicit
+no-cleanup boundary. Per-step continuation remains aggregated by the existing
+`summarize_scraper_run.py` final step, which makes failed/telemetry-failed
+runs fail the workflow after selected steps finish. The 60-minute sequential
+budget and full route matrix remain unresolved; no second scheduler was added.
+
 ## 2026-10-12 — reinforced sources and two additional connectors (PLAN, NOT ACTIVE)
 
 Use the existing certified source registry/identity/adapter/observation/sink/consumer policy system, not a replacement crawler. Reinforce documented collection coverage gaps above. A one-run page cap is a processing budget; require cursor/resume to EOF, bounded rate/cost, duplicate IDs, idempotency, failure/recovery, and both historical reconciliation and future ingestion. This section expands BUG-006/007/008; it is NOT a second bug registry.

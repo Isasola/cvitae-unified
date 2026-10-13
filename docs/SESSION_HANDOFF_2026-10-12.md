@@ -102,3 +102,35 @@ Abrir el ZIP maestro actualizado o el worktree sincronizado; leer `README_START_
 - `PROD_WRITE=NONE`; migration apply, release variable, scraper runs, deploy and
   push were untouched. The local PGlite dependency was installed under ignored
   `.cvitae-state/cable-sql-test` solely to execute the requested canary.
+
+## Continuation from 7ff5786b — 2026-10-13
+
+- The operator resolved the matching invalidation architecture as a
+  transactionally incremented global routing epoch. Implemented migration
+  `202610130001_matching_routing_epoch.sql`, transition-only trigger, and
+  service-role finalizer locking the singleton and candidate state. The
+  existing worker now refreshes the durable Universe queue first, FULL-scans
+  stale routing epochs, uses optimistic cursor updates, and cannot finalize an
+  old epoch. Live match-batch cache reads are epoch-gated; alert metadata is
+  optional and alert eligibility remains in `opportunity_alert_universe`.
+- SQL canary passed with INSERT/UPDATE/DELETE transition checks, no-op checks,
+  stale finalization rejection, competing worker calls (one completion, one
+  concurrency conflict), ACL checks, and 5,400 real membership transitions in
+  an isolated PGlite database (7,613 ms). Retrieval, scheduler, consumers,
+  Admin source-intelligence, Registry projection, and ingestion telemetry
+  verifiers passed.
+- `verify_opportunity_universe.ts` retains its prior SEO assertion failure at
+  line 42 (`seo_state` actual `NOT_READY`, expected `READY`); not changed.
+  TypeScript checks still report existing unrelated errors in matching-v2,
+  matching.ts, Admin's older discriminated unions, and path aliases; no new
+  errors were reported at the added routing-epoch lines.
+- Current checked-out registry projection has 107 rows (98 executable
+  producer declarations, 9 no-producer profiles), while the provided ZIP
+  evidence said 105/96/9. The Admin enumerates all 107 projection rows. The
+  81 direct monitored workflow steps remain distinct; alternate route mapping
+  for registered producers is not fully verified. The scheduled scraper
+  workflow still has a 60-minute sequential budget. Removed its existing
+  unauthorized cleanup RPC invocation; did not launch any scraper.
+- The generated SQL evidence artifact was restored after test execution. No
+  production SQL, release setting, scraper, deployment, or push was executed.
+- Block B implementation is committed locally as `7ea1e49f`; no push.

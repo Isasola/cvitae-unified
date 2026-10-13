@@ -50,6 +50,15 @@ def main() -> int:
     # discovery semantics; detailed accounting remains in JSON telemetry.
     monitor = (ROOT / "scripts" / "run_scraper_monitored.py").read_text(encoding="utf-8")
     assert '"found_count": summary.get("found")' in monitor
+    sink = (ROOT / "scrapers" / "opportunity_sink.py").read_text(encoding="utf-8")
+    admin = (ROOT / "netlify" / "functions" / "admin-data.ts").read_text(encoding="utf-8")
+    assert "code={code}" in sink and "column={column}" in sink and "affected_batch_rows={affected_batch_rows}" in sink
+    assert 'summary.get("errors", [])' in monitor and '"error_summary": "\\n".join(error_lines[:8])[:2000]' in monitor
+    for field in ("sqlstate", "failing_column", "batch_rows_affected"):
+        assert field in admin, f"Admin persistence diagnosis does not expose {field}"
+    workflow = (ROOT / ".github" / "workflows" / "scrapers.yml").read_text(encoding="utf-8")
+    assert "cleanup_old_opportunities" not in workflow, "scraper dispatch must not trigger unauthorized cleanup"
+    assert "scripts/summarize_scraper_run.py" in workflow, "continue-on-error failures must still fail the aggregate run"
     for scraper in ("unjobs_scraper.py", "talentcom_scraper.py"):
         text = (ROOT / "scrapers" / scraper).read_text(encoding="utf-8")
         assert "ingestion_accounting_telemetry" in text

@@ -173,3 +173,25 @@ matching decision is unchanged, so it cannot alone satisfy both durable
 invalidation and no-op requirements. Stop for a decision between a per-row
 matching routing revision/cursor contract and a conditional transition-time
 watermark contract before changing retrieval SQL or worker state.
+
+### Superseding continuation — 2026-10-13
+
+The routing-revision decision was made explicitly by the operator instruction:
+use a transactional global `routing_epoch`, per-candidate scan/completion
+epochs, and an atomic service-role finalizer. Implementation is in
+`202610130001_matching_routing_epoch.sql` and the existing retrieval worker;
+do not reopen the timestamp-versus-epoch decision. Local SQL evidence covers
+transition-only increments, old-epoch rejection, competing finalizers, RPC
+ACLs, and 5,400 rows. Focused tests cover cache invalidation, V2 ranking,
+consumer independence, and the current private matching Universe. No PROD
+write or deployment occurred.
+
+Current checkout Registry V2 contains 107 profiles (98 executable producer
+declarations, 9 without executable producers) and 81 direct monitored workflow
+steps. This differs from the earlier ZIP denominator of 105/96/9. Keep all 107
+visible; do not reconcile this difference by deleting or fabricating profiles.
+The 60-minute scraper workflow still needs a bounded scale/route pass. Its
+unauthorized cleanup step was removed, and its aggregate failure summary is
+preserved.
+
+Block B implementation commit: `7ea1e49f` (local only; not pushed).

@@ -156,7 +156,7 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
   const survival = scraperFieldSurvival()
   const survivalBySource = new Map((survival.sources || []).map((item: any) => [item.canonical_source, item]))
   const stats: Record<string, any> = dashboard?.sources || {}
-  const [observationsRes, policyRes, runsRes, fingerprintsRes, enrichmentRes, sourceCapRes, qualityAggRes, telemetryAuditRes] = await Promise.all([
+  const [observationsRes, policyRes, runsRes, fingerprintsRes, enrichmentRes, sourceCapRes, qualityAggRes, telemetryAuditRes, dirtyQueueRes, routingStateRes] = await Promise.all([
     supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at").order("observed_at", { ascending: false }).limit(SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT),
     supabase.from("opportunity_source_policy_events").select("opportunity_id,source,action,created_at").order("created_at", { ascending: false }).limit(SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT),
     supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,duration_seconds,error_count,found_count,valid_count,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,error_summary,adapter_version,extraction_metrics").order("started_at", { ascending: false }).limit(1000),
@@ -168,6 +168,8 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
     // P0.1: Full-DB fingerprint pending counts via server-side aggregate.
     supabase.rpc("admin_source_quality_aggregate"),
     supabase.from("source_control_audit_log").select("source,action,result_status,created_at").in("action", ["maintenance_telemetry", "maintenance_telemetry_retry"]).order("created_at", { ascending: false }).limit(1000),
+    supabase.from("opportunity_universe_dirty_sources").select("canonical_source,queued_at,reason,cursor_id"),
+    supabase.from("matching_retrieval_scheduler_state").select("routing_epoch").eq("singleton", true).maybeSingle(),
   ])
   const [universeRes, pipelineLedgerRes] = await Promise.all([
     supabase.rpc("get_opportunity_universe_summary"),
@@ -181,6 +183,12 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
   const enrichmentRows = enrichmentRes.error ? [] : (enrichmentRes.data || [])
   const sourceCapRows: any[] = sourceCapRes.error ? [] : (sourceCapRes.data || [])
   const telemetryAuditRows: any[] = telemetryAuditRes.error ? [] : (telemetryAuditRes.data || [])
+  const dirtyQueueBySource = new Map((dirtyQueueRes.error ? [] : dirtyQueueRes.data || []).map((row: any) => [String(row.canonical_source || '').toLowerCase(), row]))
+  const routingEpoch = Number(routingStateRes.data?.routing_epoch)
+  const routingEpochAvailable = !routingStateRes.error && Number.isSafeInteger(routingEpoch) && routingEpoch >= 1
+  const staleCandidateCoverageRes = routingEpochAvailable
+    ? await supabase.from("matching_retrieval_states").select("user_id", { count: "exact", head: true }).lt("completed_routing_epoch", routingEpoch)
+    : { count: null, error: routingStateRes.error || new Error('MATCHING_ROUTING_EPOCH_UNAVAILABLE') }
   // P0.1: Server-side fingerprint pending counts (full DB, no limit).
   const qualityAgg: Record<string, any> = qualityAggRes.error ? {} : (qualityAggRes.data || {})
   const observationBySource = indexRowsBySource(observationRows)
@@ -234,6 +242,7 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
     const runsForSource = [...runnerIds].flatMap(id => runsByRunner.get(id.toLowerCase()) || [])
       .sort((left, right) => Date.parse(String(right.started_at || '')) - Date.parse(String(left.started_at || '')))
     const latestRun = runsForSource[0] || null
+    const latestRunMetrics = latestRun?.extraction_metrics || {}
     const latestTelemetry = rowsForAliases(telemetryBySource, aliases)[0] || null
     const control = [...runnerIds].flatMap(id => controlsByRunner.get(id.toLowerCase()) || [])[0]
     const extractionHealth = latestRun?.extraction_metrics?.health?.status
@@ -328,6 +337,37 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       const after = Number(latestMetrics?.coverage?.[field] || 0)
       if (before > 0 && after < before * 0.5) driftSignals.push(`${field}_coverage`)
     }
+    const producerExecution = sourceProducerExecution(profile.canonical_source)
+    const pipelineSource = (pipelineLedgerRes.data?.sources || []).find((item: any) => item.source === profile.canonical_source)
+    const doorDiagnostics = sourceDoorDiagnostics(profile, srcCap, latestRun, eightGates.gates || [], pipelineSource)
+    const firstBroken = doorDiagnostics.first_failure || doorDiagnostics.first_unconfirmed
+    const dirtyQueueEntry = dirtyQueueBySource.get(profile.canonical_source.toLowerCase()) as any
+    const lastError = String(latestRun?.error_summary || latestRunMetrics?.health?.reasons?.join('; ') || '').slice(0, 300) || null
+    const persistenceError = lastError ? {
+      sqlstate: lastError.match(/\bcode=([A-Z0-9]{5})\b/i)?.[1] || null,
+      failing_column: lastError.match(/\bcolumn=([A-Za-z0-9_]+)\b/i)?.[1] || null,
+      batch_rows_affected: Number(lastError.match(/\baffected_batch_rows=(\d+)\b/i)?.[1] || 0) || null,
+      evidence: /\b(?:code=|column=|affected_batch_rows=)/i.test(lastError) ? 'SCRAPER_RUN_ERROR_SUMMARY' : null,
+    } : null
+    const diagnosticStates = new Set<string>()
+    if (producerExecution.state === 'NO_EXECUTABLE_PRODUCER') diagnosticStates.add('NO_EXECUTABLE_PRODUCER')
+    if (!latestRun) diagnosticStates.add('NO_RUN')
+    const errorText = String(lastError || '').toLowerCase()
+    if (control?.collection_enabled === false) diagnosticStates.add('SOURCE_PAUSED')
+    if (/release[_ -]?(?:gate|validat)|prod_release_validated/i.test(errorText)) diagnosticStates.add('RELEASE_GATED')
+    if (/\b(?:enotfound|eai_again|name resolution|getaddrinfo|dns)/i.test(errorText)) diagnosticStates.add('NETWORK_DNS')
+    if (/\b(?:timeout|timed out|tiempo m[aá]ximo excedido)/i.test(errorText)) diagnosticStates.add('NETWORK_TIMEOUT')
+    if (/\b(?:429|rate.?limit|too many requests)/i.test(errorText)) diagnosticStates.add('RATE_LIMITED')
+    if (/captcha|checking your browser|javascript required|navigation content|enable javascript/i.test(errorText)) diagnosticStates.add('NAVIGATION_CONTENT')
+    if (persistenceError?.sqlstate || /persistence_failed|persistencia|ingestion_technical_failure/i.test(errorText)) diagnosticStates.add('PERSISTENCE_FAILED')
+    if (latestRun && Number(latestRun.rejected_count || 0) > 0) diagnosticStates.add('QUALITY_FAILED')
+    if (latestRun && Number(latestRun.found_count ?? latestRunMetrics.found ?? -1) === 0 && !['skipped', 'blocked'].includes(String(latestRun.status))) diagnosticStates.add('EXTRACTOR_ZERO')
+    if (dirtyQueueEntry) diagnosticStates.add('UNIVERSE_STALE')
+    if (!srcCap || srcCap.is_enabled !== true || srcCap.matching_enabled !== true) diagnosticStates.add('SOURCE_SWITCH_BLOCKED')
+    if (dirtyQueueEntry && !staleCandidateCoverageRes.error && Number(staleCandidateCoverageRes.count || 0) > 0) diagnosticStates.add('MATCHING_CACHE_STALE')
+    if (String(latestRun?.error_summary || '').includes('[SKIPPED]')) diagnosticStates.add('RUN_SKIPPED')
+    if (diagnosticStates.size === 0 && Number(pipelineSource?.matching_ready || 0) > 0) diagnosticStates.add('READY')
+    if (diagnosticStates.size === 0) diagnosticStates.add('UNKNOWN')
     return {
       canonical_source: profile.canonical_source, source: profile.source,
       emitted_aliases: aliases, display_name: profile.display_name,
@@ -340,7 +380,12 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       expected_cleaner_version: expectedCleanerVersion || 'NOT_REPORTED',
       ...capabilityFlags, pools,
       source_permission_truth: sourcePermissionSnapshot(profile.canonical_source),
-      producer_execution: sourceProducerExecution(profile.canonical_source),
+      producer_execution: producerExecution,
+      producer_state: producerExecution.state === 'NO_EXECUTABLE_PRODUCER' ? 'NO_EXECUTABLE_PRODUCER' : !latestRun ? 'NO_RUN' : runFailed ? 'FAILED' : 'OBSERVED',
+      diagnostic_states: [...diagnosticStates],
+      producer_entrypoint: producerExecution.entrypoints?.[0] || null,
+      runner_id: latestRun?.scraper_id || profile.operational_runner_ids?.[0] || null,
+      execution_route: profile.workflow_step ? 'SCRAPERS_WORKFLOW' : profile.operational_runner_ids?.length ? 'REGISTERED_ALTERNATE_RUNNER' : producerExecution.state === 'NO_EXECUTABLE_PRODUCER' ? 'NO_ROUTE' : 'UNKNOWN',
       field_survival: fieldSurvivalSummary,
       effective_inventory: {
         catalog_flagged: pools.catalog,
@@ -355,6 +400,46 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       },
       operational_health: operationalHealth,
       source_status: sourceStatus,
+      last_run_at: latestRun?.started_at || null,
+      last_run_status: latestRun?.status || null,
+      last_run_error: lastError,
+      persistence_error: persistenceError,
+      found: latestRun?.found_count ?? latestRunMetrics?.found ?? null,
+      valid: latestRun?.valid_count ?? latestRunMetrics?.valid ?? null,
+      unique: latestRunMetrics?.unique ?? latestRun?.extraction_metrics?.lineage?.unique ?? null,
+      attempted: latestRunMetrics?.attempted ?? null,
+      inserted: latestRun?.inserted_count ?? null,
+      updated: latestRun?.updated_count ?? null,
+      unchanged: latestRun?.unchanged_count ?? null,
+      duplicates: latestRun?.duplicate_count ?? null,
+      failed: latestRun?.error_count ?? null,
+      rejected: latestRun?.rejected_count ?? null,
+      budget_skipped: latestRunMetrics?.budget_skipped ?? null,
+      inventory_total: pools.inventory,
+      lifecycle_ready: pipelineSource?.lifecycle_active_valid ?? null,
+      matching_row_ready: (universeRes.data?.per_source || []).find((item: any) => item.source === profile.canonical_source)?.match_row_ready ?? null,
+      matching_final_ready: pipelineSource?.matching_ready ?? null,
+      matching_with_embedding: (qualityBySource.get(profile.canonical_source.toLowerCase()) as any)?.embedding_ready ?? null,
+      catalog_ready: pipelineSource?.catalog_ready ?? null,
+      alerts_ready: pipelineSource?.alerts_ready ?? null,
+      seo_ready: pipelineSource?.seo_ready ?? null,
+      stored_switches: srcCap ? { is_enabled: srcCap.is_enabled, catalog: srcCap.catalog_enabled, matching: srcCap.matching_enabled, alerts: srcCap.alerts_enabled, seo: srcCap.seo_enabled } : null,
+      effective_switches: srcCap ? { source: srcCap.is_enabled === true, catalog: srcCap.is_enabled === true && srcCap.catalog_enabled === true, matching: srcCap.is_enabled === true && srcCap.matching_enabled === true, alerts: srcCap.is_enabled === true && srcCap.alerts_enabled === true, seo: srcCap.is_enabled === true && srcCap.seo_enabled !== false } : null,
+      explicit_overrides: srcCap?.consumer_switch_overrides || {},
+      consultative_permissions: sourcePermissionSnapshot(profile.canonical_source),
+      dirty_queue_status: dirtyQueueRes.error ? 'UNKNOWN' : dirtyQueueEntry ? 'PENDING' : 'EMPTY',
+      dirty_cursor: dirtyQueueEntry?.cursor_id ?? null,
+      dirty_queued_at: dirtyQueueEntry?.queued_at ?? null,
+      dirty_queue_reason: dirtyQueueEntry?.reason ?? null,
+      routing_epoch: routingEpochAvailable ? routingEpoch : null,
+      stale_matching_candidates: staleCandidateCoverageRes.error ? null : staleCandidateCoverageRes.count ?? 0,
+      universe_stale_alert: dirtyQueueEntry && pipelineSource?.inventory > 0 ? 'UNIVERSE_STALE_SOURCE_POLICY' : null,
+      affected_rows: dirtyQueueEntry ? pipelineSource?.inventory ?? pools.inventory : 0,
+      last_universe_evaluated_at: null,
+      evidence_scope: { inventory: 'FULL_DB_AGGREGATE', run: latestRun ? 'LATEST_RUN' : 'NO_RUN', row_examples: 'ON_DEMAND', dirty_queue: dirtyQueueRes.error ? 'UNAVAILABLE' : 'DURABLE_QUEUE' },
+      first_broken_stage: firstBroken?.name || null,
+      first_broken_reason: firstBroken?.reason || null,
+      recommended_next_action: firstBroken?.next_action || doorDiagnostics.next_action || null,
       observation: {
         observed_opportunities: observationSampleStatus === 'UNAVAILABLE' ? null : observations.length,
         ...scopedMetric(observationSampleStatus === 'UNAVAILABLE' ? null : null, observations.length),
@@ -380,8 +465,7 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       history,
       drift: previousRun ? { status: driftSignals.length ? "POSSIBLE_SOURCE_DRIFT" : "NO_SIGNIFICANT_DRIFT", compared_run_id: previousRun.run_id, signals: driftSignals } : null,
       row_evidence: "ON_DEMAND_INSPECTOR",
-      door_diagnostics: sourceDoorDiagnostics(profile, srcCap, latestRun, eightGates.gates || [],
-        (pipelineLedgerRes.data?.sources || []).find((item: any) => item.source === profile.canonical_source)),
+      door_diagnostics: doorDiagnostics,
       exceptions: exceptionReasons,
       latest_impact: latestImpact,
       maintenance_action: "DRY_RUN_ONLY", apply_enabled: false,
@@ -395,7 +479,7 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
     const group = exceptionGroups[reason] || { count: 0, sources: [] }
     group.count += 1; group.sources.push(source.canonical_source); exceptionGroups[reason] = group
   }
-  return { registry: { profile_count: (registry.sources || []).length, emitted_aliases: registry.emitted_aliases, alias_collisions: registry.alias_collisions, ambiguous_patterns: registry.ambiguous_patterns, alias_pattern_conflicts: registry.alias_pattern_conflicts || [], registry_hash: registry.registry_hash, schema_version: registry.schema_version, unresolved_emitted_sources: unresolvedEmittedSources, exception_groups: exceptionGroups, dynamic_metrics_unavailable: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null, quality_agg: qualityAggRes.error ? "unavailable" : null, pipeline_ledger: pipelineLedgerRes.error ? "unavailable" : null } }, sources, opportunity_universe: universeRes.error ? null : universeRes.data, opportunity_pipeline_ledger: pipelineLedgerRes.error ? null : pipelineLedgerRes.data, opportunity_universe_error: universeRes.error ? "UNIVERSE_MIGRATION_NOT_APPLIED_OR_UNAVAILABLE" : null, _observability: { source_count: sources.length, query_duration_ms: queryDurationMs, assembly_duration_ms: Date.now() - assemblyStartedAt, sample_sizes: { observations: observationRows.length, policy_events: policyRows.length, runs: runRows.length, fingerprints: fingerprintRows.length, enrichment: enrichmentRows.length, telemetry_audit: telemetryAuditRows.length }, unavailable_metrics: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null, quality_agg: qualityAggRes.error ? "unavailable" : null, pipeline_ledger: pipelineLedgerRes.error ? "unavailable" : null } } }
+  return { registry: { profile_count: (registry.sources || []).length, emitted_aliases: registry.emitted_aliases, alias_collisions: registry.alias_collisions, ambiguous_patterns: registry.ambiguous_patterns, alias_pattern_conflicts: registry.alias_pattern_conflicts || [], registry_hash: registry.registry_hash, schema_version: registry.schema_version, unresolved_emitted_sources: unresolvedEmittedSources, exception_groups: exceptionGroups, matching_routing: { epoch: routingEpochAvailable ? routingEpoch : null, stale_candidates: staleCandidateCoverageRes.error ? null : staleCandidateCoverageRes.count ?? 0, dirty_sources: dirtyQueueRes.error ? null : dirtyQueueBySource.size, state: dirtyQueueRes.error || routingStateRes.error ? 'UNKNOWN' : dirtyQueueBySource.size ? 'PENDING' : 'CLEAR' }, dynamic_metrics_unavailable: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null, quality_agg: qualityAggRes.error ? "unavailable" : null, pipeline_ledger: pipelineLedgerRes.error ? "unavailable" : null, universe_dirty_queue: dirtyQueueRes.error ? 'unavailable' : null, matching_routing_epoch: routingStateRes.error ? 'unavailable' : null, matching_candidate_epochs: staleCandidateCoverageRes.error ? 'unavailable' : null } }, sources, opportunity_universe: universeRes.error ? null : universeRes.data, opportunity_pipeline_ledger: pipelineLedgerRes.error ? null : pipelineLedgerRes.data, opportunity_universe_error: universeRes.error ? "UNIVERSE_MIGRATION_NOT_APPLIED_OR_UNAVAILABLE" : null, _observability: { source_count: sources.length, query_duration_ms: queryDurationMs, assembly_duration_ms: Date.now() - assemblyStartedAt, sample_sizes: { observations: observationRows.length, policy_events: policyRows.length, runs: runRows.length, fingerprints: fingerprintRows.length, enrichment: enrichmentRows.length, telemetry_audit: telemetryAuditRows.length }, unavailable_metrics: { observations: observationsRes.error ? "unavailable" : null, policy: policyRes.error ? "unavailable" : null, runs: runsRes.error ? "unavailable" : null, fingerprints: fingerprintsRes.error ? "unavailable" : null, quality_agg: qualityAggRes.error ? "unavailable" : null, pipeline_ledger: pipelineLedgerRes.error ? "unavailable" : null } } }
 }
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
