@@ -26,4 +26,4 @@ export function evaluateOpportunityEligibility(candidateValue: unknown, opp: any
   if(residency || (remote&&!citizenship)){if(!residence)return {state:'UNKNOWN',reason:'CANDIDATE_RESIDENCE_UNKNOWN'};if(!allowed(residence))return {state:'INELIGIBLE',reason:'CANDIDATE_COUNTRY_NOT_ALLOWED'}}
   return {state:'ELIGIBLE',reason:citizenship?'OPPORTUNITY_CITIZENSHIP_ELIGIBILITY':'OPPORTUNITY_RESIDENCE_ELIGIBILITY'}
 }
-import { isISO3166Alpha2 } from './iso-countries'
+import { isISO3166Alpha2 } from './iso-countries.ts'

@@ -1,4 +1,4 @@
-import { canonicalCandidateProfile } from './candidate-profile'
+import { canonicalCandidateProfile } from './candidate-profile.ts'
 
 /**
  * Deterministic operational fingerprint of the candidate fields consumed by

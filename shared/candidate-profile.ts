@@ -3,7 +3,7 @@
  * candidate-facing product. Empty values remain empty/UNKNOWN; this helper
  * must never invent a seniority or eligibility fact.
  */
-import { canonicalCandidateEligibility } from './candidate-eligibility'
+import { canonicalCandidateEligibility } from './candidate-eligibility.ts'
 export type CandidateTruthState = 'USER_CONFIRMED' | 'EXTRACTED' | 'UNKNOWN'
 
 export function cleanCandidateText(value: unknown): string {
