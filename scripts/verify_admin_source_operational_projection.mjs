@@ -1,6 +1,7 @@
 /** Focused local PostgreSQL fixture: actual policy SQL, Admin projection, Registry and workflows. */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { PGlite } from '../.cvitae-state/cable-sql-test/node_modules/@electric-sql/pglite/dist/index.js'
 
 process.env.ADMIN_PASSWORD ??= 'fixture-only-not-a-secret'
@@ -52,6 +53,13 @@ try {
   assert.equal((await query("select count(*) n from opportunity_universe_dirty_sources where canonical_source='jobicy'"))[0].n, 1)
 
   const routes = workflowRoutes()
+  const workflowFiles = ['.github/workflows/scrapers.yml', '.github/workflows/source-maintenance.yml', '.github/workflows/scheduled-source-automation.yml']
+  const routesFromSource = workflowFiles.flatMap(workflow => [...read(workflow).matchAll(/python\s+scripts\/run_scraper_monitored\.py\s+([\w.-]+)\s+([\w.-]+)\s+([\w./-]+\.py)/g)].map(match => ({
+    workflow, runner_id: match[1].toLowerCase(), entrypoint: match[3].replaceAll('\\', '/').toLowerCase(),
+  })))
+  assert.deepEqual(routes, routesFromSource, 'the packaged route projection is generated from the current workflow definitions')
+  const routeHash = createHash('sha256').update(JSON.stringify(routes.map(({ workflow, runner_id, entrypoint }) => ({ entrypoint, runner_id, workflow })))).digest('hex')
+  assert.equal(registry.workflow_routes_hash, routeHash, 'route projection freshness hash matches its serialized workflow data')
   const projection = sourceOperationalProjection(profile, [effective], [stored], routes, registry.sources)
   assert.equal(projection.stored_switches.matching, false)
   assert.equal(projection.effective_switches.matching, true)

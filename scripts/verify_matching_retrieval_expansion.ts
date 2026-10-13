@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import {
   buildCanonicalSourcePolicyIndex, cacheCandidateAlertEligible, classifyBackgroundCoverage, classifyInventoryRow, collectAlertCandidateSnapshot, expandEnabledSourceEmitters, inventoryFunnelPage,
   commitRetrievalPage, cursorAfterPage, deltaRowInSnapshot, mergeRetrievalSimilarities,
-  opportunityCacheIsCurrent, retrievalCacheIsCurrent, sourceMatchingAllowed, sourcePolicyFor, sourcePolicySignature, sourcePolicySignatureRows, unionRetrievalLanes,
+  opportunityCacheIsCurrent, retrievalCacheIsCurrent, sourceIdentitiesFromAliasRows, sourceMatchingAllowed, sourcePolicyFor, sourcePolicySignature, sourcePolicySignatureRows, unionRetrievalLanes,
 } from '../shared/matching-retrieval.ts'
 import { buildDefaultDictionary } from '../supabase/functions/_shared/matching.ts'
 import { rankOpportunitiesV2, V2_PRESET_FULL } from '../supabase/functions/_shared/matching-v2.ts'
@@ -40,6 +40,12 @@ assert.ok(expandEnabledSourceEmitters(casePreservingPolicy, [{ canonical_source:
 assert.throws(() => sourcePolicySignatureRows([{ source: 'wwr', is_enabled: true, matching_enabled: true }, { source: 'weworkremotely', is_enabled: false, matching_enabled: true }], canonicalSource), /SOURCE_POLICY_ALIAS_CONFLICT/)
 assert.throws(() => sourcePolicySignatureRows([{ source: 'wwr', is_enabled: true, matching_enabled: true }, { source: 'weworkremotely', is_enabled: true, matching_enabled: false }], canonicalSource), /SOURCE_POLICY_ALIAS_CONFLICT/)
 assert.throws(() => buildCanonicalSourcePolicyIndex([{ source: 'wwr', is_enabled: true, matching_enabled: true }, { source: 'weworkremotely', is_enabled: true, matching_enabled: false }], EDGE_SOURCE_IDENTITIES, canonicalSource), /SOURCE_POLICY_ALIAS_CONFLICT/)
+const sqlIdentityRows = sourceIdentitiesFromAliasRows([{ canonical_source: 'wwr', emitted_source: 'weworkremotely' }])
+assert.deepEqual(sqlIdentityRows, [{ canonical_source: 'wwr', emitted_aliases: ['weworkremotely'] }], 'runtime identity projection is derived only from SQL alias rows')
+const registryOnlyAliasPolicies = [{ source: 'oya', is_enabled: true, matching_enabled: true }, { source: 'oyaop', is_enabled: false, matching_enabled: true }]
+const sqlSourceKey = (raw: unknown) => String(raw ?? '').trim().toLowerCase()
+assert.doesNotThrow(() => buildCanonicalSourcePolicyIndex(registryOnlyAliasPolicies, sourceIdentitiesFromAliasRows([]), sqlSourceKey), 'a Registry-only alias must not collapse distinct SQL policy authorities into a fatal conflict')
+assert.doesNotThrow(() => sourcePolicySignature(registryOnlyAliasPolicies, sqlSourceKey), 'the worker signatures SQL effective rows without remapping them through Registry-only aliases')
 const examined: string[] = []
 let cursor: { at: string; id: string } | null = null
 while (examined.length < inventory.length) {

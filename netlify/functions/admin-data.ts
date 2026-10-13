@@ -18,6 +18,7 @@ import { SOURCE_PERMISSION_DIMENSIONS, sourcePermissionDimensionTruth, sourcePer
 import { sourceDoorDiagnostics } from "../../src/lib/source-intelligence-contract"
 import { sourceProducerExecution } from "../../src/lib/effective-source-policy"
 import { pipelineWithCurrentUniverse } from "../../src/lib/opportunity-universe"
+import sourceIntelligenceRegistrySnapshot from "../../src/generated/source-intelligence-registry.json"
 
 const SOURCE_SCAN_SCRAPERS: Record<string, string> = {
   unjobs: "unjobs_scraper", himalayas: "himalayas_scraper", talentcom: "talentcom_scraper", weworkremotely: "weworkremotely_scraper",
@@ -42,7 +43,7 @@ interface AdminActionResult {
 }
 
 function sourceIntelligenceRegistry() {
-  return JSON.parse(readFileSync(resolve(process.cwd(), "src/generated/source-intelligence-registry.json"), "utf8"))
+  return sourceIntelligenceRegistrySnapshot as any
 }
 
 function sourcePermissionSnapshot(source: string) {
@@ -101,18 +102,15 @@ function reconciliationPatch(decision: any) {
 export type WorkflowRoute = { workflow: string; runner_id: string; entrypoint: string }
 
 export function workflowRoutes(): WorkflowRoute[] {
-  const files = ['.github/workflows/scrapers.yml', '.github/workflows/source-maintenance.yml', '.github/workflows/scheduled-source-automation.yml']
-  const routes: WorkflowRoute[] = []
-  for (const workflow of files) {
-    try {
-      const content = readFileSync(resolve(process.cwd(), workflow), 'utf8')
-      for (const match of content.matchAll(/python\s+scripts\/run_scraper_monitored\.py\s+([\w.-]+)\s+([\w.-]+)\s+([\w./-]+\.py)/g)) {
-        // run_scraper_monitored.py positional contract is scraper_id, scraper_name, script_path.
-        routes.push({ workflow, runner_id: match[1].toLowerCase(), entrypoint: match[3].replaceAll('\\', '/').toLowerCase() })
-      }
-    } catch { /* Missing workflow evidence remains UNKNOWN. */ }
-  }
-  return routes
+  const projected = sourceIntelligenceRegistry().workflow_routes
+  if (!Array.isArray(projected)) return []
+  return projected.filter((route: any) =>
+    typeof route?.workflow === 'string' && typeof route?.runner_id === 'string' && typeof route?.entrypoint === 'string'
+  ).map((route: any) => ({
+    workflow: route.workflow,
+    runner_id: route.runner_id.toLowerCase(),
+    entrypoint: route.entrypoint.replaceAll('\\', '/').toLowerCase(),
+  }))
 }
 
 export function verifiedRouteFor(profile: any, routes: WorkflowRoute[], registryProfiles: any[] = []) {

@@ -4483,5 +4483,413 @@
       "semantic_version": "source-contract:v2.0",
       "source_family": "job_board"
     }
-  ]
+  ],
+  "workflow_routes": [
+    {
+      "entrypoint": "scrapers/computrabajo_scraper.py",
+      "runner_id": "computrabajo_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/buscojobs_scraper.py",
+      "runner_id": "buscojobs_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/scrapper.py",
+      "runner_id": "scrapper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/abc_scrapper.py",
+      "runner_id": "abc_scrapper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/fundacion_scraper.py",
+      "runner_id": "fundacion_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/remotive_scraper.py",
+      "runner_id": "remotive_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/oya_scraper.py",
+      "runner_id": "oya_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/opportunitydesk_scraper.py",
+      "runner_id": "opportunitydesk_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/becal_scraper.py",
+      "runner_id": "becal_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/fundacion_carolina_scraper.py",
+      "runner_id": "fundacion_carolina_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/arbeitnow_scraper.py",
+      "runner_id": "arbeitnow_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/himalayas_scraper.py",
+      "runner_id": "himalayas_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/jobicy_scraper.py",
+      "runner_id": "jobicy_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/weworkremotely_scraper.py",
+      "runner_id": "weworkremotely_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/unjobs_scraper.py",
+      "runner_id": "unjobs_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/sicca_scraper.py",
+      "runner_id": "sicca_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/ministerios_scraper.py",
+      "runner_id": "ministerios_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/bancos_scraper.py",
+      "runner_id": "bancos_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/cooperativas_scraper.py",
+      "runner_id": "cooperativas_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/seguros_scraper.py",
+      "runner_id": "seguros_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/callcenters_scraper.py",
+      "runner_id": "callcenters_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/universidades_scraper.py",
+      "runner_id": "universidades_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/constructoras_scraper.py",
+      "runner_id": "constructoras_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/grupovierci_scraper.py",
+      "runner_id": "grupovierci_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/grupocarteshs_scraper.py",
+      "runner_id": "grupocarteshs_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/hospitales_scraper.py",
+      "runner_id": "hospitales_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/supermercados_scraper.py",
+      "runner_id": "supermercados_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/ongs_scraper.py",
+      "runner_id": "ongs_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/tech_local_scraper.py",
+      "runner_id": "tech_local_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/eu_delegation_py_scraper.py",
+      "runner_id": "eu_delegation_paraguay",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/oas_scholarships_scraper.py",
+      "runner_id": "oas_scholarships",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/impactpool_scraper.py",
+      "runner_id": "impactpool",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/erasmus_mundus_scraper.py",
+      "runner_id": "erasmus_mundus",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/coimbra_group_scraper.py",
+      "runner_id": "coimbra_group",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/one_young_world_scraper.py",
+      "runner_id": "one_young_world_scholarships",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/santander_open_academy_scraper.py",
+      "runner_id": "santander_open_academy",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/chevening_scholarships_scraper.py",
+      "runner_id": "chevening",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/idb_calls_scraper.py",
+      "runner_id": "idb_calls",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/daad_scholarships_scraper.py",
+      "runner_id": "daad",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/aecid_paraguay_calls_scraper.py",
+      "runner_id": "aecid_paraguay_calls",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/wwf_paraguay_calls_scraper.py",
+      "runner_id": "wwf_paraguay_calls",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/snj_paraguay_scraper.py",
+      "runner_id": "snj_paraguay",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/mef_inapp_becas_scraper.py",
+      "runner_id": "mef_inapp_becas",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/ipa_convocatorias_scraper.py",
+      "runner_id": "ipa_convocatorias",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/mitic_opportunities_scraper.py",
+      "runner_id": "mitic_opportunities",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/fiuna_job_board_scraper.py",
+      "runner_id": "fiuna_job_board",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/mic_portal_emprendedor_scraper.py",
+      "runner_id": "mic_portal_emprendedor",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/caf_calls_scraper.py",
+      "runner_id": "caf_calls",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/mit_solve_scraper.py",
+      "runner_id": "mit_solve",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/startup_chile_scraper.py",
+      "runner_id": "startup_chile",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/google_startups_latam_scraper.py",
+      "runner_id": "google_startups_latam",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/eu_lac_accelerator_scraper.py",
+      "runner_id": "eu_lac_accelerator",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/becas_gobierno_itaipu_scraper.py",
+      "runner_id": "becas_gobierno_itaipu",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/ucom_job_board_scraper.py",
+      "runner_id": "ucom_job_board",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/fcq_una_job_board_scraper.py",
+      "runner_id": "fcq_una_job_board",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/pro_ong_conevio_scraper.py",
+      "runner_id": "pro_ong_conevio",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/cird_competitions_scraper.py",
+      "runner_id": "cird_competitions_tenders",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/500_latam_scraper.py",
+      "runner_id": "500_latam",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/empleapy_mtess_scraper.py",
+      "runner_id": "empleapy_mtess",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/innovandopy_startups_scraper.py",
+      "runner_id": "innovandopy_startups",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/eby_yacyreta_scraper.py",
+      "runner_id": "eby_yacyreta",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/foros_scraper.py",
+      "runner_id": "foros_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/jooble_scraper.py",
+      "runner_id": "jooble_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/talentcom_scraper.py",
+      "runner_id": "talentcom_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/googlejobs_v2.py",
+      "runner_id": "googlejobs_v2",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/googlejobs_v3.py",
+      "runner_id": "googlejobs_v3",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/automotriz_scraper.py",
+      "runner_id": "automotriz_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/farmacias_scraper.py",
+      "runner_id": "farmacias_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/gastronomia_hoteles_scraper.py",
+      "runner_id": "gastronomia_hoteles_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/agroindustria_scraper.py",
+      "runner_id": "agroindustria_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/frigorificos_scraper.py",
+      "runner_id": "frigorificos_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/industria_manufactura_scraper.py",
+      "runner_id": "industria_manufactura_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/telecomunicaciones_scraper.py",
+      "runner_id": "telecomunicaciones_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/medios_comunicacion_scraper.py",
+      "runner_id": "medios_comunicacion_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/retail_malls_scraper.py",
+      "runner_id": "retail_malls_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/logistica_transporte_scraper.py",
+      "runner_id": "logistica_transporte_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/energia_utilities_scraper.py",
+      "runner_id": "energia_utilities_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/puertos_importadoras_scraper.py",
+      "runner_id": "puertos_importadoras_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/cde_frontera_scraper.py",
+      "runner_id": "cde_frontera_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/workday_multinacionales_scraper.py",
+      "runner_id": "workday_multinacionales_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/bolsas_locales_scraper.py",
+      "runner_id": "bolsas_locales_scraper",
+      "workflow": ".github/workflows/scrapers.yml"
+    }
+  ],
+  "workflow_routes_hash": "dcd297ee9fe4b729264d234d173d9bc96c6a6c5f10f968d1bd9c999968649bc0"
 }

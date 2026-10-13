@@ -6,7 +6,6 @@ import { parseDirtyRefreshResponse, parseDueRefreshCount } from '../shared/oppor
 import { nextRetrievalSchedulerCursor, prioritizeRetrievalUsers, type RetrievalSchedulerCandidate, type RetrievalSchedulerReason } from '../shared/retrieval-user-scheduler.ts'
 import { buildDictionary } from '../supabase/functions/_shared/matching.ts'
 import { isPotentialDiscoveryDecision, isVisibleMatchDecision, rankOpportunitiesV2, V2_PRESET_FULL } from '../supabase/functions/_shared/matching-v2.ts'
-import { EDGE_SOURCE_IDENTITIES } from '../supabase/functions/_shared/generated-source-registry.ts'
 
 const args = new Map<string, string>()
 for (let i = 2; i < process.argv.length; i++) if (process.argv[i].startsWith('--')) args.set(process.argv[i], process.argv[++i] ?? '')
@@ -24,11 +23,11 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 if (!url || !serviceKey) throw new Error('SUPABASE_SERVICE_ROLE_CONFIGURATION_REQUIRED')
 
 const supabase = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
-const canonicalSource = (raw: unknown) => {
-  const source = String(raw ?? '').trim().toLowerCase()
-  const identity = EDGE_SOURCE_IDENTITIES.find((item) => item.canonical_source === source || (item.emitted_aliases as readonly string[]).includes(source))
-  return identity?.canonical_source || source
-}
+// get_source_distribution_policy already applies the SQL source identity and
+// effective-policy authority. Do not remap its rows through the broader
+// Registry alias map here: a Registry alias absent from the SQL identity table
+// is a separate SQL policy row and must not create a global signature conflict.
+const canonicalSource = (raw: unknown) => String(raw ?? '').trim().toLowerCase()
 const nowIso = () => new Date().toISOString()
 const pageFields = 'id,slug,title,organization,location,rubro,tags,description,application_url,type,opportunity_type,opportunity_kind,remote,remote_scope,eligible_countries,eligible_regions,citizenship_requirement,residency_requirement,source,deadline,created_at,updated_at,is_active,verification_status,match_eligible,alerts_eligible,archived_at,deleted_at,content_fingerprint'
 let currentRoutingEpoch = 0

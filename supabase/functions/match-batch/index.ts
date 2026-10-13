@@ -2,16 +2,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { buildDictionary, normalize, toStrings } from '../_shared/matching.ts';
 import { isPotentialDiscoveryDecision, isVisibleMatchDecision, rankOpportunitiesV2, V2_PRESET_FULL } from '../_shared/matching-v2.ts';
 import { parsePgVector } from '../_shared/vector.ts';
-import { EDGE_SOURCE_IDENTITIES } from '../_shared/generated-source-registry.ts';
 import { classifyMatchingCoverage } from '../../../src/lib/matching-coverage.ts';
 import { matchingProfileSignature } from '../../../shared/matching-profile-signature.ts';
 import { canonicalCandidateProfile } from '../../../shared/candidate-profile.ts';
-import { buildCanonicalSourcePolicyIndex, classifyBackgroundCoverage, mergeRetrievalSimilarities, normalizeSourcePolicyRow, opportunityCacheIsCurrent, retrievalCacheIsCurrent, sourceMatchingAllowed, sourcePolicyFor, sourcePolicySignature, unionRetrievalLanes } from '../../../shared/matching-retrieval.ts';
+import { buildCanonicalSourcePolicyIndex, classifyBackgroundCoverage, mergeRetrievalSimilarities, normalizeSourcePolicyRow, opportunityCacheIsCurrent, retrievalCacheIsCurrent, sourceIdentitiesFromAliasRows, sourceMatchingAllowed, sourcePolicyFor, sourcePolicySignature, unionRetrievalLanes } from '../../../shared/matching-retrieval.ts';
 const DEFAULT_SITE_URL = 'https://cvitae.lat';
 const canonicalSource = (raw: unknown) => {
-  const source = String(raw || '').trim().toLowerCase()
-  const profile = EDGE_SOURCE_IDENTITIES.find((item) => item.canonical_source === source || item.emitted_aliases.includes(source))
-  return profile?.canonical_source || source
+  // Policy rows already come from the canonical SQL authority. Avoid folding
+  // them through Registry aliases that are not present in the SQL identity map.
+  return String(raw || '').trim().toLowerCase()
 }
 const LOCAL_ORIGINS = new Set([
   'http://127.0.0.1:5173',
@@ -176,18 +175,20 @@ Deno.serve(async (req)=>{
     }
     const candidate = canonicalCandidateProfile(profile);
     const profileSignature = matchingProfileSignature(profile);
-    const [{ data: allSourcePolicies, error: allSourcePoliciesError }, { data: sourcePermissions, error: sourcePermissionError }, { data: schedulerState, error: routingEpochError }] = await Promise.all([
+    const [{ data: allSourcePolicies, error: allSourcePoliciesError }, { data: sourcePermissions, error: sourcePermissionError }, { data: schedulerState, error: routingEpochError }, { data: sourceIdentityAliases, error: sourceIdentityAliasesError }] = await Promise.all([
       supabase.rpc('get_source_distribution_policy'),
       supabase.from('opportunity_source_consumer_permissions').select('canonical_source,consumer,permission_state').eq('consumer', 'matching'),
       supabase.from('matching_retrieval_scheduler_state').select('routing_epoch').eq('singleton', true).single(),
+      supabase.from('opportunity_source_identity_aliases').select('canonical_source,emitted_source'),
     ]);
     if (allSourcePoliciesError) throw allSourcePoliciesError;
     if (sourcePermissionError) throw sourcePermissionError;
     if (routingEpochError) throw routingEpochError;
+    if (sourceIdentityAliasesError) throw sourceIdentityAliasesError;
     const routingEpoch = Number(schedulerState?.routing_epoch);
     if (!Number.isSafeInteger(routingEpoch) || routingEpoch < 1) throw new Error('MATCHING_ROUTING_EPOCH_UNAVAILABLE');
     const sourcePolicyRows = (allSourcePolicies ?? []).map(normalizeSourcePolicyRow);
-    const sourcePolicyIndex = buildCanonicalSourcePolicyIndex(sourcePolicyRows, EDGE_SOURCE_IDENTITIES, canonicalSource);
+    const sourcePolicyIndex = buildCanonicalSourcePolicyIndex(sourcePolicyRows, sourceIdentitiesFromAliasRows(sourceIdentityAliases ?? []), canonicalSource);
     const currentSourcePolicySignature = await sourcePolicySignature(sourcePolicyRows, canonicalSource, sourcePermissions ?? []);
     const { data: retrievalState } = await supabase.from('matching_retrieval_states').select('*').eq('user_id', user.id).maybeSingle();
     const backgroundCoverageStatus = classifyBackgroundCoverage(retrievalState, profileSignature, currentSourcePolicySignature, routingEpoch);

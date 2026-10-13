@@ -1,36 +1,45 @@
 # CVitae R3 — decisión de release
 
-**Estado preparado: NO-GO para publicación.** El checkout local está congelado en
-`79a0f7c5249b7c8bd0bc1ee50cba8549574aef5b`, rama
-`work/beta-hardening-postdeploy-20261011`. Hay 12 commits locales desde la
+**Estado preparado: NO-GO para publicación.** El checkout de entrada fue
+`94009ff517e93dc5e46328d355b1fe8f84906759`, rama
+`work/beta-hardening-postdeploy-20261011`. En esa entrada había 15 commits desde la
 referencia cacheada `ce6dc7aba3dec35c6785fb7100d6125cd0962dab`; el remoto no fue
 consultado, por lo que no se afirma que esos commits estén publicados o ausentes
 en el destino.
 
 ## Evidencia ya disponible
 
-- Las cinco migraciones locales y sus firmas están enumeradas en el runbook y
-  medidas por `CVITAE_R3_PREFLIGHT_READONLY.sql`. El esquema productivo actual,
-  el historial de migraciones y el inventario de hoy **no se consultaron**.
-- El tipo `public.vector(384)` tuvo confirmación productiva previa, pero debe
-  volver a contrastarse en el preflight del proyecto/branch autorizado. No se
-  presume que el esquema actual siga igual.
-- El empaquetado focalizado local de `admin-data` generó ZIP, pero el ZIP local
-  de `functions:build` no incluyó los assets dinámicos configurados. Esto no
-  demuestra por sí mismo un defecto del código ni el contenido del artefacto
-  final creado por el build del proveedor.
+- Snapshot productivo comunicado y fechado 2026-10-13: PostgreSQL 17.6,
+  `public.vector(384)`, inventario/universos medidos, 105/107 fuentes dirty, las
+  cinco migraciones no registradas y objetos R3 ausentes; sin duplicados que
+  impidan 120001. Son mediciones de esa ejecución, no objetivo ni sustituto de
+  una lectura de no-deriva si cambia la ventana/proyecto.
+- La cadena de cinco migraciones se ejecutó localmente, en orden, sobre un clon
+  aislado PostgreSQL 17.6 con `public.vector(384)`. Se verificaron firmas, ACL
+  del ledger, trigger único y universos. El clon tenía varias migraciones
+  prerequisitas pendientes antes de la secuencia R3; esto no prueba el historial
+  remoto ni sustituye dry-run/backup/GO del operador.
+- **Bundle focalizado local de `admin-data`: PASS.** Se inspeccionó y ejecutó el
+  ZIP real; las rutas de workflow y el Registry se incluyen como snapshot
+  estático derivado de los workflows fuente (81 invocaciones directas, 87
+  perfiles vinculados, 107 perfiles). El empaquetado ya no necesita incluir ni
+  leer los YAML durante runtime.
 - El build general queda condicionado por
   `seo_inventory_policy_unavailable` cuando no están disponibles en el entorno
   autorizado las variables requeridas por `scripts/generate-seo-inventory.ts`.
   No se omitió ni debilitó ese gate.
-- Clasificación del gate: **A, error reproducible de código:** ninguno
-  demostrado en esta pasada. **B, entorno/credenciales:** el build general no
-  puede completar la generación SEO local sin el contexto Supabase requerido.
-  **C, proveedor/artefacto:** la prueba local de `functions:build` no mostró los
-  assets dinámicos en su ZIP; la configuración declara `included_files`, pero
-  el bundle final del contexto de sitio/proveedor sigue sin evidencia. No
-  atribuir el resultado a un defecto de código ni a un éxito de Netlify hasta
-  inspeccionar el artefacto final.
+- Clasificación del gate: **A, error reproducible de código:** el defecto de
+  resolución dinámica en el ZIP se corrigió y el artefacto focalizado pasó.
+  **B, entorno/credenciales:** el build general no completa la generación SEO
+  local sin el contexto Supabase requerido (`seo_inventory_policy_unavailable`).
+  **C, proveedor/artefacto:** falta el build de sitio del proveedor con policy
+  SEO real y validación del artefacto del deploy. No atribuir este bloqueo a un
+  defecto restante de `admin-data` ni a un éxito de publicación.
+- E2E local parcial: PostgreSQL/PostgREST aislados, reducer real, epoch/ledger,
+  worker real, FULL, ranking V2 y retirada (un candidato sintético `MATCH`
+  persistido y luego eliminado). El endpoint Edge HTTP autenticado y la sesión
+  Supabase del candidato no se probaron porque Edge runtime local no estaba
+  disponible sobre ese clon; el smoke queda obligatorio antes de GO.
 - Los totales históricos —incluidos 5.266— no son un baseline actual ni un
   objetivo de recuperación. Se deben medir y reconciliar por identidad y puerta.
 
@@ -48,12 +57,12 @@ en el destino.
    primera migración elimina una constraint legacy específica; no hay down
    migration aprobada. Un DDL parcialmente aplicado requiere decisión de
    recuperación forward/restore, no código anterior a ciegas.
-4. En el contexto real de Netlify, el build debe completar la generación SEO con
-   policy real y el artefacto final debe incluir
-   `scrapers/source_registry.json`, los tres workflows configurados y
-   `src/generated/source-intelligence-registry.json`. Si no se puede obtener o
-   inspeccionar ese artefacto, registrar
-   `NETLIFY_BUNDLE_SMOKE_PENDING_RELEASE` y permanecer NO-GO.
+4. En el contexto real de Netlify, el build debe completar la generación SEO
+   con policy real e inspeccionarse el ZIP final de `admin-data`. Localmente el
+   ZIP focalizado ya pasó usando workflow map embebido desde el Registry
+   generado; falta el build de proveedor/staging para cerrar compatibilidad de
+   entorno y publicación. Si el artefacto del proveedor no puede obtenerse o
+   inspeccionarse, mantener NO-GO.
 5. Un candidato de prueba autorizado debe demostrar entrada y retirada privadas
    por IDs, ranking V2, revisión/cursor completos y aislamiento por usuario. Los
    resultados deben coincidir con `opportunity_final_matching_universe`; no se
@@ -73,7 +82,7 @@ en el destino.
 |---|---|---|
 | Preflight Supabase | PENDIENTE | SQL read-only guardado y sin incompatibilidades/UNKNOWN |
 | Migraciones | PENDIENTE | respaldo comprobado + dry-run exacto + autorización |
-| Netlify | NO-GO | build real y bundle final inspeccionable |
+| Netlify | PARCIAL / NO-GO | bundle focalizado local PASS; build de sitio/proveedor condicionado por SEO real |
 | Edge/worker | PENDIENTE | migraciones verificadas + publicación autorizada |
 | Reconciliación | PENDIENTE | cola medida, cursor durable, lotes aprobados y evidencia por identidad |
 | Consumidores/Admin | PENDIENTE | recorridos independientes y canarios privados verificados |

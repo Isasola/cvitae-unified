@@ -12,6 +12,22 @@ export type CanonicalSourcePolicyIndex = {
 const normalized = (source: unknown) => String(source ?? '').trim().toLowerCase()
 const explicitBoolean = (value: unknown): boolean | null => value === true ? true : value === false ? false : null
 
+export function sourceIdentitiesFromAliasRows(rows: any[]): SourceIdentity[] {
+  const aliases = new Map<string, Set<string>>()
+  for (const row of rows) {
+    const canonical = normalized(row?.canonical_source)
+    const emitted = normalized(row?.emitted_source)
+    if (!canonical || !emitted) continue
+    const values = aliases.get(canonical) ?? new Set<string>()
+    values.add(emitted)
+    aliases.set(canonical, values)
+  }
+  return [...aliases.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([canonical_source, emitted_aliases]) => ({
+    canonical_source,
+    emitted_aliases: [...emitted_aliases].sort(),
+  }))
+}
+
 export function normalizeSourcePolicyRow(row: any): SourcePolicy {
   return { source: String(row?.source ?? ''), is_enabled: explicitBoolean(row?.is_enabled), matching_enabled: explicitBoolean(row?.matching_enabled) }
 }
