@@ -2,7 +2,7 @@
 -- universe. This prevents inadmissible raw rows from exhausting the vector
 -- window before hydration.
 create or replace function public.match_consumer_opportunities(
-  query_embedding extensions.vector(384),
+  query_embedding public.vector(384),
   match_threshold double precision default 0.10,
   match_count integer default 120,
   consumer text default 'matching'
@@ -36,8 +36,8 @@ begin
   end if;
 end $$;
 
-revoke all on function public.match_consumer_opportunities(extensions.vector,double precision,integer,text) from public,anon,authenticated;
-grant execute on function public.match_consumer_opportunities(extensions.vector,double precision,integer,text) to service_role;
+revoke all on function public.match_consumer_opportunities(public.vector,double precision,integer,text) from public,anon,authenticated;
+grant execute on function public.match_consumer_opportunities(public.vector,double precision,integer,text) to service_role;
 
 comment on function public.match_consumer_opportunities is
   'Returns semantic top-N only from the canonical universe of the requested private consumer.';
