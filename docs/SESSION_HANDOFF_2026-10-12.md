@@ -119,6 +119,9 @@ Abrir el ZIP maestro actualizado o el worktree sincronizado; leer `README_START_
   an isolated PGlite database (7,613 ms). Retrieval, scheduler, consumers,
   Admin source-intelligence, Registry projection, and ingestion telemetry
   verifiers passed.
+- The matching keyset/cursor utility also covered 5,401 fixture IDs through
+  250-row pages with exact-once coverage; this is a pure worker contract test,
+  not a DB-backed user retrieval run.
 - `verify_opportunity_universe.ts` retains its prior SEO assertion failure at
   line 42 (`seo_state` actual `NOT_READY`, expected `READY`); not changed.
   TypeScript checks still report existing unrelated errors in matching-v2,

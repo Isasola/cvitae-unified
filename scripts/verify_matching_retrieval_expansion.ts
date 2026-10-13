@@ -9,7 +9,7 @@ import { buildDefaultDictionary } from '../supabase/functions/_shared/matching.t
 import { rankOpportunitiesV2, V2_PRESET_FULL } from '../supabase/functions/_shared/matching-v2.ts'
 import { EDGE_SOURCE_IDENTITIES } from '../supabase/functions/_shared/generated-source-registry.ts'
 
-const inventory = Array.from({ length: 700 }, (_, i) => ({ id: String(i).padStart(4, '0'), created_at: new Date(i * 1000).toISOString() }))
+const inventory = Array.from({ length: 5401 }, (_, i) => ({ id: String(i).padStart(5, '0'), created_at: new Date(i * 1000).toISOString() }))
 const canonicalSource = (raw: unknown) => {
   const source = String(raw ?? '').trim().toLowerCase()
   const identity = EDGE_SOURCE_IDENTITIES.find(item => item.canonical_source === source || item.emitted_aliases.some(alias => alias === source))
@@ -48,8 +48,8 @@ while (examined.length < inventory.length) {
   examined.push(...page.map(row => row.id))
   cursor = cursorAfterPage(page, 'created_at')
 }
-assert.equal(examined.length, 700, 'FULL scan must examine all 700 rows')
-assert.equal(new Set(examined).size, 700, 'keyset pages must not duplicate rows')
+assert.equal(examined.length, 5401, 'FULL scan resumes through more than 5,400 rows across 250-row pages')
+assert.equal(new Set(examined).size, 5401, 'keyset pages must not duplicate any of the 5,401 IDs')
 
 let persistedCursor = 'before-page-2'
 await assert.rejects(commitRetrievalPage([2], async () => { throw new Error('page failure') }, async () => { persistedCursor = 'after-page-2' }))
