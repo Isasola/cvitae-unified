@@ -195,10 +195,11 @@ try {
   assert.equal((await query("select get_opportunity_universe_row('no-producer') p"))[0].p.source_operational_reason,'NO_EXECUTABLE_PRODUCER')
   pass('C09_1_FIRST_PARTY_ROW_DRIVEN_EXTERNAL_DENIED_ADVISORY_AND_NO_PRODUCER')
   pass('C09_1_OPERATIONAL_DEFAULT_SOURCE_AND_SEO_AUDITED_KILLS_ROW_REPAIR')
-  // More than 1,000 existing rows; search and area predicates execute in SQL.
-  for (let page=0;page<6;page++) await db.exec(`insert into opportunities(id,source,slug,title,organization,description,opportunity_type,is_active,verification_status,updated_at,rubro)
+  // More than the confirmed 5,238-row source backlog; search and area predicates execute in SQL.
+  for (let page=0;page<27;page++) await db.exec(`insert into opportunities(id,source,slug,title,organization,description,opportunity_type,is_active,verification_status,updated_at,rubro)
     select 'bulk-'||lpad(n::text,5,'0'),'himalayas','bulk-'||n,'Programme Officer','Fixture',repeat('Professional programme coordination responsibilities and factual experience requirements. ',3),'job',true,'verified',now()+interval '1 day','Operations'
     from generate_series(${page*200},${page*200+199}) n`)
+  assert.equal((await query("select count(*) n from opportunities where source='himalayas' and id like 'bulk-%'"))[0].n,5400)
   await insert('beyond-1000','himalayas',true,'Rare Precision Engineer')
   const found = await query("select id from search_public_opportunities('Rare Precision','Research',null,'jobs',null,null,101)")
   assert.equal(found.length,1); assert.equal(found[0].id,'beyond-1000')
@@ -235,18 +236,51 @@ try {
   const total=(await query('select count(*) n from opportunity_catalog_universe'))[0].n
   assert.equal(seen.size,total); assert.ok(requests>10)
   pass('CASE_9_SEARCH_AFTER_1000_INDEX_AND_ALL_CATALOG_PAGES')
-  let dirtyPages=0
+  let preexistingDirty=0
+  do {
+    if(!(await query('select count(*) n from opportunity_universe_dirty_sources'))[0].n) break
+    const result=(await query('select refresh_dirty_opportunity_universe_sources(1) result'))[0].result
+    assert.ok(result.opportunities_refreshed<=250)
+    preexistingDirty++
+    assert.ok(preexistingDirty<100)
+  } while(true)
+  await query("insert into opportunity_sources(source,auto_verify) values('talentcom',true) on conflict(source) do nothing")
+  for(const emitted of ['talentcom','talent','talent.com']) await query('insert into opportunity_source_identity_aliases(canonical_source,emitted_source) values($1,$2) on conflict(emitted_source) do update set canonical_source=excluded.canonical_source',['talentcom',emitted])
+  await insert('identity-canonical','talentcom')
+  await insert('identity-alias-one','talent')
+  await insert('identity-alias-two','talent.com')
+  await query("update opportunity_sources set catalog_enabled=catalog_enabled where source='talentcom'")
+  let identityRows=0, identityBatches=0
+  do {
+    const result=(await query('select refresh_dirty_opportunity_universe_sources(1) result'))[0].result
+    identityRows+=result.opportunities_refreshed; identityBatches++
+    assert.ok(result.opportunities_refreshed<=250)
+    if(!result.pending_sources) break
+    assert.ok(identityBatches<10)
+  } while(true)
+  assert.equal(identityRows,3,'canonical and two explicitly registered emitted identities are each reduced once')
+  assert.equal((await query("select count(*) n from opportunity_universe_state where opportunity_id in ('identity-canonical','identity-alias-one','identity-alias-two')"))[0].n,3)
+  pass('DIRTY_SOURCE_CANONICAL_AND_EXPLICIT_ALIASES_EXACT_ONCE')
   await query("update opportunity_sources set catalog_enabled=catalog_enabled where source='himalayas'")
+  let dirtyPages=0, dirtyRows=0, interruptedCursor=null
   do {
     const result=(await query('select refresh_dirty_opportunity_universe_sources(1) result'))[0].result
     assert.ok(result.opportunities_refreshed<=250)
-    dirtyPages++
+    dirtyRows+=result.opportunities_refreshed; dirtyPages++
+    if(dirtyPages===5) {
+      assert.equal(result.pending_sources,1,'large source remains queued at an interrupted worker boundary')
+      interruptedCursor=(await query("select cursor_id from opportunity_universe_dirty_sources where canonical_source='himalayas'"))[0].cursor_id
+      assert.ok(interruptedCursor,'durable cursor survives between worker invocations')
+      pass('DIRTY_SOURCE_INTERRUPTION_CURSOR_DURABLE')
+    }
     if (!result.pending_sources) break
     assert.ok(dirtyPages<30)
   } while(true)
   assert.ok(dirtyPages>4)
+  assert.ok(interruptedCursor)
+  assert.equal(dirtyRows,(await query("select count(*) n from opportunities where source='himalayas'"))[0].n,'all large-source rows are recalculated exactly once across the interrupted run')
   assert.equal((await query("select count(*) n from opportunity_universe_dirty_sources"))[0].n,0)
-  pass('DIRTY_SOURCE_BOUNDED_RESUMABLE_FULL_COVERAGE')
+  pass('DIRTY_SOURCE_5238_PLUS_BOUNDED_RESUMABLE_FULL_COVERAGE')
   // Historical cursor RPC also finishes the whole denominator and is idempotent.
   let historicalCursor=null, historicalRows=0, historicalPages=0
   do {
@@ -254,7 +288,7 @@ try {
     assert.ok(result.examined<=250); assert.equal(result.changed_lifecycle_flags,0)
     historicalRows+=result.examined; historicalCursor=result.cursor_id; historicalPages++
     if(result.complete) break
-    assert.ok(historicalPages<20)
+    assert.ok(historicalPages<40)
   } while(true)
   assert.equal(historicalRows,(await query('select count(*) n from opportunities'))[0].n)
   pass('HISTORICAL_CURSOR_COMPLETE_IDEMPOTENT_NO_PER_CONSUMER_SCAN')

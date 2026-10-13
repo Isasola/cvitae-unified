@@ -153,3 +153,23 @@ BUG-002/BUG-003. Capture the exact endpoints and sanitized production request
 correlation/log stages for one ATS failure and one rewrite-preparation failure.
 Do not change code until their last common proven gate and first divergent
 failure are known.
+
+## 2026-10-13 local execution update
+
+The Universe maintenance worker now validates every required RPC count and
+the expected 250-row page size, emits `COMPLETE`, `RESUMABLE`, or `ERROR`, and
+keeps the SQL cursor as its resume authority. Its existing workflow has a
+15-minute schedule gated by `CVITAE_PROD_RELEASE_VALIDATED == 'true'`; manual
+dispatch still requires explicit confirmation. No release variable is changed.
+The local SQL canary processed a 5,400-row Himalayas fixture across a persisted
+interruption, and separately reconciled canonical plus the registry-declared
+`talent` / `talent.com` emitted identities exactly once. No production action
+occurred.
+
+Matching retrieval is not changed. The existing COMPLETE/DELTA selector watches
+`opportunities.updated_at`, while Universe refresh can change final routing
+without changing that timestamp. `evaluated_at` is refreshed even when the
+matching decision is unchanged, so it cannot alone satisfy both durable
+invalidation and no-op requirements. Stop for a decision between a per-row
+matching routing revision/cursor contract and a conditional transition-time
+watermark contract before changing retrieval SQL or worker state.

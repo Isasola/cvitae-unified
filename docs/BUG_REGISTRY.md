@@ -335,6 +335,26 @@ implementation, closure, or production validation.
 - **Detected / fixed / closed:** detected `ce6dc7a`; fixed `—`; production
   closure `—`.
 
+## Matching routing evidence update - 2026-10-13
+
+- Operator-provided production baseline for this pass: inventory 16,541;
+  `match_eligible=true` 6,225; final Matching 204; Catalog 205; Alerts 204;
+  SEO 6,022; private CV histories 12; no new R3 migrations applied. The
+  confirmed stale source-policy projection affects 5,266 rows across
+  Himalayas (5,238), Jobicy (21), and Remotive (7); effective matching is
+  enabled while the stored consumer switch is false and dirty reconciliation
+  is queued. These are supplied production facts, not a new production query.
+- Local code evidence: `run_matching_retrieval_expansion.ts` detects changed
+  inventory from `opportunities.updated_at`; its COMPLETE path uses the same
+  watermark. `refresh_opportunity_universe` updates `evaluated_at` on every
+  evaluation, even when final routing is unchanged. The current retrieval
+  schema has no durable matching-routing transition revision. Positive and
+  negative recommendation refresh therefore remain unproven and are not
+  marked fixed.
+- This pass implemented only the bounded/resumable Universe maintenance
+  worker and release-gated schedule. Matching invalidation is stopped for an
+  architecture decision; see the 2026-10-13 session handoff.
+
 ## BUG-009 — Duplicate and overlapping loaders
 
 - **Priority / state:** P2 / `OBSERVED_PROD`

@@ -1,6 +1,8 @@
 name: CVitae - Opportunity Universe maintenance
 
 on:
+  schedule:
+    - cron: '*/15 * * * *'
   workflow_dispatch:
     inputs:
       confirm_prod_release_validated:
@@ -19,7 +21,7 @@ concurrency:
 
 jobs:
   reconcile:
-    if: inputs.confirm_prod_release_validated == 'YES' && vars.CVITAE_PROD_RELEASE_VALIDATED == 'true'
+    if: (github.event_name == 'schedule' && vars.CVITAE_PROD_RELEASE_VALIDATED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.confirm_prod_release_validated == 'YES' && vars.CVITAE_PROD_RELEASE_VALIDATED == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

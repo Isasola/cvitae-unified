@@ -74,3 +74,31 @@ Abrir el ZIP maestro actualizado o el worktree sincronizado; leer `README_START_
 `CURRENT_BLOCKER`: P0 ATS endpoint/timing attribution; migration CV version unapplied; matching en SUCCESS_ZERO con universo final estrecho y gates no conciliados; LATAM scrapers y SEO aún requieren canarios.
 `LAST_PROVEN_GATE`: release `ce6dc7a` publicado; fallo de constraint y diagnósticos SQL de matching/source/SEO observados en PROD; ningún fix nuevo aplicado.
 `DO_NOT_REOPEN`: C3; 67 ítems sin evidencia nueva; C4 SQL no aplicado; permisos denegados; deploy/sitemap ya automatizado; no tratar muestra como total.
+
+## Local pass checkpoint - 2026-10-13
+
+- Initial HEAD was `7198538e2007f5c49453aeda0bb857efac78e59a`, on
+  `work/beta-hardening-postdeploy-20261011`, with a clean worktree. The expected
+  postdeploy baseline and explicit user scope were present.
+- Implemented the existing Universe maintenance worker contract and its
+  schedule only. `pnpm.cmd exec tsx scripts/verify_b2c_secondary_contracts.ts`
+  passed. `pnpm.cmd exec tsx scripts/verify_cable_wiring_sql.mjs` passed the
+  actual local SQL reducer canary, including 5,400 rows, interruption/resume,
+  explicit canonical/alias identity and complete drain. Test-generated changes
+  to `artifacts/release/cable-local-sql-evidence.json` were reverted; the new
+  evidence remains in test output and this handoff.
+- `verify_opportunity_universe.ts` currently fails at line 42: its factual SEO
+  potential assertion expected `READY` and received `NOT_READY`. This assertion
+  is outside files changed in this pass and was not altered.
+- Matching is an architecture STOP: `opportunity_universe_state.evaluated_at`
+  changes on every reducer call, not only matching transitions; retrieval state
+  has only the inventory `last_change_watermark`; candidate rows store content
+  fingerprint, not routing revision. Choose between (1) an integer monotonic
+  routing revision on Universe state with user/candidate cursors, or (2) a
+  conditional routing-transition timestamp with tuple cursor semantics. The
+  first supports explicit generation comparisons; the second keeps the signal
+  on existing row clocks but needs careful same-time/concurrent cutoff rules.
+  No B/C/D changes or Admin claims were made.
+- `PROD_WRITE=NONE`; migration apply, release variable, scraper runs, deploy and
+  push were untouched. The local PGlite dependency was installed under ignored
+  `.cvitae-state/cable-sql-test` solely to execute the requested canary.

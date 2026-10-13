@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { maintenanceCompletion, parseDirtyRefreshResponse, parseDueRefreshCount } from '../shared/opportunity-universe-maintenance.ts'
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 const workspace = read('../netlify/functions/application-workspace.ts')
@@ -44,9 +45,30 @@ assert.match(indexingQueue, /URL_DELETED/, 'URL_DELETED remains available for pr
 assert.match(maintenance, /refresh_due_opportunity_universe/)
 assert.match(maintenance, /refresh_dirty_opportunity_universe_sources/)
 assert.match(maintenance, /maxDirtyBatches/)
+assert.match(maintenance, /status: 'ERROR' as 'COMPLETE' \| 'RESUMABLE' \| 'ERROR'/)
+assert.match(maintenance, /parseDirtyRefreshResponse\(refreshed\.data\)/, 'dirty response shape is validated before accounting')
+assert.match(read('../shared/opportunity-universe-maintenance.ts'), /nonNegativeInteger\(response\.pending_sources, 'pending_sources'\)/)
+assert.match(read('../shared/opportunity-universe-maintenance.ts'), /nonNegativeInteger\(response\.sources_refreshed, 'sources_refreshed'\)/)
+assert.match(read('../shared/opportunity-universe-maintenance.ts'), /nonNegativeInteger\(response\.opportunities_refreshed, 'opportunities_refreshed'\)/)
+assert.match(read('../shared/opportunity-universe-maintenance.ts'), /response\.page_size !== 250/)
+assert.match(maintenance, /continuation_required/)
 assert.match(maintenanceWorkflow, /workflow_dispatch:/)
-assert.doesNotMatch(maintenanceWorkflow, /schedule:|cron:/)
-assert.match(maintenanceWorkflow, /confirm_prod_release_validated == 'YES'.*CVITAE_PROD_RELEASE_VALIDATED == 'true'/)
+assert.match(maintenanceWorkflow, /schedule:[\s\S]*cron: '\*\/15 \* \* \* \*'/, 'maintenance resumes on a bounded schedule')
+assert.match(maintenanceWorkflow, /github\.event_name == 'schedule'[\s\S]*CVITAE_PROD_RELEASE_VALIDATED == 'true'/, 'scheduled maintenance is release-gated')
+assert.match(maintenanceWorkflow, /github\.event_name == 'workflow_dispatch'[\s\S]*confirm_prod_release_validated == 'YES'[\s\S]*CVITAE_PROD_RELEASE_VALIDATED == 'true'/, 'manual maintenance retains explicit confirmation')
+assert.match(maintenanceWorkflow, /cancel-in-progress: false/)
+assert.equal(parseDueRefreshCount(0), 0)
+assert.deepEqual(maintenanceCompletion(0), { status: 'COMPLETE', continuation_required: false })
+assert.deepEqual(maintenanceCompletion(2), { status: 'RESUMABLE', continuation_required: true })
+assert.deepEqual(parseDirtyRefreshResponse({ pending_sources: 0, sources_refreshed: 1, opportunities_refreshed: 250, page_size: 250 }),
+  { pending_sources: 0, sources_refreshed: 1, opportunities_refreshed: 250, page_size: 250 })
+for (const response of [
+  { sources_refreshed: 1, opportunities_refreshed: 250, page_size: 250 },
+  { pending_sources: 0, opportunities_refreshed: 250, page_size: 250 },
+  { pending_sources: 0, sources_refreshed: 1, page_size: 250 },
+  { pending_sources: -1, sources_refreshed: 1, opportunities_refreshed: 250, page_size: 250 },
+  { pending_sources: 0, sources_refreshed: 1, opportunities_refreshed: 250, page_size: 100 },
+]) assert.throws(() => parseDirtyRefreshResponse(response))
 assert.match(maintenanceWorkflow, /scripts\/refresh_opportunity_universe_maintenance\.ts/)
 assert.match(maintenanceWorkflow, /node-version: 24/)
 assert.match(scheduledAutomation, /trigger_type.*eq\.schedule/, 'automation considers scheduled runs only')
