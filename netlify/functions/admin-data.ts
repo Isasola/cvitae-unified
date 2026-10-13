@@ -135,10 +135,18 @@ export function verifiedRouteFor(profile: any, routes: WorkflowRoute[], registry
 export function sourceOperationalProjection(profile: any, effectiveRows: any[], storedRows: any[], routes: WorkflowRoute[], registryProfiles: any[] = []) {
   const aliases = (profile.emitted_aliases || [profile.canonical_source]).map((alias: string) => String(alias).toLowerCase())
   const effective = aliases.map((alias: string) => effectiveRows.find(row => String(row.source || '').toLowerCase() === alias)).find(Boolean)
-  const stored = aliases.map((alias: string) => storedRows.find(row => String(row.source || '').toLowerCase() === alias)).find(Boolean)
+  const storedEvidence = [...new Map(storedRows
+    .filter(row => aliases.includes(String(row.source || '').toLowerCase()))
+    .map(row => [String(row.source || '').toLowerCase(), row])).values()]
+    .map(row => ({ source: row.source, is_enabled: row.is_enabled ?? null, catalog_enabled: row.catalog_enabled ?? null, matching_enabled: row.matching_enabled ?? null, alerts_enabled: row.alerts_enabled ?? null, seo_enabled: row.seo_enabled ?? null }))
+  const switchSignature = (row: any) => JSON.stringify([row.is_enabled, row.catalog_enabled, row.matching_enabled, row.alerts_enabled, row.seo_enabled])
+  const storedConflict = new Set(storedEvidence.map(switchSignature)).size > 1
+  const stored = storedEvidence[0]
   const route = verifiedRouteFor(profile, routes, registryProfiles)
   return {
-    stored_switches: stored ? { is_enabled: stored.is_enabled, catalog: stored.catalog_enabled, matching: stored.matching_enabled, alerts: stored.alerts_enabled, seo: stored.seo_enabled } : null,
+    stored_switches: stored && !storedConflict ? { is_enabled: stored.is_enabled, catalog: stored.catalog_enabled, matching: stored.matching_enabled, alerts: stored.alerts_enabled, seo: stored.seo_enabled } : null,
+    stored_switches_conflict: storedConflict,
+    stored_switches_evidence: storedEvidence,
     effective_switches: effective ? { source: effective.is_enabled, catalog: effective.catalog_enabled, matching: effective.matching_enabled, alerts: effective.alerts_enabled, seo: effective.seo_enabled } : null,
     explicit_overrides: effective?.consumer_switch_overrides || {},
     route,
@@ -147,6 +155,73 @@ export function sourceOperationalProjection(profile: any, effectiveRows: any[], 
 
 export function sourceSwitchBlocked(effective: { source?: boolean | null; matching?: boolean | null } | null): boolean {
   return effective?.source === false || effective?.matching === false
+}
+
+export async function diagnoseSource(supabase: any, targetSource: string, registry = sourceIntelligenceRegistry()) {
+  const profile = (registry.sources || []).find((source: any) => source.canonical_source === targetSource)
+  if (!profile) return { statusCode: 404, body: JSON.stringify({ error: "Fuente no encontrada en el registro" }) }
+  const aliases: string[] = (profile.emitted_aliases || [profile.canonical_source]).map((value: string) => value.toLowerCase())
+  const aliasSet = new Set<string>(aliases)
+  const route = verifiedRouteFor(profile, workflowRoutes(), registry.sources || [])
+  const diagRunnerIds: string[] = route.runner_ids
+  const runsPromise = diagRunnerIds.length
+    ? supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,error_count,found_count,valid_count,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,error_summary,adapter_version,extraction_metrics")
+      .in("scraper_id", diagRunnerIds).order("started_at", { ascending: false }).limit(5)
+    : Promise.resolve({ data: [], error: null, count: null })
+  const [runsRes, sourceRowsRes, observationsRes, enrichmentRes, capRes] = await Promise.all([
+    runsPromise,
+    supabase.from("opportunities").select("id,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope", { count: "exact" })
+      .in("source", aliases).is("deleted_at", null).is("archived_at", null).limit(2000),
+    supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at", { count: "exact" })
+      .in("source", aliases).order("observed_at", { ascending: false }).limit(2000),
+    supabase.from("opportunity_enrichment_events").select("opportunity_id,source,changed_fields,created_at")
+      .in("source", aliases).order("created_at", { ascending: false }).limit(1000),
+    supabase.rpc("get_source_distribution_policy"),
+  ])
+  const latestRun = runsRes.data?.[0] || null
+  const sourceRows = sourceRowsRes.data || []
+  const observations = observationsRes.data || []
+  const enrichmentRows = enrichmentRes.data || []
+  const capRow = (capRes.data || []).find((row: any) => aliasSet.has(String(row.source || "").toLowerCase()))
+  const capabilityFlags = capRow ? {
+    is_enabled: capRow.is_enabled ?? null, consumer_switch_overrides: capRow.consumer_switch_overrides || {},
+    catalog_enabled: capRow.catalog_enabled ?? null, matching_enabled: capRow.matching_enabled ?? null,
+    alerts_enabled: capRow.alerts_enabled ?? null, seo_enabled: capRow.seo_enabled ?? null,
+    search_engine_indexing_allowed: capRow.search_engine_indexing_allowed ?? null,
+  } : {}
+  const eightGates = evaluateEightGates({ ...profile, ...capabilityFlags }, sourceRows, latestRun, observations, enrichmentRows)
+  const doorDiagnostics = sourceDoorDiagnostics(profile, capRow, latestRun, eightGates.gates)
+  const healthSummary = summarizeSourceHealth(eightGates.gates)
+  const runSummary = latestRun ? {
+    run_id: latestRun.run_id, status: latestRun.status, started_at: latestRun.started_at, finished_at: latestRun.finished_at,
+    discovered: latestRun.found_count ?? null, normalized: latestRun.valid_count ?? null,
+    persisted: (latestRun.inserted_count ?? 0) + (latestRun.updated_count ?? 0),
+    inserted: latestRun.inserted_count ?? null, updated: latestRun.updated_count ?? null,
+  } : null
+  const totalActive = typeof sourceRowsRes.count === "number" ? sourceRowsRes.count : null
+  const inventorySampled = sourceRows.length
+  const runPersisted = runSummary ? runSummary.persisted : null
+  const reconciliation = {
+    run_coverage_pct: runPersisted !== null && typeof totalActive === "number" && totalActive > 0 ? Math.round((runPersisted / totalActive) * 10000) / 100 : null,
+    full_inventory_total_active: totalActive, inventory_sampled: inventorySampled,
+    inventory_scope: typeof totalActive === "number" ? "FULL_DB" : "UNAVAILABLE", run_persisted: runPersisted,
+    note: inventorySampled >= 2000 ? "inventory_sample_capped_2000" : null,
+  }
+  return { statusCode: 200, body: JSON.stringify({
+    source: targetSource, display_name: profile.display_name || targetSource,
+    overall_health: healthSummary.overall_health,
+    first_non_confirmed_required_stage: healthSummary.first_non_confirmed_required_stage < 0 ? null : { gate: healthSummary.first_non_confirmed_required_stage + 1, status: eightGates.gates[healthSummary.first_non_confirmed_required_stage].status, reason: eightGates.gates[healthSummary.first_non_confirmed_required_stage].reason_code },
+    failing_gates: healthSummary.failing_gates, warning_gates: healthSummary.warning_gates, not_evaluated_gates: healthSummary.not_evaluated_gates,
+    eight_gates: eightGates, door_diagnostics: doorDiagnostics, run_summary: runSummary, reconciliation,
+    latest_run: latestRun ? { run_id: latestRun.run_id, status: latestRun.status, started_at: latestRun.started_at } : null,
+    runner_id: latestRun?.scraper_id || (route.runner_ids.length === 1 ? route.runner_ids[0] : null),
+    runner_attribution: route.runner_ids.length ? "VERIFIED" : "UNKNOWN", execution_route: route.state, execution_route_evidence: route.evidence,
+    inventory: totalActive, inventory_sampled: inventorySampled, observations: observations.length,
+    observations_total: typeof observationsRes.count === "number" ? observationsRes.count : null,
+    observations_sampled: observations.length,
+    _scope: { inventory: typeof totalActive === "number" ? "FULL_DB" : "UNAVAILABLE", inventory_sample: "SAMPLED", observations: typeof observationsRes.count === "number" ? "FULL_DB" : "UNAVAILABLE", observations_sample: "SAMPLED", eight_gates: "SAMPLED" },
+    diagnosed_at: new Date().toISOString(),
+  }) }
 }
 
 export async function loadMissingOpportunitySamples(supabase: any, profiles: any[], globalIndex: Map<string, any[]>) {
@@ -398,6 +473,7 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
     const diagnosticStates = new Set<string>()
     if (producerExecution.state === 'NO_EXECUTABLE_PRODUCER') diagnosticStates.add('NO_EXECUTABLE_PRODUCER')
     if (!latestRun) diagnosticStates.add('NO_RUN')
+    if (operations.stored_switches_conflict) diagnosticStates.add('STORED_ALIAS_SWITCH_CONFLICT')
     const errorText = String(lastError || '').toLowerCase()
     if (control?.collection_enabled === false) diagnosticStates.add('SOURCE_PAUSED')
     if (/release[_ -]?(?:gate|validat)|prod_release_validated/i.test(errorText)) diagnosticStates.add('RELEASE_GATED')
@@ -470,6 +546,8 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       alerts_ready: pipelineSource?.alerts_ready ?? null,
       seo_ready: pipelineSource?.seo_ready ?? null,
       stored_switches: operations.stored_switches,
+      stored_switches_conflict: operations.stored_switches_conflict,
+      stored_switches_evidence: operations.stored_switches_evidence,
       effective_switches: operations.effective_switches,
       explicit_overrides: operations.explicit_overrides,
       consultative_permissions: sourcePermissionSnapshot(profile.canonical_source),
@@ -2305,6 +2383,7 @@ const handler: Handler = async (event) => {
       // Does not mutate anything.
       const targetSource = String(payload?.source || "").toLowerCase()
       if (!targetSource) return { statusCode: 400, body: JSON.stringify({ error: "source requerido" }) }
+      return await diagnoseSource(supabase, targetSource)
 
       const registry = sourceIntelligenceRegistry()
       const profile = (registry.sources || []).find((s: any) => s.canonical_source === targetSource)
@@ -2315,12 +2394,13 @@ const handler: Handler = async (event) => {
       const aliases: string[] = (profile.emitted_aliases || [profile.canonical_source]).map((v: string) => v.toLowerCase())
       const aliasSet = new Set<string>(aliases)
 
-      // P0.3: Use shared runnerIdsFor to include _scraper/_scrapper variants.
-      const diagRunnerIds = [...runnerIdsFor(profile)]
+      const route = verifiedRouteFor(profile, workflowRoutes(), registry.sources || [])
+      const diagRunnerIds: string[] = route.runner_ids
       const [runsRes, sourceRowsRes, observationsRes, enrichmentRes, capRes] = await Promise.all([
-        supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,error_count,found_count,valid_count,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,error_summary,adapter_version,extraction_metrics")
-          .in("scraper_id", diagRunnerIds)
-          .order("started_at", { ascending: false }).limit(5),
+        diagRunnerIds.length
+          ? supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,error_count,found_count,valid_count,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,error_summary,adapter_version,extraction_metrics")
+            .in("scraper_id", diagRunnerIds).order("started_at", { ascending: false }).limit(5)
+          : Promise.resolve({ data: [], error: null, count: null }),
         supabase.from("opportunities").select("id,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope", { count: "exact" })
           .in("source", aliases).is("deleted_at", null).is("archived_at", null).limit(2000),
         supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at", { count: "exact" })
