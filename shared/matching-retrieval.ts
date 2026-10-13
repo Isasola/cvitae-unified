@@ -104,6 +104,7 @@ export function retrievalCacheIsCurrent(candidate: any, state: any, profileSigna
     && state.profile_signature === profileSignature
     && state.source_policy_signature === policySignature
     && state.scan_status === 'COMPLETE'
+    && state.routing_ledger_baseline_epoch != null
     && Number.isSafeInteger(routingEpoch) && routingEpoch >= 1
     && Number(state.completed_routing_epoch) === routingEpoch)
 }
@@ -164,6 +165,48 @@ export function cursorAfterPage(rows: any[], timestampField: 'created_at' | 'upd
   if (!rows.length) return null
   const last = rows[rows.length - 1]
   return { at: String(last[timestampField]), id: String(last.id) }
+}
+
+export function retrievalStateRequiresFullRebuild(state: any, ledgerBaselineEpoch: number) {
+  if (!state || !Number.isSafeInteger(ledgerBaselineEpoch) || ledgerBaselineEpoch < 1) return true
+  const inProgress = ['PENDING', 'SCANNING', 'ERROR'].includes(state.scan_status)
+  const bootstrapFull = inProgress && state.scan_kind === 'FULL'
+    && (state.routing_phase === 'FULL_SCAN'
+      || (state.routing_phase === 'ROUTING_DELTA' && Number(state.routing_delta_from_epoch) >= ledgerBaselineEpoch))
+  if (state.routing_ledger_baseline_epoch == null && !bootstrapFull) return true
+  if (state.routing_ledger_baseline_epoch != null && Number(state.routing_ledger_baseline_epoch) !== ledgerBaselineEpoch) return true
+  if (Number(state.completed_routing_epoch ?? 0) < ledgerBaselineEpoch && !bootstrapFull) return true
+  if ((state.cursor_at == null) !== (state.cursor_id == null)) return true
+  if (state.routing_phase != null && !['FULL_SCAN', 'ROUTING_DELTA'].includes(state.routing_phase)) return true
+  if (state.routing_phase === 'FULL_SCAN'
+    && (state.scan_kind !== 'FULL' || !Number.isSafeInteger(Number(state.scan_routing_epoch)) || Number(state.scan_routing_epoch) < ledgerBaselineEpoch)) return true
+  if (state.routing_phase === 'ROUTING_DELTA') {
+    const from = Number(state.routing_delta_from_epoch)
+    const cursor = Number(state.routing_delta_cursor_epoch)
+    const target = Number(state.routing_delta_target_epoch)
+    if (![from, cursor, target].every(Number.isSafeInteger) || from < ledgerBaselineEpoch || cursor < from || target < cursor) return true
+    if (state.scan_kind === 'FULL' && from !== Number(state.scan_routing_epoch)) return true
+    if (state.scan_kind === 'DELTA' && from !== Number(state.completed_routing_epoch)) return true
+  }
+  if (state.scan_status === 'COMPLETE' && state.routing_phase != null) return true
+  return false
+}
+
+export type MatchingRoutingChange = { routing_epoch: number; opportunity_id: string; previous_ready: boolean; current_ready: boolean }
+
+/** Keep routing work bounded to a fixed target while global revisions advance. */
+export function pageMatchingRoutingChanges<T extends MatchingRoutingChange>(rows: T[], afterEpoch: number, targetEpoch: number, pageSize: number) {
+  if (!Number.isSafeInteger(afterEpoch) || afterEpoch < 0 || !Number.isSafeInteger(targetEpoch) || targetEpoch < afterEpoch
+    || !Number.isSafeInteger(pageSize) || pageSize < 1) throw new Error('INVALID_MATCHING_ROUTING_PAGE')
+  const ordered = rows.filter(row => Number.isSafeInteger(Number(row.routing_epoch))
+    && Number(row.routing_epoch) > afterEpoch && Number(row.routing_epoch) <= targetEpoch)
+    .sort((a, b) => Number(a.routing_epoch) - Number(b.routing_epoch))
+  const page = ordered.slice(0, pageSize)
+  return { rows: page, cursor: page.length ? Number(page[page.length - 1].routing_epoch) : targetEpoch, hasMoreInInput: ordered.length > page.length }
+}
+
+export function uniqueRoutingOpportunityIds(events: readonly MatchingRoutingChange[]) {
+  return [...new Set(events.map(event => String(event.opportunity_id)))]
 }
 
 /** Cursor is persisted only after all page effects have completed successfully. */
@@ -248,6 +291,7 @@ export function classifyBackgroundCoverage(state: any, profileSignature: string,
   if (state.profile_signature !== profileSignature || state.source_policy_signature !== policySignature) return 'STALE'
   if (state.scan_status === 'ERROR') return 'ERROR'
   if (!Number.isSafeInteger(routingEpoch) || routingEpoch < 1) return 'STALE'
+  if (state.scan_status === 'COMPLETE' && state.routing_ledger_baseline_epoch == null) return 'STALE'
   if (state.scan_status === 'COMPLETE' && Number(state.completed_routing_epoch ?? 0) !== routingEpoch) return 'STALE'
   if (['PENDING', 'SCANNING'].includes(state.scan_status) && Number(state.scan_routing_epoch ?? 0) !== routingEpoch) return 'STALE'
   return state.scan_status === 'COMPLETE' ? 'COMPLETE' : 'PARTIAL'

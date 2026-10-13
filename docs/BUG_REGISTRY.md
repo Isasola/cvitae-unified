@@ -368,6 +368,31 @@ own canonical Universes. Local PGlite and focused consumer contracts pass;
 there is no production validation. See the current handoff for the remaining
 end-to-end and Registry-route gaps.
 
+## 2026-10-13 continuation — routing starvation resolved locally
+
+- Additive, unapplied migration `202610130002_matching_routing_changes.sql`
+  adds a transition ledger to the existing routing epoch and updates the
+  existing trigger function (no second trigger). Each real matching-membership
+  transition increments the singleton and inserts its event atomically. A
+  migration baseline leaves legacy candidate baselines unverifiable, so each
+  candidate must complete one FULL before using DELTA.
+- The retrieval worker now keeps a fixed FULL start revision, then drains a
+  bounded ledger interval per candidate with a durable revision cursor. Global
+  epoch movement does not restart FULL, and the finalizer can record coverage
+  at a target below the current epoch without claiming global freshness.
+  Content `updated_at` DELTA remains separate. Routing reconciliation is
+  labeled `FULL_BACKFILL` so it cannot masquerade as a new alert event; alerts
+  retain their own Universe and delivery ledger.
+- Evidence: new PGlite SQL canary validates baseline, trigger transitions,
+  atomic rollback, fixed-target completion, ledger-gap rejection and service
+  ACL. An isolated local PostgreSQL 17.6 database applied both routing
+  migrations; two independent sessions verified a transition waiting behind
+  finalization leaves coverage at the fixed target, and competing finalizers
+  yield one COMPLETE plus one concurrency conflict, with no deadlock. Eight
+  focused deterministic worker/cache fixtures pass. The worker was not driven
+  through an HTTP/PostgREST candidate E2E in this pass; production remains
+  untouched and unvalidated.
+
 ## BUG-009 — Duplicate and overlapping loaders
 
 - **Priority / state:** P2 / `OBSERVED_PROD`

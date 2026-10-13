@@ -195,3 +195,17 @@ unauthorized cleanup step was removed, and its aggregate failure summary is
 preserved.
 
 Block B implementation commit: `7ea1e49f` (local only; not pushed).
+
+### Superseding decision — resumable routing ledger, 2026-10-13
+
+The global epoch remains a transactional invalidation revision, but epoch
+advancement no longer restarts an in-progress FULL. Migration
+`202610130002_matching_routing_changes.sql` extends the existing trigger to
+persist each real membership transition and fixes a ledger baseline; legacy
+candidates require one FULL before ledger DELTA. The worker completes a FULL
+from its captured start revision, then drains fixed, resumable per-candidate
+ledger intervals. The finalizer records coverage through its target even when
+global routing has advanced. SQL canaries passed in PGlite and an isolated
+PostgreSQL 17.6 database; two real local sessions covered a concurrent routing
+commit and competing finalizers. Eight deterministic routing fixtures pass.
+There is no HTTP/PostgREST worker E2E or production validation in this pass.
