@@ -103,6 +103,8 @@ assert.match(batch, /isVisibleMatchDecision/, 'match-batch owns the common MATCH
 assert.match(email, /isHighMatchAlertDecision/, 'scheduled email starts from the same base decision')
 assert.doesNotMatch(email, /rankOpportunities\(profile/, 'scheduled email has no legacy candidate-fit invocation')
 assert.match(email, /from\("opportunity_alert_universe"\)/, 'scheduled email discovers rows through the canonical alert universe, which applies lifecycle/deadline readiness')
+assert.match(email, /matchingInputsAvailable && state && currentRoutingEpoch !== null/, 'matching-cache metadata is optional and cannot block the canonical alert-universe path')
+assert.match(email, /if \(!matchingCacheCurrent\)/, 'stale matching cache is skipped rather than interpreted as historical alert events')
 assert.match(dashboard, /matchingProfileSignature/, 'Dashboard cache uses the shared matching profile signature')
 assert.match(batch, /profile_signature: matchingProfileSignature/, 'match-batch persists the same matching profile signature')
 assert.match(profileBoundary, /action === 'opportunity_preference'/, 'likes remain a feedback action, not a matching decision engine')

@@ -98,11 +98,14 @@ export function expandEnabledSourceEmitters(index: CanonicalSourcePolicyIndex, i
   return [...emitters.values()].sort((a, b) => a.localeCompare(b))
 }
 
-export function retrievalCacheIsCurrent(candidate: any, state: any, profileSignature: string, policySignature: string) {
+export function retrievalCacheIsCurrent(candidate: any, state: any, profileSignature: string, policySignature: string, routingEpoch: number) {
   return Boolean(candidate && state
     && candidate.profile_signature === profileSignature
     && state.profile_signature === profileSignature
-    && state.source_policy_signature === policySignature)
+    && state.source_policy_signature === policySignature
+    && state.scan_status === 'COMPLETE'
+    && Number.isSafeInteger(routingEpoch) && routingEpoch >= 1
+    && Number(state.completed_routing_epoch) === routingEpoch)
 }
 
 export function opportunityCacheIsCurrent(candidate: any, opportunity: any) {
@@ -240,9 +243,12 @@ export function mergeInventoryFunnelCounts(target: Record<string, any>, delta: R
   return target
 }
 
-export function classifyBackgroundCoverage(state: any, profileSignature: string, policySignature: string) {
+export function classifyBackgroundCoverage(state: any, profileSignature: string, policySignature: string, routingEpoch: number) {
   if (!state) return 'NO_SCAN'
   if (state.profile_signature !== profileSignature || state.source_policy_signature !== policySignature) return 'STALE'
   if (state.scan_status === 'ERROR') return 'ERROR'
+  if (!Number.isSafeInteger(routingEpoch) || routingEpoch < 1) return 'STALE'
+  if (state.scan_status === 'COMPLETE' && Number(state.completed_routing_epoch ?? 0) !== routingEpoch) return 'STALE'
+  if (['PENDING', 'SCANNING'].includes(state.scan_status) && Number(state.scan_routing_epoch ?? 0) !== routingEpoch) return 'STALE'
   return state.scan_status === 'COMPLETE' ? 'COMPLETE' : 'PARTIAL'
 }

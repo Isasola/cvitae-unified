@@ -176,19 +176,23 @@ Deno.serve(async (req)=>{
     }
     const candidate = canonicalCandidateProfile(profile);
     const profileSignature = matchingProfileSignature(profile);
-    const [{ data: allSourcePolicies, error: allSourcePoliciesError }, { data: sourcePermissions, error: sourcePermissionError }] = await Promise.all([
+    const [{ data: allSourcePolicies, error: allSourcePoliciesError }, { data: sourcePermissions, error: sourcePermissionError }, { data: schedulerState, error: routingEpochError }] = await Promise.all([
       supabase.rpc('get_source_distribution_policy'),
       supabase.from('opportunity_source_consumer_permissions').select('canonical_source,consumer,permission_state').eq('consumer', 'matching'),
+      supabase.from('matching_retrieval_scheduler_state').select('routing_epoch').eq('singleton', true).single(),
     ]);
     if (allSourcePoliciesError) throw allSourcePoliciesError;
     if (sourcePermissionError) throw sourcePermissionError;
+    if (routingEpochError) throw routingEpochError;
+    const routingEpoch = Number(schedulerState?.routing_epoch);
+    if (!Number.isSafeInteger(routingEpoch) || routingEpoch < 1) throw new Error('MATCHING_ROUTING_EPOCH_UNAVAILABLE');
     const sourcePolicyRows = (allSourcePolicies ?? []).map(normalizeSourcePolicyRow);
     const sourcePolicyIndex = buildCanonicalSourcePolicyIndex(sourcePolicyRows, EDGE_SOURCE_IDENTITIES, canonicalSource);
     const currentSourcePolicySignature = await sourcePolicySignature(sourcePolicyRows, canonicalSource, sourcePermissions ?? []);
     const { data: retrievalState } = await supabase.from('matching_retrieval_states').select('*').eq('user_id', user.id).maybeSingle();
-    const backgroundCoverageStatus = classifyBackgroundCoverage(retrievalState, profileSignature, currentSourcePolicySignature);
+    const backgroundCoverageStatus = classifyBackgroundCoverage(retrievalState, profileSignature, currentSourcePolicySignature, routingEpoch);
     let backgroundCandidateRows = [];
-    if (retrievalState && retrievalCacheIsCurrent({ profile_signature: retrievalState.profile_signature }, retrievalState, profileSignature, currentSourcePolicySignature)) {
+    if (retrievalState && retrievalCacheIsCurrent({ profile_signature: retrievalState.profile_signature }, retrievalState, profileSignature, currentSourcePolicySignature, routingEpoch)) {
       const { data, error } = await supabase.from('matching_retrieval_candidates').select('opportunity_id,candidate_class,profile_signature,opportunity_content_fingerprint,score_snapshot,semantic_similarity,reason_codes,retrieval_lanes,evaluation_lane,evaluated_at')
         .eq('user_id', user.id).eq('profile_signature', profileSignature).order('candidate_class', { ascending: true }).order('score_snapshot', { ascending: false, nullsFirst: false }).order('evaluated_at', { ascending: false }).limit(300);
       if (error) console.error('background retrieval cache unavailable:', error.message);
@@ -420,6 +424,8 @@ Deno.serve(async (req)=>{
       top_reason_codes: reasonCounts(decisions),
       background_retrieval: backgroundHydratedOpportunities.length,
       background_scan_status: backgroundCoverageStatus,
+      background_completed_routing_epoch: retrievalState?.completed_routing_epoch ?? null,
+      routing_epoch: routingEpoch,
       background_examined: backgroundCoverageStatus === 'PARTIAL' ? (retrievalState?.scan_examined_count ?? 0) : (retrievalState?.examined_count ?? 0),
       background_target: backgroundCoverageStatus === 'PARTIAL' ? (retrievalState?.scan_target_count ?? 0) : (retrievalState?.target_count ?? 0),
       background_candidate_count: retrievalState?.candidate_count ?? 0,

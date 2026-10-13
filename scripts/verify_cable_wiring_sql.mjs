@@ -348,5 +348,76 @@ try {
   assert.equal((await query("select * from get_source_distribution_policy() where source='jobicy'"))[0].consumer_switch_overrides.catalog,false)
   assert.ok((await query('select count(*) n from opportunity_universe_dirty_sources'))[0].n>0)
   pass('EXACT_RELEASE_PLAN_ROLLBACK_FUNCTION_AND_DIRTY_QUEUE')
-  writeFileSync('artifacts/release/cable-local-sql-evidence.json',JSON.stringify({status:'LOCAL_SQL_EXECUTION_PASS',engine:'PGlite PostgreSQL',checks,catalog_rows:total,catalog_pages:requests,dirty_pages:dirtyPages,seo_urls:sitemap.length,checkpoint:"C09.1 delta; C09/C20 baseline retained",changed_migrations:["202610040001_source_switch_wiring.sql"],prod_executed:false},null,2)+'\n')
+
+  await db.exec(`
+    create table public.matching_retrieval_scheduler_state(singleton boolean primary key default true check(singleton),profile_cursor uuid,updated_at timestamptz not null default now());
+    insert into public.matching_retrieval_scheduler_state(singleton) values(true);
+    create table public.matching_retrieval_states(
+      user_id uuid primary key, profile_signature text not null, source_policy_signature text not null,
+      scan_kind text not null, scan_status text not null, scan_cutoff timestamptz not null,
+      cursor_at timestamptz, cursor_id text, last_change_watermark timestamptz,
+      examined_count integer not null default 0, target_count integer not null default 0,
+      scan_examined_count integer not null default 0, scan_target_count integer not null default 0,
+      candidate_count integer not null default 0, completed_at timestamptz,
+      last_error_code text, inventory_funnel jsonb not null default '{}'::jsonb,
+      inventory_funnel_at timestamptz, updated_at timestamptz not null default now());
+    create table public.matching_retrieval_candidates(user_id uuid not null,opportunity_id text not null,profile_signature text not null);
+  `)
+  await db.exec(sql('supabase/migrations/202610130001_matching_routing_epoch.sql'))
+  const epoch=()=>query('select routing_epoch from matching_retrieval_scheduler_state where singleton=true').then(rows=>Number(rows[0].routing_epoch))
+  const firstEpoch=await epoch()
+  assert.equal(firstEpoch,1)
+  await query("insert into matching_retrieval_states(user_id,profile_signature,source_policy_signature,scan_kind,scan_status,scan_cutoff,scan_examined_count,scan_target_count) values('00000000-0000-0000-0000-000000000001','sig-a','policy-a','FULL','COMPLETE',now(),0,0)")
+  assert.equal((await query("select completed_routing_epoch from matching_retrieval_states where user_id='00000000-0000-0000-0000-000000000001'"))[0].completed_routing_epoch,0,'existing candidates require one post-migration review')
+  const ready=(await query("select opportunity_id from opportunity_universe_state where final_matching_state='READY' limit 1"))[0]
+  assert.ok(ready,'fixture includes a matching-ready Universe row')
+  await query('update opportunity_universe_state set evaluated_at=clock_timestamp() where opportunity_id=$1',[ready.opportunity_id])
+  assert.equal(await epoch(),firstEpoch,'refresh without a routing transition does not increment epoch')
+  await query("update opportunity_universe_state set catalog_state=case when catalog_state='READY' then 'NOT_READY' else 'READY' end where opportunity_id=$1",[ready.opportunity_id])
+  assert.equal(await epoch(),firstEpoch,'catalog-only routing change does not increment matching epoch')
+  await query("insert into opportunities(id) values('epoch-insert-ready'),('epoch-insert-not-ready')")
+  await query("delete from opportunity_universe_state where opportunity_id in ('epoch-insert-ready','epoch-insert-not-ready')")
+  const beforeInsert=await epoch()
+  const insertColumns='opportunity_id,lifecycle_state,lifecycle_reason,professional_readiness,professional_reason,catalog_row_state,catalog_state,alerts_row_state,matching_row_state,matching_row_reason,source_matching_state,source_matching_reason,source_matching_provenance,source_matching_operational_state,source_matching_operational_reason,source_operational_state,source_operational_reason,final_matching_state,seo_row_state,seo_row_reason,seo_effective_reason,seo_state,alerts_state'
+  const insertValues="'ACTIVE_VALID','FIXTURE','READY','FIXTURE','READY','READY','READY','READY','FIXTURE','ALLOWED','FIXTURE','FIXTURE','ENABLED','FIXTURE','ENABLED','FIXTURE','READY','READY','FIXTURE','FIXTURE','READY','READY'"
+  await query(`insert into opportunity_universe_state(${insertColumns}) values('epoch-insert-ready',${insertValues})`)
+  assert.equal(await epoch(),beforeInsert+1,'INSERT READY increments the routing epoch')
+  await query(`insert into opportunity_universe_state(${insertColumns}) values('epoch-insert-not-ready','ACTIVE_VALID','FIXTURE','READY','FIXTURE','READY','READY','READY','READY','FIXTURE','ALLOWED','FIXTURE','FIXTURE','ENABLED','FIXTURE','ENABLED','FIXTURE','NOT_READY','READY','FIXTURE','FIXTURE','READY','READY')`)
+  assert.equal(await epoch(),beforeInsert+1,'INSERT NOT_READY does not increment the routing epoch')
+  await query("delete from opportunity_universe_state where opportunity_id='epoch-insert-ready'")
+  assert.equal(await epoch(),beforeInsert+2,'DELETE READY increments the routing epoch')
+  const updateStartEpoch=await epoch()
+  await query("update opportunity_universe_state set final_matching_state='NOT_READY' where opportunity_id=$1",[ready.opportunity_id])
+  assert.equal(await epoch(),updateStartEpoch+1,'READY to NOT_READY increments matching epoch')
+  await query("update opportunity_universe_state set final_matching_state='READY' where opportunity_id=$1",[ready.opportunity_id])
+  let currentEpoch=await epoch()
+  assert.equal(currentEpoch,updateStartEpoch+2,'NOT_READY to READY increments matching epoch')
+  await query("update opportunity_universe_state set final_matching_state='NOT_READY' where opportunity_id in (select id from opportunities where id like 'bulk-%')")
+  const batchEpoch=await epoch()
+  const routingBatchStarted=Date.now()
+  const batchTransition=await query("update opportunity_universe_state set final_matching_state='READY' where opportunity_id in (select id from opportunities where id like 'bulk-%') returning opportunity_id")
+  const routingEpoch5400TransitionMs=Date.now()-routingBatchStarted
+  assert.equal(batchTransition.length,5400)
+  assert.equal(await epoch(),batchEpoch+5400,'one monotonic epoch increment is recorded for every real membership transition in the large fixture')
+  currentEpoch=await epoch()
+  pass(`MATCHING_ROUTING_EPOCH_5400_TRANSITIONS_${routingEpoch5400TransitionMs}MS`)
+  const stale=(await query(`select complete_matching_retrieval_scan('00000000-0000-0000-0000-000000000001',$1,null,null,'sig-a','policy-a') result`,[firstEpoch]))[0].result
+  assert.equal(stale.status,'STALE_ROUTING_EPOCH')
+  assert.equal((await query("select scan_status from matching_retrieval_states where user_id='00000000-0000-0000-0000-000000000001'"))[0].scan_status,'COMPLETE','stale finalization cannot replace the prior completed state')
+  await query("update matching_retrieval_states set scan_status='SCANNING',scan_kind='DELTA',scan_routing_epoch=$1,scan_examined_count=0,scan_target_count=0,cursor_at=null,cursor_id=null where user_id='00000000-0000-0000-0000-000000000001'",[currentEpoch])
+  const concurrentFinalizations=await Promise.allSettled([
+    query(`select complete_matching_retrieval_scan('00000000-0000-0000-0000-000000000001',$1,null,null,'sig-a','policy-a') result`,[currentEpoch]),
+    query(`select complete_matching_retrieval_scan('00000000-0000-0000-0000-000000000001',$1,null,null,'sig-a','policy-a') result`,[currentEpoch]),
+  ])
+  assert.equal(concurrentFinalizations.filter(result=>result.status==='fulfilled').length,1,'only one of two concurrent workers can finalize the same cursor')
+  assert.equal(concurrentFinalizations.filter(result=>result.status==='rejected').length,1,'the competing worker receives a verifiable state conflict')
+  const completed=concurrentFinalizations.find(result=>result.status==='fulfilled').value[0].result
+  assert.equal(completed.status,'COMPLETE')
+  assert.equal((await query("select completed_routing_epoch from matching_retrieval_states where user_id='00000000-0000-0000-0000-000000000001'"))[0].completed_routing_epoch,currentEpoch)
+  await assert.rejects(query(`select complete_matching_retrieval_scan('00000000-0000-0000-0000-000000000001',$1,null,null,'sig-a','policy-a')`,[currentEpoch]),/matching_retrieval_state_concurrency_conflict/,'duplicate worker cannot finalize the already-completed cursor')
+  assert.equal(await query("select has_function_privilege('anon','public.complete_matching_retrieval_scan(uuid,bigint,timestamp with time zone,text,text,text)','EXECUTE') allowed").then(rows=>rows[0].allowed),false)
+  assert.equal(await query("select has_function_privilege('authenticated','public.complete_matching_retrieval_scan(uuid,bigint,timestamp with time zone,text,text,text)','EXECUTE') allowed").then(rows=>rows[0].allowed),false)
+  assert.equal(await query("select has_function_privilege('service_role','public.complete_matching_retrieval_scan(uuid,bigint,timestamp with time zone,text,text,text)','EXECUTE') allowed").then(rows=>rows[0].allowed),true)
+  pass('MATCHING_ROUTING_EPOCH_TRANSITIONS_FINALIZATION_AND_RPC_ACL')
+  writeFileSync('artifacts/release/cable-local-sql-evidence.json',JSON.stringify({status:'LOCAL_SQL_EXECUTION_PASS',engine:'PGlite PostgreSQL',checks,catalog_rows:total,catalog_pages:requests,dirty_pages:dirtyPages,seo_urls:sitemap.length,routing_epoch_5400_transition_ms:routingEpoch5400TransitionMs,checkpoint:"C09.1 delta; C09/C20 baseline retained",changed_migrations:["202610040001_source_switch_wiring.sql","202610130001_matching_routing_epoch.sql"],prod_executed:false},null,2)+'\n')
 } finally { await db.close() }

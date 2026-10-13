@@ -59,9 +59,13 @@ for (const workflow of ['refresh_embeddings.yml', 'matching-retrieval.yml', 'sch
   const yaml = readFileSync(new URL(`../.github/workflows/${workflow}`, import.meta.url), 'utf8')
   assert.match(yaml, /group: cvitae-opportunity-pipeline-maintenance/, `${workflow} serializes pipeline maintenance workers`)
 }
-for (const workflow of ['scheduled-source-automation.yml', 'opportunity-universe-maintenance.yml']) {
+for (const workflow of ['scheduled-source-automation.yml']) {
   const yaml = readFileSync(new URL(`../.github/workflows/${workflow}`, import.meta.url), 'utf8')
   assert.doesNotMatch(yaml, /^\s{2}schedule:/m, `${workflow} remains manual until authorized PROD validation`)
 }
+const universeWorkflow = readFileSync(new URL('../.github/workflows/opportunity-universe-maintenance.yml', import.meta.url), 'utf8')
+assert.match(universeWorkflow, /^\s{2}schedule:/m, 'authorized Universe reconciliation continues periodically')
+assert.match(universeWorkflow, /github\.event_name == 'schedule' && vars\.CVITAE_PROD_RELEASE_VALIDATED == 'true'/, 'scheduled Universe work is release-gated')
+assert.match(universeWorkflow, /cancel-in-progress: false/, 'scheduled Universe reconciliation is serialized without cancellation')
 
 console.log('PASS retrieval user scheduler: priority, idle skip, delta proof, cyclic fairness, resume cursor, signature reset, UTC label, serialized workers')

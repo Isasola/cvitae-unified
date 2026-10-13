@@ -117,19 +117,36 @@ export function createHighMatchAlertsHandler(deps: Dependencies = {}): Handler {
       const scan = await checked(db.rpc('claim_match_alert_scan'))
       if (!scan?.profile) return { statusCode: 200, body: JSON.stringify({ profiles: 0, continuation: scan }) }
       profile = scan.profile; token = scan.lease_token; progress = scan.checkpoint || {}
-      const [skillRows, allSourcePolicies, permissionRows, stateRows] = await Promise.all([
+      const [skillRows, policyResult, permissionResult, stateResult] = await Promise.all([
         checked(db.from('skill_dictionary').select('canonical_name,variants')),
-        checked(db.rpc('get_source_distribution_policy')),
-        checked(db.from('opportunity_source_consumer_permissions').select('canonical_source,consumer,permission_state').eq('consumer', 'matching')),
-        checked(db.from('matching_retrieval_states').select('user_id,profile_signature,source_policy_signature').eq('user_id', profile.user_id).limit(1)),
+        db.rpc('get_source_distribution_policy'),
+        db.from('opportunity_source_consumer_permissions').select('canonical_source,consumer,permission_state').eq('consumer', 'matching'),
+        db.from('matching_retrieval_states').select('user_id,profile_signature,source_policy_signature,scan_status,completed_routing_epoch').eq('user_id', profile.user_id).limit(1),
       ])
+      const allSourcePolicies = policyResult.error ? [] : policyResult.data || []
+      const permissionRows = permissionResult.error ? [] : permissionResult.data || []
+      const stateRows = stateResult.error ? [] : stateResult.data || []
+      const matchingInputsAvailable = !policyResult.error && !permissionResult.error && !stateResult.error
+      if (!matchingInputsAvailable) console.error('matching retrieval cache metadata unavailable to alerts; using alert universe only')
+      let currentRoutingEpoch: number | null = null
+      try {
+        const schedulerRows = await checked(db.from('matching_retrieval_scheduler_state').select('routing_epoch').eq('singleton', true).limit(1))
+        const epoch = Number(schedulerRows?.[0]?.routing_epoch)
+        if (Number.isSafeInteger(epoch) && epoch >= 1) currentRoutingEpoch = epoch
+      } catch (error: any) {
+        // Matching cache is optional here; alert eligibility remains owned by
+        // the canonical Alert Universe and continues through its own route.
+        console.error('matching retrieval epoch unavailable to alerts:', String(error?.message || error).slice(0, 240))
+      }
       const signature = matchingProfileSignature(profile)
       const sourceSignature = await sourcePolicySignature((allSourcePolicies || []).map(normalizeSourcePolicyRow), canonicalSource, permissionRows || [])
       // Invalidation metadata only: the canonical Alert view remains the eligibility authority.
       const policyStamp = JSON.stringify([sourceSignature, (allSourcePolicies || []).map((p: any) => [p.source, p.is_enabled, p.alerts_enabled])])
       const profileStamp = JSON.stringify([signature, profile.match_alert_threshold])
       const state = stateRows?.[0]
-      const validCache = (c: any) => state?.source_policy_signature === sourceSignature && state?.profile_signature === signature && c.profile_signature === signature
+      const matchingCacheCurrent = Boolean(matchingInputsAvailable && state && currentRoutingEpoch !== null
+        && state.scan_status === 'COMPLETE' && Number(state.completed_routing_epoch ?? 0) === currentRoutingEpoch)
+      const validCache = (c: any) => matchingCacheCurrent && state?.source_policy_signature === sourceSignature && state?.profile_signature === signature && c.profile_signature === signature
       if (!progress.cutoff || progress.complete || progress.policyStamp !== policyStamp || progress.profileStamp !== profileStamp) {
         const cutoff = new Date(now()).toISOString()
         const unchanged = progress.policyStamp === policyStamp && progress.profileStamp === profileStamp
@@ -210,6 +227,13 @@ export function createHighMatchAlertsHandler(deps: Dependencies = {}): Handler {
           if (rows.length) candidates = await checked(db.from('matching_retrieval_candidates').select(CACHE_FIELDS).eq('user_id', profile.user_id).in('opportunity_id', rows.map(r => String(r.id)))
             .eq('candidate_class', 'MATCH').gte('evaluated_at', progress.since).lte('evaluated_at', progress.cutoff).limit(pageSize)) || []
         } else {
+          if (!matchingCacheCurrent) {
+            // Do not treat a stale private matching cache as the alert queue.
+            // The bounded recent lane above still uses opportunity_alert_universe.
+            nextProgress.cacheDone = true
+            candidates = []
+            rows = []
+          } else {
           const page = await collectAlertCandidateSnapshot(async (cursor, limit) => {
             let query = db.from('matching_retrieval_candidates').select(CACHE_FIELDS).eq('user_id', profile.user_id).eq('candidate_class', 'MATCH')
               .lte('evaluated_at', progress.cutoff)
@@ -228,6 +252,7 @@ export function createHighMatchAlertsHandler(deps: Dependencies = {}): Handler {
             return opp && opportunityCacheIsCurrent(c, opp) && cacheCandidateAlertEligible(c, opp, progress.since)
               && !(Date.parse(opp.updated_at) >= Date.parse(progress.lower) && Date.parse(opp.updated_at) <= Date.parse(progress.cutoff)) ? [opp] : []
           })
+          }
         }
         pages++; opportunities += rows.length
         const byId = new Map<string, any>(rows.map(r => [String(r.id), r]))

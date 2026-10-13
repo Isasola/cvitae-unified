@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { canonicalCandidateProfile } from '../shared/candidate-profile.ts'
 import { matchingProfileSignature } from '../shared/matching-profile-signature.ts'
-import { commitRetrievalPage, cursorAfterPage, normalizeSourcePolicyRow, sourcePolicySignature } from '../shared/matching-retrieval.ts'
+import { buildCanonicalSourcePolicyIndex, commitRetrievalPage, cursorAfterPage, inventoryFunnelPage, normalizeSourcePolicyRow, sourcePolicySignature } from '../shared/matching-retrieval.ts'
+import { parseDirtyRefreshResponse, parseDueRefreshCount } from '../shared/opportunity-universe-maintenance.ts'
 import { nextRetrievalSchedulerCursor, prioritizeRetrievalUsers, type RetrievalSchedulerCandidate, type RetrievalSchedulerReason } from '../shared/retrieval-user-scheduler.ts'
 import { buildDictionary } from '../supabase/functions/_shared/matching.ts'
 import { isPotentialDiscoveryDecision, isVisibleMatchDecision, rankOpportunitiesV2, V2_PRESET_FULL } from '../supabase/functions/_shared/matching-v2.ts'
@@ -25,11 +26,20 @@ if (!url || !serviceKey) throw new Error('SUPABASE_SERVICE_ROLE_CONFIGURATION_RE
 const supabase = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
 const canonicalSource = (raw: unknown) => {
   const source = String(raw ?? '').trim().toLowerCase()
-  const identity = EDGE_SOURCE_IDENTITIES.find((item) => item.canonical_source === source || item.emitted_aliases.includes(source))
+  const identity = EDGE_SOURCE_IDENTITIES.find((item) => item.canonical_source === source || (item.emitted_aliases as readonly string[]).includes(source))
   return identity?.canonical_source || source
 }
 const nowIso = () => new Date().toISOString()
 const pageFields = 'id,slug,title,organization,location,rubro,tags,description,application_url,type,opportunity_type,opportunity_kind,remote,remote_scope,eligible_countries,eligible_regions,citizenship_requirement,residency_requirement,source,deadline,created_at,updated_at,is_active,verification_status,match_eligible,alerts_eligible,archived_at,deleted_at,content_fingerprint'
+let currentRoutingEpoch = 0
+
+async function readRoutingEpoch() {
+  const { data, error } = await supabase.from('matching_retrieval_scheduler_state').select('routing_epoch').eq('singleton', true).single()
+  if (error) throw error
+  const epoch = Number(data?.routing_epoch)
+  if (!Number.isSafeInteger(epoch) || epoch < 1) throw new Error('INVALID_MATCHING_ROUTING_EPOCH')
+  return epoch
+}
 
 function inventoryDelta(rows: any[], policies: ReturnType<typeof buildCanonicalSourcePolicyIndex>, cutoff: string) {
   return inventoryFunnelPage(rows, policies, cutoff)
@@ -173,8 +183,10 @@ async function selectUsers(maxCount: number) {
     selection = prioritizeRetrievalUsers(maxCount, groups)
   }
 
-  const scheduler = await supabase.from('matching_retrieval_scheduler_state').select('profile_cursor').eq('singleton', true).single()
+  const scheduler = await supabase.from('matching_retrieval_scheduler_state').select('profile_cursor,routing_epoch').eq('singleton', true).single()
   if (scheduler.error) throw scheduler.error
+  currentRoutingEpoch = Number(scheduler.data.routing_epoch)
+  if (!Number.isSafeInteger(currentRoutingEpoch) || currentRoutingEpoch < 1) throw new Error('INVALID_MATCHING_ROUTING_EPOCH')
   const cursor = scheduler.data.profile_cursor as string | null
   const sampleSize = Math.max(250, maxCount * 20)
   const sampledResult = await supabase.from('user_master_profiles').select(fields)
@@ -187,7 +199,7 @@ async function selectUsers(maxCount: number) {
     sampled.push(...(wrap.data ?? []))
   }
   const sampleIds = sampled.map((row: any) => String(row.user_id))
-  const states = sampleIds.length ? await supabase.from('matching_retrieval_states').select('user_id,profile_signature,source_policy_signature,scan_status').in('user_id', sampleIds) : { data: [], error: null }
+  const states = sampleIds.length ? await supabase.from('matching_retrieval_states').select('user_id,profile_signature,source_policy_signature,scan_status,scan_routing_epoch,completed_routing_epoch').in('user_id', sampleIds) : { data: [], error: null }
   if (states.error) throw states.error
   const stateByUser = new Map((states.data ?? []).map((row: any) => [row.user_id, row]))
   const safelySkipped = new Set<string>()
@@ -197,7 +209,9 @@ async function selectUsers(maxCount: number) {
     let reason: RetrievalSchedulerReason | null = null
     if (!state) reason = 'NO_STATE'
     else if (state.scan_status === 'PENDING' || state.scan_status === 'SCANNING' || state.scan_status === 'ERROR') reason = state.scan_status
-    else if (state.profile_signature !== matchingProfileSignature(profile) || state.source_policy_signature !== sourcePolicies.signature) reason = 'STALE'
+    else if (state.profile_signature !== matchingProfileSignature(profile) || state.source_policy_signature !== sourcePolicies.signature
+      || Number(state.completed_routing_epoch ?? 0) < currentRoutingEpoch
+      || (['PENDING', 'SCANNING'].includes(state.scan_status) && Number(state.scan_routing_epoch ?? 0) !== currentRoutingEpoch)) reason = 'STALE'
     else safelySkipped.add(String(profile.user_id))
     if (reason) {
       const candidate = { profile, scheduler_reason: reason }
@@ -208,7 +222,7 @@ async function selectUsers(maxCount: number) {
 
   selection = prioritizeRetrievalUsers(maxCount, groups)
   if (selection.length < maxCount) {
-    const complete = await supabase.from('matching_retrieval_states').select('user_id,last_change_watermark,profile_signature,source_policy_signature')
+    const complete = await supabase.from('matching_retrieval_states').select('user_id,last_change_watermark,profile_signature,source_policy_signature,completed_routing_epoch')
       .eq('scan_status', 'COMPLETE').order('last_change_watermark', { ascending: true }).limit(Math.min(250, Math.max(20, maxCount * 10)))
     if (complete.error) throw complete.error
     const cutoff = nowIso()
@@ -222,7 +236,8 @@ async function selectUsers(maxCount: number) {
       if (loaded.error) throw loaded.error
       const profile = loaded.data
       if (!profile) continue
-      if (matchingProfileSignature(profile) !== (state as any).profile_signature || sourcePolicies.signature !== (state as any).source_policy_signature) {
+      if (matchingProfileSignature(profile) !== (state as any).profile_signature || sourcePolicies.signature !== (state as any).source_policy_signature
+        || Number((state as any).completed_routing_epoch ?? 0) < currentRoutingEpoch) {
         add('STALE', profile)
       } else if (highPrioritySelection.length < maxCount) {
         // The shared opportunity stream is checked only for a bounded prefix of
@@ -257,6 +272,7 @@ async function initializeState(profile: any, profileSig: string, policySig: stri
   const { data, error } = await supabase.from('matching_retrieval_states').upsert({
     user_id: profile.user_id, profile_signature: profileSig, source_policy_signature: policySig,
     scan_kind: kind, scan_status: 'PENDING', scan_cutoff: cutoff, cursor_at: null, cursor_id: null,
+    scan_routing_epoch: currentRoutingEpoch,
     last_change_watermark: watermark,
     examined_count: kind === 'FULL' ? 0 : (previous?.examined_count ?? 0),
     target_count: kind === 'FULL' ? target : (previous?.target_count ?? 0),
@@ -277,7 +293,9 @@ async function processUser(profile: any, pageLimit: number, pageSizeValue: numbe
   const state = await stateFor(profile.user_id)
   let current = state
   const signaturesChanged = !state || state.profile_signature !== profileSig || state.source_policy_signature !== sourcePolicies.signature
-  if (signaturesChanged) current = await initializeState(profile, profileSig, sourcePolicies.signature, 'FULL', null, sourcePolicies.rows.length)
+  const routingChanged = Boolean(state && (Number(state.completed_routing_epoch ?? 0) < currentRoutingEpoch
+    || (['PENDING', 'SCANNING'].includes(state.scan_status) && Number(state.scan_routing_epoch ?? 0) !== currentRoutingEpoch)))
+  if (signaturesChanged || routingChanged) current = await initializeState(profile, profileSig, sourcePolicies.signature, 'FULL', null, sourcePolicies.rows.length, state)
   else if (state.scan_status === 'ERROR' && state.last_error_code === 'COVERAGE_COUNT_MISMATCH') {
     current = await initializeState(profile, profileSig, sourcePolicies.signature, state.scan_kind, state.last_change_watermark, sourcePolicies.rows.length, state)
   } else if (state.scan_status === 'ERROR') {
@@ -302,27 +320,33 @@ async function processUser(profile: any, pageLimit: number, pageSizeValue: numbe
   }
   let pages = 0
   for (; pages < pageLimit; pages++) {
+    if (await readRoutingEpoch() !== Number(current.scan_routing_epoch)) throw new Error('STALE_ROUTING_EPOCH')
     const { data: rows, error } = await pageQuery(current, pageSizeValue)
     if (error) throw error
       if (!rows?.length) {
       if (current.scan_examined_count !== current.scan_target_count) throw new Error('COVERAGE_COUNT_MISMATCH')
-      const coverageTarget = await countUniverse(current.scan_cutoff, true)
-      const completion = nowIso()
-      const counts = await supabase.from('matching_retrieval_candidates').select('opportunity_id', { count: 'exact', head: true }).eq('user_id', profile.user_id).eq('profile_signature', profileSig)
-      if (counts.error) throw counts.error
-      candidatesRetained = counts.count ?? 0
-      const done = await supabase.from('matching_retrieval_states').update({
-        scan_status: 'COMPLETE', completed_at: completion,
-        last_change_watermark: current.scan_cutoff, cursor_at: null, cursor_id: null,
-        examined_count: coverageTarget, target_count: coverageTarget,
-        candidate_count: counts.count ?? 0,
-        inventory_funnel_at: current.scan_kind === 'FULL' ? current.scan_cutoff : current.inventory_funnel_at,
-        updated_at: completion, last_error_code: null,
-      }).eq('user_id', profile.user_id)
-      if (done.error) throw done.error
+      const completion = await supabase.rpc('complete_matching_retrieval_scan', {
+        p_user_id: profile.user_id,
+        p_expected_routing_epoch: current.scan_routing_epoch,
+        p_expected_cursor_at: current.cursor_at,
+        p_expected_cursor_id: current.cursor_id,
+        p_profile_signature: profileSig,
+        p_source_policy_signature: sourcePolicies.signature,
+      })
+      if (completion.error) throw new Error(`RETRIEVAL_FINALIZE_FAILED:${completion.error.message}`)
+      const completionResult = Array.isArray(completion.data) ? completion.data[0] : completion.data
+      if (completionResult?.status === 'STALE_ROUTING_EPOCH') return {
+        user_id: profile.user_id, pages, status: 'RESUMABLE', resume_reason: 'STALE_ROUTING_EPOCH',
+        examined: current.examined_count, target: current.target_count, duration_ms: Date.now() - startedAt,
+        inventory_rows_scanned: inventoryRowsScanned, source_allowed_rows_evaluated: sourceAllowedRowsEvaluated,
+        candidates_retained: current.candidate_count ?? 0,
+      }
+      if (completionResult?.status !== 'COMPLETE') throw new Error('RETRIEVAL_FINALIZE_INVALID_RESPONSE')
+      candidatesRetained = Number(completionResult.candidate_count ?? 0)
       current.scan_status = 'COMPLETE'
-      current.examined_count = coverageTarget
-      current.target_count = coverageTarget
+      current.completed_routing_epoch = Number(completionResult.routing_epoch)
+      current.examined_count = Number(completionResult.coverage_target)
+      current.target_count = Number(completionResult.coverage_target)
       break
     }
     const nextCursor = cursorAfterPage(rows, current.scan_kind === 'FULL' ? 'created_at' : 'updated_at')
@@ -335,12 +359,17 @@ async function processUser(profile: any, pageLimit: number, pageSizeValue: numbe
       const nextExamined = current.scan_kind === 'FULL' ? nextScanExamined : current.examined_count
       const currentCandidates = await supabase.from('matching_retrieval_candidates').select('opportunity_id', { count: 'exact', head: true }).eq('user_id', profile.user_id).eq('profile_signature', profileSig)
       if (currentCandidates.error) throw currentCandidates.error
-      const updated = await supabase.from('matching_retrieval_states').update({
+      if (await readRoutingEpoch() !== Number(current.scan_routing_epoch)) throw new Error('STALE_ROUTING_EPOCH')
+      let pageUpdate = supabase.from('matching_retrieval_states').update({
         scan_status: 'SCANNING', cursor_at: nextCursor?.at ?? null, cursor_id: nextCursor?.id ?? null,
         examined_count: nextExamined, scan_examined_count: nextScanExamined, candidate_count: currentCandidates.count ?? 0,
         inventory_funnel: counts, updated_at: nowIso(), last_error_code: null,
-      }).eq('user_id', profile.user_id)
+      }).eq('user_id', profile.user_id).eq('scan_status', 'SCANNING').eq('scan_routing_epoch', current.scan_routing_epoch)
+      pageUpdate = current.cursor_at == null ? pageUpdate.is('cursor_at', null) : pageUpdate.eq('cursor_at', current.cursor_at)
+      pageUpdate = current.cursor_id == null ? pageUpdate.is('cursor_id', null) : pageUpdate.eq('cursor_id', current.cursor_id)
+      const updated = await pageUpdate.select('user_id').maybeSingle()
       if (updated.error) throw updated.error
+      if (!updated.data) throw new Error('RETRIEVAL_PAGE_CURSOR_CONFLICT')
       inventoryRowsScanned += pageRows.length
       sourceAllowedRowsEvaluated += result.examined
       candidatesRetained = currentCandidates.count ?? 0
@@ -354,17 +383,25 @@ const { rows: policyRows, signature: policySig } = await getSourcePolicies()
 const sourcePolicies = { rows: policyRows, signature: policySig }
 const { data: expiredUniverseRefresh, error: universeRefreshError } = await supabase.rpc('refresh_due_opportunity_universe', { p_limit: 500 })
 if (universeRefreshError) throw new Error('OPPORTUNITY_UNIVERSE_LIFECYCLE_REFRESH_FAILED')
+const dueRowsRefreshed = parseDueRefreshCount(expiredUniverseRefresh)
 let dirtySourceBatches = 0
 let pendingDirtySources = 0
 do {
   const { data, error } = await supabase.rpc('refresh_dirty_opportunity_universe_sources', { p_limit: 1 })
   if (error) throw new Error('OPPORTUNITY_UNIVERSE_SOURCE_POLICY_REFRESH_FAILED')
-  pendingDirtySources = Number(data?.pending_sources || 0)
+  const refresh = parseDirtyRefreshResponse(data)
+  pendingDirtySources = refresh.pending_sources
   dirtySourceBatches++
-  if (pendingDirtySources > 0 && dirtySourceBatches >= 10) throw new Error('OPPORTUNITY_UNIVERSE_DIRTY_SOURCE_QUEUE_NOT_DRAINED')
+  if (pendingDirtySources > 0 && dirtySourceBatches >= 10) {
+    console.log(JSON.stringify({ status: 'RESUMABLE', resume_reason: 'UNIVERSE_PENDING', pending_sources: pendingDirtySources,
+      dirty_source_batches: dirtySourceBatches, due_rows_refreshed: dueRowsRefreshed, matching_candidates_processed: 0 }))
+    break
+  }
 } while (pendingDirtySources > 0)
+if (pendingDirtySources === 0) {
 const { data: pruneResult, error: pruneError } = await supabase.rpc('prune_matching_retrieval_candidates')
 if (pruneError) throw new Error('CANDIDATE_CACHE_PRUNE_FAILED')
+currentRoutingEpoch = await readRoutingEpoch()
 const schedule = await selectUsers(maxUsers)
 const profiles = schedule.selected
 const results: any[] = []
@@ -375,6 +412,10 @@ for (const profile of profiles) {
     const result = await processUser(profile.profile, maxPages, pageSize)
     results.push({ scheduler_reason: profile.scheduler_reason, status: result.status, duration_ms: result.duration_ms, pages_processed: result.pages, inventory_rows_scanned: result.inventory_rows_scanned, source_allowed_rows_evaluated: result.source_allowed_rows_evaluated, candidates_retained: result.candidates_retained, examined: result.examined, target: result.target })
   } catch (error: any) {
+    if (error?.message === 'STALE_ROUTING_EPOCH') {
+      results.push({ scheduler_reason: profile.scheduler_reason, status: 'RESUMABLE', resume_reason: 'STALE_ROUTING_EPOCH' })
+      continue
+    }
     schedulerBatchSucceeded = false
     await supabase.from('matching_retrieval_states').update({ scan_status: 'ERROR', last_error_code: error?.message === 'COVERAGE_COUNT_MISMATCH' ? 'COVERAGE_COUNT_MISMATCH' : 'PAGE_PROCESS_FAILED', updated_at: nowIso() }).eq('user_id', profile.profile.user_id)
     results.push({ scheduler_reason: profile.scheduler_reason, status: 'ERROR', error_code: error?.message === 'COVERAGE_COUNT_MISMATCH' ? 'COVERAGE_COUNT_MISMATCH' : 'PAGE_PROCESS_FAILED' })
@@ -384,4 +425,7 @@ if (!onlyUser && schedulerBatchSucceeded && schedule.nextCursor && schedule.next
   const { error } = await supabase.from('matching_retrieval_scheduler_state').update({ profile_cursor: schedule.nextCursor, updated_at: nowIso() }).eq('singleton', true)
   if (error) throw error
 }
-console.log(JSON.stringify({ users_processed: results.length, max_users: maxUsers, page_size: pageSize, max_pages_per_user: maxPages, opportunity_universe_expirations_refreshed: Number(expiredUniverseRefresh ?? 0), stale_candidates_pruned: Number(pruneResult ?? 0), results }, null, 2))
+console.log(JSON.stringify({ users_processed: results.length, max_users: maxUsers, page_size: pageSize, max_pages_per_user: maxPages,
+  opportunity_universe_expirations_refreshed: dueRowsRefreshed, dirty_source_batches: dirtySourceBatches,
+  pending_dirty_sources: pendingDirtySources, routing_epoch: currentRoutingEpoch, stale_candidates_pruned: Number(pruneResult ?? 0), results }, null, 2))
+}
