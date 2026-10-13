@@ -98,14 +98,55 @@ function reconciliationPatch(decision: any) {
   ))
 }
 
-// P0.3: Derive runner IDs from canonical source (e.g. "unjobs" → "unjobs_scraper").
-// operational_runner_ids from profile takes precedence when populated.
-function runnerIdsFor(profile: any): Set<string> {
-  const base = (profile.canonical_source || '').toLowerCase()
-  const ids = new Set<string>([base, `${base}_scraper`, `${base}_scrapper`])
-  for (const alias of (profile.emitted_aliases || [])) ids.add(String(alias).toLowerCase())
-  for (const runnerId of (profile.operational_runner_ids || [])) ids.add(String(runnerId).toLowerCase())
-  return ids
+export type WorkflowRoute = { workflow: string; runner_id: string; entrypoint: string }
+
+export function workflowRoutes(): WorkflowRoute[] {
+  const files = ['.github/workflows/scrapers.yml', '.github/workflows/source-maintenance.yml', '.github/workflows/scheduled-source-automation.yml']
+  const routes: WorkflowRoute[] = []
+  for (const workflow of files) {
+    try {
+      const content = readFileSync(resolve(process.cwd(), workflow), 'utf8')
+      for (const match of content.matchAll(/python\s+scripts\/run_scraper_monitored\.py\s+([\w.-]+)\s+([\w.-]+)\s+([\w./-]+\.py)/g)) {
+        // run_scraper_monitored.py positional contract is scraper_id, scraper_name, script_path.
+        routes.push({ workflow, runner_id: match[1].toLowerCase(), entrypoint: match[3].replaceAll('\\', '/').toLowerCase() })
+      }
+    } catch { /* Missing workflow evidence remains UNKNOWN. */ }
+  }
+  return routes
+}
+
+export function verifiedRouteFor(profile: any, routes: WorkflowRoute[], registryProfiles: any[] = []) {
+  const declared = (profile.producer_execution?.entrypoints || []).map((entry: string) => String(entry).replaceAll('\\', '/').toLowerCase())
+  const direct = routes.filter(route => route.workflow === '.github/workflows/scrapers.yml' && declared.includes(route.entrypoint))
+  const alternate = routes.filter(route => route.workflow !== '.github/workflows/scrapers.yml' && declared.includes(route.entrypoint))
+  const manualRunner = SOURCE_SCAN_SCRAPERS[profile.canonical_source]
+  const routeEvidence = (matches: WorkflowRoute[]) => matches.map(({ workflow, runner_id, entrypoint }) => {
+    const owners = registryProfiles.filter(candidate => (candidate.producer_execution?.entrypoints || []).some((path: string) => String(path).replaceAll('\\', '/').toLowerCase() === entrypoint)).map(candidate => candidate.canonical_source)
+    return { workflow, runner_id, entrypoint, profile_owners: owners.length ? owners : [profile.canonical_source], runner_identity_unique: owners.length <= 1 }
+  })
+  const uniqueRunnerIds = (matches: WorkflowRoute[]) => [...new Set(routeEvidence(matches).filter(item => item.runner_identity_unique).map(item => item.runner_id))]
+  if (direct.length) return { state: 'DIRECT', evidence: routeEvidence(direct), runner_ids: uniqueRunnerIds(direct) }
+  if (alternate.length) return { state: 'ALTERNATE', evidence: routeEvidence(alternate), runner_ids: uniqueRunnerIds(alternate) }
+  if (manualRunner) return { state: 'MANUAL', evidence: [{ source: 'SOURCE_SCAN_SCRAPERS_ALLOWLIST', runner_id: manualRunner }], runner_ids: [manualRunner] }
+  if (profile.producer_execution?.state === 'NO_EXECUTABLE_PRODUCER') return { state: 'NO_ROUTE', evidence: [{ source: 'REGISTRY_V2', producer_state: 'NO_EXECUTABLE_PRODUCER' }], runner_ids: [] }
+  return { state: 'UNKNOWN', evidence: [{ source: 'REGISTRY_V2', entrypoints: declared, reason: 'NO_VERIFIED_WORKFLOW_OR_MANUAL_ROUTE' }], runner_ids: [] }
+}
+
+export function sourceOperationalProjection(profile: any, effectiveRows: any[], storedRows: any[], routes: WorkflowRoute[], registryProfiles: any[] = []) {
+  const aliases = (profile.emitted_aliases || [profile.canonical_source]).map((alias: string) => String(alias).toLowerCase())
+  const effective = aliases.map((alias: string) => effectiveRows.find(row => String(row.source || '').toLowerCase() === alias)).find(Boolean)
+  const stored = aliases.map((alias: string) => storedRows.find(row => String(row.source || '').toLowerCase() === alias)).find(Boolean)
+  const route = verifiedRouteFor(profile, routes, registryProfiles)
+  return {
+    stored_switches: stored ? { is_enabled: stored.is_enabled, catalog: stored.catalog_enabled, matching: stored.matching_enabled, alerts: stored.alerts_enabled, seo: stored.seo_enabled } : null,
+    effective_switches: effective ? { source: effective.is_enabled, catalog: effective.catalog_enabled, matching: effective.matching_enabled, alerts: effective.alerts_enabled, seo: effective.seo_enabled } : null,
+    explicit_overrides: effective?.consumer_switch_overrides || {},
+    route,
+  }
+}
+
+export function sourceSwitchBlocked(effective: { source?: boolean | null; matching?: boolean | null } | null): boolean {
+  return effective?.source === false || effective?.matching === false
 }
 
 export async function loadMissingOpportunitySamples(supabase: any, profiles: any[], globalIndex: Map<string, any[]>) {
@@ -156,7 +197,7 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
   const survival = scraperFieldSurvival()
   const survivalBySource = new Map((survival.sources || []).map((item: any) => [item.canonical_source, item]))
   const stats: Record<string, any> = dashboard?.sources || {}
-  const [observationsRes, policyRes, runsRes, fingerprintsRes, enrichmentRes, sourceCapRes, qualityAggRes, telemetryAuditRes, dirtyQueueRes, routingStateRes] = await Promise.all([
+  const [observationsRes, policyRes, runsRes, fingerprintsRes, enrichmentRes, sourceCapRes, storedSourceRes, qualityAggRes, telemetryAuditRes, dirtyQueueRes, routingStateRes] = await Promise.all([
     supabase.from("opportunity_source_observations").select("opportunity_id,source,identity_status,http_status,observed_at").order("observed_at", { ascending: false }).limit(SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT),
     supabase.from("opportunity_source_policy_events").select("opportunity_id,source,action,created_at").order("created_at", { ascending: false }).limit(SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT),
     supabase.from("scraper_runs").select("id,run_id,scraper_id,status,started_at,finished_at,duration_seconds,error_count,found_count,valid_count,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,error_summary,adapter_version,extraction_metrics").order("started_at", { ascending: false }).limit(1000),
@@ -165,6 +206,7 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
     supabase.from("opportunities").select("id,title,source,semantic_fingerprint,match_eligible,description,organization,location,country_code,application_url,source_url,remote_scope").is("deleted_at", null).is("archived_at", null).order("id", { ascending: true }).limit(SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT),
     supabase.from("opportunity_enrichment_events").select("opportunity_id,source,changed_fields,created_at").order("created_at", { ascending: false }).limit(SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT),
     supabase.rpc("get_source_distribution_policy"),
+    supabase.from("opportunity_sources").select("source,is_enabled,catalog_enabled,matching_enabled,alerts_enabled,seo_enabled"),
     // P0.1: Full-DB fingerprint pending counts via server-side aggregate.
     supabase.rpc("admin_source_quality_aggregate"),
     supabase.from("source_control_audit_log").select("source,action,result_status,created_at").in("action", ["maintenance_telemetry", "maintenance_telemetry_retry"]).order("created_at", { ascending: false }).limit(1000),
@@ -182,6 +224,7 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
   const fingerprintRows = fingerprintsRes.error ? [] : (fingerprintsRes.data || [])
   const enrichmentRows = enrichmentRes.error ? [] : (enrichmentRes.data || [])
   const sourceCapRows: any[] = sourceCapRes.error ? [] : (sourceCapRes.data || [])
+  const storedSourceRows: any[] = storedSourceRes.error ? [] : (storedSourceRes.data || [])
   const telemetryAuditRows: any[] = telemetryAuditRes.error ? [] : (telemetryAuditRes.data || [])
   const dirtyQueueBySource = new Map((dirtyQueueRes.error ? [] : dirtyQueueRes.data || []).map((row: any) => [String(row.canonical_source || '').toLowerCase(), row]))
   const routingEpoch = Number(routingStateRes.data?.routing_epoch)
@@ -198,6 +241,8 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
   const telemetryBySource = indexRowsBySource(telemetryAuditRows)
   const statsBySource = new Map(Object.entries(stats).map(([source, value]) => [source.toLowerCase(), value]))
   const sourceCapBySource = new Map(sourceCapRows.map(item => [String(item.source || '').toLowerCase(), item]))
+  const storedSourceBySource = new Map(storedSourceRows.map(item => [String(item.source || '').toLowerCase(), item]))
+  const routes = workflowRoutes()
   const qualityBySource = new Map(Object.entries(qualityAgg).map(([source, value]) => [source.toLowerCase(), value]))
   const runsByRunner = indexRowsBySource(runRows.map(item => ({ ...item, source: item.scraper_id })))
   const controlsByRunner = indexRowsBySource(controls.map(item => ({ ...item, source: item.scraper_id })))
@@ -237,8 +282,9 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
     const fresh = observations.filter((item: any) => ttlMs > 0 && now - Date.parse(item.observed_at) <= ttlMs).length
     const stale = observations.length - fresh
     const policyLatest = latestRowsByKey(rowsForAliases(policyBySource, aliases), 'opportunity_id')
-    // P0.3: runnerIds includes canonical_source + _scraper/_scrapper variants.
-    const runnerIds = runnerIdsFor(profile)
+    const operations = sourceOperationalProjection(profile, sourceCapRows, storedSourceRows, routes, registry.sources || [])
+    const routeInfo = operations.route
+    const runnerIds = new Set(routeInfo.runner_ids)
     const runsForSource = [...runnerIds].flatMap(id => runsByRunner.get(id.toLowerCase()) || [])
       .sort((left, right) => Date.parse(String(right.started_at || '')) - Date.parse(String(left.started_at || '')))
     const latestRun = runsForSource[0] || null
@@ -363,8 +409,7 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
     if (latestRun && Number(latestRun.rejected_count || 0) > 0) diagnosticStates.add('QUALITY_FAILED')
     if (latestRun && Number(latestRun.found_count ?? latestRunMetrics.found ?? -1) === 0 && !['skipped', 'blocked'].includes(String(latestRun.status))) diagnosticStates.add('EXTRACTOR_ZERO')
     if (dirtyQueueEntry) diagnosticStates.add('UNIVERSE_STALE')
-    if (!srcCap || srcCap.is_enabled !== true || srcCap.matching_enabled !== true) diagnosticStates.add('SOURCE_SWITCH_BLOCKED')
-    if (dirtyQueueEntry && !staleCandidateCoverageRes.error && Number(staleCandidateCoverageRes.count || 0) > 0) diagnosticStates.add('MATCHING_CACHE_STALE')
+    if (sourceSwitchBlocked(operations.effective_switches)) diagnosticStates.add('SOURCE_SWITCH_BLOCKED')
     if (String(latestRun?.error_summary || '').includes('[SKIPPED]')) diagnosticStates.add('RUN_SKIPPED')
     if (diagnosticStates.size === 0 && Number(pipelineSource?.matching_ready || 0) > 0) diagnosticStates.add('READY')
     if (diagnosticStates.size === 0) diagnosticStates.add('UNKNOWN')
@@ -374,7 +419,7 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       source_family: profile.source_family, implementation_state: profile.implementation_state,
       contract_covered: profile.contract_covered, active: profile.active,
       certified: profile.certified, auto_enabled: profile.auto_enabled,
-      blocking_requirements: profile.blocking_requirements || [], operational_runner_ids: profile.operational_runner_ids || [],
+      blocking_requirements: profile.blocking_requirements || [],
       freshness_ttl_hours: profile.freshness_ttl_hours,
       expected_adapter_version: expectedAdapterVersion || 'NOT_REPORTED',
       expected_cleaner_version: expectedCleanerVersion || 'NOT_REPORTED',
@@ -384,8 +429,9 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       producer_state: producerExecution.state === 'NO_EXECUTABLE_PRODUCER' ? 'NO_EXECUTABLE_PRODUCER' : !latestRun ? 'NO_RUN' : runFailed ? 'FAILED' : 'OBSERVED',
       diagnostic_states: [...diagnosticStates],
       producer_entrypoint: producerExecution.entrypoints?.[0] || null,
-      runner_id: latestRun?.scraper_id || profile.operational_runner_ids?.[0] || null,
-      execution_route: profile.workflow_step ? 'SCRAPERS_WORKFLOW' : profile.operational_runner_ids?.length ? 'REGISTERED_ALTERNATE_RUNNER' : producerExecution.state === 'NO_EXECUTABLE_PRODUCER' ? 'NO_ROUTE' : 'UNKNOWN',
+      runner_id: latestRun?.scraper_id || routeInfo.runner_ids[0] || null,
+      execution_route: routeInfo.state,
+      execution_route_evidence: routeInfo.evidence,
       field_survival: fieldSurvivalSummary,
       effective_inventory: {
         catalog_flagged: pools.catalog,
@@ -423,18 +469,18 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       catalog_ready: pipelineSource?.catalog_ready ?? null,
       alerts_ready: pipelineSource?.alerts_ready ?? null,
       seo_ready: pipelineSource?.seo_ready ?? null,
-      stored_switches: srcCap ? { is_enabled: srcCap.is_enabled, catalog: srcCap.catalog_enabled, matching: srcCap.matching_enabled, alerts: srcCap.alerts_enabled, seo: srcCap.seo_enabled } : null,
-      effective_switches: srcCap ? { source: srcCap.is_enabled === true, catalog: srcCap.is_enabled === true && srcCap.catalog_enabled === true, matching: srcCap.is_enabled === true && srcCap.matching_enabled === true, alerts: srcCap.is_enabled === true && srcCap.alerts_enabled === true, seo: srcCap.is_enabled === true && srcCap.seo_enabled !== false } : null,
-      explicit_overrides: srcCap?.consumer_switch_overrides || {},
+      stored_switches: operations.stored_switches,
+      effective_switches: operations.effective_switches,
+      explicit_overrides: operations.explicit_overrides,
       consultative_permissions: sourcePermissionSnapshot(profile.canonical_source),
       dirty_queue_status: dirtyQueueRes.error ? 'UNKNOWN' : dirtyQueueEntry ? 'PENDING' : 'EMPTY',
       dirty_cursor: dirtyQueueEntry?.cursor_id ?? null,
       dirty_queued_at: dirtyQueueEntry?.queued_at ?? null,
       dirty_queue_reason: dirtyQueueEntry?.reason ?? null,
       routing_epoch: routingEpochAvailable ? routingEpoch : null,
-      stale_matching_candidates: staleCandidateCoverageRes.error ? null : staleCandidateCoverageRes.count ?? 0,
       universe_stale_alert: dirtyQueueEntry && pipelineSource?.inventory > 0 ? 'UNIVERSE_STALE_SOURCE_POLICY' : null,
-      affected_rows: dirtyQueueEntry ? pipelineSource?.inventory ?? pools.inventory : 0,
+      pending_rows: null,
+      affected_rows: null,
       last_universe_evaluated_at: null,
       evidence_scope: { inventory: 'FULL_DB_AGGREGATE', run: latestRun ? 'LATEST_RUN' : 'NO_RUN', row_examples: 'ON_DEMAND', dirty_queue: dirtyQueueRes.error ? 'UNAVAILABLE' : 'DURABLE_QUEUE' },
       first_broken_stage: firstBroken?.name || null,

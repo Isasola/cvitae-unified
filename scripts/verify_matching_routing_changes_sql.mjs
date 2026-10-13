@@ -86,6 +86,20 @@ try {
   await assert.rejects(query(`select complete_matching_retrieval_scan($1,$2,null,null,'profile','policy')`, [user2, globalAfterNewEvent]), error => error?.message === 'matching_routing_ledger_gap',
     'finalizer rejects an unprocessed ledger interval')
 
+  // Content updated during routing DELTA must remain beyond the content scan cutoff.
+  const contentUser = '00000000-0000-0000-0000-000000000003'
+  const contentCutoff = '2026-10-13T10:00:00.000Z'
+  const contentUpdatedAt = '2026-10-13T10:05:00.000Z'
+  await query("insert into opportunities(id,created_at,updated_at) values('content-during-routing',$1,$2)", [contentCutoff, contentUpdatedAt])
+  await query(`insert into matching_retrieval_states(user_id,profile_signature,source_policy_signature,scan_kind,scan_status,scan_cutoff,
+    completed_routing_epoch,routing_ledger_baseline_epoch,routing_phase,routing_delta_from_epoch,routing_delta_cursor_epoch,routing_delta_target_epoch)
+    values($1,'profile','policy','DELTA','SCANNING',$2,$3,$4,'ROUTING_DELTA',$3,$3,$3)`, [contentUser, contentCutoff, globalAfterNewEvent, baseline])
+  const contentCompletion = (await query(`select complete_matching_retrieval_scan($1,$2,null,null,'profile','policy') result`, [contentUser, globalAfterNewEvent]))[0].result
+  assert.equal(contentCompletion.status, 'COMPLETE')
+  assert.equal(new Date((await query('select last_change_watermark from matching_retrieval_states where user_id=$1', [contentUser]))[0].last_change_watermark).toISOString(), new Date(contentCutoff).toISOString())
+  const contentDelta = await query('select id from opportunities where updated_at > $1::timestamptz and updated_at <= $2::timestamptz', [contentCutoff, contentUpdatedAt])
+  assert.deepEqual(contentDelta.map(row => row.id), ['content-during-routing'], 'the next content DELTA still selects an update made after the fixed scan cutoff')
+
   const acl = await query(`select has_table_privilege('anon','public.matching_routing_changes','select') anon_read,
       has_table_privilege('authenticated','public.matching_routing_changes','select') user_read,
       has_table_privilege('service_role','public.matching_routing_changes','select') service_read,
@@ -96,7 +110,7 @@ try {
   assert.equal(acl[0].service_read, true)
   assert.equal(acl[0].anon_rpc, false)
   assert.equal(acl[0].service_rpc, true)
-  console.log(JSON.stringify({ status: 'PASS', checks: ['baseline', 'transition-ledger', 'atomic-rollback', 'full-denominator-drift-via-ledger', 'consumer-independence', 'targeted-finalization', 'ledger-gap', 'service-acl'], baseline, fixed_target: target - 1, global_after_new_event: globalAfterNewEvent }, null, 2))
+  console.log(JSON.stringify({ status: 'PASS', checks: ['baseline', 'transition-ledger', 'atomic-rollback', 'full-denominator-drift-via-ledger', 'consumer-independence', 'targeted-finalization', 'ledger-gap', 'content-update-during-routing-delta-watermark', 'service-acl'], baseline, fixed_target: target - 1, global_after_new_event: globalAfterNewEvent, content_scan_cutoff: contentCutoff, content_updated_at: contentUpdatedAt, content_delta_rows: contentDelta.length }, null, 2))
 } finally {
   await db.close()
 }

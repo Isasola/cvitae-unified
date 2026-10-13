@@ -35,7 +35,7 @@
   timeout = 30
 
 [functions."admin-data"]
-  included_files = ["scrapers/source_registry.json", ".github/workflows/scrapers.yml", "src/generated/source-intelligence-registry.json"]
+  included_files = ["scrapers/source_registry.json", ".github/workflows/scrapers.yml", ".github/workflows/source-maintenance.yml", ".github/workflows/scheduled-source-automation.yml", "src/generated/source-intelligence-registry.json"]
 
 [functions."public-opportunity-detail"]
   included_files = ["dist/index.html"]
