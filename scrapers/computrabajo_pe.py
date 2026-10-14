@@ -176,8 +176,6 @@ def scrape_category(slug, rubro, max_pages=3):
                 if text and not text.startswith("i_") and len(text) > 2:
                     location = text
                     break
-            if not location:
-                location = "Peru"
 
             page_jobs.append({
                 "title": title,
@@ -187,8 +185,8 @@ def scrape_category(slug, rubro, max_pages=3):
                 "type": "",
                 "description": "",
                 "application_url": full_url,
+                "source_url": full_url,
                 "source": "computrabajo_pe",
-                "country_code": "PE",
                 "is_active": True,
                 "tags": [slug.replace("-", " ")],
             })

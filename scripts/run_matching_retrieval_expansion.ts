@@ -2,7 +2,6 @@ import { createClient } from '@supabase/supabase-js'
 import { canonicalCandidateProfile } from '../shared/candidate-profile.ts'
 import { matchingProfileSignature } from '../shared/matching-profile-signature.ts'
 import { buildCanonicalSourcePolicyIndex, commitRetrievalPage, cursorAfterPage, inventoryFunnelPage, normalizeSourcePolicyRow, pageMatchingRoutingChanges, retrievalStateRequiresFullRebuild, sourcePolicySignature, uniqueRoutingOpportunityIds } from '../shared/matching-retrieval.ts'
-import { parseDirtyRefreshResponse, parseDueRefreshCount } from '../shared/opportunity-universe-maintenance.ts'
 import { nextRetrievalSchedulerCursor, prioritizeRetrievalUsers, type RetrievalSchedulerCandidate, type RetrievalSchedulerReason } from '../shared/retrieval-user-scheduler.ts'
 import { buildDictionary } from '../supabase/functions/_shared/matching.ts'
 import { isPotentialDiscoveryDecision, isVisibleMatchDecision, rankOpportunitiesV2, V2_PRESET_FULL } from '../supabase/functions/_shared/matching-v2.ts'
@@ -482,24 +481,20 @@ async function processUser(profile: any, pageLimit: number, pageSizeValue: numbe
 
 const { rows: policyRows, signature: policySig } = await getSourcePolicies()
 const sourcePolicies = { rows: policyRows, signature: policySig }
-const { data: expiredUniverseRefresh, error: universeRefreshError } = await supabase.rpc('refresh_due_opportunity_universe', { p_limit: 500 })
-if (universeRefreshError) throw new Error('OPPORTUNITY_UNIVERSE_LIFECYCLE_REFRESH_FAILED')
-const dueRowsRefreshed = parseDueRefreshCount(expiredUniverseRefresh)
-let dirtySourceBatches = 0
-let pendingDirtySources = 0
-do {
-  const { data, error } = await supabase.rpc('refresh_dirty_opportunity_universe_sources', { p_limit: 1 })
-  if (error) throw new Error('OPPORTUNITY_UNIVERSE_SOURCE_POLICY_REFRESH_FAILED')
-  const refresh = parseDirtyRefreshResponse(data)
-  pendingDirtySources = refresh.pending_sources
-  dirtySourceBatches++
-  if (pendingDirtySources > 0 && dirtySourceBatches >= 10) {
-    console.log(JSON.stringify({ status: 'RESUMABLE', resume_reason: 'UNIVERSE_PENDING', pending_sources: pendingDirtySources,
-      dirty_source_batches: dirtySourceBatches, due_rows_refreshed: dueRowsRefreshed, matching_candidates_processed: 0 }))
-    break
+// Queue A is owned by refresh_opportunity_universe_maintenance.ts. Retrieval
+// consumes the effective READY view and its routing epoch independently; a
+// dirty source elsewhere must never hold every candidate profile behind it.
+async function persistedCandidateCounts(userId: string, profileSig: string) {
+  const countClass = async (candidateClass: 'MATCH' | 'POTENTIAL') => {
+    const { count, error } = await supabase.from('matching_retrieval_candidates')
+      .select('opportunity_id', { count: 'exact', head: true })
+      .eq('user_id', userId).eq('profile_signature', profileSig).eq('candidate_class', candidateClass)
+    if (error) throw error
+    return count ?? 0
   }
-} while (pendingDirtySources > 0)
-if (pendingDirtySources === 0) {
+  const [matches, potentials] = await Promise.all([countClass('MATCH'), countClass('POTENTIAL')])
+  return { persisted_matches: matches, persisted_potentials: potentials }
+}
 const { data: pruneResult, error: pruneError } = await supabase.rpc('prune_matching_retrieval_candidates')
 if (pruneError) throw new Error('CANDIDATE_CACHE_PRUNE_FAILED')
 currentRoutingEpoch = await readRoutingEpoch()
@@ -511,7 +506,8 @@ for (const profile of profiles) {
   if (results.length >= maxUsers) break
   try {
     const result = await processUser(profile.profile, maxPages, pageSize)
-    results.push({ scheduler_reason: profile.scheduler_reason, status: result.status, duration_ms: result.duration_ms, pages_processed: result.pages, inventory_rows_scanned: result.inventory_rows_scanned, source_allowed_rows_evaluated: result.source_allowed_rows_evaluated, candidates_retained: result.candidates_retained, examined: result.examined, target: result.target })
+    const counts = await persistedCandidateCounts(profile.profile.user_id, matchingProfileSignature(profile.profile))
+    results.push({ scheduler_reason: profile.scheduler_reason, status: result.status, duration_ms: result.duration_ms, pages_processed: result.pages, inventory_rows_scanned: result.inventory_rows_scanned, source_allowed_rows_evaluated: result.source_allowed_rows_evaluated, candidates_retained: result.candidates_retained, ...counts, examined: result.examined, target: result.target })
   } catch (error: any) {
     const errorMessage = String(error?.message ?? '')
     if (errorMessage === 'STALE_ROUTING_EPOCH' || errorMessage.includes('RETRIEVAL_PAGE_CURSOR_CONFLICT')
@@ -529,6 +525,5 @@ if (!onlyUser && schedulerBatchSucceeded && schedule.nextCursor && schedule.next
   if (error) throw error
 }
 console.log(JSON.stringify({ users_processed: results.length, max_users: maxUsers, page_size: pageSize, max_pages_per_user: maxPages,
-  opportunity_universe_expirations_refreshed: dueRowsRefreshed, dirty_source_batches: dirtySourceBatches,
-  pending_dirty_sources: pendingDirtySources, routing_epoch: currentRoutingEpoch, stale_candidates_pruned: Number(pruneResult ?? 0), results }, null, 2))
-}
+  queue_a_dependency: 'NONE', routing_epoch: currentRoutingEpoch,
+  stale_candidates_pruned: Number(pruneResult ?? 0), results }, null, 2))

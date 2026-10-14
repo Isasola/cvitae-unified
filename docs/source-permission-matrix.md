@@ -14,6 +14,8 @@ permission evidence, not a current DB toggle.
 | UNJobs | UNKNOWN | HTML observed | UNKNOWN | UNKNOWN | UNKNOWN | source URL retained | STATIC_PARTIAL |
 | OpportunityDesk | UNKNOWN | detail enrichment absent | UNKNOWN | UNKNOWN | UNKNOWN | publisher link only | DETAIL_ENRICHMENT_REQUIRED |
 | Computrabajo | UNKNOWN | HTML observed | UNKNOWN | UNKNOWN | UNKNOWN | source URL retained | STATIC_PARTIAL |
+| Bumeran PE | PENDING_WRITTEN_AGREEMENT_OR_VALID_FEED | UNKNOWN | OFF | OFF | OFF | original link only after authorization | No mass extraction or schedule before agreement |
+| Computrabajo PE | PENDING_WRITTEN_AGREEMENT_OR_VALID_FEED | UNKNOWN | OFF | OFF | OFF | original link only after authorization | No mass extraction or schedule before agreement |
 | Arbeitnow | API use ALLOWED with linkback | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | API linkback required | Official terms https://www.arbeitnow.com/terms; general terms restrict copying/public display/mirroring; STATIC_PARTIAL |
 | Impactpool | UNKNOWN; acquisition permission not evidenced | UNKNOWN | Catalog/alerts DENIED absent permission; internal matching UNKNOWN | DENIED absent permission | DENIED absent permission | UNKNOWN | Official terms https://www.impactpool.org/signup/terms (updated 2026-01-09): scraping/copying and reproduction/distribution require permission; STATIC_PARTIAL |
 | Fundación Carolina | DENIED absent legal basis/written authorization | DENIED | DENIED | DENIED | DENIED | UNKNOWN | Official legal notice https://www.fundacioncarolina.es/aviso-legal/ §§ IP / use; STATIC_CONFIRMED_EXTERNAL |

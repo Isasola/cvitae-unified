@@ -55,7 +55,7 @@ assert.ok(worker.includes('nextRetrievalSchedulerCursor') && worker.includes(".g
 const accounting = readFileSync(new URL('./account_matching_retrieval_funnel.ts', import.meta.url), 'utf8')
 assert.ok(accounting.includes('CURRENT_READONLY_PROD_${observationDate}') && !accounting.includes('CURRENT_READONLY_PROD_27SEP2026'), 'accounting label uses its runtime UTC observation date')
 
-for (const workflow of ['refresh_embeddings.yml', 'matching-retrieval.yml', 'scheduled-source-automation.yml', 'opportunity-universe-maintenance.yml']) {
+for (const workflow of ['refresh_embeddings.yml', 'scheduled-source-automation.yml']) {
   const yaml = readFileSync(new URL(`../.github/workflows/${workflow}`, import.meta.url), 'utf8')
   assert.match(yaml, /group: cvitae-opportunity-pipeline-maintenance/, `${workflow} serializes pipeline maintenance workers`)
 }
@@ -65,7 +65,14 @@ for (const workflow of ['scheduled-source-automation.yml']) {
 }
 const universeWorkflow = readFileSync(new URL('../.github/workflows/opportunity-universe-maintenance.yml', import.meta.url), 'utf8')
 assert.match(universeWorkflow, /^\s{2}schedule:/m, 'authorized Universe reconciliation continues periodically')
-assert.match(universeWorkflow, /github\.event_name == 'schedule' && vars\.CVITAE_PROD_RELEASE_VALIDATED == 'true'/, 'scheduled Universe work is release-gated')
+assert.match(universeWorkflow, /github\.event_name == 'schedule' && vars\.CVITAE_RECOVERY_CRON_ENABLED == 'true'/, 'scheduled Universe work has a recovery-specific gate')
 assert.match(universeWorkflow, /cancel-in-progress: false/, 'scheduled Universe reconciliation is serialized without cancellation')
+const retrievalWorkflow = readFileSync(new URL('../.github/workflows/matching-retrieval.yml', import.meta.url), 'utf8')
+assert.match(retrievalWorkflow, /group: cvitae-matching-retrieval/)
+assert.match(universeWorkflow, /group: cvitae-opportunity-universe-maintenance/)
+assert.match(retrievalWorkflow, /vars\.CVITAE_RECOVERY_CRON_ENABLED == 'true'/, 'scheduled retrieval has a recovery-specific gate')
+assert.match(retrievalWorkflow, /confirm_prod_recovery == 'YES'/, 'manual retrieval requires explicit canary confirmation')
+assert.match(retrievalWorkflow, /default: '1'/, 'manual retrieval defaults to one profile')
+assert.doesNotMatch(universeWorkflow + retrievalWorkflow, /CVITAE_PROD_RELEASE_VALIDATED/, 'recovery does not unlock unrelated release-gated workflows')
 
 console.log('PASS retrieval user scheduler: priority, idle skip, delta proof, cyclic fairness, resume cursor, signature reset, UTC label, serialized workers')

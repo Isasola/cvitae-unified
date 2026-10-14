@@ -2,26 +2,32 @@ name: CVitae - Opportunity Universe maintenance
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '7 * * * *'
   workflow_dispatch:
     inputs:
-      confirm_prod_release_validated:
-        description: 'Confirm an authorized release and bounded PROD validation passed'
+      confirm_prod_recovery:
+        description: 'Confirm an authorized bounded Universe recovery canary'
         type: choice
         options: ['NO', 'YES']
         default: 'NO'
+        required: true
+      canary_only:
+        description: 'Process one persisted dirty-source page, without the due lifecycle queue'
+        type: choice
+        options: ['YES', 'NO']
+        default: 'YES'
         required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: cvitae-opportunity-pipeline-maintenance
+  group: cvitae-opportunity-universe-maintenance
   cancel-in-progress: false
 
 jobs:
   reconcile:
-    if: (github.event_name == 'schedule' && vars.CVITAE_PROD_RELEASE_VALIDATED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.confirm_prod_release_validated == 'YES' && vars.CVITAE_PROD_RELEASE_VALIDATED == 'true')
+    if: (github.event_name == 'schedule' && vars.CVITAE_RECOVERY_CRON_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.confirm_prod_recovery == 'YES')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -34,7 +40,13 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec tsx scripts/refresh_opportunity_universe_maintenance.ts
+      - if: github.event_name == 'workflow_dispatch' && inputs.canary_only == 'YES'
+        run: pnpm exec tsx scripts/reconcile_119_canary.ts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.canary_only == 'NO')
+        run: pnpm exec tsx scripts/refresh_opportunity_universe_maintenance.ts
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

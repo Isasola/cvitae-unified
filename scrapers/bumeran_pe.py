@@ -81,9 +81,8 @@ def scrape_category(category_slug, rubro, max_pages=3):
             company = company_el.get_text(strip=True) if company_el else ""
 
             location_el = card.select_one("span[data-qa='location'], li[data-qa='location']")
-            location = location_el.get_text(strip=True) if location_el else "Peru"
-            if not location:
-                location = "Peru"
+            # A PE portal/search route does not prove the row's job location.
+            location = location_el.get_text(strip=True) if location_el else ""
 
             # Attempt to get description from card snippet
             desc_el = card.select_one("p[data-qa='job-description'], div[data-qa='job-description']")
@@ -97,8 +96,8 @@ def scrape_category(category_slug, rubro, max_pages=3):
                 "type": "",
                 "description": description,
                 "application_url": full_url,
+                "source_url": full_url,
                 "source": "bumeran_pe",
-                "country_code": "PE",
                 "is_active": True,
                 "tags": [category_slug.replace("-", " ")],
             })

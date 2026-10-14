@@ -6,7 +6,7 @@ import { hasProfessionalEvidence, professionalRequirementsText } from '../shared
 
 const now = new Date('2026-09-28T12:00:00.000Z')
 const policy: UniversePolicy[] = [{ source: 'himalayas', is_enabled: true, matching_enabled: true, catalog_enabled: true, alerts_enabled: true, seo_enabled: true }]
-const rich = { id: 'x', source: 'himalayas', title: 'Programme Officer', slug: 'programme-officer', organization: 'Example', description: 'A professional role with detailed responsibilities and required experience. '.repeat(2), is_active: true, verification_status: 'verified', deadline: '2026-12-31', updated_at: '2026-09-01T00:00:00.000Z', match_eligible: false }
+const rich = { id: 'x', source: 'himalayas', title: 'Programme Officer', slug: 'programme-officer', organization: 'Example', description: 'This professional programme officer coordinates regional delivery budgets, partner engagement, monitoring, reporting, safeguarding, stakeholder workshops, data analysis, and implementation plans across public services.', is_active: true, verification_status: 'verified', deadline: '2026-12-31', updated_at: '2026-09-01T00:00:00.000Z', match_eligible: false }
 const permission = (_source: string, _consumer: 'catalog' | 'matching' | 'alerts' | 'seo') =>
   ({ state: 'ALLOWED' as const, reason: 'FIXTURE_ALLOWED', provenance: 'fixture' })
 
@@ -49,7 +49,7 @@ assert.deepEqual(unknownActiveWithLiveObservation.lifecycle_repair, { is_active:
 assert.equal(unknownActiveWithLiveObservation.lifecycle_recovery_class, 'RECOVERABLE_NOW')
 const lifecycleThin = classifyOpportunityUniverse({ ...rich, is_active:false, description:'' }, policy, null, now, permission)
 assert.equal(lifecycleThin.lifecycle_recovery_class, 'CONTENT_NOT_READY')
-assert.equal(lifecycleThin.seo_content_reason, 'THIN_CONTENT')
+assert.equal(lifecycleThin.seo_content_reason, 'DESCRIPTION_WITHOUT_FACTUAL_CONTENT')
 const mismatchedObservation = classifyOpportunityUniverse({ ...rich, is_active:false }, policy, { id:'obs-other-source', source:'unjobs', identity_status:'IDENTITY_UNRESOLVED', http_status:0, observed_at:'2026-09-20T00:00:00.000Z' }, now, permission)
 assert.equal(mismatchedObservation.lifecycle_unresolved_reason, 'OBSERVATION_SOURCE_MISMATCH')
 assert.equal(mismatchedObservation.lifecycle_recovery_class, 'SYSTEM_ERROR')
@@ -99,12 +99,12 @@ assert.equal(classifyOpportunityUniverse({...computrabajoLegacy,description:'Too
 assert.equal(classifyOpportunityUniverse(computrabajoLegacy,[{...computrabajoPolicy[0],consumer_switch_overrides:{seo:false}}]).seo_state,'NOT_READY')
 const seoMissingDescription = classifyOpportunityUniverse({ ...rich, description:'' }, policy, null, now, (_source, _consumer) => ({ state: 'UNKNOWN', reason: 'NO_EVIDENCE', provenance: 'fixture' }))
 assert.equal(seoMissingDescription.seo_row_state, 'NOT_READY')
-assert.equal(seoMissingDescription.seo_row_reason, 'THIN_CONTENT')
+assert.equal(seoMissingDescription.seo_row_reason, 'DESCRIPTION_WITHOUT_FACTUAL_CONTENT')
 assert.equal(seoMissingDescription.seo_state, 'NOT_READY')
 for (const [row, reason] of [[{ ...rich, title:'' },'MISSING_TITLE'],[{ ...rich, slug:'' },'MISSING_CANONICAL_IDENTITY'],[{ ...rich, organization:'' },'MISSING_ORGANIZATION']] as const) {
   assert.equal(classifyOpportunityUniverse(row,policy,null,now,(_source,_consumer)=>({state:'UNKNOWN',reason:'NO_EVIDENCE',provenance:'fixture'})).seo_row_reason,reason)
 }
-const seoEnrichedUpdate = classifyOpportunityUniverse({ ...rich, source:'jobicy', description:'Factual role duties and qualifications. '.repeat(4) }, [{ ...policy[0], source:'jobicy' }], null, now, (_source, _consumer) => ({ state: 'UNKNOWN', reason: 'NO_EVIDENCE', provenance: 'fixture' }))
+const seoEnrichedUpdate = classifyOpportunityUniverse({ ...rich, source:'jobicy', description:'This position coordinates regional hiring, workforce planning, payroll administration, employee support, performance reviews, training, workplace safety, policy compliance, labor relations, and organizational development.' }, [{ ...policy[0], source:'jobicy' }], null, now, (_source, _consumer) => ({ state: 'UNKNOWN', reason: 'NO_EVIDENCE', provenance: 'fixture' }))
 assert.equal(seoEnrichedUpdate.seo_row_state, 'READY', 'an update supplying the factual SEO field enters through the same reducer')
 assert.equal(seoEnrichedUpdate.seo_state, 'READY', 'permission UNKNOWN remains observable but does not block first-party SEO')
 assert.equal(seoEnrichedUpdate.provenance.consumer_permission_states && (seoEnrichedUpdate.provenance.consumer_permission_states as any).seo, 'UNKNOWN')
@@ -142,7 +142,7 @@ assert.equal(summary.FINAL_MATCHING_UNIVERSE, summary.SOURCE_MATCH_ALLOWED, 'Ret
 const seoSummary = summarizeOpportunityUniverse([seoEnrichedUpdate, seoMissingDescription])
 assert.equal(seoSummary.SEO_ROW_READY, 1)
 assert.equal(seoSummary.SEO_EFFECTIVE_READY, 1)
-assert.equal(seoSummary.TOP_SEO_BLOCK_REASONS.THIN_CONTENT, 1)
+assert.equal(seoSummary.TOP_SEO_BLOCK_REASONS.DESCRIPTION_WITHOUT_FACTUAL_CONTENT, 1)
 const migration = readFileSync(new URL('../supabase/migrations/202609280001_opportunity_universe.sql', import.meta.url), 'utf8')
 const finalCorrection = readFileSync(new URL('../supabase/migrations/202610040001_source_switch_wiring.sql', import.meta.url),'utf8')
 const seoCorrection = readFileSync(new URL('../supabase/migrations/202610030002_opportunity_universe_seo_permission.sql', import.meta.url), 'utf8')

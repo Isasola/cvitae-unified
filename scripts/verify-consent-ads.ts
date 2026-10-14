@@ -9,6 +9,7 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 const index = read('index.html')
+const adsTxt = read('public/ads.txt')
 const main = read('src/main.tsx')
 const app = read('src/App.tsx')
 const consent = read('src/lib/consent.ts')
@@ -51,6 +52,8 @@ for (const privatePage of [
 }
 
 assert(envExample.includes('VITE_GOOGLE_ADSENSE_READY=false'), 'La configuración de ejemplo debe mantener AdSense apagado')
+assert(index.includes('<meta name="google-adsense-account" content="ca-pub-8453355862743054"'), 'publisher meta tag is present in head')
+assert(adsTxt.trim() === 'google.com, pub-8453355862743054, DIRECT, f08c47fec0942fa0', 'ads.txt publishes the supplied AdSense publisher')
 assert(envExample.includes('VITE_GOOGLE_CERTIFIED_CMP_READY=false'), 'La CMP certificada debe quedar marcada como no configurada por defecto')
 assert(envExample.includes('VITE_ADSENSE_PREVIEW=false'), 'La vista previa no debe quedar activa en producción')
 

@@ -57,3 +57,10 @@ Use the existing certified source registry/identity/adapter/observation/sink/con
 Official documentation: Greenhouse `https://docs.greenhouse.io/job-board.html`; Lever `https://github.com/lever/postings-api`. Before implementation re-check current API field contracts, provider guidance, legal basis and employer permissions. A company board having public JSON is NOT approval for indexing or redistribution.
 
 Do not automatically turn on WWR, Fundación Carolina, Impactpool, or any other denied/unknown permission; preserve the exact permission matrix and the Himalayas SEO-versus-JobPosting distinction. Candidate/source eligibility may stay UNKNOWN. Greenhouse/Lever are **additional integrations**, not replacements for repairing Jooble, Workday, OpportunityDesk, Computrabajo, Buscojobs, Arbeitnow, Becal, Jobicy or the existing pipeline.
+
+## 2026-10-14 — LATAM release evidence and authorization boundaries
+
+- Bumeran PE and Computrabajo PE remain PENDING_WRITTEN_AGREEMENT_OR_VALID_FEED. Their adapters are not scheduled and no bulk or live extraction was run. A future agreement/feed can reuse the existing sink and identity path after one-page contract tests pass.
+- Paraguay MEF announced the new paraguayconcursa.mef.gov.py space begins publishing on 2026-10-14 while legacy SICCA calls migrate gradually. The official MEF listing shows an application window from 2026-10-13 through 2026-10-19, and Poder Judicial lists active 2026 calls with virtual application. The new host page structure could not be fetched in this pass, so no selectors or producer are claimed. Keep legacy SICCA as a separate source.
+- The official Empleos Peru service describes account registration with DNI and email before search; no public feed or unauthenticated inventory endpoint was established. Talento Peru did not return a page in the available read probe. Both remain unimplemented/unverified, not empty operational connectors.
+- No board allowlist, source switch, or automated source schedule was broadened. The 1,000-new-opportunity target has not been measured or met.

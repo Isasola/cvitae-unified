@@ -2,29 +2,35 @@ name: Matching retrieval coverage
 
 on:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '37 * * * *'
   workflow_dispatch:
     inputs:
+      confirm_prod_recovery:
+        description: 'Confirm an authorized one-profile matching recovery canary'
+        type: choice
+        options: ['NO', 'YES']
+        default: 'NO'
+        required: true
       max_users:
         description: Profiles processed per run (bounded)
         required: false
-        default: '2'
+        default: '1'
       page_size:
         description: Opportunities per page (maximum 500)
         required: false
-        default: '250'
+        default: '25'
       max_pages:
         description: Pages per profile per run (bounded)
         required: false
-        default: '4'
+        default: '1'
 
 concurrency:
-  group: cvitae-opportunity-pipeline-maintenance
+  group: cvitae-matching-retrieval
   cancel-in-progress: false
 
 jobs:
   expand:
-    if: github.event_name == 'workflow_dispatch' || vars.CVITAE_PROD_RELEASE_VALIDATED == 'true'
+    if: (github.event_name == 'schedule' && vars.CVITAE_RECOVERY_CRON_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.confirm_prod_recovery == 'YES')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
