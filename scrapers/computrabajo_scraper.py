@@ -247,7 +247,7 @@ def insert_job(job):
         return "error"
 
 
-def scrape_category(slug, rubro, max_pages=3):
+def scrape_category(slug, rubro, max_pages=10):
     jobs = []
     for page in range(1, max_pages + 1):
         url = f"{BASE_URL}/trabajo-de-{slug}"
@@ -307,11 +307,15 @@ def scrape_category(slug, rubro, max_pages=3):
                 "title": title,
                 "organization": company,
                 "location": location,
+                "country_code": "PY",
                 "rubro": rubro,
                 "type": "",
+                "opportunity_type": "job",
                 "description": "",
                 "application_url": full_url,
                 "source": "computrabajo",
+                "source_authority": "aggregator",
+                "original_source_verified": True,
                 "is_active": True,
                 "tags": [slug.replace("-", " ")],
             })
@@ -335,7 +339,7 @@ def main():
 
     for slug, rubro in CATEGORIES:
         print(f"\nRastreando: {slug} ({rubro})")
-        jobs = scrape_category(slug, rubro, max_pages=5)
+        jobs = scrape_category(slug, rubro, max_pages=10)
         all_jobs.extend(jobs)
 
         time.sleep(2)

@@ -56,17 +56,40 @@ def extract_jobs(html):
         return []
     try:
         data = json.loads(match.group(1))
-        # Try multiple known paths in the Next.js data structure
         page_props = data.get('props', {}).get('pageProps', {})
-        for key in ['resultadosIniciales', 'initialData', 'ofertas']:
-            if key in page_props:
-                val = page_props[key]
-                if isinstance(val, list):
+
+        for key in ['resultadosIniciales', 'initialData', 'ofertas', 'jobs', 'results', 'data', 'items', 'vacantes']:
+            if key not in page_props:
+                continue
+            val = page_props[key]
+            if isinstance(val, list) and val:
+                return val
+            if isinstance(val, dict):
+                for sub in ['ofertas', 'items', 'results', 'data', 'jobs', 'vacantes']:
+                    sub_val = val.get(sub)
+                    if isinstance(sub_val, list) and sub_val:
+                        return sub_val
+
+        job_id_keys = {'CargoVacante', 'Titulo', 'title', 'IdOferta', 'id', 'titulo', 'cargo'}
+        for key, val in page_props.items():
+            if isinstance(val, list) and val and isinstance(val[0], dict):
+                if job_id_keys & set(val[0].keys()):
+                    print(f"  [buscojobs] found jobs under pageProps.{key} ({len(val)} items)")
                     return val
-                if isinstance(val, dict) and 'ofertas' in val:
-                    return val['ofertas']
+
+        for key, val in page_props.items():
+            if not isinstance(val, dict):
+                continue
+            for sub_key, sub_val in val.items():
+                if isinstance(sub_val, list) and sub_val and isinstance(sub_val[0], dict):
+                    if job_id_keys & set(sub_val[0].keys()):
+                        print(f"  [buscojobs] found jobs under pageProps.{key}.{sub_key} ({len(sub_val)} items)")
+                        return sub_val
+
+        print(f"  [buscojobs] no job list found; pageProps keys: {list(page_props.keys())[:15]}")
         return []
-    except (json.JSONDecodeError, KeyError):
+    except (json.JSONDecodeError, KeyError) as e:
+        print(f"  [buscojobs] extract error: {e}")
         return []
 
 
@@ -90,13 +113,19 @@ def insert_job(job_raw, rubro):
 
     payload = {
         "title": title,
-        "organization": company,
+        "organization": company or None,
         "location": location,
+        "city": ciudad or None,
+        "department": depto or None,
+        "country_code": "PY",
         "rubro": rubro,
         "type": "Tiempo completo",
+        "opportunity_type": "job",
         "description": description[:800] if description else "",
         "application_url": url,
         "source": "buscojobs",
+        "source_authority": "aggregator",
+        "original_source_verified": True,
         "is_active": True,
         "tags": [],
     }

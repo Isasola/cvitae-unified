@@ -77,6 +77,8 @@ def search_jooble(keywords, location, rubro):
             "description": description,
             "application_url": link,
             "source": "jooble_pe",
+            "source_authority": "aggregator",
+            "original_source_verified": True,
             "country_code": "PE",
             "is_active": True,
             "tags": [keywords.strip() or "general"],

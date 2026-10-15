@@ -12,7 +12,6 @@ import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { auth, supabase } from '@/lib/supabase'
-import { isProfileComplete } from '@/lib/profile'
 import { B2CProgressLoader } from '@/components/cv/B2CProgressLoader'
 import { PageErrorState, PageLoadingState } from '@/components/cv/PublicState'
 import { playComplete } from '@/lib/sounds'
@@ -404,8 +403,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) {
-      supabase.from('user_master_profiles').select('profile_data,full_name,professional_title').eq('user_id', user.id).maybeSingle()
-        .then(({ data }) => setHasProfile(isProfileComplete(data)))
+      supabase.from('user_master_profiles').select('profile_data').eq('user_id', user.id).maybeSingle()
+        .then(({ data }) => setHasProfile(data?.profile_data?.onboarding_status === 'completed'))
     }
   }, [user])
 

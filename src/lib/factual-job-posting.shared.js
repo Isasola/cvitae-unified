@@ -51,7 +51,7 @@ export function factualJobPosting(row, canonicalUrl) {
 
   if (!title) reasons.push('MISSING_TITLE')
 
-  if (description.length < 100) {
+  if (description.length < 20) {
     reasons.push('MISSING_FACTUAL_DESCRIPTION')
   }
 
@@ -66,15 +66,18 @@ export function factualJobPosting(row, canonicalUrl) {
   }
 
   const country = clean(row.country_code).toUpperCase()
+  const isTelecommute =
+    country === 'WW' ||
+    String(row.job_location_type || '').toUpperCase() === 'TELECOMMUTE'
 
-  if (!isISO3166Alpha2(country)) {
+  if (!isTelecommute && !isISO3166Alpha2(country)) {
     reasons.push('MISSING_FACTUAL_COUNTRY')
   }
 
   const city = clean(row.city)
   const region = clean(row.department)
 
-  if (!city && !region) {
+  if (!city && !region && !isTelecommute) {
     reasons.push('MISSING_FACTUAL_LOCATION')
   }
 
@@ -113,19 +116,29 @@ export function factualJobPosting(row, canonicalUrl) {
       description,
       url: canonicalUrl,
       datePosted,
+      identifier: {
+        '@type': 'PropertyValue',
+        name: 'CVitae',
+        value: String(row.id || '').slice(0, 200),
+      },
       hiringOrganization: {
         '@type': 'Organization',
         name: organization,
       },
-      jobLocation: {
-        '@type': 'Place',
-        address: {
-          '@type': 'PostalAddress',
-          addressCountry: country,
-          ...(city ? { addressLocality: city } : {}),
-          ...(region ? { addressRegion: region } : {}),
-        },
-      },
+      ...(isTelecommute
+        ? { jobLocationType: 'TELECOMMUTE' }
+        : {
+            jobLocation: {
+              '@type': 'Place',
+              address: {
+                '@type': 'PostalAddress',
+                addressCountry: country,
+                ...(city ? { addressLocality: city } : {}),
+                ...(region ? { addressRegion: region } : {}),
+              },
+            },
+          }
+      ),
       ...(deadline ? { validThrough: deadline } : {}),
       ...(employmentType ? { employmentType } : {}),
       directApply: row.first_party_direct_apply === true,

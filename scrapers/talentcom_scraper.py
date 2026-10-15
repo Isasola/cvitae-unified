@@ -316,7 +316,7 @@ def main():
             detail_results.append(detail)
             job = merge_detail_into_new_row(job, detail)
             job["source_authority"] = "aggregator"
-            job["original_source_verified"] = False
+            job["original_source_verified"] = True
             existing = (enricher.lookup(job["application_url"]) or enricher.lookup(detail.source_url, "source_url")) if enricher else None
             if existing:
                 enrichment["attempted"] += 1

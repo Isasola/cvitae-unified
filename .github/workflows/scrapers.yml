@@ -542,6 +542,60 @@ jobs:
         run: python scripts/run_scraper_monitored.py bolsas_locales_scraper bolsas_locales_scraper scrapers/bolsas_locales_scraper.py
         continue-on-error: true
 
+      # ── Perú — bolsas y portales ─────────────────────────────────────────
+
+      - name: Bumeran Perú — bolsa de trabajo líder en Perú
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'bumeran_pe' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py bumeran_pe bumeran_pe scrapers/bumeran_pe.py
+        continue-on-error: true
+
+      - name: Computrabajo Perú — portal de empleo regional
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'computrabajo_pe' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py computrabajo_pe computrabajo_pe scrapers/computrabajo_pe.py
+        continue-on-error: true
+
+      - name: Aptitus Perú — portal de empleo peruano
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'aptitus_pe' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py aptitus_pe aptitus_pe scrapers/aptitus_pe.py
+        continue-on-error: true
+
+      - name: Jooble Perú — agregador de empleo
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'jooble_pe' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py jooble_pe jooble_pe scrapers/jooble_pe.py
+        continue-on-error: true
+
+      - name: Indeed Perú — portal global con filtro PE
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'indeed_pe' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py indeed_pe indeed_pe scrapers/indeed_pe.py
+        continue-on-error: true
+
+      - name: Laborum Perú — portal de empleo regional
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'laborum_pe' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py laborum_pe laborum_pe scrapers/laborum_pe.py
+        continue-on-error: true
+
+      # ── Paraguay — portales especializados y reclutamiento ───────────────
+
+      - name: Paraguay Concursa MEF — portal oficial de concursos públicos
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'paraguayconcursa_mef' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py paraguayconcursa_mef paraguayconcursa_mef_scraper scrapers/paraguayconcursa_mef_scraper.py
+        continue-on-error: true
+
+      - name: Prodato — bolsa de trabajo local
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'prodato' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py prodato_direct prodato_scraper scrapers/prodato_scraper.py
+        continue-on-error: true
+
+      - name: Lizzy Castillo — consultora de reclutamiento PY
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'lizzy_castillo' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py lizzy_castillo_py lizzy_castillo_scraper scrapers/lizzy_castillo_scraper.py
+        continue-on-error: true
+
+      - name: Outsourcing Paraguay — empresa de outsourcing local
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'outsourcing_py' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py outsourcing_paraguay outsourcing_py_scraper scrapers/outsourcing_py_scraper.py
+        continue-on-error: true
+
       # Scrapers stay isolated, but the final job conclusion reflects real
       # scraper/telemetry failures after every selected source has finished.
       - name: Resumir estado real de scrapers

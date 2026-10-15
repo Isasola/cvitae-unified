@@ -16,7 +16,7 @@ const timeoutFetch: typeof fetch = (input, init = {}) => fetch(input, {
 const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: timeoutFetch } })
 const canaryOnly = process.argv.includes('--canary')
 const dueLimit = canaryOnly ? 0 : 500
-const dirtySourceLimit = 1
+const dirtySourceLimit = 10
 const maxDirtyBatches = canaryOnly ? 1 : 8
 const maxRuntimeMs = 7 * 60 * 1000
 const startedAtMs = Date.now()

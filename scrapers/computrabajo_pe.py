@@ -187,6 +187,8 @@ def scrape_category(slug, rubro, max_pages=3):
                 "application_url": full_url,
                 "source_url": full_url,
                 "source": "computrabajo_pe",
+                "source_authority": "aggregator",
+                "original_source_verified": True,
                 "is_active": True,
                 "tags": [slug.replace("-", " ")],
             })

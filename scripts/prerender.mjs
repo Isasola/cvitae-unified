@@ -466,7 +466,7 @@ async function prerender() {
       path: 'oportunidades/peru',
       title: 'Empleos y oportunidades en Perú | CVitae',
       desc: 'Empleos, becas y programas verificados disponibles para personas en Perú y América Latina.',
-      index: false,
+      index: true,
       snapshot: marketSnapshotContent('peru'),
     },
     {
