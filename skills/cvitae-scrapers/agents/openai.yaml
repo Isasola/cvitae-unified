@@ -1,4 +1,4 @@
 interface:
   display_name: "CVitae Scrapers"
-  short_description: "Audita y agrega fuentes de oportunidades seguras"
-  default_prompt: "Usa $cvitae-scrapers para auditar o incorporar una fuente sin publicar datos no verificados."
+  short_description: "Investiga fuentes reales y entrega oportunidades trazables"
+  default_prompt: "Usa $cvitae-scrapers: primero investiga el portal real, determina el método y campos autoritativos; después ejecuta adquisición por Registry/Sink/Universe hasta un resultado medido para matching y demás consumidores autorizados. Respeta WORKING_PRINCIPLES y no cierres por tests locales."
