@@ -1,0 +1,96 @@
+name: CVitae LATAM Scrapers
+
+on:
+  # GitHub scheduled workflows run from the repository's effective default branch.
+  # This independent gate and the per-source certification variable both default OFF.
+  schedule:
+    - cron: '23 */6 * * *'
+    - cron: '41 10 * * *'
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Fuente o grupo LATAM. Solo se ejecutan fuentes implementadas en este workflow.'
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - py_official
+          - paraguayconcursa_mef
+          - psf_hiringroom
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cvitae-latam-scrapers
+  cancel-in-progress: false
+
+jobs:
+  paraguayconcursa-mef:
+    if: >-
+      vars.CVITAE_LATAM_SCRAPERS_ENABLED == 'true' &&
+      vars.CVITAE_LATAM_PARAGUAYCONCURSA_CERTIFIED == 'true' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '23 */6 * * *') ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.source == 'all' || inputs.source == 'py_official' || inputs.source == 'paraguayconcursa_mef')
+      )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CVITAE_LATAM_MAX_PAGES: '3'
+      CVITAE_LATAM_MAX_DETAILS: '20'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: scrapers/requirements.txt
+      - name: Install bounded scraper dependencies
+        run: pip install requests beautifulsoup4 lxml
+      - name: Run Paraguay Concursa through source control
+        continue-on-error: true
+        run: >-
+          python scripts/run_scraper_monitored.py paraguayconcursa_mef_scraper
+          paraguayconcursa_mef_scraper scrapers/paraguayconcursa_mef_scraper.py
+          --timeout 900 --max-items-cap 20
+      - name: Summarize monitored LATAM run
+        if: always()
+        run: python scripts/summarize_scraper_run.py --require-progress
+
+  psf-hiringroom:
+    if: >-
+      vars.CVITAE_LATAM_SCRAPERS_ENABLED == 'true' &&
+      vars.CVITAE_LATAM_PSF_HIRINGROOM_CERTIFIED == 'true' &&
+      vars.CVITAE_PSF_HIRINGROOM_FEED_AUTHORIZED == 'true' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '41 10 * * *') ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.source == 'all' || inputs.source == 'py_official' || inputs.source == 'psf_hiringroom')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CVITAE_PSF_HIRINGROOM_FEED_AUTHORIZED: ${{ vars.CVITAE_PSF_HIRINGROOM_FEED_AUTHORIZED }}
+      CVITAE_LATAM_MAX_DETAILS: '20'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: scrapers/requirements.txt
+      - name: Install bounded scraper dependencies
+        run: pip install requests beautifulsoup4 lxml
+      - name: Run PSF tenant through source control
+        run: >-
+          python scripts/run_scraper_monitored.py psf_hiringroom_scraper
+          psf_hiringroom_scraper scrapers/psf_hiringroom_scraper.py
+          --timeout 900 --max-items-cap 20
+      - name: Summarize monitored PSF run
+        if: always()
+        run: python scripts/summarize_scraper_run.py --require-progress

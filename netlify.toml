@@ -108,9 +108,34 @@
   force = true
 
 [[redirects]]
+  from = "/blog"
+  to = "/.netlify/functions/public-blog-post?view=list"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/blog/index.html"
+  to = "/.netlify/functions/public-blog-post?view=list"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/blog/:slug"
-  to = "/404.html"
-  status = 404
+  to = "/.netlify/functions/public-blog-post?slug=:slug"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/blog/:slug/"
+  to = "/.netlify/functions/public-blog-post?slug=:slug"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/blog/:slug/index.html"
+  to = "/.netlify/functions/public-blog-post?slug=:slug"
+  status = 200
+  force = true
 
 [[redirects]]
   from = "/vacante/:slug"

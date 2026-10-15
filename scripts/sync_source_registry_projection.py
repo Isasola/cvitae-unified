@@ -31,6 +31,15 @@ PROJECTION_FIELDS = tuple(field for field in PROJECTION_FIELDS if field != "sour
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
+def initial_source_enabled(source: str) -> bool:
+    """Honor a source-specific closed initial gate on first projection INSERT."""
+    registry = json.loads((ROOT / "scrapers" / "source_registry.json").read_text(encoding="utf-8"))
+    entry = next((row for row in registry.get("sources", []) if row.get("source_id") == source), None)
+    if entry and "initial_is_enabled" in entry:
+        return bool(entry["initial_is_enabled"])
+    return operational_default(PROFILES[source]) if source in PROFILES else False
+
+
 def target_identity(requested: str) -> dict[str, Any]:
     """Fail closed: production must match an explicitly configured public host."""
     url = str(os.environ.get("SUPABASE_URL") or "").rstrip("/")
@@ -163,7 +172,7 @@ def apply(rows: list[dict[str, Any]], *, session: requests.Session | None = None
             payload = {
                 **row["desired"], "display_name": row["source"].replace("_", " ").title(),
                 "trust_level": "review", "auto_verify": False,
-                "is_enabled": operational_default(PROFILES[row["source"]]) if row["source"] in PROFILES else False,
+                "is_enabled": initial_source_enabled(row["source"]),
             }
             response = session.post(
                 f"{api_base()}/opportunity_sources", headers={**api_headers(), "Prefer": "return=representation"},

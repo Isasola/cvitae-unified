@@ -13,7 +13,8 @@ def main() -> None:
     data = json.loads(REGISTRY.read_text(encoding="utf-8"))
     allowed_types = set(data.get("proposed_types") or [])
     allowed_tiers = {"A", "B", "C"}
-    allowed_statuses = {"untested", "research_pending", "research_verified", "candidate", "active", "paused", "broken"}
+    # `review_required` remains a supported intake state used by the public ATS connectors.
+    allowed_statuses = {"untested", "research_pending", "research_verified", "candidate", "active", "paused", "broken", "review_required"}
     seen: set[str] = set()
     errors: list[str] = []
     for index, source in enumerate(data.get("sources") or [], start=1):
@@ -32,6 +33,14 @@ def main() -> None:
             errors.append(f"{source_id}: start_url debe ser HTTPS")
         if source.get("source_tier") != "A" and not source.get("original_source_required"):
             errors.append(f"{source_id}: Tier B/C debe exigir fuente original")
+        if source_id == "paraguayconcursa_mef":
+            control = source.get("operational_control") or {}
+            if source.get("collection_enabled") is not False or source.get("initial_is_enabled") is not False:
+                errors.append(f"{source_id}: collection and source gates must start closed")
+            if control.get("scraper_id") != "paraguayconcursa_mef_scraper":
+                errors.append(f"{source_id}: operational control scraper_id mismatch")
+            if control.get("max_items_per_run") != 20 or control.get("max_runtime_seconds") != 900:
+                errors.append(f"{source_id}: unsafe initial budget or runtime")
     if errors:
         raise SystemExit("\n".join(errors))
     print(json.dumps({"valid": True, "sources": len(seen), "by_tier": {tier: sum(1 for row in data["sources"] if row["source_tier"] == tier) for tier in sorted(allowed_tiers)}}, ensure_ascii=False))

@@ -5,10 +5,11 @@ import { fetchAllPages } from '../../src/lib/paged-fetch.js'
 import { seoUniversePages } from '../../src/lib/seo-universe-fetch.js'
 import { STATIC_PUBLIC_SITEMAP_ROUTES } from '../../src/lib/static-sitemap-routes.js'
 import { canonicalSitemapRows, sitemapIndexEntries as sitemapIndexEntriesForUniverse } from '../../src/lib/sitemap-universe.js'
+import { isCurrentPublicBlog, publicBlogExclusionReason } from '../../src/lib/public-blog-contract'
 
 const SITE_URL = 'https://cvitae.lat'; const PAGE_SIZE = 1000
 const esc = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-const response = (body: string) => ({ statusCode: 200, headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' }, body })
+const response = (body: string, noStore = false) => ({ statusCode: 200, headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': noStore ? 'no-store' : 'public, s-maxage=3600, stale-while-revalidate=86400' }, body })
 const urlset = (rows: Array<{ canonical_path: string; updated_at?: string | null }>) => `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.map(row => `  <url><loc>${esc(`${SITE_URL}${row.canonical_path}`)}</loc><lastmod>${(row.updated_at || new Date().toISOString()).slice(0,10)}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>`).join('\n')}\n</urlset>`
 
 export function opportunitySitemapPage(path: string, inventory: Array<{ canonical_path:string; updated_at?:string | null }>) {
@@ -35,8 +36,9 @@ export async function opportunitySitemapPageFromUniverse(supabase: ReturnType<ty
   const start = (page - 1) * PAGE_SIZE
   const rows: Array<{ canonical_path:string; updated_at:string | null }> = []
   let position = 0
-  for await (const batch of seoUniversePages(supabase, 'id,slug,opportunity_type,opportunity_kind,type,updated_at,created_at')) {
+  for await (const batch of seoUniversePages(supabase, 'id,slug,source,opportunity_type,opportunity_kind,type,updated_at,created_at')) {
     for (const row of batch) {
+      // opportunity_seo_universe is the single SQL authority for this surface.
       if (position++ < start) continue
       rows.push({ canonical_path: canonicalOpportunityPath(row.slug, row.opportunity_type || row.opportunity_kind || row.type), updated_at: row.updated_at || row.created_at || null })
       if (rows.length === PAGE_SIZE) return response(urlset(rows))
@@ -47,35 +49,43 @@ export async function opportunitySitemapPageFromUniverse(supabase: ReturnType<ty
 
 export async function opportunitySitemapSize(supabase: ReturnType<typeof makeSupabaseAdmin>) {
   let size = 0
-  for await (const batch of seoUniversePages(supabase, 'id')) size += batch.length
+  for await (const batch of seoUniversePages(supabase, 'id,source')) size += batch.length
   return size
 }
 async function publicRows(supabase: ReturnType<typeof makeSupabaseAdmin>, table: 'content_hub', prefix: '/blog') {
   const rows = await fetchAllPages(PAGE_SIZE, async (offset, size) => {
-    let query: any = supabase.from(table).select('id,slug,created_at,updated_at').not('slug', 'is', null).order('updated_at', { ascending:false }).order('id', { ascending:true }).range(offset, offset + size - 1)
+    let query: any = supabase.from(table).select('id,tipo,is_active,titulo,slug,created_at,updated_at,fecha_vencimiento,metadata').not('slug', 'is', null).order('updated_at', { ascending:false }).order('id', { ascending:true }).range(offset, offset + size - 1)
     query = query.eq('tipo', 'blog').eq('is_active', true)
     const { data, error } = await query; if (error) throw error
     return data || []
   })
-  return canonicalSitemapRows(prefix, rows)
+  const checkedAt = Date.now()
+  const invalidExpiry = rows.filter(row => publicBlogExclusionReason(row, checkedAt) === 'BLOG_EXPIRY_INVALID')
+  if (invalidExpiry.length) console.error('[sitemap:blog-invalid-expiry]', JSON.stringify({ count: invalidExpiry.length, ids: invalidExpiry.map(row => row.id).filter(Boolean) }))
+  return canonicalSitemapRows(prefix, rows.filter(row => isCurrentPublicBlog(row, checkedAt)))
 }
 
 export const handler: Handler = async (event) => {
   try {
     const supabase = makeSupabaseAdmin(); const path = event.path || '/sitemap.xml'
     if (path === '/sitemap-static.xml') return response(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${STATIC_PUBLIC_SITEMAP_ROUTES.map(route => `<url><loc>${esc(`${SITE_URL}${route.url}`)}</loc></url>`).join('')}</urlset>`)
-    if (/^\/sitemap-opportunities(?:\/|-)\d+\.xml$/.test(path)) return await opportunitySitemapPageFromUniverse(supabase, path)
-    if (path === '/sitemap-blog.xml') return singletonSitemapPage(path, '/sitemap-blog.xml', await publicRows(supabase, 'content_hub', '/blog'))
+    if (/^\/sitemap-opportunities(?:\/|-)\d+\.xml$/.test(path)) {
+      return await opportunitySitemapPageFromUniverse(supabase, path)
+    }
+    if (path === '/sitemap-blog.xml') {
+      const page = singletonSitemapPage(path, '/sitemap-blog.xml', await publicRows(supabase, 'content_hub', '/blog'))
+      return page.statusCode === 200 ? { ...page, headers: { ...('headers' in page ? page.headers : {}), 'Cache-Control': 'no-store' } } : page
+    }
     if (path === '/sitemap-vacancies.xml') return { statusCode:404, body:'Recruiter application routes are not an authorized SEO universe' }
     if (path !== '/sitemap.xml') return { statusCode:404, body:'Unknown sitemap' }
-    const [opportunityCount, { count: blogCount, error: blogCountError }] = await Promise.all([
+    const [opportunityCount, blogRows] = await Promise.all([
       opportunitySitemapSize(supabase),
-      supabase.from('content_hub').select('id', { count: 'exact', head: true }).eq('tipo', 'blog').eq('is_active', true).not('slug', 'is', null),
+      publicRows(supabase, 'content_hub', '/blog'),
     ])
-    if (blogCountError) throw blogCountError
+    const blogCount = blogRows.length
     if (path === '/sitemap.xml') {
       const today = new Date().toISOString().slice(0,10); const entries = sitemapIndexEntries(opportunityCount || 0, blogCount || 0)
-      return response(`<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map(name => `  <sitemap><loc>${SITE_URL}/${name}</loc><lastmod>${today}</lastmod></sitemap>`).join('\n')}\n</sitemapindex>`)
+      return response(`<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map(name => `  <sitemap><loc>${SITE_URL}/${name}</loc><lastmod>${today}</lastmod></sitemap>`).join('\n')}\n</sitemapindex>`, true)
     }
     return { statusCode:404, body:'Unknown sitemap' }
   } catch (error) { console.error('[sitemap]', error); return { statusCode: 500, body: '<!-- sitemap generation failed -->' } }

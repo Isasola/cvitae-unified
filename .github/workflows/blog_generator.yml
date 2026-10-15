@@ -8,14 +8,19 @@ on:
 
 jobs:
   generate-blog:
-    if: github.event_name == 'workflow_dispatch' || vars.CVITAE_PROD_RELEASE_VALIDATED == 'true'
+    if: vars.CVITAE_BLOG_DRAFTS_ENABLED == 'true' && vars.CVITAE_BLOG_DRAFTS_CERTIFIED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: cvitae-blog-drafts
+      cancel-in-progress: false
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_MODEL: ${{ vars.CVITAE_BLOG_MODEL || 'gemini-3.8-flash' }}
+      GEMINI_FALLBACK_MODEL: ${{ vars.CVITAE_BLOG_FALLBACK_MODEL || 'gemini-3.6-flash' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -28,5 +33,5 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Generate blog drafts from SS opportunities
+      - name: Generate pending drafts from canonical Catalog and SEO views
         run: python scripts/generate_blog_posts.py

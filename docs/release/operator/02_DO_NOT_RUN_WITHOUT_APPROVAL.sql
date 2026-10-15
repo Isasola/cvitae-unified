@@ -1,0 +1,8 @@
+-- DO NOT RUN WITHOUT A SEPARATE EXPLICIT APPROVAL.
+-- This file is intentionally inert and contains no executable SQL.
+-- The additive release migrations, in order, are:
+-- 1. supabase/migrations/202610140001_paraguayconcursa_source_operation.sql
+-- 2. supabase/migrations/202610140002_explicit_seo_permission_universe.sql
+-- Review and apply them individually after release approval; do not run
+-- generic pending migrations. Do not apply 202610040001 or any R3 migration.
+-- The 140002 rollback is fail-closed and can abort without reverting data.

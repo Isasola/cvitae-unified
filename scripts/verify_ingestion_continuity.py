@@ -310,7 +310,8 @@ def test_j_max_items_cap() -> None:
     assert_eq(summary.unique, 3, "J: unique remains the validated unique total")
     assert_eq(summary.budget_skipped, 1, "J: one valid item skipped due to budget")
     assert_eq(summary.rejected, 0, "J: budget must not be a rejection")
-    assert_true(any("Límite operativo" in e for e in summary.errors), "J: cap error logged")
+    assert_eq(summary.errors, [], "J: budget is observable without being reported as a technical error")
+    assert_eq(summary.to_dict()["rejected_by_gate_reasons"], {}, "J: budget does not create gate rejection reasons")
     receipt_batches = [call.kwargs.get("json", []) for call in sink.session.post.call_args_list if "opportunity_ingestion_events" in call.args[0]]
     assert_true(any(event.get("outcome") == "BUDGET_SKIPPED" for batch in receipt_batches for event in batch), "J: budget-skipped result remains observable")
 
@@ -364,8 +365,8 @@ def test_j3_sparse_fields_keep_sql_defaults() -> None:
     )
 
 
-def test_j4_one_bad_row_does_not_poison_other_shape() -> None:
-    print("\nFixture J4: one explicit invalid NULL cannot fail a second shape")
+def test_j4_explicit_null_uses_schema_default_without_poisoning_batch() -> None:
+    print("\nFixture J4: explicit NULL is omitted so the NOT NULL schema default is preserved")
     bad = _item(
         application_url="https://example.com/sparse/invalid",
         verification_reasons=None,
@@ -373,44 +374,22 @@ def test_j4_one_bad_row_does_not_poison_other_shape() -> None:
     good = _item(application_url="https://example.com/sparse/valid")
     sink = _sink_with_existing({})
     success = MagicMock(status_code=204, text="")
-    rejection = MagicMock(
-        status_code=400,
-        text='{"code":"23502","message":"NOT NULL verification_reasons"}',
-    )
-    rejection.json.return_value = {
-        "code": "23502",
-        "message": 'null value in column "verification_reasons" of relation "opportunities" violates not-null constraint',
-        "details": "Failing row contains SENSITIVE_RECORD",
-    }
     original_post = sink.session.post
 
     def post_result(url: str, **kwargs: Any) -> Any:
         if "/opportunities?on_conflict=" not in url:
             return success
         rows = kwargs["json"]
-        if any("verification_reasons" in row and row["verification_reasons"] is None for row in rows):
-            return rejection
+        assert_true(all("verification_reasons" not in row for row in rows), "J4: NULL reason field omitted to preserve DB default")
         return success
 
     original_post.side_effect = post_result
     summary = sink.upsert([bad, good])
-    assert_eq(summary.failed, 1, "J4: only invalid row fails")
-    assert_eq(summary.inserted, 1, "J4: valid row persists")
-    assert_eq(summary.rejected, 0, "J4: persistence failure not misclassified as rejection")
+    assert_eq(summary.failed, 0, "J4: schema default prevents an avoidable persistence failure")
+    assert_eq(summary.inserted, 2, "J4: both rows persist")
+    assert_eq(summary.rejected, 0, "J4: NULL normalization is not a gate rejection")
     assert_eq(summary.to_dict()["processed_attempted"], 2, "J4: reconciliation includes both")
-    assert_true(
-        any(
-            "code=23502" in error
-            and "column=verification_reasons" in error
-            and "affected_batch_rows=1" in error
-            for error in summary.errors
-        ),
-        "J4: SQLSTATE, actual failing column and batch impact visible",
-    )
-    assert_true(
-        all("SENSITIVE_RECORD" not in error for error in summary.errors),
-        "J4: raw failing row is not leaked into diagnostics",
-    )
+    assert_eq(summary.errors, [], "J4: valid rows need no persistence error")
 
 
 # ─── Lineage summary method ───────────────────────────────────────────────────
@@ -595,7 +574,7 @@ if __name__ == "__main__":
         test_j_max_items_cap,
         test_j2_persistence_failure_reconciliation,
         test_j3_sparse_fields_keep_sql_defaults,
-        test_j4_one_bad_row_does_not_poison_other_shape,
+    test_j4_explicit_null_uses_schema_default_without_poisoning_batch,
         test_lineage_summary,
         test_trigger_type_max_items,
         test_k_source_alias_stable,

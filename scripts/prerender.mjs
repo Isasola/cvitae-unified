@@ -9,6 +9,7 @@ import { toGoogleEmploymentType } from '../src/lib/seo/employment-type.shared.js
 import { deadlineLifecycle, isScholarshipLike } from '../src/lib/opportunity-truth.ts'
 import { safeExternalUrl } from '../src/lib/safe-url.ts'
 import { publicDetailDescription, withPublicDetailHead } from '../src/lib/public-detail-head.js'
+import { isCurrentPublicBlog, publicBlogExclusionReason } from '../src/lib/public-blog-contract.ts'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
@@ -50,7 +51,12 @@ async function fetchCanonicalPublicRows(supabase, table, prefix, columns, orderC
     if (error) throw error
     return data || []
   })
-  return canonicalPublicRows(prefix, rows)
+  if (table === 'content_hub') {
+    const invalidExpiry = rows.filter(row => publicBlogExclusionReason(row) === 'BLOG_EXPIRY_INVALID')
+    if (invalidExpiry.length) console.error('[prerender:blog-invalid-expiry]', JSON.stringify({ count: invalidExpiry.length, ids: invalidExpiry.map(row => row.id).filter(Boolean) }))
+  }
+  const publishedRows = table === 'content_hub' ? rows.filter(isCurrentPublicBlog) : rows
+  return canonicalPublicRows(prefix, publishedRows)
 }
 
 function stripInlineMarkdown(text) {
@@ -499,11 +505,11 @@ async function prerender() {
   if (publicFixturePath) {
     const fixture = JSON.parse(readFileSync(publicFixturePath, 'utf8'))
     if (!Array.isArray(fixture.blogs) || !Array.isArray(fixture.vacancies)) throw new Error('prerender_public_fixture_invalid')
-    posts = canonicalPublicRows('/blog', fixture.blogs.filter(row => row.is_active !== false))
+    posts = canonicalPublicRows('/blog', fixture.blogs.filter(row => isCurrentPublicBlog(row)))
     vacancies = canonicalPublicRows('/vacante', fixture.vacancies.filter(row => row.is_active !== false))
   } else if (supabase) {
     ;[posts, vacancies] = await Promise.all([
-      fetchCanonicalPublicRows(supabase, 'content_hub', '/blog', 'id,slug,titulo,cuerpo,created_at,updated_at,imagen_url,categoria,metadata'),
+      fetchCanonicalPublicRows(supabase, 'content_hub', '/blog', 'id,slug,titulo,cuerpo,created_at,updated_at,imagen_url,categoria,metadata,fecha_vencimiento,is_active'),
       fetchCanonicalPublicRows(supabase, 'recruiter_vacancies', '/vacante', 'id,slug,title,company,location,modality,description,requirements,salary_range,created_at', 'created_at'),
     ])
   }

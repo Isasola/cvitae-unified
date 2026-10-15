@@ -109,11 +109,13 @@ class IngestionSummary:
     found: int = 0
     valid: int = 0
     unique: int = 0
+    submitted: int = 0
     inserted: int = 0
     updated: int = 0
     unchanged: int = 0
     duplicates_in_run: int = 0
     rejected: int = 0
+    rejection_reasons: dict[str, int] = field(default_factory=dict)
     budget_skipped: int = 0
     failed: int = 0
     errors: list[str] = field(default_factory=list)
@@ -130,6 +132,12 @@ class IngestionSummary:
         # clarifies that persistence failures are attempted, never invisible.
         payload["processed_attempted"] = self.inserted + self.updated + self.unchanged + self.rejected + self.failed
         payload["processed"] = payload["processed_attempted"]
+        payload["discovered"] = self.found
+        payload["normalized"] = self.valid
+        payload["duplicate"] = self.duplicates_in_run
+        payload["rejected_by_gate"] = self.rejected
+        payload["rejected_by_gate_reasons"] = self.rejection_reasons
+        payload["continuation_pending"] = None
         payload["unprocessed_due_to_budget"] = self.budget_skipped
         payload["pipeline_traced"] = self.lineage_traced
         payload["lineage_events_written"] = self.lineage_written
@@ -210,6 +218,12 @@ def _normalize_py_geo(item: dict[str, Any]) -> None:
 
 def normalize_opportunity(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
     item = {key: value for key, value in raw.items() if key in ALLOWED_FIELDS}
+    # `verification_reasons` is NOT NULL in the production schema. `None`
+    # means the producer supplied no decision evidence; omit the column so an
+    # insert receives its database default and an update preserves prior
+    # evidence. An explicit list (including []) remains source-owned data.
+    if "verification_reasons" in item and item["verification_reasons"] is None:
+        item.pop("verification_reasons", None)
     item["title"] = _text(item.get("title"), 240)
     item["application_url"] = _text(item.get("application_url"), 2000)
     if not item["title"]:
@@ -486,9 +500,9 @@ class OpportunitySink:
             item, reason = normalize_opportunity(raw)
             if not item:
                 summary.rejected += 1
+                reason_code = reason or "OPPORTUNITY_INVALID"
+                summary.rejection_reasons[reason_code] = summary.rejection_reasons.get(reason_code, 0) + 1
                 rejected_lineage.append(({"source": raw.get("source"), "application_url": raw.get("application_url"), "reason": reason}, "REJECTED"))
-                if len(summary.errors) < 10:
-                    summary.errors.append(reason or "oportunidad inválida")
                 continue
             summary.valid += 1
             if os.getenv("CVITAE_REQUIRE_REVIEW", "0") == "1":
@@ -508,7 +522,6 @@ class OpportunitySink:
         items = list(unique.values())
         if len(items) > max_items:
             summary.budget_skipped += len(items) - max_items
-            summary.errors.append(f"Límite operativo aplicado: {max_items} de {len(items)} oportunidades únicas")
             rejected_lineage.extend(({**item, "reason": "PROCESSING_BUDGET_SKIPPED"}, "BUDGET_SKIPPED") for item in items[max_items:])
             items = items[:max_items]
         if not items:
@@ -570,6 +583,9 @@ class OpportunitySink:
             changed_items.append(item)
 
         items = changed_items
+        # This is the number of rows handed to PostgREST after validation,
+        # within-run dedupe, budget selection, and unchanged-row elimination.
+        summary.submitted = len(items)
         for start in range(0, len(items), batch_size):
             window = items[start:start + batch_size]
             # PostgREST needs homogeneous column sets. Never synthesize absent

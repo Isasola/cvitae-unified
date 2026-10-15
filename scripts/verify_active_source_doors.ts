@@ -16,7 +16,7 @@ assert.equal(flow.observation.http_status, 200)
 assert.equal(flow.lineage.observation.state, 'PERSISTED')
 assert.equal(flow.ingestion_event.trace_state,'TRACED')
 assert.equal(flow.ingestion_event.opportunity_id,flow.observation.opportunity_id)
-const row = { ...flow.row, id:'future-himalayas-factual', slug:'factual-role', is_active:true, verification_status:'verified' }
+const row = { ...flow.row, id:'future-himalayas-factual', slug:'factual-role', description:`${flow.row.description} The role requires project planning, stakeholder communication, reporting, evaluation of outcomes, compliance reviews, and coordination with programme officers.`, is_active:true, verification_status:'verified' }
 const stale = (source:string) => ({ source, is_enabled:false, catalog_enabled:false, matching_enabled:false, alerts_enabled:false, seo_enabled:false })
 const now = new Date('2026-10-06T12:00:00Z')
 for (const source of ['himalayas','jobicy','remotive','computrabajo','weworkremotely','impactpool','fundacion_carolina','arbeitnow','unjobs']) {
@@ -26,10 +26,11 @@ for (const source of ['himalayas','jobicy','remotive','computrabajo','weworkremo
   const result = evaluateOpportunityDistribution({ ...row, source }, [policy], now)
   const universe = classifyOpportunityUniverse({ ...row, source }, [policy], flow.observation, now)
   assert.equal(universe.source_operational_state, 'ENABLED')
-  for (const [consumer, field] of [['catalog','catalog_state'],['matching','final_matching_state'],['alerts','alerts_state'],['seo','seo_state']] as const)
-    assert.equal(result[consumer].allowed, universe[field] === 'READY', `${source}/${consumer}: shared effective authority`)
-  if (['himalayas','jobicy','remotive','computrabajo','weworkremotely','impactpool','fundacion_carolina','arbeitnow','unjobs'].includes(source)) {
-    assert(result.catalog.allowed && result.matching.allowed && result.alerts.allowed && result.seo.allowed)
+  for (const [consumer, field, dimension] of [['catalog','catalog_state','catalog'],['matching','final_matching_state','matching'],['alerts','alerts_state','alerts'],['seo','seo_state','seo_index']] as const) {
+    const permission = sourcePermissionDimensionTruth(source, dimension).state
+    const universeReady = universe[field] === 'READY'
+    assert.equal(result[consumer].allowed, universeReady && permission !== 'DENIED', `${source}/${consumer}: row readiness, source operation and exact consumer restriction remain separate`)
+    if (permission === 'UNKNOWN' && universeReady) assert.equal(result[consumer].allowed, true, `${source}/${consumer}: UNKNOWN is not an invented veto`)
   }
 }
 const himalayas = evaluateOpportunityDistribution(row, [stale('himalayas')], now)
@@ -41,12 +42,15 @@ assert(!himalayas.googleJobs.allowed && !himalayas.jobPosting.allowed && !himala
 // Explicit external DENIED fixture; do not rewrite actual WWR UNKNOWN evidence.
 const wwrExternalDenied = evaluateOpportunityDistribution({...row,source:'weworkremotely'},[stale('weworkremotely')],now,
   (source,dimension)=> dimension==='google_jobs' ? {...sourcePermissionDimensionTruth(source,dimension),state:'DENIED',reason:'LOCAL_EXTERNAL_DENIED_FIXTURE'} : sourcePermissionDimensionTruth(source,dimension))
-for (const consumer of ['catalog','matching','alerts','seo'] as const) assert(wwrExternalDenied[consumer].allowed)
+for (const [consumer, dimension] of [['catalog','catalog'],['matching','matching'],['alerts','alerts'],['seo','seo_index']] as const) {
+  assert.equal(wwrExternalDenied[consumer].allowed, sourcePermissionDimensionTruth('weworkremotely', dimension).state !== 'DENIED', `WWR explicit restriction is scoped to ${consumer}`)
+}
 assert.equal(wwrExternalDenied.googleJobs.allowed,false)
 assert(wwrExternalDenied.googleJobs.reasons.includes('GOOGLE_JOBS_SOURCE_PERMISSION_DENIED'))
 const wwrExternalAllowed = evaluateOpportunityDistribution({...row,source:'weworkremotely'},[stale('weworkremotely')],now,
   (source,dimension)=> dimension==='google_jobs' ? {...sourcePermissionDimensionTruth(source,dimension),state:'ALLOWED',reason:'LOCAL_EXTERNAL_ALLOWED_FIXTURE'} : sourcePermissionDimensionTruth(source,dimension))
 assert.equal(wwrExternalAllowed.googleJobs.allowed,true,'external negative has discriminating power with identical row/operator facts')
+for (const consumer of ['catalog','matching','alerts','seo'] as const) assert.equal(wwrExternalAllowed[consumer].allowed, false, `an unrelated Google Jobs permission does not unlock WWR ${consumer}`)
 assert.equal(sourcePermissionDimensionTruth('weworkremotely','google_jobs').state,'UNKNOWN','fixture cannot invent a WWR permission decision')
 const unknown = classifyOpportunityUniverse({ ...row, source:'unjobs' }, [stale('unjobs')], null, now)
 assert.equal(unknown.source_operational_state, 'ENABLED')
@@ -56,7 +60,7 @@ assert(!unknown.unresolved_dimensions.includes('SOURCE_MATCH_PERMISSION'))
 const thin = classifyOpportunityUniverse({ ...row, description:'' }, [stale('himalayas')], null, now)
 assert.equal(thin.source_operational_state, 'ENABLED')
 assert.equal(thin.seo_state, 'NOT_READY')
-assert.equal(thin.seo_effective_reason, 'THIN_CONTENT')
+assert.equal(thin.seo_effective_reason, 'DESCRIPTION_WITHOUT_FACTUAL_CONTENT')
 assert.equal(classifyOpportunityUniverse(row, [stale('himalayas')], null, now).seo_state, 'READY')
 for (const consumer of ['source','catalog','matching','alerts','seo'] as const) {
   const policy = { ...stale('himalayas'), consumer_switch_overrides:{ [consumer]:false } }
@@ -87,8 +91,14 @@ assert.equal(unknownDiagnostic.stages.find(item => item.name === 'CONSUMER PERMI
 assert.equal(unknownDiagnostic.stages.find(item => item.name === 'ADAPTER')?.status, 'NOT_EVALUATED')
 assert(JSON.stringify(diagnostics).length < 12000)
 const wiring = readFileSync('supabase/migrations/202610040001_source_switch_wiring.sql','utf8')
+const additiveSourceWiring = readFileSync('supabase/migrations/202610140001_paraguayconcursa_source_operation.sql','utf8')
 const registry = JSON.parse(readFileSync('src/generated/source-intelligence-registry.json','utf8'))
-for (const profile of registry.sources) assert.equal(wiring.includes(`'${profile.canonical_source}'`), registeredSourceOperationalDefault(profile.canonical_source), `SQL registered operational projection: ${profile.canonical_source}`)
+for (const profile of registry.sources) {
+  const registeredInExistingProjection = wiring.includes(`'${profile.canonical_source}'`)
+    || additiveSourceWiring.includes(`'${profile.canonical_source}'`)
+  if (registeredInExistingProjection) assert.equal(registeredSourceOperationalDefault(profile.canonical_source), true, `SQL operational source has a local executable producer: ${profile.canonical_source}`)
+}
+assert(additiveSourceWiring.includes("'paraguayconcursa_mef'"), 'new Paraguay source is wired additively without editing the applied migration')
 for (const permission of canonicalSourcePermissionRegistry()) for (const decision of Object.values(permission.dimensions))
   if (decision.state === 'DENIED') assert.equal(sourcePermissionEvidenceClass(decision), 'EXPLICIT_EVIDENCE_BACKED')
 assert.equal(sourcePermissionDimensionTruth('wwr','seo_index').state,'DENIED')

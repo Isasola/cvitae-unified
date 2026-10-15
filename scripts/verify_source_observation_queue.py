@@ -12,18 +12,18 @@ from source_identity import IdentityResult
 NOW = datetime(2026, 9, 13, tzinfo=timezone.utc)
 
 def row(identifier: str, **values):
-    base = {"id": identifier, "source": "unjobs", "updated_at": "2026-09-01T00:00:00+00:00", "organization": "UN Agency", "description": "", "location": "", "country_code": None, "onsite_country": None, "remote_scope": None, "source_url": None, "application_url": f"https://unjobs.org/vacancies/{identifier}", "verification_status": "verified", "catalog_eligible": False, "match_eligible": False, "deleted_at": None, "archived_at": None}
+    base = {"id": identifier, "source": "unjobs", "title": "Specific Professional Role", "updated_at": "2026-09-01T00:00:00+00:00", "organization": "UN Agency", "description": "The organization supports public service, sustainable development, technical coordination, transparent administration, and professional growth for eligible applicants.", "location": "", "country_code": None, "onsite_country": None, "remote_scope": None, "source_url": None, "application_url": f"https://unjobs.org/vacancies/{identifier}", "verification_status": "verified", "catalog_eligible": False, "match_eligible": False, "deleted_at": None, "archived_at": None}
     return {**base, **values}
 
 p0 = row("p0", match_eligible=True, country_code="WW")
 p1 = row("p1", catalog_eligible=True)
 p2 = row("p2", verification_status="in_review")
-complete = row("complete", description="x" * 100, location="La Paz, Bolivia", country_code="BO", source_url="https://unjobs.org/vacancies/complete")
+complete = row("complete", location="La Paz, Bolivia", country_code="BO", source_url="https://unjobs.org/vacancies/complete")
 selected, summary, details = batch.select_candidates([p2, complete, p1, p0], 4, now=NOW)
 assert [item["id"] for item in selected] == ["p0", "p1", "p2"]
 assert details["p0"]["priority"] == "P0" and summary["p0"] == 1 and summary["p1"] == 1 and summary["p2"] == 1
 assert summary["excluded"]["not_degraded"] == 1
-assert batch.priority({**p1, "description": "x" * 100}) < batch.priority({**p2, "country_code": "WW", "source_url": None})
+assert batch.priority({**p1, "description": "The organization supports public service, sustainable development, technical coordination, transparent administration, and professional growth for eligible applicants."}) < batch.priority({**p2, "country_code": "WW", "source_url": None})
 
 selected, summary, _ = batch.select_candidates([p0], 1, enrichments={"p0": NOW - timedelta(days=1)}, now=NOW)
 assert not selected and summary["excluded"]["recent_enrichment"] == 1

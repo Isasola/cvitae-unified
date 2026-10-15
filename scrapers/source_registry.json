@@ -28,6 +28,36 @@
   ],
   "sources": [
     {
+      "source_id": "paraguayconcursa_mef",
+      "script": "scrapers/paraguayconcursa_mef_scraper.py",
+      "start_url": "https://paraguayconcursa.mef.gov.py/",
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "A",
+      "status": "research_pending",
+      "priority": 1,
+      "priority_grade": "A",
+      "opportunity_scopes": ["public_sector_job", "government_concours"],
+      "collection_enabled": false,
+      "initial_is_enabled": false,
+      "require_review": true,
+      "operational_control": {
+        "scraper_id": "paraguayconcursa_mef_scraper",
+        "max_items_per_run": 20,
+        "max_runtime_seconds": 900,
+        "auto_pause_on_failure": true,
+        "consecutive_failures_before_pause": 2,
+        "allowed_country_codes": ["PY"],
+        "frequency": "manual_dispatch_only_until_location_and_vacancy_fields_are_verified"
+      },
+      "catalog_enabled": false,
+      "matching_enabled": false,
+      "alerts_enabled": false,
+      "seo_enabled": false,
+      "original_source_required": false,
+      "access_note": "Portal oficial del MEF con listados paginados. Adapter y HTTP acotado implementados; ubicación y vacantes faltaron en la ficha real muestreada, por lo que los registros incompletos se excluyen del sink. No activar hasta pasar validación de campos, fuente original, observaciones, Universe y revisión de permisos."
+    },
+    {
       "source_id": "greenhouse",
       "script": "scrapers/greenhouse_scraper.py",
       "start_url": "https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs?content=true",
@@ -1064,6 +1094,66 @@
       "matching_enabled": false,
       "alerts_enabled": false,
       "seo_enabled": false
+    },
+    {
+      "source_id": "grupovierci",
+      "script": "scrapers/grupovierci_scraper.py",
+      "start_url": "https://empleo.grupovierci.com/vista_prueba.php",
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "A",
+      "status": "review_required",
+      "priority": 2,
+      "priority_grade": "B",
+      "opportunity_scopes": ["employer_job", "retail_job"],
+      "collection_enabled": false,
+      "initial_is_enabled": false,
+      "require_review": true,
+      "operational_control": {
+        "scraper_id": "grupovierci_scraper",
+        "max_items_per_run": 20,
+        "max_runtime_seconds": 900,
+        "auto_pause_on_failure": true,
+        "consecutive_failures_before_pause": 2,
+        "allowed_country_codes": ["PY"],
+        "frequency": "daily_schedule_only_after_written_feed_rights_and_source_certification"
+      },
+      "catalog_enabled": false,
+      "matching_enabled": false,
+      "alerts_enabled": false,
+      "seo_enabled": false,
+      "original_source_required": true,
+      "access_note": "The current employer-owned portal is empleo.grupovierci.com; its opportunities route returned an explicit no-current-vacancies state in a bounded public read. The previous script guessed vacancies from unrelated pages, disabled TLS verification, invented Paraguay/full-time facts, and wrote directly to opportunities. Those paths are removed. Keep collection and consumers off; the new scout requires CVITAE_GRUPO_VIERCI_FEED_AUTHORIZED=true before HTTP and fails closed on any non-empty markup until stable native ID/detail/apply and use rights are verified."
+    },
+    {
+      "source_id": "psf_hiringroom",
+      "script": "scrapers/psf_hiringroom_scraper.py",
+      "start_url": "https://psf.hiringroom.com/jobs",
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "A",
+      "status": "review_required",
+      "priority": 1,
+      "priority_grade": "A",
+      "opportunity_scopes": ["employer_job", "paraguay_job"],
+      "collection_enabled": false,
+      "initial_is_enabled": false,
+      "require_review": true,
+      "operational_control": {
+        "scraper_id": "psf_hiringroom_scraper",
+        "max_items_per_run": 20,
+        "max_runtime_seconds": 900,
+        "auto_pause_on_failure": true,
+        "consecutive_failures_before_pause": 2,
+        "allowed_country_codes": ["PY"],
+        "frequency": "daily_schedule_10_41_utc_only_after_written_feed_rights_and_source_certification"
+      },
+      "catalog_enabled": false,
+      "matching_enabled": false,
+      "alerts_enabled": false,
+      "seo_enabled": false,
+      "original_source_required": true,
+      "access_note": "Public employer board returned 12 listed postings in one bounded GET on 2026-10-14; one individual posting detail was checked. HiringRoom documents its integration API for customer accounts with client credentials. Public HTML does not grant CVitae redistribution or consumer use. Keep discovery/review-only; code requires CVITAE_PSF_HIRINGROOM_FEED_AUTHORIZED=true before any scheduled HTTP request. Do not enable until written permission specifies fields, storage, linking, and each consumer. Relative posted-age labels and lack of a closing date keep records inactive/in_review."
     }
   ]
 }

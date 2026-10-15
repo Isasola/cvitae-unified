@@ -56,6 +56,8 @@ class FixtureQuery {
   limit() { return this }
   is() { return this }
   in() { return this }
+  eq() { return this }
+  maybeSingle() { return Promise.resolve({ data: null, error: new Error('fixture_routing_state_unavailable') }) }
   then(resolve: (value: any) => any, reject?: (reason: any) => any) {
     return Promise.resolve({ data: this.data, count: this.count, error: null }).then(resolve, reject)
   }
@@ -89,8 +91,8 @@ const fixtureSupabase = {
   },
 }
 const snapshot = await sourceIntelligenceSnapshot(fixtureSupabase, fixtureDashboard, [])
-assert.equal(snapshot._observability.source_count, 105)
-assert.equal(snapshot.sources.length, 105)
+assert.equal(snapshot._observability.source_count, 108)
+assert.equal(snapshot.sources.length, 108)
 assert.equal(snapshot.sources[0]._inventory_scope.inventory, 'FULL_DB')
 assert.equal(snapshot.sources[0]._inventory_scope.row_evidence, 'ON_DEMAND_INSPECTOR')
 const unjobsSnapshot = snapshot.sources.find((source: any) => source.canonical_source === 'unjobs')
@@ -99,7 +101,7 @@ assert.ok(unjobsSnapshot.expected_adapter_version && unjobsSnapshot.expected_ada
 assert.equal(unjobsSnapshot.execution.adapter_version_state, 'EXECUTED')
 assert.equal(unjobsSnapshot.history[0].extraction_metrics.scan_lineage.items, undefined)
 assert.equal(snapshot.registry.profiles, undefined)
-assert.equal(snapshot.registry.profile_count, 105)
+assert.equal(snapshot.registry.profile_count, 108)
 assert.equal(snapshot._observability.sample_sizes.observations, 1_000)
 assert.match(adminDataSource, /SOURCE_DIAGNOSTIC_SAMPLE_LIMIT = 100/)
 assert.match(adminDataSource, /SOURCE_INTELLIGENCE_GLOBAL_SAMPLE_LIMIT = 1000/)
@@ -112,4 +114,4 @@ assert.ok(fixtureSnapshotBytes < 1_000_000, `source snapshot must remain below t
 assert.ok(fixtureSnapshotBytes < 2_000_000, `source snapshot must fail before the 2 MB hard limit (got ${fixtureSnapshotBytes})`)
 assert.doesNotMatch(JSON.stringify(snapshot), /PRIVATE_ROW_SENTINEL|PRIVATE_DESCRIPTION_SENTINEL|PRIVATE_EVIDENCE_SENTINEL/)
 
-console.log(`verify_source_intelligence_item53: PASS sources=119 rows=10000 old_filter_ops=${oldFilterOperations} indexed_ops=${indexedOperations} fresh_wins=1 source_switch_invalidates=1 totals_scoped=1 optional_degraded=1 payload_deduped=1 payload_before=${beforeBytes} payload_after=${afterBytes} fixture_snapshot_bytes=${fixtureSnapshotBytes}`)
+console.log(`verify_source_intelligence_item53: PASS registry_sources=108 synthetic_sources=119 rows=10000 old_filter_ops=${oldFilterOperations} indexed_ops=${indexedOperations} fresh_wins=1 source_switch_invalidates=1 totals_scoped=1 optional_degraded=1 payload_deduped=1 payload_before=${beforeBytes} payload_after=${afterBytes} fixture_snapshot_bytes=${fixtureSnapshotBytes}`)

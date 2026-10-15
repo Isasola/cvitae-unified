@@ -4,13 +4,15 @@ import { publicOpportunitySchemaType } from '../src/lib/opportunity-truth.ts'
 import { aggregatedJobPosting } from '../src/lib/factual-job-posting.ts'
 import { sourcePermissionDimensionTruth } from '../src/lib/source-permission-truth.ts'
 
-const rich = { source:'computrabajo', slug:'programme-officer', title:'Programme Officer', organization:'Acme', description:'Coordinate programmes, monitor results, prepare reports and collaborate with partners. '.repeat(2), tags:['programme management','monitoring'], opportunity_type:'job', is_active:true, verification_status:'verified', created_at:'2026-09-20T00:00:00Z', catalog_eligible:true, match_eligible:true, alerts_eligible:true, seo_eligible:true, seo_status:'eligible' }
+const rich = { source:'computrabajo', slug:'programme-officer', title:'Programme Officer', organization:'Acme', description:'Coordinate regional programmes with local partners and monitor deliverables. Prepare quarterly reports, document compliance requirements, manage project schedules, support stakeholder meetings, evaluate outcome indicators and communicate implementation risks to the programme team.', tags:['programme management','monitoring'], opportunity_type:'job', is_active:true, verification_status:'verified', created_at:'2026-09-20T00:00:00Z', catalog_eligible:true, match_eligible:true, alerts_eligible:true, seo_eligible:true, seo_status:'eligible' }
 const policy = (source:string, extra:Partial<SourcePolicyRow> = {}):SourcePolicyRow => ({ source, is_enabled:true, catalog_enabled:true, matching_enabled:true, alerts_enabled:true, seo_enabled:true, web_catalog_allowed:true, search_engine_indexing_allowed:true, google_jobs_distribution_allowed:true, ...extra })
 let result = evaluateOpportunityDistribution(rich, [policy('computrabajo', { web_catalog_allowed:false, search_engine_indexing_allowed:null, google_jobs_distribution_allowed:false })], new Date('2026-10-03T12:00:00Z'))
-assert.equal(result.catalog.allowed, true, 'first-party Catalog is row-driven; historical permission remains advisory')
+assert.equal(result.catalog.allowed, false, 'explicit catalog-use restriction blocks only Catalog')
 assert.equal(result.catalog.capabilityState, 'DENIED')
-assert(!result.catalog.reasons.includes('SOURCE_CATALOG_PERMISSION_DENIED')); assert(result.catalog.permissionReasons.includes('SOURCE_CATALOG_PERMISSION_DENIED'))
-assert.equal(result.seo.allowed, true, 'qualifying legacy Computrabajo row gets the narrow first-party SEO exception')
+assert(result.catalog.reasons.includes('SOURCE_CATALOG_PERMISSION_DENIED'))
+assert.equal(result.catalog.permissionRole, 'EXPLICIT_FIRST_PARTY_DENY')
+assert.equal(result.matching.allowed, true, 'matching permission UNKNOWN is consultative and does not create a blanket veto')
+assert.equal(result.seo.allowed, false, 'explicit SEO restriction has no temporary source-name exception')
 assert.equal(result.seo.capabilityState, 'DENIED')
 assert.equal(result.seo.temporaryException, null)
 assert.equal(result.googleJobs.allowed, false)
@@ -36,8 +38,8 @@ for (const date of ['2026-10-03T12:00:00Z','2026-10-09T23:59:59Z','2026-10-10T00
   for (const extra of [{}, {created_at:'2026-10-05T12:00:00Z',seo_eligible:false,seo_status:'pending'}]) {
     const d=evaluateOpportunityDistribution({...rich,...extra},[policy('computrabajo')],new Date(date))
     for (const consumer of ['catalog','matching','alerts','seo'] as const) {
-      assert.equal(d[consumer].allowed,true)
-      assert.equal(d[consumer].permissionRole,'ADVISORY_FIRST_PARTY')
+      assert.equal(d[consumer].allowed,consumer==='matching')
+      assert.equal(d[consumer].permissionRole,consumer==='matching'?'ADVISORY_FIRST_PARTY':'EXPLICIT_FIRST_PARTY_DENY')
     }
     assert.equal(d.seo.capabilityState,'DENIED')
     assert.equal(d.seo.temporaryException,null)
@@ -49,7 +51,7 @@ const ctSwitchOff = evaluateOpportunityDistribution(rich, [policy('computrabajo'
 assert.equal(ctSwitchOff.seo.allowed,false,'explicit SEO switch OFF blocks even where source permission is denied')
 assert.equal(ctSwitchOff.seo.reasons.includes('SOURCE_SEO_OPERATOR_DISABLED'),true)
 result = evaluateOpportunityDistribution(rich, [policy('computrabajo')], new Date('2026-10-10T00:00:00Z'))
-assert.equal(result.catalog.allowed, true); assert.equal(result.matching.allowed, true); assert.equal(result.alerts.allowed, true); assert.equal(result.seo.allowed, true); assert.equal(result.jobPosting.allowed, false); assert.equal(result.googleJobs.allowed, false); assert.equal(result.thirdParty.allowed, false)
+assert.equal(result.catalog.allowed, false); assert.equal(result.matching.allowed, true); assert.equal(result.alerts.allowed, false); assert.equal(result.seo.allowed, false); assert.equal(result.jobPosting.allowed, false); assert.equal(result.googleJobs.allowed, false); assert.equal(result.thirdParty.allowed, false)
 assert.equal(sourcePermissionDimensionTruth('computrabajo', 'collect').state, 'DENIED')
 assert.equal(sourcePermissionDimensionTruth('computrabajo', 'detail_fetch').state, 'DENIED')
 assert.equal(sourcePermissionDimensionTruth('computrabajo', 'catalog').state, 'DENIED')
@@ -60,6 +62,11 @@ assert.equal(sourcePermissionDimensionTruth('computrabajo', 'third_party_distrib
 assert.equal(sourcePermissionDimensionTruth('computrabajo', 'matching').state, 'UNKNOWN')
 assert.equal(sourcePermissionDimensionTruth('computrabajo', 'application_routing').state, 'UNKNOWN')
 assert.equal(sourcePermissionDimensionTruth('computrabajo', 'attribution_requirement').state, 'UNKNOWN')
+const wwr = evaluateOpportunityDistribution({ ...rich, source:'weworkremotely' }, [policy('weworkremotely')])
+assert.equal(wwr.matching.capabilityState, 'DENIED')
+assert.equal(wwr.matching.permissionRole, 'EXPLICIT_FIRST_PARTY_DENY')
+assert.equal(wwr.matching.allowed, false, 'official WWR terms deny the matching/search-service use')
+assert.equal(wwr.seo.allowed, false, 'the official WWR search-service restriction also gates organic listing')
 
 const himalayasRow = { ...rich, source:'himalayas', slug:'himalayas-organic-role', country_code:'PY', city:'Asunción', published_at:'2026-09-01T00:00:00Z' }
 const himalayasPolicy = policy('himalayas')
@@ -68,9 +75,11 @@ assert.equal(himalayas.seo.capabilityState, 'ALLOWED')
 assert.equal(himalayas.seo.allowed, true, 'Himalayas ordinary first-party public pages may be indexed')
 assert.equal(himalayas.catalog.allowed, true)
 assert.equal(himalayas.matching.allowed, true)
+assert.equal(himalayas.matching.allowed, true, 'Himalayas private first-party matching is separately permitted')
 assert.equal(himalayas.alerts.allowed, true)
 assert.equal(himalayas.jobPosting.allowed, false, 'JobPosting follows Google Jobs permission, not SEO_INDEX')
 assert.equal(himalayas.googleJobs.allowed, false)
+assert.equal(himalayas.googleJobs.allowed, false, 'Himalayas Google Jobs remains separately denied')
 assert.equal(himalayas.thirdParty.allowed, false)
 const structured = aggregatedJobPosting({ ...himalayasRow, distribution:himalayas }, 'https://cvitae.lat/empleos/himalayas-organic-role')
 assert.equal(structured.state, 'NOT_READY')
@@ -89,4 +98,12 @@ const unknownPermissionNoSwitch = evaluateOpportunityDistribution({ ...himalayas
 assert.equal(unknownPermissionNoSwitch.seo.capabilityState,'UNKNOWN')
 assert.equal(unknownPermissionNoSwitch.seo.allowed,true,'UNKNOWN source permission is not rewritten into a veto for a ready first-party page')
 assert.equal(unknownSeoPermissionReady.googleJobs.allowed, false, 'external Google Jobs remains fail-closed on unknown permission')
+const unverifiedDeny = evaluateOpportunityDistribution({ ...himalayasRow, source:'jobicy' }, [policy('jobicy')], new Date(), (source, dimension) => ({
+  state: source === 'jobicy' && dimension === 'seo_index' ? 'DENIED' : 'UNKNOWN',
+  reason:'LEGACY_DENY_WITHOUT_OFFICIAL_EVIDENCE', evidence_type:'REPOSITORY_REVIEW',
+  provenance:'legacy projection only', evidence_url_or_repo_reference:'docs/source-permission-matrix.md', verified_at:'2026-10-14', notes:'fixture',
+}))
+assert.equal(unverifiedDeny.seo.capabilityState, 'DENIED')
+assert.equal(unverifiedDeny.seo.permissionRole, 'ADVISORY_FIRST_PARTY')
+assert.equal(unverifiedDeny.seo.allowed, true, 'legacy/unsupported DENIED is advisory for an internal consumer; evidence class controls veto')
 console.log('verify_effective_source_policy: PASS')

@@ -69,6 +69,10 @@ assert.equal(candidateEligibilityUnknown.matching_row_state, 'READY', 'candidate
 const explicitMatchingDenied = classifyOpportunityUniverse(rich, policy, null, now, (_source, consumer) => ({ state: consumer === 'matching' ? 'DENIED' : 'ALLOWED', reason: 'explicit', provenance: 'fixture' }))
 assert.equal(explicitMatchingDenied.matching_row_state, 'READY')
 assert.equal(explicitMatchingDenied.final_matching_state, 'READY', 'historical source permission is advisory for first-party Matching')
+const wwrExplicitlyDenied = classifyOpportunityUniverse({ ...rich, source:'weworkremotely' }, [{ ...policy[0], source:'weworkremotely' }], null, now)
+assert.equal(wwrExplicitlyDenied.final_matching_state, 'NOT_READY', 'official WWR job-search prohibition blocks Matching for this source')
+assert.equal(wwrExplicitlyDenied.catalog_state, 'NOT_READY', 'the same first-party restriction reaches Catalog')
+assert.equal(wwrExplicitlyDenied.seo_state, 'NOT_READY', 'the explicit SEO restriction is visible in the persisted decision')
 const matchingSwitchOff = classifyOpportunityUniverse(rich, [{ source: 'himalayas', is_enabled: true, matching_enabled: false, consumer_switch_overrides: { matching: false } }], null, now, permission)
 assert.equal(matchingSwitchOff.matching_row_state, 'READY')
 assert.equal(matchingSwitchOff.source_matching_operational_state, 'DENIED')
@@ -87,14 +91,11 @@ const computrabajoPolicy: UniversePolicy[] = [{ source:'computrabajo', is_enable
 const computrabajoException = classifyOpportunityUniverse(computrabajoLegacy, computrabajoPolicy, null, new Date('2026-10-01T12:00:00Z'))
 assert.equal(computrabajoException.provenance.consumer_permission_states && (computrabajoException.provenance.consumer_permission_states as any).seo,'DENIED','temporary SEO routing never rewrites permission truth')
 assert.equal(computrabajoException.seo_state,'READY','qualifying legacy SEO row is READY during the window')
-assert.equal(computrabajoException.seo_effective_reason,'SEO_EFFECTIVE_READY')
-for (const date of ['2026-10-03T12:00:00Z','2026-10-09T23:59:59Z','2026-10-10T00:00:00Z']) {
-  for (const created_at of ['2026-09-20T00:00:00Z','2026-10-05T12:00:00Z']) {
-    const decision=classifyOpportunityUniverse({...computrabajoLegacy,created_at,seo_eligible:false},computrabajoPolicy,null,new Date(date))
-    assert.equal(decision.seo_state,'READY')
-    assert.equal(decision.provenance.temporary_legacy_seo_exception,undefined)
-  }
-}
+assert.equal(computrabajoException.seo_effective_reason,'TEMP_LEGACY_SEO_EXCEPTION_APPLIED')
+assert.equal(classifyOpportunityUniverse(computrabajoLegacy,computrabajoPolicy,null,new Date('2026-10-09T23:59:59Z')).seo_state,'READY','the narrow, evidenced legacy exception remains date bounded')
+assert.equal(classifyOpportunityUniverse(computrabajoLegacy,computrabajoPolicy,null,new Date('2026-10-10T00:00:00Z')).seo_state,'NOT_READY','the legacy exception expires at the documented cutoff')
+assert.equal(classifyOpportunityUniverse({...computrabajoLegacy,created_at:'2026-10-05T12:00:00Z'},computrabajoPolicy,null,new Date('2026-10-01T12:00:00Z')).seo_state,'NOT_READY','rows created after the documented exception cohort are excluded')
+assert.equal(classifyOpportunityUniverse({...computrabajoLegacy,seo_eligible:false},computrabajoPolicy,null,new Date('2026-10-01T12:00:00Z')).seo_state,'NOT_READY','an unqualified row cannot use the legacy exception')
 assert.equal(classifyOpportunityUniverse({...computrabajoLegacy,description:'Too short'},computrabajoPolicy).seo_state,'NOT_READY')
 assert.equal(classifyOpportunityUniverse(computrabajoLegacy,[{...computrabajoPolicy[0],consumer_switch_overrides:{seo:false}}]).seo_state,'NOT_READY')
 const seoMissingDescription = classifyOpportunityUniverse({ ...rich, description:'' }, policy, null, now, (_source, _consumer) => ({ state: 'UNKNOWN', reason: 'NO_EVIDENCE', provenance: 'fixture' }))

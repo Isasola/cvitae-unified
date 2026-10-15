@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import ReactMarkdown from 'react-markdown'
 import rehypeSanitize from 'rehype-sanitize'
 import { AdSlot } from '@/components/cv/AdSlot'
+import { isCurrentPublicBlog } from '@/lib/public-blog-contract'
 
 interface BlogPost {
   id: string
@@ -56,24 +57,25 @@ export default function BlogPost() {
     if (slug) {
       supabase
         .from('content_hub')
-        .select('id, titulo, slug, cuerpo, categoria, created_at, updated_at, fecha_vencimiento, imagen_url, metadata')
+        .select('id, tipo, is_active, titulo, slug, cuerpo, categoria, created_at, updated_at, fecha_vencimiento, imagen_url, metadata')
         .eq('slug', slug)
         .eq('tipo', 'blog')
         .eq('is_active', true)
         .single()
         .then(({ data }) => {
-          setPost(data)
+          const currentPost = isCurrentPublicBlog(data) ? data : null
+          setPost(currentPost)
           setLoading(false)
-          if (data) {
+          if (currentPost) {
             supabase
               .from('content_hub')
-              .select('id, titulo, slug, categoria, created_at, imagen_url')
+              .select('id, tipo, is_active, titulo, slug, categoria, created_at, fecha_vencimiento, metadata, imagen_url')
               .eq('tipo', 'blog')
               .eq('is_active', true)
               .eq('categoria', data.categoria)
               .neq('id', data.id)
               .limit(3)
-              .then(({ data: rel }) => setRelated(rel || []))
+              .then(({ data: rel }) => setRelated((rel || []).filter(row => isCurrentPublicBlog(row))))
           }
         })
     }

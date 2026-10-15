@@ -2,11 +2,11 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { classifyOpportunityUniverse, type UniversePolicy } from '../src/lib/opportunity-universe.ts'
 import { canonicalSource, evaluateOpportunityDistribution } from '../src/lib/effective-source-policy.ts'
-import { SOURCE_PERMISSION_DIMENSIONS, canonicalPermissionSource, canonicalSourcePermissionRegistry, sourcePermissionCoverage, sourcePermissionDimensionTruth, sourcePermissionTruth } from '../src/lib/source-permission-truth.ts'
-import { deadlineLifecycle } from '../src/lib/opportunity-truth.ts'
+import { SOURCE_PERMISSION_DIMENSIONS, canonicalPermissionSource, canonicalSourcePermissionRegistry, sourcePermissionCoverage, sourcePermissionDimensionTruth, sourcePermissionEvidenceClass, sourcePermissionTruth } from '../src/lib/source-permission-truth.ts'
+import { deadlineLifecycle, opportunityContentQualityReasons } from '../src/lib/opportunity-truth.ts'
 import { evaluateEightGates } from '../netlify/functions/lib/eight-gates.ts'
 import { hasProfessionalEvidence, professionalRequirementsText } from '../shared/professional-evidence.ts'
-import { sourcePolicyForCanonical } from '../src/lib/effective-source-policy.ts'
+import { effectiveSourceSwitches, sourcePolicyForCanonical } from '../src/lib/effective-source-policy.ts'
 import { firstNonConfirmedRequiredStage, summarizeSourceHealth } from '../src/lib/source-intelligence-contract.ts'
 
 const artifact = new URL('../artifacts/opportunity-universe/preflight-prod.sql', import.meta.url)
@@ -39,6 +39,13 @@ assert.doesNotMatch(sql, /trim\(coalesce\(x\.requirements,|trim\(coalesce\(x\.pr
 assert.match(sql,/TEMP_LEGACY_SEO_EXCEPTION_UNTIL_2026_10_09[\s\S]*\(now\(\) at time zone 'UTC'\)::date\s*<=\s*date '2026-10-09'/,'preflight presents the UTC-dated inclusive Computrabajo-only SEO exception')
 assert.match(sql,/greatest\(q\.current_catalog-q\.catalog,0\)/,'per-source catalog removals qualify both CTE aliases to avoid PostgreSQL current_catalog resolution')
 assert.match(sql,/greatest\(q\.catalog-q\.current_catalog,0\)/,'per-source catalog additions qualify both CTE aliases to avoid PostgreSQL current_catalog resolution')
+const operatorPreflight = readFileSync(new URL('../docs/release/operator/01_READ_ONLY_PREFLIGHT.sql', import.meta.url), 'utf8')
+assertReadOnly(operatorPreflight)
+assert.match(operatorPreflight,/lifecycle_state\s*=\s*'ACTIVE_VALID'/,'read-only release report uses the real lifecycle state contract')
+assert.doesNotMatch(operatorPreflight,/lifecycle_state\s*=\s*'READY'/,'READY is a consumer state, not a lifecycle enum value')
+assert.match(migration,/v_lifecycle := 'ACTIVE_VALID'/,'ACTIVE_VALID is present in the installed lifecycle reducer contract')
+const preflightExecutable = operatorPreflight.replace(/--[^\n]*/g, '')
+assert.doesNotMatch(preflightExecutable,/\b(insert|update|delete|merge|create|alter|drop|truncate|call|do|refresh)\b/i,'operator lifecycle preflight remains read-only')
 assert.doesNotMatch(sql,/(?<![.\w])current_catalog\s*-\s*catalog|(?<![.\w])catalog\s*-\s*current_catalog/i,'no ambiguous unqualified current_catalog arithmetic is generated')
 assert.match(sql,/'current_catalog',q\.current_catalog[\s\S]*'catalog_removed'[\s\S]*'catalog_added'/,'JSON output keys remain stable while internal references are qualified')
 assert.match(sql,/temporary_legacy_seo_exception_applied[\s\S]{0,180}seo_permission='DENIED'[\s\S]{0,80}then 'NOT_READY'/,'only applied legacy rows bypass the explicit denial before expiry')
@@ -78,35 +85,36 @@ for (const requirements of [null,'Applicants must demonstrate five years of rele
 assert.equal(hasProfessionalEvidence({ title:'Programme Officer',description:'',requirements:structuredRequirements }), true, 'realistic JSONB text contributes using the existing evidence threshold')
 assert.equal(hasProfessionalEvidence({ title:'Programme Officer',description:'' }), false, 'optional professional_family and requirements keys may both be absent')
 const aliasBase = { source: 'himalayas', is_enabled: true, catalog_enabled: true, matching_enabled: true, alerts_enabled: true, seo_enabled: true }
-const seoConflict = sourcePolicyForCanonical('himalayas', [aliasBase, { ...aliasBase, source: 'HIMALAYAS', seo_enabled: false }])
+const seoConflict = sourcePolicyForCanonical('himalayas', [aliasBase, { ...aliasBase, source: 'HIMALAYAS', seo_enabled: false, consumer_switch_overrides: { seo: false } }])
 assert.deepEqual(seoConflict.conflicts, { is_enabled: false, matching_enabled: false, catalog_enabled: false, alerts_enabled: false, seo_enabled: true })
 assert.equal(seoConflict.policy?.matching_enabled, true, 'SEO alias conflict does not erase matching switch')
 assert.equal(seoConflict.policy?.catalog_enabled, true, 'SEO alias conflict does not erase catalog switch')
-const matchingConflict = sourcePolicyForCanonical('himalayas', [aliasBase, { ...aliasBase, source: 'HIMALAYAS', matching_enabled: false }])
+const matchingConflict = sourcePolicyForCanonical('himalayas', [aliasBase, { ...aliasBase, source: 'HIMALAYAS', matching_enabled: false, consumer_switch_overrides: { matching: false } }])
 assert.equal(matchingConflict.policy?.matching_enabled, null)
 assert.equal(matchingConflict.policy?.catalog_enabled, true)
 assert.equal(matchingConflict.policy?.alerts_enabled, true)
 assert.equal(matchingConflict.policy?.seo_enabled, true)
 const permissionParityRow = { title: 'Programme Officer', slug: 'programme-officer', organization: 'Example', description: 'Professional responsibilities and relevant experience. '.repeat(3), is_active: true, verification_status: 'verified', source: 'himalayas', deadline: '2027-01-01' }
-const effectiveSeoConflict = evaluateOpportunityDistribution(permissionParityRow, [aliasBase, { ...aliasBase, source: 'HIMALAYAS', seo_enabled: false }])
+const effectiveSeoConflict = evaluateOpportunityDistribution(permissionParityRow, [aliasBase, { ...aliasBase, source: 'HIMALAYAS', seo_enabled: false, consumer_switch_overrides: { seo: false } }])
 assert.equal(effectiveSeoConflict.matching.allowed, true, 'SEO-only alias conflict leaves Matching effective state unchanged')
 assert.equal(effectiveSeoConflict.catalog.allowed, true)
 assert.equal(effectiveSeoConflict.alerts.allowed, true)
-assert.equal(effectiveSeoConflict.seo.allowed,true,'an SEO-only legacy switch alias conflict does not block the first-party SEO row')
+assert.equal(effectiveSeoConflict.seo.allowed,false,'an explicit conflicting SEO switch blocks only the SEO consumer')
+assert(effectiveSeoConflict.seo.reasons.includes('SOURCE_POLICY_ALIAS_CONFLICT'))
 assert.equal(effectiveSeoConflict.seo.capabilityState,'ALLOWED')
-const effectiveMatchingConflict = evaluateOpportunityDistribution(permissionParityRow, [aliasBase, { ...aliasBase, source: 'HIMALAYAS', matching_enabled: false }])
+const effectiveMatchingConflict = evaluateOpportunityDistribution(permissionParityRow, [aliasBase, { ...aliasBase, source: 'HIMALAYAS', matching_enabled: false, consumer_switch_overrides: { matching: false } }])
 assert.ok(effectiveMatchingConflict.matching.reasons.includes('SOURCE_POLICY_ALIAS_CONFLICT'))
 assert.equal(effectiveMatchingConflict.catalog.allowed, true)
 assert.equal(effectiveMatchingConflict.alerts.allowed, true)
-const effectiveCatalogConflict = evaluateOpportunityDistribution(permissionParityRow, [aliasBase, { ...aliasBase, source: 'HIMALAYAS', catalog_enabled: false }])
+const effectiveCatalogConflict = evaluateOpportunityDistribution(permissionParityRow, [aliasBase, { ...aliasBase, source: 'HIMALAYAS', catalog_enabled: false, consumer_switch_overrides: { catalog: false } }])
 assert.ok(effectiveCatalogConflict.catalog.reasons.includes('SOURCE_POLICY_ALIAS_CONFLICT'))
 assert.equal(effectiveCatalogConflict.matching.allowed, true)
 assert.equal(effectiveCatalogConflict.alerts.allowed, true)
-const effectiveAlertsConflict = evaluateOpportunityDistribution(permissionParityRow, [aliasBase, { ...aliasBase, source: 'HIMALAYAS', alerts_enabled: false }])
+const effectiveAlertsConflict = evaluateOpportunityDistribution(permissionParityRow, [aliasBase, { ...aliasBase, source: 'HIMALAYAS', alerts_enabled: false, consumer_switch_overrides: { alerts: false } }])
 assert.ok(effectiveAlertsConflict.alerts.reasons.includes('SOURCE_POLICY_ALIAS_CONFLICT'))
 assert.equal(effectiveAlertsConflict.matching.allowed, true)
 assert.equal(effectiveAlertsConflict.catalog.allowed, true)
-const effectiveGlobalConflict = evaluateOpportunityDistribution(permissionParityRow, [aliasBase, { ...aliasBase, source: 'HIMALAYAS', is_enabled: false }])
+const effectiveGlobalConflict = evaluateOpportunityDistribution(permissionParityRow, [aliasBase, { ...aliasBase, source: 'HIMALAYAS', is_enabled: false, consumer_switch_overrides: { source: false } }])
 for (const consumer of ['catalog', 'matching', 'alerts', 'seo'] as const) assert.ok(effectiveGlobalConflict[consumer].reasons.includes('SOURCE_POLICY_ALIAS_CONFLICT'))
 assert.match(migration, /matching_enabled_alias_conflict/)
 assert.match(migration, /catalog_enabled_alias_conflict/)
@@ -123,7 +131,8 @@ const parityOpportunity = { id: 'alias-parity', source: 'himalayas', title: 'Sen
 const allowAll = (_source: string, _consumer: string) => ({ state: 'ALLOWED' as const, reason: 'fixture', provenance: 'fixture' })
 const enabledPolicy: UniversePolicy = { source: 'himalayas', is_enabled: true, matching_enabled: true, catalog_enabled: true, alerts_enabled: true, seo_enabled: true }
 for (const [field, conflictDimension] of [['seo_enabled', 'seo'], ['matching_enabled', 'matching'], ['catalog_enabled', 'catalog'], ['alerts_enabled', 'alerts'], ['is_enabled', 'global']] as const) {
-  const rows = [enabledPolicy, { ...enabledPolicy, source: 'HIMALAYAS', [field]: false }]
+  const overrideName = field === 'is_enabled' ? 'source' : field.replace('_enabled','')
+  const rows = [enabledPolicy, { ...enabledPolicy, source: 'HIMALAYAS', [field]: false, consumer_switch_overrides: { [overrideName]: false } }]
   const ts = classifyOpportunityUniverse(parityOpportunity, rows, null, new Date('2026-09-30T12:00:00Z'), allowAll)
   const sqlDistinctConflict = (values: Array<boolean | null | undefined>) => new Set(values.map(value => value === true ? 'true' : value === false ? 'false' : 'UNKNOWN')).size > 1
   const globalConflict = sqlDistinctConflict(rows.map(row => row.is_enabled))
@@ -140,7 +149,8 @@ const currentBaselineRow = { ...parityOpportunity, source: 'talentcom', match_el
 const currentLegacyMatching = currentBaselineRow.is_active && currentBaselineRow.verification_status === 'verified' && currentBaselineRow.match_eligible && enabledPolicy.is_enabled && enabledPolicy.matching_enabled
 const predictedWithUnknownPermission = classifyOpportunityUniverse(currentBaselineRow, [{ ...enabledPolicy, source: 'talentcom' }], null, new Date('2026-09-30T12:00:00Z'))
 assert.equal(currentLegacyMatching, true, 'CURRENT_MATCHING baseline uses persisted lifecycle/readiness/switches only')
-assert.equal(predictedWithUnknownPermission.final_matching_state, 'UNKNOWN', 'canonical permission UNKNOWN changes only PREDICTED effective Matching')
+assert.equal(predictedWithUnknownPermission.source_matching_state, 'UNKNOWN', 'canonical permission evidence remains UNKNOWN')
+assert.equal(predictedWithUnknownPermission.final_matching_state, 'READY', 'UNKNOWN permission alone is not a blanket veto when row truth and operational switches are ready')
 const warningThenUnknown = [{ status: 'WARNING' }, { status: 'NOT_EVALUATED' }]
 assert.equal(firstNonConfirmedRequiredStage(warningThenUnknown), 0, 'WARNING is the first degraded stage')
 assert.deepEqual(summarizeSourceHealth(warningThenUnknown), { overall_health: 'UNKNOWN', first_non_confirmed_required_stage: 0, failing_gates: 0, warning_gates: 1, not_evaluated_gates: 1 }, 'missing required evidence outranks WARNING for overall health')
@@ -195,13 +205,13 @@ assert.equal(invariantStatus(16405,16405),'PASS')
 assert.equal(invariantStatus(16404,16405),'FAIL','post-apply invariant check rejects a deliberately altered inventory count')
 
 const permissionRows = canonicalSourcePermissionRegistry()
-assert.equal(permissionRows.length, 105)
+assert.equal(permissionRows.length, 108, 'permission reducer covers every source in the current checked-out registry')
 assert.equal(SOURCE_PERMISSION_DIMENSIONS.length, 10)
 assert.match(generator, /permission_sources\(canonical_source\) as \(values/)
 assert.match(generator, /permission_dimensions\(dimension\) as \(values/)
 assert.match(sql, /from permission_sources s cross join permission_dimensions d\s+left join permission_overrides o using\(canonical_source,dimension\)/)
 assert.match(generator, /const permissionUniverseSql = `permission_sources/)
-assert.equal(permissionRows.length * SOURCE_PERMISSION_DIMENSIONS.length, 1050, 'compact generator still denotes all semantic permission decisions')
+assert.equal(permissionRows.length * SOURCE_PERMISSION_DIMENSIONS.length, 1080, 'current local registry retains all semantic permission dimensions')
 assert.match(schema, /DATE\s+'2026-09-29'/i, 'generated schema emits DATE-typed verified_at literals')
 const permissionEvidenceCte = schema.match(/permission_evidence as \(([\s\S]*?)\)\s*insert into public\.opportunity_source_consumer_permissions/i)?.[1]
 assert(permissionEvidenceCte, 'permission_evidence CTE immediately feeds the permission seed')
@@ -219,11 +229,11 @@ assert.doesNotMatch(migration, /project_source_universe_permissions|new\.(catalo
 const permissionTriggerBody = migration.slice(migration.indexOf('create or replace function public.opportunity_permission_refresh_universe'), migration.indexOf('create or replace function public.refresh_dirty_opportunity_universe_sources'))
 assert.match(permissionTriggerBody, /opportunity_universe_state u join public\.opportunities o/, 'permission refresh is coalesced only when persisted Universe rows already exist')
 assert.match(permissionTriggerBody, /if v_has_reconciled_rows then[\s\S]*opportunity_universe_dirty_sources/, 'empty initial Universe does not queue the initial seed; later affected rows still invalidate')
-assert.equal(new Set(permissionRows.map(row => row.canonical_source)).size, 105)
+assert.equal(new Set(permissionRows.map(row => row.canonical_source)).size, 108)
 assert(permissionRows.every(row => SOURCE_PERMISSION_DIMENSIONS.every(dimension => ['ALLOWED','DENIED','UNKNOWN','NOT_APPLICABLE'].includes(row.dimensions[dimension].state) && row.dimensions[dimension].reason && row.dimensions[dimension].evidence_type && row.dimensions[dimension].provenance && row.dimensions[dimension].evidence_url_or_repo_reference && row.dimensions[dimension].verified_at)))
 const coverage = sourcePermissionCoverage()
-assert.equal(Object.keys(coverage.per_source).length,105,'permission coverage spans the whole canonical source registry, not a hardcoded inventory sample')
-assert.equal(coverage.permission_dimensions.matching.UNKNOWN + coverage.permission_dimensions.matching.ALLOWED + coverage.permission_dimensions.matching.DENIED + coverage.permission_dimensions.matching.NOT_APPLICABLE,105)
+assert.equal(Object.keys(coverage.per_source).length,108,'permission coverage spans the whole canonical source registry, not a hardcoded inventory sample')
+assert.equal(coverage.permission_dimensions.matching.UNKNOWN + coverage.permission_dimensions.matching.ALLOWED + coverage.permission_dimensions.matching.DENIED + coverage.permission_dimensions.matching.NOT_APPLICABLE,108)
 assert.equal(canonicalPermissionSource('wwr'), canonicalPermissionSource('weworkremotely'))
 assert.equal(sourcePermissionDimensionTruth('wwr','matching').state, sourcePermissionDimensionTruth('weworkremotely','matching').state)
 assert.equal(sourcePermissionTruth('remotive', 'matching').state, 'ALLOWED')
@@ -246,7 +256,8 @@ assert.equal(sourcePermissionDimensionTruth('weworkremotely','detail_fetch').sta
 assert.equal(sourcePermissionDimensionTruth('weworkremotely','third_party_distribution').state,'UNKNOWN')
 assert.equal(sourcePermissionDimensionTruth('weworkremotely','seo_index').state,'DENIED')
 assert.match(adminSource, /sourcePermissionSnapshot\(profile\.canonical_source\)/)
-assert.match(adminSource, /SOURCE_PERMISSION_NOT_EVIDENCED/)
+assert.match(adminSource, /sourcePermissionDimensionTruth\(source, dimension\)/)
+assert.match(adminSource, /state: truth\.state, reason: truth\.reason/)
 const adminUnknown = evaluateEightGates({canonical_source:'computrabajo',distribution_policy:{search_engine_indexing_allowed:false,google_jobs_distribution_allowed:false,third_party_job_distribution_allowed:false,source_attribution_required:false}},[],null,[],[]).gates[7].metrics.surfaces as any
 assert.equal(adminUnknown.organic_seo.state,'DENIED','Computrabajo official terms deny copied-content indexing')
 assert.equal(adminUnknown.google_jobs.state,'DENIED')
@@ -262,10 +273,14 @@ assert.equal(adminHimalayas.third_party_distribution.state,'DENIED')
 
 type Permission = (source: string, consumer: 'catalog'|'matching'|'alerts'|'seo') => { state: 'ALLOWED'|'DENIED'|'UNKNOWN'; reason: string; provenance: string }
 const now = new Date('2026-09-29T12:00:00.000Z')
-const active = { id: 'fixture-1', source: 'himalayas', title: 'Programme Officer', slug: 'programme-officer', organization: 'Example', description: 'Role details. '.repeat(12), is_active: true, verification_status: 'verified', deadline: '2026-12-31', updated_at: '2026-09-01T00:00:00.000Z' }
+const active = { id: 'fixture-1', source: 'himalayas', title: 'Programme Officer', slug: 'programme-officer', organization: 'Example', description: 'Coordinate regional programmes with local partners and monitor deliverables. Prepare quarterly reports, document compliance requirements, manage project schedules, support stakeholder meetings, evaluate outcome indicators and communicate implementation risks to the programme team.', is_active: true, verification_status: 'verified', deadline: '2026-12-31', updated_at: '2026-09-01T00:00:00.000Z' }
 function sqlEquivalent(row: Record<string, any>, policies: UniversePolicy[], observation?: Record<string, any> | null, permission: Permission = sourcePermissionTruth) {
   const src = canonicalPermissionSource(row.source)
-  const matchingRows = policies.filter(p => canonicalPermissionSource(p.source) === src)
+  const explicitDenied = (dimension: 'catalog'|'matching'|'alerts'|'seo_index') => {
+    const evidence = sourcePermissionDimensionTruth(src, dimension)
+    return evidence.state === 'DENIED' && sourcePermissionEvidenceClass(evidence) === 'EXPLICIT_EVIDENCE_BACKED'
+  }
+  const matchingRows = policies.filter(p => canonicalPermissionSource(p.source) === src).map(policy => effectiveSourceSwitches(policy))
   const boolState = (key: 'is_enabled'|'matching_enabled'|'catalog_enabled'|'alerts_enabled'|'seo_enabled') => {
     const vals = new Set(matchingRows.map(p => p[key] === true ? 'true' : p[key] === false ? 'false' : 'unknown'))
     return matchingRows.length === 0 || vals.size !== 1 || vals.has('unknown') ? 'UNKNOWN' : vals.has('true') ? 'ALLOWED' : 'DENIED'
@@ -297,16 +312,18 @@ function sqlEquivalent(row: Record<string, any>, policies: UniversePolicy[], obs
   const projectedSwitch = switchState
   const operationalSourceState = globalAliasConflict ? 'CONFLICT' : sourceState === 'ALLOWED' ? 'ENABLED' : sourceState === 'DENIED' ? 'DISABLED' : 'UNKNOWN'
   const operationalSwitch = switchState === 'ALLOWED' ? 'ALLOWED' : switchState === 'DENIED' ? 'DENIED' : 'UNKNOWN'
-  const final = rowState !== 'READY' ? rowState : matchPermission === 'DENIED' || sourceState === 'DENIED' || switchState === 'DENIED' ? 'NOT_READY'
+  const final = rowState !== 'READY' ? rowState : explicitDenied('matching') || sourceState === 'DENIED' || switchState === 'DENIED' ? 'NOT_READY'
     : matchPermission !== 'ALLOWED' || sourceState === 'UNKNOWN' || aliasConflict || switchState === 'UNKNOWN' ? 'UNKNOWN' : 'READY'
   const catalogRow = !lifecycleReady ? ['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(lifecycle) ? 'UNKNOWN' : 'NOT_READY' : !String(row.title || '').trim() || !String(row.slug || '').trim() ? 'NOT_READY' : 'READY'
-  const seoRow = !lifecycleReady ? ['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(lifecycle) ? 'UNKNOWN' : 'NOT_READY' : !String(row.title || '').trim() || !String(row.slug || '').trim() || String(row.description || '').trim().length < 100 || !String(row.organization || '').trim() ? 'NOT_READY' : 'READY'
-  const seoRowReason = !lifecycleReady ? lifecycleReason : !String(row.title || '').trim() ? 'MISSING_TITLE' : !String(row.slug || '').trim() ? 'MISSING_CANONICAL_IDENTITY' : String(row.description || '').trim().length < 100 ? 'THIN_CONTENT' : !String(row.organization || '').trim() ? 'MISSING_ORGANIZATION' : 'SEO_ROW_READY'
+  const contentReasons = opportunityContentQualityReasons(row)
+  const intrinsicSeoReason = !String(row.title || '').trim() ? 'MISSING_TITLE' : contentReasons.includes('GENERIC_OR_NAVIGATION_TITLE') ? 'GENERIC_OR_NAVIGATION_TITLE' : !String(row.slug || '').trim() ? 'MISSING_CANONICAL_IDENTITY' : contentReasons[0] || (!String(row.organization || '').trim() ? 'MISSING_ORGANIZATION' : 'SEO_ROW_READY')
+  const seoRow = !lifecycleReady ? ['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(lifecycle) ? 'UNKNOWN' : 'NOT_READY' : intrinsicSeoReason === 'SEO_ROW_READY' ? 'READY' : 'NOT_READY'
+  const seoRowReason = !lifecycleReady ? lifecycleReason : intrinsicSeoReason
   const alertsRow = !lifecycleReady ? ['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(lifecycle) ? 'UNKNOWN' : 'NOT_READY' : !professional ? 'NOT_READY' : 'READY'
   const consumer = (rowGate: string, name: 'catalog'|'alerts', switchKey: 'catalog_enabled'|'alerts_enabled', aliasConflict: boolean) => {
     const consumerSwitch = boolState(switchKey)
     if (rowGate !== 'READY') return rowGate
-    if (permission(src,name).state === 'DENIED' || sourceState === 'DENIED' || consumerSwitch === 'DENIED') return 'NOT_READY'
+    if (explicitDenied(name) || sourceState === 'DENIED' || consumerSwitch === 'DENIED') return 'NOT_READY'
     if (permission(src,name).state !== 'ALLOWED' || sourceState !== 'ALLOWED' || consumerSwitch !== 'ALLOWED' || globalAliasConflict || aliasConflict) return 'UNKNOWN'
     return 'READY'
   }
@@ -321,12 +338,12 @@ function sqlEquivalent(row: Record<string, any>, policies: UniversePolicy[], obs
     && row.seo_eligible === true && row.seo_status === 'eligible'
     && /^\d{4}-\d{2}-\d{2}$/.test(createdDate) && createdDate <= '2026-10-03'
     && sourceState === 'ALLOWED' && seoSwitch === 'ALLOWED' && !seoAliasConflict
-  const seoContentReason = !String(row.title || '').trim() ? 'MISSING_TITLE' : !String(row.slug || '').trim() ? 'MISSING_CANONICAL_IDENTITY' : String(row.description || '').trim().length < 100 ? 'THIN_CONTENT' : !String(row.organization || '').trim() ? 'MISSING_ORGANIZATION' : 'SEO_CONTENT_READY_INDEPENDENT_OF_LIFECYCLE'
+  const seoContentReason = !String(row.title || '').trim() ? 'MISSING_TITLE' : !String(row.slug || '').trim() ? 'MISSING_CANONICAL_IDENTITY' : contentReasons[0] || (!String(row.organization || '').trim() ? 'MISSING_ORGANIZATION' : 'SEO_CONTENT_READY_INDEPENDENT_OF_LIFECYCLE')
   const lifecycleUnresolvedReason = !['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(lifecycle) ? null : lifecycle === 'STALE_DERIVED_STATE' ? lifecycleReason : deadline === 'INVALID' ? 'DEADLINE_INVALID_OR_TIMEZONE_UNKNOWN' : !observation?.id ? 'NO_OBSERVATION' : observation?.source && canonicalSource(observation.source) !== src ? 'OBSERVATION_SOURCE_MISMATCH' : observation?.identity_status === 'IDENTITY_UNRESOLVED' ? 'IDENTITY_UNRESOLVED' : observation?.identity_status === 'IDENTITY_MISMATCH' ? 'IDENTITY_MISMATCH' : [0,429].includes(Number(observation?.http_status)) || Number(observation?.http_status)>=500 ? 'TRANSIENT_HTTP_EVIDENCE' : observation?.identity_status === 'IDENTITY_CONFIRMED' && Number(observation?.http_status)===200 ? 'OBSERVATION_NOT_NEWER_THAN_ROW_UPDATE' : observation?.http_status == null ? 'HTTP_STATUS_UNKNOWN' : 'LIFECYCLE_EVIDENCE_INSUFFICIENT'
   const lifecycleRepair = lifecycle === 'STALE_DERIVED_STATE' && row.verification_status === 'verified' ? { is_active:true } : null
   const lifecycleRecoveryClass = !['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(lifecycle) ? ['EXPIRED','DELETED','ARCHIVED','HARD_DEAD','INACTIVE_VALID'].includes(lifecycle) ? 'EXPLICITLY_INACTIVE' : 'NOT_UNRESOLVED' : lifecycleRepair ? 'RECOVERABLE_NOW' : seoContentReason !== 'SEO_CONTENT_READY_INDEPENDENT_OF_LIFECYCLE' ? 'CONTENT_NOT_READY' : lifecycleUnresolvedReason === 'OBSERVATION_SOURCE_MISMATCH' ? 'SYSTEM_ERROR' : 'REFRESH_REQUIRED'
-  const seoState = seoRow !== 'READY' ? seoRow : temporarySeoExceptionApplied ? 'READY' : seoPermission === 'DENIED' || seoSwitch === 'DENIED' || sourceState === 'DENIED' ? 'NOT_READY' : sourceState === 'UNKNOWN' || globalAliasConflict || seoAliasConflict ? 'UNKNOWN' : 'READY'
-  const seoEffectiveReason = seoRow !== 'READY' ? seoRowReason : temporarySeoExceptionApplied ? 'TEMP_LEGACY_SEO_EXCEPTION_APPLIED' : seoPermission === 'DENIED' ? 'SOURCE_SEO_PERMISSION_DENIED' : seoSwitch === 'DENIED' ? 'SOURCE_SEO_OPERATOR_DISABLED' : sourceState === 'DENIED' ? 'SOURCE_DISABLED' : sourceState === 'UNKNOWN' || globalAliasConflict ? globalAliasConflict ? 'SOURCE_POLICY_ALIAS_CONFLICT' : 'SOURCE_OPERATIONAL_STATE_UNKNOWN' : seoAliasConflict ? 'SOURCE_POLICY_ALIAS_CONFLICT' : 'SEO_EFFECTIVE_READY'
+  const seoState = seoRow !== 'READY' ? seoRow : temporarySeoExceptionApplied ? 'READY' : explicitDenied('seo_index') || seoSwitch === 'DENIED' || sourceState === 'DENIED' ? 'NOT_READY' : sourceState === 'UNKNOWN' || globalAliasConflict || seoAliasConflict ? 'UNKNOWN' : 'READY'
+  const seoEffectiveReason = seoRow !== 'READY' ? seoRowReason : temporarySeoExceptionApplied ? 'TEMP_LEGACY_SEO_EXCEPTION_APPLIED' : explicitDenied('seo_index') ? 'SOURCE_SEO_PERMISSION_DENIED' : seoSwitch === 'DENIED' ? 'SOURCE_SEO_OPERATOR_DISABLED' : sourceState === 'DENIED' ? 'SOURCE_DISABLED' : sourceState === 'UNKNOWN' || globalAliasConflict ? globalAliasConflict ? 'SOURCE_POLICY_ALIAS_CONFLICT' : 'SOURCE_OPERATIONAL_STATE_UNKNOWN' : seoAliasConflict ? 'SOURCE_POLICY_ALIAS_CONFLICT' : 'SEO_EFFECTIVE_READY'
   const unresolved: string[] = []
   if (['LIFECYCLE_UNKNOWN','STALE_DERIVED_STATE'].includes(lifecycle)) unresolved.push('LIFECYCLE')
   if (rowState === 'UNKNOWN') unresolved.push('ROW_MATCH_READINESS')
@@ -357,7 +374,7 @@ const fixtures: Array<{ row: Record<string,any>; policies: UniversePolicy[]; obs
   { row: {...active,id:'unknown-no-observation',is_active:false}, policies:[{source:'himalayas',is_enabled:true,matching_enabled:true}] },
   { row: {...active,id:'observation-source-mismatch',is_active:false}, policies:[{source:'himalayas',is_enabled:true,matching_enabled:true}], observation:{id:'o-mismatch',source:'unjobs',identity_status:'IDENTITY_UNRESOLVED',http_status:0,observed_at:'2026-09-20T00:00:00Z'} },
   { row: {...active,id:'switch-off'}, policies:[{source:'himalayas',is_enabled:true,matching_enabled:false}] },
-  { row: {...active,id:'seo-unknown-switch-off',source:'jobicy',seo_eligible:false,seo_status:'review'}, policies:[{source:'jobicy',is_enabled:true,matching_enabled:true,seo_enabled:false}] },
+  { row: {...active,id:'seo-unknown-switch-off',source:'jobicy',seo_eligible:false,seo_status:'review'}, policies:[{source:'jobicy',is_enabled:true,matching_enabled:true,seo_enabled:false,consumer_switch_overrides:{seo:false}}] },
   { row: {...active,id:'seo-description-missing',description:''}, policies:[{source:'himalayas',is_enabled:true,matching_enabled:true}] },
   { row: {...active,id:'seo-title-missing',title:''}, policies:[{source:'himalayas',is_enabled:true,matching_enabled:true}] },
   { row: {...active,id:'seo-slug-missing',slug:''}, policies:[{source:'himalayas',is_enabled:true,matching_enabled:true}] },
@@ -384,7 +401,12 @@ assert(unknownSeoDecision.source_permission_unknown_dimensions.includes('seo_ind
 const unknownPermissionReady = classifyOpportunityUniverse({...active,id:'seo-unknown-permission-switch-on',source:'jobicy'},[{source:'jobicy',is_enabled:true,catalog_enabled:true,alerts_enabled:true,seo_enabled:true}],null,now)
 assert.equal(unknownPermissionReady.provenance.consumer_permission_states && (unknownPermissionReady.provenance.consumer_permission_states as any).seo,'UNKNOWN')
 assert.equal(unknownPermissionReady.seo_state,'READY','unknown SEO permission alone is not converted to a veto on an explicitly enabled first-party route')
+const unknownMatchingReady = classifyOpportunityUniverse({...active,id:'unjobs-unknown-first-party',source:'unjobs'},[{source:'unjobs',is_enabled:true,catalog_enabled:true,matching_enabled:true,alerts_enabled:true,seo_enabled:true}],null,now)
+assert.equal(sourcePermissionDimensionTruth('unjobs','matching').state,'UNKNOWN')
+assert.equal(unknownMatchingReady.source_matching_state,'UNKNOWN','the missing permission evidence remains visible')
+assert.equal(unknownMatchingReady.final_matching_state,'READY','UNKNOWN is consultative for private matching when source and row gates pass')
+assert.equal(unknownMatchingReady.catalog_state,'READY','a source with no evaluated permission may flow through the independent first-party Catalog gate')
 
 const historical = { total:16405, inactive_or_unknown:9272, deadline_expired:91, source_matching_disabled:6460, match_eligibility_unexplained:429, source_allowed:153 }
 assert.equal(historical.inactive_or_unknown + historical.deadline_expired + historical.source_matching_disabled + historical.match_eligibility_unexplained + historical.source_allowed, historical.total)
-console.log('verify_opportunity_universe_permission_preflight: PASS prod-schema-compatibility, structured-requirements-parity, optional-family-absence, pre-retrieval-stage, final-retrieval-stage, runtime-manifest-order, registry-105x10, all-row/latest-observation, historical-baseline-reconciliation')
+console.log('verify_opportunity_universe_permission_preflight: PASS prod-schema-compatibility, SQL/TS factual SEO reason parity, ACTIVE_VALID read-only preflight, optional-family-absence, source-gates, historical-baseline-reconciliation')

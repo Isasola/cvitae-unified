@@ -15,6 +15,12 @@ def main() -> int:
     lines, warnings, errors, status = execution_outcome(0, "CVITAE_INGESTION_SUMMARY={}", rejected_summary)
     assert lines == [] and warnings == 0 and errors == 0 and status == "success"
 
+    lines, warnings, errors, status = execution_outcome(0, "CVITAE_INGESTION_SUMMARY={}", {
+        "rejected": 3, "budget_skipped": 4, "errors": ["title vacío", "PROCESSING_BUDGET_SKIPPED"],
+        "technical_failure": False,
+    })
+    assert lines == [] and errors == 0 and status == "success", "explicit business outcomes do not fail a technically healthy run"
+
     lines, warnings, errors, status = execution_outcome(0, "warning: provider coverage partial", {"rejected": 0, "errors": []})
     assert warnings == 1 and errors == 0 and status == "partial_success"
 

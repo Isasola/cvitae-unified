@@ -1,7 +1,7 @@
 import { canonicalSource, effectiveSourceSwitches, registeredSourceOperationalDefault } from './effective-source-policy'
 import { catalogReadiness, deadlineLifecycle, seoContentReadinessIndependentOfLifecycle, seoReadiness } from './opportunity-truth'
 import { hasProfessionalEvidence } from '../../shared/professional-evidence'
-import { SOURCE_PERMISSION_DIMENSIONS, sourcePermissionDimensionTruth, sourcePermissionTruth } from './source-permission-truth'
+import { SOURCE_PERMISSION_DIMENSIONS, sourcePermissionDimensionTruth, sourcePermissionEvidenceClass, sourcePermissionTruth } from './source-permission-truth'
 
 export type UniverseState = 'READY' | 'NOT_READY' | 'UNKNOWN'
 export type LifecycleState = 'ACTIVE_VALID' | 'EXPIRED' | 'DELETED' | 'ARCHIVED' | 'HARD_DEAD' | 'SUPERSEDED_DUPLICATE' | 'INACTIVE_VALID' | 'STALE_DERIVED_STATE' | 'LIFECYCLE_UNKNOWN'
@@ -9,6 +9,11 @@ export type PermissionState = 'ALLOWED' | 'DENIED' | 'UNKNOWN'
 export type UniversePolicy = import('./effective-source-policy').SourcePolicyRow
 
 const permission = sourcePermissionTruth
+
+function explicitConsumerDenial(source: string, dimension: 'catalog'|'matching'|'alerts'|'seo_index') {
+  const evidence = sourcePermissionDimensionTruth(source, dimension)
+  return evidence.state === 'DENIED' && sourcePermissionEvidenceClass(evidence) === 'EXPLICIT_EVIDENCE_BACKED'
+}
 
 function timestamp(value: unknown): number | null {
   const parsed = Date.parse(String(value || ''))
@@ -82,6 +87,14 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
   const alertsOperational = operationalState(alertsValues, 'alerts_enabled')
   const seoOperational = operationalState(seoValues, 'seo_enabled')
   const policy = sourcePolicies[0]
+  const createdDate = String(row.created_at || '').slice(0, 10)
+  const temporarySeoExceptionApplied = source === 'computrabajo'
+    && now.toISOString().slice(0, 10) <= '2026-10-09'
+    && sourcePermissionTruth(source, 'seo').state === 'DENIED'
+    && row.seo_eligible === true && row.seo_status === 'eligible'
+    && /^\d{4}-\d{2}-\d{2}$/.test(createdDate) && createdDate <= '2026-10-03'
+    && sourcePolicies.length > 0 && !globalPolicyConflict && !aliasConflicts.includes('seo_enabled')
+    && policy?.is_enabled === true && seoOperational === 'ALLOWED'
   const deleted = Boolean(row.deleted_at)
   const archived = Boolean(row.archived_at)
   const deadline = deadlineLifecycle(row.deadline, now)
@@ -114,22 +127,26 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
   const source_matching_operational_reason = globalPolicyConflict || aliasConflicts.includes('matching_enabled') ? 'SOURCE_POLICY_ALIAS_CONFLICT' : matchingPolicyUnknown ? 'SOURCE_MATCHING_SWITCH_UNKNOWN' : source_matching_operational_state === 'DENIED' ? 'SOURCE_MATCHING_DISABLED' : 'SOURCE_MATCHING_ENABLED'
   const source_operational_state = globalPolicyConflict ? 'CONFLICT' : policyUnknown ? 'UNKNOWN' : policy?.is_enabled ? 'ENABLED' : 'DISABLED'
   const source_operational_reason = globalPolicyConflict ? 'SOURCE_POLICY_ALIAS_CONFLICT' : policyUnknown ? 'SOURCE_POLICY_STATE_UNKNOWN' : !registeredSourceOperationalDefault(source) ? 'NO_EXECUTABLE_PRODUCER' : source_operational_state === 'ENABLED' ? 'SOURCE_OPERATIONALLY_ENABLED' : 'SOURCE_DISABLED'
-  const final_matching_state: UniverseState = matching_row_state !== 'READY' ? matching_row_state : source_matching_operational_state === 'DENIED' || source_operational_state === 'DISABLED' ? 'NOT_READY' : source_matching_operational_state === 'UNKNOWN' || source_operational_state === 'UNKNOWN' || source_operational_state === 'CONFLICT' ? 'UNKNOWN' : 'READY'
+  const final_matching_state: UniverseState = matching_row_state !== 'READY' ? matching_row_state : explicitConsumerDenial(source, 'matching') || source_matching_operational_state === 'DENIED' || source_operational_state === 'DISABLED' ? 'NOT_READY' : source_matching_operational_state === 'UNKNOWN' || source_operational_state === 'UNKNOWN' || source_operational_state === 'CONFLICT' ? 'UNKNOWN' : 'READY'
   const catalogRow = catalogReadiness({ ...row, is_active: lifecycleReady, verification_status: lifecycleReady ? 'verified' : row.verification_status }, now)
   const seoRow = seoReadiness({ ...row, is_active: lifecycleReady, verification_status: lifecycleReady ? 'verified' : row.verification_status }, now)
   const catalogPermission = permissionResolver(source, 'catalog')
   const seoPermission = permissionResolver(source, 'seo')
   const alertPermission = permissionResolver(source, 'alerts')
-  const consumerState = (ready: boolean, _permissionState: PermissionState, switchState: PermissionState): UniverseState => !lifecycleReady ? (lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE' ? 'UNKNOWN' : 'NOT_READY') : !ready ? 'NOT_READY' : source_operational_state === 'UNKNOWN' || source_operational_state === 'CONFLICT' ? 'UNKNOWN' : source_operational_state === 'DISABLED' || switchState === 'DENIED' ? 'NOT_READY' : switchState === 'ALLOWED' ? 'READY' : 'UNKNOWN'
-  const catalog_state = consumerState(catalogRow.state === 'READY', catalogPermission.state, catalogOperational)
+  const consumerState = (ready: boolean, explicitDenied: boolean, switchState: PermissionState): UniverseState => !lifecycleReady ? (lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE' ? 'UNKNOWN' : 'NOT_READY') : !ready ? 'NOT_READY' : explicitDenied ? 'NOT_READY' : source_operational_state === 'UNKNOWN' || source_operational_state === 'CONFLICT' ? 'UNKNOWN' : source_operational_state === 'DISABLED' || switchState === 'DENIED' ? 'NOT_READY' : switchState === 'ALLOWED' ? 'READY' : 'UNKNOWN'
+  const catalog_state = consumerState(catalogRow.state === 'READY', explicitConsumerDenial(source, 'catalog'), catalogOperational)
   const seo_row_state: UniverseState = !lifecycleReady ? (lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE' ? 'UNKNOWN' : 'NOT_READY') : seoRow.state === 'READY' ? 'READY' : 'NOT_READY'
   const seo_row_reason = !lifecycleReady ? lifecycle_reason : seoRow.state === 'READY' ? 'SEO_ROW_READY' : seoRow.reasons[0] || 'SEO_ROW_NOT_READY'
   const seo_state: UniverseState = seo_row_state !== 'READY' ? seo_row_state
+    : temporarySeoExceptionApplied ? 'READY'
+    : explicitConsumerDenial(source, 'seo_index') ? 'NOT_READY'
     : seoOperational === 'DENIED' ? 'NOT_READY'
     : seoOperational === 'UNKNOWN' || source_operational_state === 'UNKNOWN' || source_operational_state === 'CONFLICT' ? 'UNKNOWN'
     : source_operational_state === 'DISABLED' ? 'NOT_READY'
     : 'READY'
   const seo_effective_reason = seo_row_state !== 'READY' ? seo_row_reason
+    : temporarySeoExceptionApplied ? 'TEMP_LEGACY_SEO_EXCEPTION_APPLIED'
+    : explicitConsumerDenial(source, 'seo_index') ? 'SOURCE_SEO_PERMISSION_DENIED'
     : seoOperational === 'DENIED' ? 'SOURCE_SEO_OPERATOR_DISABLED'
     : aliasConflicts.includes('seo_enabled') ? 'SOURCE_POLICY_ALIAS_CONFLICT'
     : seoOperational === 'UNKNOWN' ? 'SOURCE_SEO_SWITCH_UNKNOWN'
@@ -155,7 +172,7 @@ export function classifyOpportunityUniverse(row: Record<string, any>, policyRows
     : seoContent.state !== 'READY' ? 'CONTENT_NOT_READY'
     : lifecycle_unresolved_reason === 'OBSERVATION_SOURCE_MISMATCH' ? 'SYSTEM_ERROR'
     : 'REFRESH_REQUIRED'
-  const alerts_state = consumerState(professional, alertPermission.state, alertsOperational)
+  const alerts_state = consumerState(professional, explicitConsumerDenial(source, 'alerts'), alertsOperational)
   const unresolved_dimensions: string[] = []
   if (lifecycle_state === 'LIFECYCLE_UNKNOWN' || lifecycle_state === 'STALE_DERIVED_STATE') unresolved_dimensions.push('LIFECYCLE')
   if (matching_row_state === 'UNKNOWN') unresolved_dimensions.push('ROW_MATCH_READINESS')
@@ -257,7 +274,6 @@ export function summarizeOpportunityUniverse(decisions: OpportunityUniverseDecis
     SEO_ROW_NOT_READY: counts('seo_row_state', 'NOT_READY'), SEO_ROW_UNKNOWN: counts('seo_row_state', 'UNKNOWN'),
     SEO_EFFECTIVE_READY: counts('seo_state', 'READY'),
     lifecycle_recovery: Object.fromEntries(['RECOVERABLE_NOW','REFRESH_REQUIRED','CONTENT_NOT_READY','SYSTEM_ERROR','EXPLICITLY_INACTIVE'].map(state => [state, decisions.filter(item => item.lifecycle_recovery_class === state).length])),
-    TOP_LIFECYCLE_UNRESOLVED_REASONS: decisions.reduce((counts, item) => { if (item.lifecycle_unresolved_reason) counts[item.lifecycle_unresolved_reason] = (counts[item.lifecycle_unresolved_reason] || 0) + 1; return counts }, {} as Record<string, number>),
     SEO_PERMISSION_UNKNOWN_READY_ROWS: decisions.filter(item => item.seo_row_state === 'READY' && (item.provenance.consumer_permission_states as any)?.seo === 'UNKNOWN').length,
     SEO_CONTENT_READY_INDEPENDENT_OF_LIFECYCLE: decisions.filter(item => item.seo_content_readiness_independent_of_lifecycle === 'READY').length,
     SEO_CONTENT_READY_WHILE_LIFECYCLE_UNRESOLVED: lifecycleUnresolved.filter(item => item.seo_content_readiness_independent_of_lifecycle === 'READY').length,

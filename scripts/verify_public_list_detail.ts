@@ -255,7 +255,7 @@ if (process.argv.includes('--browser')) {
   assert.ok(fs.existsSync('dist/index.html'), 'run the fixture build first')
   const redirectLines = read('dist/_redirects').trim().split(/\r?\n/)
   const seoAliases = redirectLines.filter(line => line.endsWith(' 301!'))
-  assert.deepEqual(redirectLines, [...seoAliases, ...DETAIL_FALLBACK_RULES], 'final deployed artifact: SEO aliases then non-forced detail rules only')
+  assert.deepEqual(redirectLines, [...seoAliases, ...DETAIL_FALLBACK_RULES], 'final deployed artifact: SEO aliases, forced live blog routes, then static-aware opportunity detail rules')
   assert.doesNotMatch(redirectLines.join('\n'), /\/index\.html|^\/\* /m)
   console.log(`SEO_ALIAS_RULES=${seoAliases.length} DETAIL_FALLBACK_RULES=${DETAIL_FALLBACK_RULES.length} LAST_SEO_ALIAS_INDEX=${seoAliases.length - 1} FIRST_DETAIL_FALLBACK_INDEX=${seoAliases.length} ORDER=PASS`)
   let reproduceOldFailure = false

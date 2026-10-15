@@ -9,7 +9,7 @@ os.environ.setdefault("SUPABASE_URL", "https://example.test")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "fixture")
 from source_cleaners import PROFILES
 from source_registry_v2 import runtime_projection
-from sync_source_registry_projection import PRODUCTION_TARGET_FILE, diff_projection, apply, projection_inventory, target_identity
+from sync_source_registry_projection import PRODUCTION_TARGET_FILE, diff_projection, apply, initial_source_enabled, projection_inventory, target_identity
 
 p=PROFILES["himalayas"]
 baseline=runtime_projection(p)
@@ -58,6 +58,8 @@ assert "catalog_enabled" not in functional_payload
 from sync_source_registry import build_row
 assert build_row({"source_id":"computrabajo"})["is_enabled"] is True
 assert build_row({"source_id":"computrabajo"})["catalog_enabled"] is False
+assert initial_source_enabled("paraguayconcursa_mef") is False
+assert initial_source_enabled("himalayas") is True
 inventory=projection_inventory([
     {"source":"himalayas","action":"NOOP"},
     {"source":"new_source","action":"INSERT"},

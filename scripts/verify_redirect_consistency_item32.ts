@@ -8,13 +8,14 @@ const root = path.resolve(import.meta.dirname, '..')
 const fixture = JSON.parse(fs.readFileSync(path.join(root, 'scripts/fixtures/seo-inventory.json'), 'utf8'))
 const effective = buildEffectiveSeoInventory(fixture.opportunities, fixture.policies)
 const normal = redirectText(effective)
-const expectedFallbacks = ['empleos', 'oportunidades'].map(family =>
-  `/${family}/* /.netlify/functions/public-opportunity-detail 200`)
-assert.deepEqual(DETAIL_FALLBACK_RULES, expectedFallbacks)
+const expectedFallbacks = DETAIL_FALLBACK_RULES
+assert.deepEqual(expectedFallbacks.slice(-2), ['empleos', 'oportunidades'].map(family =>
+  `/${family}/* /.netlify/functions/public-opportunity-detail 200`))
+assert(expectedFallbacks.slice(0, 5).every(line => line.endsWith(' 200!') && line.includes('/public-blog-post')), 'blog routes force the current publication handler over static prerender files')
 assert.deepEqual(normal.text.trim().split('\n'), [
   ...normal.redirects.map(({ source, target }: { source: string; target: string }) => `${source} ${target} 301!`),
   ...expectedFallbacks,
-], 'SEO aliases are unchanged and precede the only non-forced infrastructure rewrites')
+], 'SEO aliases are unchanged and precede the explicit forced blog and non-forced opportunity routes')
 assert.deepEqual(redirectText([]).text.trim().split('\n'), expectedFallbacks, 'fallback exists independently of SEO inventory size')
 assert.match(normal.text, /^\/empleos\/regional-fellowship \/oportunidades\/regional-fellowship 301!$/m)
 assert.ok(!normal.text.includes('/empleos/programme-officer /'), 'canonical job has no redirect')

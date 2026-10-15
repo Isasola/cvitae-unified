@@ -16,6 +16,52 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 V2_PROFILES: dict[str, SourceProfile] = {
+    "paraguayconcursa_mef": SourceProfile(
+        source="paraguayconcursa_mef", adapter_version="paraguayconcursa-mef:v1.0.0", auto_enabled=False,
+        expected_description_coverage=.90, adapter="ParaguayConcursaAdapter", cleaner="ParaguayConcursaCleaner",
+        scout="official_mef_listing", discovery_strategy="paginated_listing", detail_strategy="html_detail",
+        source_family="official_government_job_portal", opportunity_kinds=("job",),
+        max_workers=1, max_detail_fetches_per_run=20, retry_attempts=3,
+        supports_eligibility=False, emitted_aliases=("paraguayconcursa_mef_scraper",),
+        operational_runner_ids=("paraguayconcursa_mef_scraper",),
+        known_assumptions=("location_and_vacancies_required_for_ingestion", "unknown_status_never_ready", "review_required", "source_cursor_in_scraper_runs"),
+        source_attribution_required=True, search_engine_indexing_allowed=False,
+    ),
+    "psf_hiringroom": SourceProfile(
+        source="psf_hiringroom", adapter_version="psf-hiringroom:v1.0.0", auto_enabled=False,
+        expected_description_coverage=.85, adapter="HiringRoomPsfAdapter", cleaner="PsfHiringRoomCleaner",
+        scout="psf_employer_listing", discovery_strategy="tenant_scoped_html", detail_strategy="individual_html",
+        source_family="employer_ats", opportunity_kinds=("job",),
+        max_workers=1, max_detail_fetches_per_run=20, retry_attempts=3,
+        supports_eligibility=False, emitted_aliases=("psf_hiringroom_scraper",),
+        operational_runner_ids=("psf_hiringroom_scraper",),
+        known_assumptions=(
+            "written_feed_rights_required_before_http", "public_html_is_not_distribution_permission",
+            "tenant_and_native_posting_id_form_identity", "relative_age_is_not_exact_published_at",
+            "job_location_is_not_candidate_eligibility", "no_customer_api_credentials",
+            "all_consumer_permissions_remain_unapproved",
+        ),
+        source_attribution_required=True, search_engine_indexing_allowed=False,
+        web_catalog_allowed=False, third_party_job_distribution_allowed=False,
+        google_jobs_distribution_allowed=False,
+    ),
+    "grupovierci": SourceProfile(
+        source="grupovierci", adapter_version="grupo-vierci-scout:v1.0.0", auto_enabled=False,
+        expected_description_coverage=.85, adapter="GrupoVierciScout", cleaner="GrupoVierciCleaner",
+        scout="retail_sa_employer_portal", discovery_strategy="tenant_listing_html", detail_strategy="unverified",
+        source_family="employer_career_portal", opportunity_kinds=("job",),
+        max_workers=1, max_detail_fetches_per_run=0, retry_attempts=3,
+        supports_eligibility=False, emitted_aliases=("grupo_vierci", "grupovierci_scraper"),
+        operational_runner_ids=("grupovierci_scraper",),
+        known_assumptions=(
+            "written_feed_rights_required_before_http", "old_scraper_direct_write_removed",
+            "current_employer_route_observed_empty", "nonempty_markup_fails_closed_until_native_id_and_detail_contract",
+            "public_portal_is_not_distribution_permission",
+        ),
+        source_attribution_required=True, search_engine_indexing_allowed=False,
+        web_catalog_allowed=False, third_party_job_distribution_allowed=False,
+        google_jobs_distribution_allowed=False,
+    ),
     "greenhouse": SourceProfile(
         source="greenhouse", adapter_version="greenhouse:v1.0.0", auto_enabled=False,
         expected_description_coverage=.85, adapter="GreenhouseBoardAdapter", cleaner=None,

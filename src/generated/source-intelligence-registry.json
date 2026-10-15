@@ -4,12 +4,136 @@
   "ambiguous_patterns": [],
   "auto_enabled": 1,
   "certified": 2,
-  "emitted_aliases": 150,
-  "pending_certification": 105,
-  "profiles": 107,
-  "registry_hash": "397d5ed716a1dc42f0fa3dc60829a82c693947126e358f466987a9e0bcd55d9a",
+  "emitted_aliases": 155,
+  "pending_certification": 107,
+  "profiles": 109,
+  "registry_hash": "eb8ce493971b3238ee773daf8c4028a4a42a0faa54862b7db85694ae17bd50eb",
   "schema_version": "source-intelligence-registry:v2",
   "sources": [
+    {
+      "active": true,
+      "adapter_version": "paraguayconcursa-mef:v1.0.0",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "live_validation"
+      ],
+      "canonical_source": "paraguayconcursa_mef",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": false,
+        "source_attribution_required": true,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "paraguayconcursa_mef",
+        "paraguayconcursa_mef_scraper"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/paraguayconcursa_mef_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
+      "refresh_capability": {
+        "adapter": "ParaguayConcursaAdapter",
+        "cleaner": "ParaguayConcursaCleaner",
+        "detail_strategy": "html_detail",
+        "discovery_strategy": "paginated_listing",
+        "scout": "official_mef_listing"
+      },
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "official_government_job_portal"
+    },
+    {
+      "active": true,
+      "adapter_version": "psf-hiringroom:v1.0.0",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "live_validation"
+      ],
+      "canonical_source": "psf_hiringroom",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": false,
+        "source_attribution_required": true,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "psf_hiringroom",
+        "psf_hiringroom_scraper"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/psf_hiringroom_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
+      "refresh_capability": {
+        "adapter": "HiringRoomPsfAdapter",
+        "cleaner": "PsfHiringRoomCleaner",
+        "detail_strategy": "individual_html",
+        "discovery_strategy": "tenant_scoped_html",
+        "scout": "psf_employer_listing"
+      },
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "employer_ats"
+    },
+    {
+      "active": true,
+      "adapter_version": "grupo-vierci-scout:v1.0.0",
+      "auto_enabled": false,
+      "blocking_requirements": [
+        "live_validation"
+      ],
+      "canonical_source": "grupovierci",
+      "certification_evidence": {},
+      "certified": false,
+      "contract_covered": true,
+      "distribution_policy": {
+        "google_jobs_distribution_allowed": false,
+        "search_engine_indexing_allowed": false,
+        "source_attribution_required": true,
+        "third_party_job_distribution_allowed": false,
+        "web_catalog_allowed": false
+      },
+      "emitted_aliases": [
+        "grupo_vierci",
+        "grupovierci",
+        "grupovierci_scraper"
+      ],
+      "emitted_patterns": [],
+      "freshness_ttl_hours": 168,
+      "producer_execution": {
+        "entrypoints": [
+          "scrapers/grupovierci_scraper.py"
+        ],
+        "operational_default": "ACTIVE",
+        "state": "EXECUTABLE_PRODUCER"
+      },
+      "refresh_capability": {
+        "adapter": "GrupoVierciScout",
+        "cleaner": "GrupoVierciCleaner",
+        "detail_strategy": "unverified",
+        "discovery_strategy": "tenant_listing_html",
+        "scout": "retail_sa_employer_portal"
+      },
+      "semantic_version": "source-contract:v2.0",
+      "source_family": "employer_career_portal"
+    },
     {
       "active": true,
       "adapter_version": "greenhouse:v1.0.0",
@@ -2769,48 +2893,6 @@
         "dry_run",
         "live_validation"
       ],
-      "canonical_source": "grupovierci",
-      "certification_evidence": {},
-      "certified": false,
-      "contract_covered": true,
-      "distribution_policy": {
-        "google_jobs_distribution_allowed": false,
-        "search_engine_indexing_allowed": null,
-        "source_attribution_required": false,
-        "third_party_job_distribution_allowed": false,
-        "web_catalog_allowed": false
-      },
-      "emitted_aliases": [
-        "grupo_vierci",
-        "grupovierci"
-      ],
-      "emitted_patterns": [],
-      "freshness_ttl_hours": 168,
-      "producer_execution": {
-        "entrypoints": [
-          "scrapers/grupovierci_scraper.py"
-        ],
-        "operational_default": "ACTIVE",
-        "state": "EXECUTABLE_PRODUCER"
-      },
-      "refresh_capability": {
-        "adapter": null,
-        "cleaner": null,
-        "detail_strategy": "unvalidated",
-        "discovery_strategy": "legacy_workflow",
-        "scout": "none"
-      },
-      "semantic_version": "source-contract:v2.0",
-      "source_family": "job_board"
-    },
-    {
-      "active": true,
-      "adapter_version": "unvalidated",
-      "auto_enabled": false,
-      "blocking_requirements": [
-        "dry_run",
-        "live_validation"
-      ],
       "canonical_source": "grupocarteshs",
       "certification_evidence": {},
       "certified": false,
@@ -4889,7 +4971,17 @@
       "entrypoint": "scrapers/bolsas_locales_scraper.py",
       "runner_id": "bolsas_locales_scraper",
       "workflow": ".github/workflows/scrapers.yml"
+    },
+    {
+      "entrypoint": "scrapers/paraguayconcursa_mef_scraper.py",
+      "runner_id": "paraguayconcursa_mef_scraper",
+      "workflow": ".github/workflows/scrapers-latam.yml"
+    },
+    {
+      "entrypoint": "scrapers/psf_hiringroom_scraper.py",
+      "runner_id": "psf_hiringroom_scraper",
+      "workflow": ".github/workflows/scrapers-latam.yml"
     }
   ],
-  "workflow_routes_hash": "dcd297ee9fe4b729264d234d173d9bc96c6a6c5f10f968d1bd9c999968649bc0"
+  "workflow_routes_hash": "ef9c2632a8b5da5e2acd9f68a0386f8131b5608b29af54d250fbfcd4bdc10e3b"
 }

@@ -47,11 +47,111 @@ def db_status(status: str) -> str:
     """Map explicit states onto the existing scraper_runs DB constraint."""
     return {
         "success": "healthy",
+        "success_zero_confirmed": "warning",
+        "empty_eof_confirmed": "warning",
+        "resumable": "warning",
+        "stalled": "warning",
+        "executed_unmeasured": "warning",
         "partial_success": "warning",
         "skipped": "warning",
         "blocked": "warning",
         "failed": "failed",
     }.get(status, "failed")
+
+
+def _count(*values: object) -> int | None:
+    for value in values:
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+    return None
+
+
+def execution_metrics(summary: dict | None, adapter_metrics: dict | None, output: str = "") -> dict:
+    """Preserve stage counts without treating missing telemetry as a zero."""
+    extraction = (adapter_metrics or {}).get("extraction_metrics")
+    extraction = extraction if isinstance(extraction, dict) else {}
+    found = _count(extraction.get("discovered"), extraction.get("found"), (summary or {}).get("found"), last_number(FOUND_RE, output))
+    inserted = _count((summary or {}).get("inserted"), extraction.get("inserted"), last_number(INSERTED_RE, output))
+    budget_skipped = _count((summary or {}).get("budget_skipped"), extraction.get("budget_skipped"))
+    cursor = extraction.get("latam_cursor") or extraction.get("cursor") or {}
+    continuation = extraction.get("continuation_pending")
+    if not isinstance(continuation, bool) and isinstance(cursor, dict):
+        continuation = cursor.get("continuation_pending")
+    if not isinstance(continuation, bool):
+        continuation = None
+    cursor_progress = extraction.get("cursor_progress")
+    cursor_advanced = cursor_progress.get("advanced") if isinstance(cursor_progress, dict) and isinstance(cursor_progress.get("advanced"), bool) else None
+    eof_confirmed = extraction.get("eof_confirmed") is True or extraction.get("pagination_eof") is True
+    http_status = _count(extraction.get("http_status"), extraction.get("last_http_status"))
+    transport_error = bool(extraction.get("transport_error") or extraction.get("technical_failure") is True or extraction.get("blocked") is True)
+    cursor_circular = bool(isinstance(cursor_progress, dict) and (cursor_progress.get("circular") is True or cursor_progress.get("loop_detected") is True))
+    unique = _count((summary or {}).get("unique"), extraction.get("unique"))
+    rejection_reasons = (summary or {}).get("rejection_reasons")
+    if not isinstance(rejection_reasons, dict):
+        rejection_reasons = extraction.get("rejected_by_gate_reasons") if isinstance(extraction.get("rejected_by_gate_reasons"), dict) else None
+    submitted = _count(
+        (summary or {}).get("submitted"), extraction.get("submitted"),
+        unique - budget_skipped if unique is not None and budget_skipped is not None else None,
+    )
+    return {
+        "discovered": found,
+        "detail_attempted": _count(extraction.get("detail_attempted"), extraction.get("details_fetched"), (summary or {}).get("detail_attempted")),
+        "normalized": _count((summary or {}).get("valid"), extraction.get("normalized")),
+        "unique": unique,
+        "submitted": submitted,
+        "inserted": inserted,
+        "updated": _count((summary or {}).get("updated"), extraction.get("updated")),
+        "unchanged": _count((summary or {}).get("unchanged"), extraction.get("unchanged")),
+        "duplicate": _count((summary or {}).get("duplicates_in_run"), extraction.get("duplicates")),
+        "rejected_by_gate": _count((summary or {}).get("rejected"), extraction.get("rejected")),
+        "rejected_by_gate_reasons": rejection_reasons,
+        "failed": _count((summary or {}).get("failed"), extraction.get("failed")),
+        "budget_skipped": budget_skipped,
+        "continuation_pending": continuation,
+        "cursor_advanced": cursor_advanced,
+        "eof_confirmed": eof_confirmed,
+        "http_status": http_status,
+        "transport_error": transport_error,
+        "cursor_circular": cursor_circular,
+    }
+
+
+def measured_execution_status(status: str, metrics: dict) -> str:
+    """Require explicit EOF or durable continuation evidence before healthy outcomes."""
+    if status in {"failed", "skipped", "blocked"}:
+        return status
+    if metrics.get("transport_error") or metrics.get("http_status") not in (None, 200):
+        return "failed"
+    if metrics.get("cursor_circular"):
+        return "stalled"
+    if metrics["discovered"] is None or metrics["inserted"] is None:
+        return "executed_unmeasured"
+    if metrics["continuation_pending"] is True:
+        budget_skipped = metrics.get("budget_skipped")
+        if isinstance(budget_skipped, int) and budget_skipped > 0 and metrics.get("cursor_advanced") is True:
+            return "resumable"
+        return "stalled"
+    if metrics["discovered"] == 0 and metrics["inserted"] == 0:
+        complete = all(metrics.get(key) is not None for key in (
+            "detail_attempted", "normalized", "unique", "submitted", "updated", "unchanged",
+            "duplicate", "rejected_by_gate", "failed", "budget_skipped",
+        ))
+        if complete and metrics.get("eof_confirmed") is True and metrics.get("http_status") == 200 and metrics.get("failed") == 0 and metrics.get("budget_skipped") == 0:
+            return "empty_eof_confirmed"
+        return "stalled" if complete else "executed_unmeasured"
+    return "partial_success" if status == "partial_success" else "success"
+
+
+def configured_item_budget(control: dict, trigger_type: str, cap: int | None = None) -> int:
+    """Resolve the existing control budget; an optional workflow cap can only lower it."""
+    if trigger_type == "scan":
+        configured = control.get("scan_max_items") or 50
+    elif trigger_type == "schedule":
+        configured = control.get("schedule_max_items") or 10000
+    else:
+        configured = control.get("max_items_per_run") or 250
+    value = max(1, int(configured))
+    return min(value, max(1, int(cap))) if cap is not None else value
 
 
 def api_headers() -> dict[str, str]:
@@ -129,9 +229,11 @@ def update_control_quality(scraper_id: str, status: str, summary: dict | None, e
     found = summary.get("found") if summary else None
     inserted = summary.get("inserted") if summary else None
     quality = (
-        "broken" if status in {"failed", "telemetry_failed"}
+        "broken" if status in {"failed", "telemetry_failed", "stalled"}
+        else "degraded" if status in {"executed_unmeasured", "resumable", "partial_success"}
+        else "unproductive" if status == "success_zero_confirmed"
+        else "healthy" if status == "empty_eof_confirmed"
         else "healthy" if isinstance(inserted, int) and inserted > 0
-        else "degraded" if status == "partial_success"
         else "unproductive" if found == 0
         else "degraded"
     )
@@ -185,7 +287,15 @@ def execution_outcome(returncode: int, output: str, summary: dict | None) -> tup
     """Classify technical execution separately from valid business rejection."""
     error_lines = [line.strip() for line in output.splitlines() if ERROR_RE.search(line)]
     if summary:
-        error_lines = [str(item) for item in summary.get("errors", []) if item]
+        if isinstance(summary.get("technical_errors"), list):
+            error_lines = [str(item) for item in summary.get("technical_errors", []) if item]
+        elif summary.get("technical_failure") is False:
+            # Explicit separation is authoritative: normalization/business
+            # rejections and processing-budget skips are outcomes, not runtime
+            # failures. Technical evidence below can still fail the run.
+            error_lines = []
+        else:
+            error_lines = [str(item) for item in summary.get("errors", []) if item]
         adapter_metrics = structured_adapter_metrics(output) or {}
         extraction = adapter_metrics.get("extraction_metrics") or {}
         lineage = extraction.get("scan_lineage") or {}
@@ -219,6 +329,13 @@ def execution_outcome(returncode: int, output: str, summary: dict | None) -> tup
         status = "partial_success"
     else:
         status = "success"
+    health_status = (((structured_adapter_metrics(output) or {}).get("extraction_metrics") or {}).get("health") or {}).get("status")
+    if status == "success" and health_status == "DEGRADED":
+        status = "partial_success"
+        warning_count += 1
+    elif status == "success" and health_status in {"ERROR", "FAILED"}:
+        status = "failed"
+        error_count += 1
     return error_lines, warning_count, error_count, status
 
 
@@ -228,6 +345,7 @@ def main() -> int:
     parser.add_argument("scraper_name")
     parser.add_argument("script_path")
     parser.add_argument("--timeout", type=int, default=900)
+    parser.add_argument("--max-items-cap", type=int, help="Optional source-workflow budget cap; never raises the scraper control budget")
     args = parser.parse_args()
 
     run_id = os.getenv("GITHUB_RUN_ID", f"local-{int(time.time())}")
@@ -297,6 +415,7 @@ def main() -> int:
 
     summary = None
     adapter_metrics = None
+    counters = {}
     try:
         child_env = os.environ.copy()
         # Propagate the durable monitored-run identity into adapter evidence.
@@ -308,18 +427,8 @@ def main() -> int:
         if record_id:
             child_env["CVITAE_SCRAPER_RUN_DB_ID"] = record_id
         child_env["CVITAE_SOURCE_SCAN_REQUEST_ID"] = scan_request_id
-        # scan (Admin Play): bounded diagnostic cap — never overwhelm production
-        # schedule (production cron): high fallback so full inventory is processed
-        # manual/local: operator-configured cap
-        if trigger_type == "scan":
-            # scan is a bounded diagnostic — never inherit max_items_per_run (full-collection cap)
-            child_env["CVITAE_MAX_ITEMS"] = str(control.get("scan_max_items") or 50)
-        elif trigger_type == "schedule":
-            # max_items_per_run is the legacy/manual cap (historically 250).
-            # Schedule must use only its own future field or the coverage cap.
-            child_env["CVITAE_MAX_ITEMS"] = str(control.get("schedule_max_items") or 10000)
-        else:
-            child_env["CVITAE_MAX_ITEMS"] = str(control.get("max_items_per_run") or 250)
+        # A source workflow may lower an existing control-plane budget only.
+        child_env["CVITAE_MAX_ITEMS"] = str(configured_item_budget(control, trigger_type, args.max_items_cap))
         child_env["CVITAE_ALLOWED_COUNTRIES"] = ",".join(control.get("allowed_country_codes") or [])
         child_env["CVITAE_REQUIRE_REVIEW"] = "1" if control.get("require_review", True) else "0"
         runtime_policy = os.path.abspath(os.path.join("scrapers", "runtime_policy"))
@@ -339,6 +448,8 @@ def main() -> int:
         summary = structured_summary(output)
         adapter_metrics = structured_adapter_metrics(output)
         error_lines, warning_count, error_count, status = execution_outcome(result.returncode, output, summary)
+        counters = execution_metrics(summary, adapter_metrics, output)
+        status = measured_execution_status(status, counters)
         exit_code = result.returncode
     except subprocess.TimeoutExpired as exc:
         output = ((exc.stdout or "") + "\n" + (exc.stderr or "")).strip()
@@ -350,7 +461,7 @@ def main() -> int:
     excerpt = output[-12000:] if output else "El scraper no produjo salida."
     if record_id:
         try:
-            save({
+            final_payload = {
                 "status": db_status(status),
                 "exit_code": exit_code,
                 "found_count": summary.get("found") if summary else (adapter_metrics or {}).get("extraction_metrics", {}).get("found", last_number(FOUND_RE, output)),
@@ -363,14 +474,24 @@ def main() -> int:
                 "unchanged_count": summary.get("unchanged") if summary else None,
                 "warning_count": warning_count,
                 "error_count": error_count,
-                "error_summary": "\n".join(error_lines[:8])[:2000] or None,
+                "error_summary": "\n".join(error_lines[:8])[:2000]
+                    or ("BUSINESS_REJECTION_REASONS=" + json.dumps(counters.get("rejected_by_gate_reasons"), ensure_ascii=False)[:1200]
+                        if counters.get("rejected_by_gate_reasons") else None)
+                    or (f"[{status.upper()}]" if status != "success" else None),
                 "log_excerpt": excerpt,
                 "finished_at": finished.isoformat(),
                 "duration_seconds": duration,
                 "updated_at": finished.isoformat(),
                 "adapter_version": adapter_metrics.get("adapter_version") if adapter_metrics else None,
-                "extraction_metrics": adapter_metrics.get("extraction_metrics") if adapter_metrics else None,
-            }, record_id)
+            }
+            # A timeout or killed child may already have checkpointed a durable
+            # source cursor.  Omit this field when no final adapter report
+            # exists instead of erasing that checkpoint with JSON null.
+            if adapter_metrics and isinstance(adapter_metrics.get("extraction_metrics"), dict):
+                extraction_metrics = dict(adapter_metrics["extraction_metrics"])
+                extraction_metrics["run_accounting"] = {"state": status, **counters}
+                final_payload["extraction_metrics"] = extraction_metrics
+            save(final_payload, record_id)
         except Exception as exc:
             print(f"[monitor] No se pudo finalizar telemetría: {type(exc).__name__}", file=sys.stderr)
             telemetry_ok = False
@@ -392,6 +513,8 @@ def main() -> int:
         exit_code=exit_code,
         error_count=error_count,
         duration_seconds=duration,
+        **counters,
+        measurement_state="MEASURED" if counters.get("discovered") is not None and counters.get("inserted") is not None else "UNMEASURED",
     )
     print(output)
     print(f"\n[monitor] {args.scraper_id}: {final_status} · {duration}s · {error_count} error(es)")

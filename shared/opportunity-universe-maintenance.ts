@@ -34,3 +34,20 @@ export function maintenanceCompletion(pendingSources: number): { status: Univers
   const pending = nonNegativeInteger(pendingSources, 'pending_sources')
   return { status: pending === 0 ? 'COMPLETE' : 'RESUMABLE', continuation_required: pending > 0 }
 }
+
+export function nextNoProgressWindows(previous: unknown, progressed: boolean): number {
+  if (progressed) return 0
+  const prior = typeof previous === 'number' && Number.isInteger(previous) && previous >= 0 ? previous : 0
+  return prior + 1
+}
+
+export function maintenanceIsStalled(
+  pendingSources: number,
+  oldestPendingAgeSeconds: number | null,
+  consecutiveNoProgressWindows: number,
+  minimumAgeSeconds = 2 * 60 * 60,
+): boolean {
+  const pending = nonNegativeInteger(pendingSources, 'pending_sources')
+  const windows = nonNegativeInteger(consecutiveNoProgressWindows, 'consecutive_no_progress_windows')
+  return pending > 0 && windows >= 2 && oldestPendingAgeSeconds !== null && oldestPendingAgeSeconds >= minimumAgeSeconds
+}

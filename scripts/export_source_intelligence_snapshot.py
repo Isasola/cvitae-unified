@@ -11,6 +11,7 @@ WORKFLOW_FILES = (
     ".github/workflows/scrapers.yml",
     ".github/workflows/source-maintenance.yml",
     ".github/workflows/scheduled-source-automation.yml",
+    ".github/workflows/scrapers-latam.yml",
 )
 RUNNER = re.compile(r"python\s+scripts/run_scraper_monitored\.py\s+([\w.-]+)\s+([\w.-]+)\s+([\w./-]+\.py)")
 

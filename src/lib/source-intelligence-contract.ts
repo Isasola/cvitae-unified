@@ -35,8 +35,8 @@ export function sourceDoorDiagnostics(profile: any, policy: any, run: any, gates
   ]
   const permissions = Object.fromEntries(SOURCE_PERMISSION_DIMENSIONS.map(dimension => {
     const truth = sourcePermissionDimensionTruth(profile.canonical_source, dimension)
-    // Full reason/provenance already lives in source_permission_truth on the
-    // same source response. Do not serialize a second permission registry.
+    // Full permission evidence is returned only for the selected source.
+    // Keep the global source snapshot to compact, independent dimension states.
     return [dimension, { state: truth.state, role: ['catalog','matching','alerts','seo_index'].includes(dimension) ? 'ADVISORY_FIRST_PARTY' : 'SPECIFIC_DIMENSION' }]
   }))
   stages.push(stage('CONSUMER PERMISSION', 'INFORMATIONAL', 'INDEPENDENT_DIMENSIONS', 'INSPECT_EXACT_CONSUMER_PERMISSION', permissions))

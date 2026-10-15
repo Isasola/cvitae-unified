@@ -1,6 +1,6 @@
 import registry from '../generated/source-intelligence-registry.json'
 import { alertsReadiness, catalogReadiness, jobPostingReadiness, matchingReadiness, seoReadiness, type OpportunityTruthInput, type ReadinessResult } from './opportunity-truth'
-import { sourcePermissionDimensionTruth, sourcePermissionTruth } from './source-permission-truth'
+import { sourcePermissionDimensionTruth, sourcePermissionEvidenceClass, sourcePermissionTruth } from './source-permission-truth'
 
 export type SourcePolicyRow = {
   source: string; is_enabled?: boolean | null; catalog_enabled?: boolean | null
@@ -21,7 +21,7 @@ export type PolicyDecision = {
   storedGateState: 'TRUE' | 'FALSE' | 'UNKNOWN' | 'NOT_APPLICABLE'
   reasons: string[]
   permissionReasons: string[]
-  permissionRole: 'ADVISORY_FIRST_PARTY' | 'EXTERNAL_DISTRIBUTION_GATE'
+  permissionRole: 'ADVISORY_FIRST_PARTY' | 'EXPLICIT_FIRST_PARTY_DENY' | 'EXTERNAL_DISTRIBUTION_GATE'
   temporaryException: null
 }
 const profiles = (registry as any).sources as Array<{ canonical_source:string; emitted_aliases:string[]; producer_execution?: {state:string; entrypoints:string[]; operational_default:string} }>
@@ -97,6 +97,9 @@ const capabilityFor = (canonical: string, consumer: Consumer, _policy: SourcePol
 const decision = (canonicalSource: string, consumer: Consumer, rowReadiness: ReadinessResult, policy: SourcePolicyRow | undefined, admin: Array<boolean | null | undefined>, live: boolean, storedGate: unknown, storedApplicable = true, extraReasons: string[] = [], permissionResolver = sourcePermissionDimensionTruth): PolicyDecision => {
   const policyFound = Boolean(policy)
   const capabilityState = capabilityFor(canonicalSource, consumer, policy, permissionResolver)
+  const permissionDimension = consumer === 'googleJobs' || consumer === 'jobPosting' ? 'google_jobs' : consumer === 'thirdParty' ? 'third_party_distribution' : consumer === 'seo' ? 'seo_index' : consumer
+  const capabilityEvidence = permissionResolver(canonicalSource, permissionDimension as Parameters<typeof sourcePermissionDimensionTruth>[1])
+  const explicitDenied = capabilityState === 'DENIED' && sourcePermissionEvidenceClass(capabilityEvidence) === 'EXPLICIT_EVIDENCE_BACKED'
   const adminSwitchState = legacySwitchState(policy, admin)
   const projectionSwitch = consumer === 'catalog' ? policy?.catalog_enabled : consumer === 'matching' ? policy?.matching_enabled : consumer === 'alerts' ? policy?.alerts_enabled : consumer === 'seo' || consumer === 'jobPosting' ? policy?.seo_enabled : true
   const firstParty = ['catalog','matching','alerts','seo'].includes(consumer)
@@ -115,12 +118,15 @@ const decision = (canonicalSource: string, consumer: Consumer, rowReadiness: Rea
     ...(live ? [] : ['ROW_LIFECYCLE_NOT_ROUTABLE']),
     ...extraReasons,
   ]
-  // First-party organic SEO is gated by lifecycle, row facts and global source
-  // operation. Canonical permission remains diagnostic; external distribution
-  // uses its own JobPosting/Google Jobs decisions below.
-  const effectiveReasons = firstParty ? reasons : [...reasons, ...permissionReasons]
-  return { allowed: effectiveReasons.length === 0 && (firstParty || capabilityState === 'ALLOWED'), canonicalSource, rowReadiness, capabilityState, adminSwitchState, storedGateState: storedGateState(storedGate, storedApplicable), reasons: effectiveReasons, permissionReasons,
-    permissionRole: firstParty ? 'ADVISORY_FIRST_PARTY' : 'EXTERNAL_DISTRIBUTION_GATE', temporaryException: null }
+  // UNKNOWN permission is consultative for first-party surfaces. A source's
+  // explicitly evidenced DENIED permission blocks only that consumer. JobPosting,
+  // Google Jobs and third-party distribution still require affirmative permission.
+  const effectiveReasons = firstParty
+    ? [...reasons, ...(explicitDenied ? permissionReasons : [])]
+    : [...reasons, ...permissionReasons]
+  const permissionAllows = firstParty ? !explicitDenied : capabilityState === 'ALLOWED'
+  return { allowed: effectiveReasons.length === 0 && permissionAllows, canonicalSource, rowReadiness, capabilityState, adminSwitchState, storedGateState: storedGateState(storedGate, storedApplicable), reasons: effectiveReasons, permissionReasons,
+    permissionRole: firstParty ? explicitDenied ? 'EXPLICIT_FIRST_PARTY_DENY' : 'ADVISORY_FIRST_PARTY' : 'EXTERNAL_DISTRIBUTION_GATE', temporaryException: null }
 }
 
 /** One fail-closed evaluation for runtime/build projections. Canonical DB row wins over legacy alias rows. */

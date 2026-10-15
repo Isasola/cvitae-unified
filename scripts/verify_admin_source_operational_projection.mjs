@@ -53,7 +53,7 @@ try {
   assert.equal((await query("select count(*) n from opportunity_universe_dirty_sources where canonical_source='jobicy'"))[0].n, 1)
 
   const routes = workflowRoutes()
-  const workflowFiles = ['.github/workflows/scrapers.yml', '.github/workflows/source-maintenance.yml', '.github/workflows/scheduled-source-automation.yml']
+  const workflowFiles = ['.github/workflows/scrapers.yml', '.github/workflows/source-maintenance.yml', '.github/workflows/scheduled-source-automation.yml', '.github/workflows/scrapers-latam.yml']
   const routesFromSource = workflowFiles.flatMap(workflow => [...read(workflow).matchAll(/python\s+scripts\/run_scraper_monitored\.py\s+([\w.-]+)\s+([\w.-]+)\s+([\w./-]+\.py)/g)].map(match => ({
     workflow, runner_id: match[1].toLowerCase(), entrypoint: match[3].replaceAll('\\', '/').toLowerCase(),
   })))
@@ -83,10 +83,11 @@ try {
 
   const routeRows = registry.sources.map(item => verifiedRouteFor(item, routes, registry.sources))
   const directInvocations = routes.filter(route => route.workflow === '.github/workflows/scrapers.yml')
-  assert.equal(registry.sources.length, 107, 'all Registry profiles participate, including profiles without a route')
+  assert.equal(registry.sources.length, 108, 'all Registry profiles participate, including profiles without a route')
   assert.equal(directInvocations.length, 81, 'the current workflow yields 81 directly monitored invocations')
   assert.equal(new Set(directInvocations.map(route => route.runner_id)).size, 81)
-  assert.equal(routeRows.filter(route => route.state === 'DIRECT').length, 87, 'all 87 profiles associated with direct workflow entrypoints have exact path evidence')
+  assert.equal(routeRows.filter(route => route.state === 'DIRECT').length, 87, 'all 87 profiles associated with the legacy direct workflow retain exact path evidence')
+  assert.equal(routeRows.filter(route => route.state === 'ALTERNATE').length, 1, 'the isolated LATAM producer is an alternate workflow route')
   assert.ok(routeRows.every(route => ['DIRECT', 'ALTERNATE', 'MANUAL', 'NO_ROUTE', 'UNKNOWN'].includes(route.state)))
   assert.ok(routeRows.filter(route => ['MANUAL', 'NO_ROUTE', 'UNKNOWN'].includes(route.state)).every(route => route.evidence.length > 0), 'non-direct routes retain the evidence or unresolved reason that supports their classification')
   assert.ok(routeRows.filter(route => route.state === 'DIRECT').flatMap(route => route.evidence).every(evidence => evidence.profile_owners.length > 0), 'shared producer entrypoints retain their exact Registry profile scope')
@@ -153,7 +154,7 @@ try {
   assert.ok(sharedBody.execution_route_evidence.some(item => item.profile_owners.length > 1))
   assert.equal(sharedDb.calls.some(call => call.table === 'scraper_runs'), false, 'shared entrypoint history is not attributed without an exclusive runner identity')
   assert.ok(sharedBody.eight_gates.gates.length > 0)
-  console.log(JSON.stringify({ status: 'PASS', checks: ['effective-vs-stored-sql-policy-with-dirty-queue', 'stored-alias-conflict-identical-and-missing', 'diagnose-source-exclusive-runner', 'diagnose-source-no-runner-no-global-query', 'diagnose-source-shared-entrypoint-not-attributed', '107-registry-profiles', '81-direct-workflow-invocations', '87-profile-entrypoint-mappings'], stored_matching: stored.matching_enabled, effective_matching: effective.matching_enabled, dirty_source: 'jobicy', registry_profiles: registry.sources.length, direct_invocations: directInvocations.length, direct_profiles: routeRows.filter(route => route.state === 'DIRECT').length }, null, 2))
+  console.log(JSON.stringify({ status: 'PASS', checks: ['effective-vs-stored-sql-policy-with-dirty-queue', 'stored-alias-conflict-identical-and-missing', 'diagnose-source-exclusive-runner', 'diagnose-source-no-runner-no-global-query', 'diagnose-source-shared-entrypoint-not-attributed', '108-registry-profiles', '81-direct-workflow-invocations', '87-legacy-profile-entrypoint-mappings', '1-alternate-latam-producer'], stored_matching: stored.matching_enabled, effective_matching: effective.matching_enabled, dirty_source: 'jobicy', registry_profiles: registry.sources.length, direct_invocations: directInvocations.length, direct_profiles: routeRows.filter(route => route.state === 'DIRECT').length }, null, 2))
 } finally {
   await db.close()
 }

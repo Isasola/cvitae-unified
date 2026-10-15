@@ -30,9 +30,10 @@ async function input(): Promise<Input> {
 
 const { opportunities, policies, fromUniverse } = await input()
 // The offline fixture contains raw rows and deliberately tests shared row gates.
-// Live rows have already crossed the canonical SQL consumer gate. Re-filtering
-// them here can silently drop an admitted future source from build/sitemap.
-const rows = fromUniverse ? buildSeoInventoryFromUniverse(opportunities).map(row => {
+// Live rows have already crossed the canonical SQL consumer gate. Do not apply
+// a second local source-permission filter to this admitted projection.
+const rows = fromUniverse ? buildSeoInventoryFromUniverse(opportunities)
+  .map(row => {
     const { seo: _legacySeoDecision, ...external } = publicDistributionProjection(row, policies)
     return { ...row, distribution: { ...external, seo: { allowed: true, authority: 'opportunity_seo_universe' } } }
   }) : buildEffectiveSeoInventory(opportunities, policies)

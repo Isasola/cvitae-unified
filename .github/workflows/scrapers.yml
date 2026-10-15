@@ -198,7 +198,7 @@ jobs:
       # ── Paraguay — grandes grupos empresariales ───────────────────────────
 
       - name: Grupo Vierci (La Nación, GEN, MegaSuper)
-        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'vierci' || github.event_name == 'schedule' }}
+        if: ${{ vars.CVITAE_GRUPO_VIERCI_FEED_AUTHORIZED == 'true' && (github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'vierci' || github.event_name == 'schedule') }}
         run: python scripts/run_scraper_monitored.py grupovierci_scraper grupovierci_scraper scrapers/grupovierci_scraper.py
         continue-on-error: true
 

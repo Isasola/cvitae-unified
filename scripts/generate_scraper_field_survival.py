@@ -42,13 +42,21 @@ KNOWN_STRUCTURAL_LOSSES = {
         "runtime_relevance": "NONE_NO_ROW_WRITE",
     },
 }
-WORKFLOW = ROOT / ".github" / "workflows" / "scrapers.yml"
+WORKFLOWS = (
+    ROOT / ".github" / "workflows" / "scrapers.yml",
+    ROOT / ".github" / "workflows" / "scrapers-latam.yml",
+)
 OUTPUT = ROOT / "generated" / "scraper-field-survival.json"
 
 
 def workflow_emitters() -> list[Path]:
-    text = WORKFLOW.read_text(encoding="utf-8")
-    paths = sorted({match for match in re.findall(r"scrapers/([\w-]+\.py)", text) if (ROOT / "scrapers" / match).exists()})
+    texts = [path.read_text(encoding="utf-8") for path in WORKFLOWS if path.exists()]
+    paths = sorted({
+        match
+        for text in texts
+        for match in re.findall(r"scrapers/([\w-]+\.py)", text)
+        if (ROOT / "scrapers" / match).exists()
+    })
     return [ROOT / "scrapers" / path for path in paths]
 
 

@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { GrowthLine, Eyebrow } from '@/components/cv/visuals'
 import { supabase } from '@/lib/supabase'
+import { isCurrentPublicBlog } from '@/lib/public-blog-contract'
 
 interface BlogPost {
   id: string
@@ -26,13 +27,13 @@ export default function Blog() {
   useEffect(() => {
     supabase
       .from('content_hub')
-      .select('id, titulo, slug, cuerpo, categoria, created_at, fecha_vencimiento, tipo, imagen_url')
+      .select('id, titulo, slug, cuerpo, categoria, created_at, fecha_vencimiento, tipo, imagen_url, is_active, metadata')
       .eq('tipo', 'blog')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .then(({ data, error: loadError }) => {
         if (loadError) setError('No pudimos cargar los artículos. Intentá nuevamente en unos minutos.')
-        else setPosts(data || [])
+        else setPosts((data || []).filter(row => isCurrentPublicBlog(row)))
         setLoading(false)
       })
   }, [])

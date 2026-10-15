@@ -11,6 +11,11 @@ const MAX_AGE_MS = 24 * 60 * 60 * 1000
 // precedes netlify.toml's SPA fallback. Identity comes from the original path,
 // including both trailing-slash forms.
 export const DETAIL_FALLBACK_RULES = [
+  '/blog /.netlify/functions/public-blog-post?view=list 200!',
+  '/blog/index.html /.netlify/functions/public-blog-post?view=list 200!',
+  '/blog/:slug /.netlify/functions/public-blog-post?slug=:slug 200!',
+  '/blog/:slug/ /.netlify/functions/public-blog-post?slug=:slug 200!',
+  '/blog/:slug/index.html /.netlify/functions/public-blog-post?slug=:slug 200!',
   '/empleos/* /.netlify/functions/public-opportunity-detail 200',
   '/oportunidades/* /.netlify/functions/public-opportunity-detail 200',
 ]

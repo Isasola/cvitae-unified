@@ -58,7 +58,11 @@ def build_row(entry: dict) -> dict:
         "country_code": "PY" if market == "PY" else None,
         "trust_level": TIER_TRUST.get(tier, "review"),
         "auto_verify": False,
-        "is_enabled": operational,
+        # A source may have a runnable producer while its source-policy gate
+        # is intentionally held closed for first-party review.  The explicit
+        # initial value is source-specific and does not control collection or
+        # any consumer permission.
+        "is_enabled": bool(entry.get("initial_is_enabled", operational)),
         "verification_criteria": {
             "tier": tier,
             "original_source_required": entry.get("original_source_required", True),

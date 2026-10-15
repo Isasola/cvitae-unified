@@ -58,11 +58,10 @@ const expectedAliases = expectedGraph.map(({ source, target }) => `${source} ${t
 const aliases = redirects.filter(line => line.endsWith(' 301!'))
 const fallbacks = redirects.filter(line => !line.endsWith(' 301!'))
 assert.deepEqual(aliases, expectedAliases, 'exactly one forced redirect per effective SEO alias, with canonical target and graph validation')
-assert.deepEqual(fallbacks, DETAIL_FALLBACK_RULES, 'only the fixed, non-forced detail infrastructure rewrites')
-assert.deepEqual(redirects, [...expectedAliases, ...DETAIL_FALLBACK_RULES], 'all SEO aliases precede detail fallbacks; no SPA or other rules')
-assert.deepEqual(fallbacks, ['empleos', 'oportunidades'].map(family =>
-  `/${family}/* /.netlify/functions/public-opportunity-detail 200`), 'rewrites use original path, not injected queries')
-assert.ok(fallbacks.every(line => line.endsWith(' 200') && !/[!?]/.test(line)))
+assert.deepEqual(fallbacks, DETAIL_FALLBACK_RULES, 'artifact contains only the fixed blog publication and opportunity detail routes')
+assert.deepEqual(redirects, [...expectedAliases, ...DETAIL_FALLBACK_RULES], 'all SEO aliases precede routes; no SPA or unrelated rules')
+assert.ok(fallbacks.slice(0, 5).every(line => line.endsWith(' 200!') && line.includes('/public-blog-post')), 'blog rewrite is forced over static pages for revocation')
+assert.ok(fallbacks.slice(-2).every(line => line.endsWith(' 200') && !/[!?]/.test(line)), 'opportunity routes retain non-forced static SEO shadowing')
 assert.doesNotMatch(fs.readFileSync(path.join(root, 'netlify.toml'), 'utf8'), /from = "\/(empleos|oportunidades)\/:slug\/?"/)
 console.log(`SEO_ALIAS_RULES=${aliases.length} DETAIL_FALLBACK_RULES=${fallbacks.length} LAST_SEO_ALIAS_INDEX=${aliases.length - 1} FIRST_DETAIL_FALLBACK_INDEX=${aliases.length} ORDER=PASS`)
 

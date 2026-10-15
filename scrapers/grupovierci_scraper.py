@@ -1,139 +1,99 @@
-"""Grupo Vierci (La Nación, GEN, etc.) — portal de empleos."""
+"""Fail-closed scout for the current Grupo Vierci / Retail S.A. job portal.
+
+The previous script guessed jobs from unrelated corporate pages and wrote
+directly to ``opportunities``. The current employer portal showed an explicit
+empty state in a bounded read. This scout refuses to fetch until a written
+feed/use authorization is configured and refuses to interpret an unknown page
+as EOF or as a vacancy.
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+import unicodedata
+
 import requests
 from bs4 import BeautifulSoup
-import os
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-TABLE_URL = f"{SUPABASE_URL}/rest/v1/opportunities"
-HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type": "application/json",
-    "Prefer": "resolution=merge-duplicates",
-}
-UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+from latam_source_runtime import UnexpectedMarkup, UpstreamFailure, fetch_response
 
-# Grupo Vierci: La Nación, GEN TV, radio, supermercados MegaSuper, etc.
-ENDPOINTS = [
-    ("https://www.grupovierci.com/trabaja-con-nosotros", "Grupo Vierci"),
-    ("https://www.grupovierci.com/empleos", "Grupo Vierci"),
-    ("https://www.lanacion.com.py/institucional/trabaja-con-nosotros", "La Nación"),
-    ("https://www.gen.com.py/trabaja-con-nosotros", "GEN Paraguay"),
-    ("https://www.megasuper.com.py/trabaja-con-nosotros", "MegaSuper"),
-    ("https://www.vierci.com.py/careers", "Grupo Vierci"),
-    ("https://www.nacionmedia.com.py/trabaja-con-nosotros", "Nación Media"),
-]
-
-LINK_KEYWORDS = ["vacante", "empleo", "trabaja", "oportunidad", "cargo", "plaza", "postula"]
-JOB_SELECTORS = [".job", ".oportunidad", ".vacante", "article", ".card", ".listing-item"]
+SOURCE_ID = "grupo_vierci"
+RUNNER_ID = "grupovierci_scraper"
+LISTING_URL = "https://empleo.grupovierci.com/vista_prueba.php"
+ADAPTER_VERSION = "grupo-vierci-scout:v1.0.0"
+EMPTY_MARKERS = (
+    "no se encontraron resultados con los criterios actuales",
+    "en este momento no se encuentra ninguna vacante disponible",
+    "no hay vacantes disponibles",
+)
 
 
-def fetch(url):
-    try:
-        r = requests.get(url, headers=UA, timeout=30, verify=False)
-        return r.text if r.status_code == 200 else ""
-    except Exception as e:
-        print(f"  fetch error {url}: {e}")
-        return ""
+def _fold(value: str) -> str:
+    return unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").casefold()
 
 
-def scrape_url(url, org):
-    html = fetch(url)
-    if not html:
-        return []
+def parse_listing_page(html: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
-    jobs = []
-
-    for sel in JOB_SELECTORS:
-        items = soup.select(sel)
-        if items:
-            for item in items:
-                title_el = item.select_one("h2, h3, h4, .title, .cargo")
-                if not title_el:
-                    continue
-                title = title_el.get_text(strip=True)
-                if not title or len(title) < 5:
-                    continue
-                link_el = item.select_one("a[href]")
-                job_url = url
-                if link_el:
-                    href = link_el.get("href", "")
-                    job_url = href if href.startswith("http") else f"{url.rstrip('/')}/{href.lstrip('/')}"
-                jobs.append({
-                    "title": title,
-                    "organization": org,
-                    "location": "Paraguay",
-                    "rubro": "Medios y Comunicación",
-                    "type": "Tiempo completo",
-                    "description": "",
-                    "application_url": job_url,
-                    "source": "grupo_vierci",
-                    "is_active": True,
-                    "tags": ["grupo-vierci", "medios", "comunicacion"],
-                })
-            if jobs:
-                break
-
-    if not jobs:
-        for a in soup.select("a[href]"):
-            text = a.get_text(strip=True)
-            href = a.get("href", "")
-            if not text or len(text) < 6 or len(text) > 120:
-                continue
-            if any(kw in text.lower() for kw in LINK_KEYWORDS):
-                job_url = href if href.startswith("http") else url
-                jobs.append({
-                    "title": text,
-                    "organization": org,
-                    "location": "Paraguay",
-                    "rubro": "Medios y Comunicación",
-                    "type": "Tiempo completo",
-                    "description": "",
-                    "application_url": job_url,
-                    "source": "grupo_vierci",
-                    "is_active": True,
-                    "tags": ["grupo-vierci", "medios"],
-                })
-
-    seen = set()
-    unique = []
-    for j in jobs:
-        if j["application_url"] not in seen:
-            seen.add(j["application_url"])
-            unique.append(j)
-    return unique[:15]
+    text = " ".join(soup.get_text(" ", strip=True).split())
+    folded = _fold(text)
+    if any(marker in folded for marker in EMPTY_MARKERS):
+        return {"items": [], "eof": True, "empty_state": "EXPLICIT_NO_CURRENT_VACANCIES"}
+    # The publicly visible page may contain a modal template with generic
+    # labels such as "Título de la vacante". Only real individual posting URLs
+    # can prove a non-empty listing; no selectors or source IDs are established
+    # for that contract yet, so report unexpected markup instead of inventing.
+    if soup.select(".vacancy-card, .vacancy, article[data-vacancy-id], a[href*='/vacante/']"):
+        raise UpstreamFailure("LISTING_CONTRACT_UNVERIFIED", "posting_like_markup_requires_native_id_and_detail_contract")
+    raise UnexpectedMarkup("listing_has_neither_verified_vacancy_cards_nor_explicit_empty_state")
 
 
-def insert_job(job):
+def _authorization_failure() -> int:
+    summary = {"found": 0, "valid": 0, "unique": 0, "inserted": 0, "updated": 0,
+        "unchanged": 0, "duplicates_in_run": 0, "rejected": 0, "failed": 0,
+        "technical_failure": True, "errors": ["FEED_AUTHORIZATION_REQUIRED"]}
+    metrics = {"adapter_version": ADAPTER_VERSION, "extraction_metrics": {
+        "health": {"status": "ERROR", "reason": "FEED_AUTHORIZATION_REQUIRED"}, "http_requests": 0}}
+    print("CVITAE_INGESTION_SUMMARY=" + json.dumps(summary, separators=(",", ":")))
+    print("CVITAE_ADAPTER_METRICS=" + json.dumps(metrics, separators=(",", ":")))
+    return 2
+
+
+def main() -> int:
+    if os.getenv("CVITAE_GRUPO_VIERCI_FEED_AUTHORIZED", "false").casefold() != "true":
+        return _authorization_failure()
+    if not os.getenv("CVITAE_SCRAPER_RUN_DB_ID"):
+        print("PRODUCTION_RUN_ROW_REQUIRED_FOR_MONITORED_SCOUT", file=sys.stderr)
+        return 2
     try:
-        r = requests.post(TABLE_URL + "?on_conflict=application_url", headers=HEADERS, json=job)
-        return r.status_code
-    except Exception as e:
-        print(f"  insert error: {e}")
-        return "error"
+        response = fetch_response(requests.Session(), LISTING_URL, attempts=3)
+        if not response.url.startswith("https://empleo.grupovierci.com/"):
+            raise UpstreamFailure("IDENTITY_MISMATCH", "portal_redirected_outside_employer_host")
+        result = parse_listing_page(response.text)
+    except (UpstreamFailure, requests.RequestException) as exc:
+        reason = exc.kind if isinstance(exc, UpstreamFailure) else type(exc).__name__
+        print("CVITAE_INGESTION_SUMMARY=" + json.dumps({"found": 0, "valid": 0, "inserted": 0,
+            "failed": 1, "technical_failure": True, "errors": [reason]}, separators=(",", ":")))
+        print("CVITAE_ADAPTER_METRICS=" + json.dumps({"adapter_version": ADAPTER_VERSION,
+            "extraction_metrics": {"health": {"status": "DEGRADED", "reason": reason}, "error_kind": reason}}, separators=(",", ":")))
+        return 1
 
-
-def main():
-    import urllib3
-    urllib3.disable_warnings()
-    all_jobs = []
-    seen_urls = set()
-    for url, org in ENDPOINTS:
-        jobs = scrape_url(url, org)
-        print(f"[vierci] {url}: {len(jobs)}")
-        for j in jobs:
-            if j["application_url"] not in seen_urls:
-                seen_urls.add(j["application_url"])
-                all_jobs.append(j)
-
-    count = 0
-    for job in all_jobs:
-        status = insert_job(job)
-        if status in (200, 201, 409):
-            count += 1
-    print(f"[grupo_vierci] Total insertados: {count}/{len(all_jobs)}")
+    summary = {"found": len(result["items"]), "valid": 0, "unique": 0, "inserted": 0,
+        "updated": 0, "unchanged": 0, "duplicates_in_run": 0, "rejected": 0,
+        "failed": 0, "budget_skipped": 0, "technical_failure": False, "errors": []}
+    metrics = {"adapter_version": ADAPTER_VERSION, "extraction_metrics": {
+        "http_status": response.status_code, "eof_confirmed": result["eof"],
+        "continuation_pending": False, "cursor_advanced": False,
+        "discovered": 0, "detail_attempted": 0, "normalized": 0, "unique": 0,
+        "submitted": 0, "inserted": 0, "updated": 0, "unchanged": 0,
+        "duplicate": 0, "rejected_by_gate": 0, "failed": 0, "budget_skipped": 0,
+        "empty_state": result["empty_state"], "permission_status": "REVIEW_REQUIRED",
+        "health": {"status": "EMPTY_EOF_CONFIRMED", "reason": result["empty_state"]},
+    }}
+    print("CVITAE_INGESTION_SUMMARY=" + json.dumps(summary, separators=(",", ":")))
+    print("CVITAE_ADAPTER_METRICS=" + json.dumps(metrics, ensure_ascii=False, separators=(",", ":")))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

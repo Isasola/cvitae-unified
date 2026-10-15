@@ -22,7 +22,11 @@ assert(env.includes('VITE_ADSENSE_PREVIEW=false'), 'La vista previa debe estar a
 assert(slot.includes('if (!active) return null'), 'Un slot apagado no debe producir markup ni espacio')
 assert(slot.includes('aria-label="Publicidad"') && slot.includes('data-ad-placement'), 'Un slot futuro debe ser distinguible')
 assert(!index.includes('pagead2.googlesyndication.com') && !index.includes('googletagmanager.com/gtag/js'), 'No debe haber scripts publicitarios estaticos')
-assert(!exists('public/ads.txt'), 'No debe inventarse ads.txt sin publisher configurado')
+assert(exists('public/ads.txt'), 'La línea ads.txt de la cuenta incluida previamente se conserva en el release')
+const adsTxt = read('public/ads.txt').trim().split(/\r?\n/)
+assert(adsTxt.length === 1, 'ads.txt conserva una única línea de publisher')
+assert(/^google\.com, pub-\d{16}, DIRECT, [a-f0-9]{16}$/.test(adsTxt[0]), 'ads.txt mantiene el formato de publisher válido')
+assert(index.includes('google-adsense-account'), 'La metaetiqueta de cuenta existente se conserva')
 assert(!presentation.includes('AdSlot'), 'El CTA de postulación no debe contener publicidad')
 
 for (const privatePage of [

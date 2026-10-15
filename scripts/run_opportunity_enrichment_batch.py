@@ -121,7 +121,15 @@ def selection_detail(row: dict[str, Any]) -> dict[str, Any] | None:
         priority_name, base, class_reason = "P2", 40, "in_review"
     else:
         priority_name, base, class_reason = "P3", 0, "degraded_other"
-    weights = {"missing_description": 30, "missing_organization": 20, "missing_application_url": 20, "bad_country": 25, "missing_source_url": 15, "missing_or_weak_location": 10, "missing_onsite_country": 10}
+    weights = {
+        "generic_or_navigation_title": 40, "description_repeats_title": 25,
+        "description_without_factual_content": 25, "missing_description": 30,
+        "missing_organization": 20, "missing_application_url": 20,
+        "bad_country": 25, "missing_source_url": 15,
+        "missing_or_weak_location": 10, "missing_onsite_country": 10,
+        "unsupported_original_source_verified": 25,
+        "eligibility_without_evidence": 20,
+    }
     return {"priority": priority_name, "score": base + sum(weights[item] for item in signals), "reasons": [class_reason, *signals]}
 
 

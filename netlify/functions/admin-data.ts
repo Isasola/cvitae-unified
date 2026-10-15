@@ -113,6 +113,17 @@ export function workflowRoutes(): WorkflowRoute[] {
   }))
 }
 
+function sourcePermissionSummary(source: string) {
+  return Object.fromEntries(SOURCE_PERMISSION_DIMENSIONS.map(dimension => {
+    const truth = sourcePermissionDimensionTruth(source, dimension)
+    return [dimension, {
+      state: truth.state,
+      evidence_class: sourcePermissionEvidenceClass(truth),
+      permission_role: ['catalog','matching','alerts','seo_index'].includes(dimension) ? 'ADVISORY_FIRST_PARTY' : 'SPECIFIC_DIMENSION',
+    }]
+  }))
+}
+
 export function verifiedRouteFor(profile: any, routes: WorkflowRoute[], registryProfiles: any[] = []) {
   const declared = (profile.producer_execution?.entrypoints || []).map((entry: string) => String(entry).replaceAll('\\', '/').toLowerCase())
   const direct = routes.filter(route => route.workflow === '.github/workflows/scrapers.yml' && declared.includes(route.entrypoint))
@@ -362,13 +373,21 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       .sort((left, right) => Date.parse(String(right.started_at || '')) - Date.parse(String(left.started_at || '')))
     const latestRun = runsForSource[0] || null
     const latestRunMetrics = latestRun?.extraction_metrics || {}
+    const runAccounting = latestRunMetrics.run_accounting || {}
+    const runAccountingState = String(runAccounting.state || latestRun?.error_summary?.match(/^\[([A-Z_]+)\]/)?.[1]?.toLowerCase() || '')
     const latestTelemetry = rowsForAliases(telemetryBySource, aliases)[0] || null
     const control = [...runnerIds].flatMap(id => controlsByRunner.get(id.toLowerCase()) || [])[0]
     const extractionHealth = latestRun?.extraction_metrics?.health?.status
-    const runFailed = latestRun?.status === "failed" || Boolean(latestRun?.error_summary) || extractionHealth === "DEGRADED"
+    const runFailed = latestRun?.status === "failed" || extractionHealth === "DEGRADED"
+    const runUnmeasured = runAccountingState === 'executed_unmeasured'
+    const runResumable = runAccountingState === 'resumable'
+    const runZero = runAccountingState === 'success_zero_confirmed'
+    const runPartial = runAccountingState === 'partial_success'
     const operationalHealthBase = control && control.collection_enabled === false || srcCap?.is_enabled === false ? "PAUSED"
       : profile.auto_enabled && !profile.certified ? "BLOCKED"
       : runFailed ? "DEGRADED"
+      : runUnmeasured ? "DEGRADED"
+      : runResumable || runZero || runPartial ? "PARTIAL"
       : !latestRun || observations.length === 0 ? "UNKNOWN"
       : "HEALTHY"
     // P0.1: Use full-DB RPC result instead of client-side limited rows.
@@ -433,6 +452,8 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
         error_count: run.error_count, found_count: run.found_count, valid_count: run.valid_count,
         inserted_count: run.inserted_count, updated_count: run.updated_count, unchanged_count: run.unchanged_count,
         duplicate_count: run.duplicate_count, rejected_count: run.rejected_count,
+        run_accounting_state: metrics.run_accounting?.state || run.error_summary?.match(/^\[([A-Z_]+)\]/)?.[1]?.toLowerCase() || null,
+        run_accounting: metrics.run_accounting ? Object.fromEntries(Object.entries(metrics.run_accounting).filter(([key, value]) => ['state', 'discovered', 'detail_attempted', 'normalized', 'unique', 'submitted', 'inserted', 'updated', 'unchanged', 'duplicate', 'rejected_by_gate', 'failed', 'budget_skipped', 'continuation_pending', 'cursor_advanced'].includes(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null))) : null,
         error_summary: String(run.error_summary || '').slice(0, 300), adapter_version: run.adapter_version,
         extraction_metrics: {
           health: metrics.health ? { status: metrics.health.status, reasons: Array.isArray(metrics.health.reasons) ? metrics.health.reasons.slice(0, 12) : [] } : undefined,
@@ -481,7 +502,8 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
     if (/captcha|checking your browser|javascript required|navigation content|enable javascript/i.test(errorText)) diagnosticStates.add('NAVIGATION_CONTENT')
     if (persistenceError?.sqlstate || /persistence_failed|persistencia|ingestion_technical_failure/i.test(errorText)) diagnosticStates.add('PERSISTENCE_FAILED')
     if (latestRun && Number(latestRun.rejected_count || 0) > 0) diagnosticStates.add('QUALITY_FAILED')
-    if (latestRun && Number(latestRun.found_count ?? latestRunMetrics.found ?? -1) === 0 && !['skipped', 'blocked'].includes(String(latestRun.status))) diagnosticStates.add('EXTRACTOR_ZERO')
+    if (runAccountingState) diagnosticStates.add(runAccountingState.toUpperCase())
+    if (!runAccountingState && latestRun && Number(latestRun.found_count ?? latestRunMetrics.found ?? -1) === 0 && !['skipped', 'blocked'].includes(String(latestRun.status))) diagnosticStates.add('EXTRACTOR_ZERO')
     if (dirtyQueueEntry) diagnosticStates.add('UNIVERSE_STALE')
     if (sourceSwitchBlocked(operations.effective_switches)) diagnosticStates.add('SOURCE_SWITCH_BLOCKED')
     if (String(latestRun?.error_summary || '').includes('[SKIPPED]')) diagnosticStates.add('RUN_SKIPPED')
@@ -498,9 +520,9 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       expected_adapter_version: expectedAdapterVersion || 'NOT_REPORTED',
       expected_cleaner_version: expectedCleanerVersion || 'NOT_REPORTED',
       ...capabilityFlags, pools,
-      source_permission_truth: sourcePermissionSnapshot(profile.canonical_source),
+      source_permission_truth: sourcePermissionSummary(profile.canonical_source),
       producer_execution: producerExecution,
-      producer_state: producerExecution.state === 'NO_EXECUTABLE_PRODUCER' ? 'NO_EXECUTABLE_PRODUCER' : !latestRun ? 'NO_RUN' : runFailed ? 'FAILED' : 'OBSERVED',
+      producer_state: producerExecution.state === 'NO_EXECUTABLE_PRODUCER' ? 'NO_EXECUTABLE_PRODUCER' : !latestRun ? 'NO_RUN' : runFailed ? 'FAILED' : runAccountingState.toUpperCase() || 'OBSERVED',
       diagnostic_states: [...diagnosticStates],
       producer_entrypoint: producerExecution.entrypoints?.[0] || null,
       runner_id: latestRun?.scraper_id || routeInfo.runner_ids[0] || null,
@@ -524,17 +546,23 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       last_run_status: latestRun?.status || null,
       last_run_error: lastError,
       persistence_error: persistenceError,
-      found: latestRun?.found_count ?? latestRunMetrics?.found ?? null,
+      found: runAccounting.discovered ?? latestRunMetrics?.discovered ?? latestRun?.found_count ?? latestRunMetrics?.found ?? null,
       valid: latestRun?.valid_count ?? latestRunMetrics?.valid ?? null,
       unique: latestRunMetrics?.unique ?? latestRun?.extraction_metrics?.lineage?.unique ?? null,
-      attempted: latestRunMetrics?.attempted ?? null,
+      detail_attempted: runAccounting.detail_attempted ?? latestRunMetrics.detail_attempted ?? null,
+      normalized: runAccounting.normalized ?? latestRunMetrics.normalized ?? latestRun?.valid_count ?? null,
+      submitted: runAccounting.submitted ?? latestRunMetrics.submitted ?? null,
       inserted: latestRun?.inserted_count ?? null,
       updated: latestRun?.updated_count ?? null,
       unchanged: latestRun?.unchanged_count ?? null,
       duplicates: latestRun?.duplicate_count ?? null,
       failed: latestRun?.error_count ?? null,
       rejected: latestRun?.rejected_count ?? null,
-      budget_skipped: latestRunMetrics?.budget_skipped ?? null,
+      rejected_by_gate_reasons: runAccounting.rejected_by_gate_reasons ?? latestRunMetrics.rejected_by_gate_reasons ?? null,
+      budget_skipped: runAccounting.budget_skipped ?? latestRunMetrics?.budget_skipped ?? null,
+      continuation_pending: runAccounting.continuation_pending ?? latestRunMetrics.continuation_pending ?? null,
+      cursor_advanced: runAccounting.cursor_advanced ?? latestRunMetrics.cursor_progress?.advanced ?? null,
+      run_accounting_state: runAccountingState || 'UNKNOWN',
       inventory_total: pools.inventory,
       lifecycle_ready: pipelineSource?.lifecycle_active_valid ?? null,
       matching_row_ready: (universeRes.data?.per_source || []).find((item: any) => item.source === profile.canonical_source)?.match_row_ready ?? null,
@@ -548,7 +576,6 @@ export async function sourceIntelligenceSnapshot(supabase: any, dashboard: any, 
       stored_switches_evidence: operations.stored_switches_evidence,
       effective_switches: operations.effective_switches,
       explicit_overrides: operations.explicit_overrides,
-      consultative_permissions: sourcePermissionSnapshot(profile.canonical_source),
       dirty_queue_status: dirtyQueueRes.error ? 'UNKNOWN' : dirtyQueueEntry ? 'PENDING' : 'EMPTY',
       dirty_cursor: dirtyQueueEntry?.cursor_id ?? null,
       dirty_queued_at: dirtyQueueEntry?.queued_at ?? null,

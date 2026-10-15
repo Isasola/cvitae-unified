@@ -6,6 +6,7 @@ import WebSocket from 'ws'
 import { STATIC_PUBLIC_SITEMAP_ROUTES } from '../src/lib/static-sitemap-routes.js'
 import { fetchAllPages } from '../src/lib/paged-fetch.js'
 import { canonicalSitemapRows, sitemapIndexEntries } from '../src/lib/sitemap-universe.js'
+import { isCurrentPublicBlog, publicBlogExclusionReason } from '../src/lib/public-blog-contract.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const distPath = path.join(__dirname, '..', 'dist')
@@ -35,14 +36,16 @@ function urlsetXml(rows, today) {
 async function fetchPublicBlogRows() {
   if (!supabase) return []
   const rows = await fetchAllPages(1000, async (offset, size) => {
-    const query = supabase.from('content_hub').select('id,slug,created_at,updated_at')
+    const query = supabase.from('content_hub').select('id,slug,created_at,updated_at,fecha_vencimiento,metadata,is_active')
       .not('slug', 'is', null).eq('tipo', 'blog').eq('is_active', true)
       .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(offset, offset + size - 1)
     const { data, error } = await query
     if (error) throw error
     return data || []
   })
-  return canonicalSitemapRows('/blog', rows)
+  const invalidExpiry = rows.filter(row => publicBlogExclusionReason(row) === 'BLOG_EXPIRY_INVALID')
+  if (invalidExpiry.length) console.error('[sitemap-build:blog-invalid-expiry]', JSON.stringify({ count: invalidExpiry.length, ids: invalidExpiry.map(row => row.id).filter(Boolean) }))
+  return canonicalSitemapRows('/blog', rows.filter(row => isCurrentPublicBlog(row)))
 }
 
 async function generate() {
@@ -51,8 +54,11 @@ async function generate() {
     ? JSON.parse(fs.readFileSync(path.resolve(publicContentFixturePath), 'utf8'))
     : null
   if (publicContentFixture && !Array.isArray(publicContentFixture.blogs)) throw new Error('public_content_fixture_invalid')
+  const blogCandidates = publicContentFixture ? publicContentFixture.blogs : []
+  const invalidFixtureExpiry = blogCandidates.filter(row => publicBlogExclusionReason(row) === 'BLOG_EXPIRY_INVALID')
+  if (invalidFixtureExpiry.length) console.error('[sitemap-build:blog-invalid-expiry]', JSON.stringify({ count: invalidFixtureExpiry.length, ids: invalidFixtureExpiry.map(row => row.id).filter(Boolean) }))
   const blogPosts = publicContentFixture
-    ? canonicalSitemapRows('/blog', publicContentFixture.blogs.filter(row => row.is_active !== false))
+    ? canonicalSitemapRows('/blog', blogCandidates.filter(row => isCurrentPublicBlog(row)))
     : await fetchPublicBlogRows()
 
   // Opportunity URLs are exclusively the pre-filtered effective SEO inventory.
