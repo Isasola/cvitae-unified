@@ -1,5 +1,95 @@
 {
   "schema_version": 1,
   "greenhouse": [],
-  "lever": []
+  "lever": [
+    {
+      "site": "coderio",
+      "employer": "Coderio",
+      "region": "global",
+      "market_scope": "PY_PRIMARY",
+      "detail_verify_before_sink": true,
+      "enabled": false,
+      "permission_state": "REVIEW_REQUIRED",
+      "description_reuse_allowed": false,
+      "evidence": "Bounded public Lever API inventory on 2026-10-15; 15 postings, 2 with a Paraguay location signal. Access is not distribution permission.",
+      "delay_seconds": 0.25
+    },
+    {
+      "site": "aleph",
+      "employer": "Aleph",
+      "region": "global",
+      "market_scope": "PY_PRIMARY",
+      "detail_verify_before_sink": true,
+      "enabled": false,
+      "permission_state": "REVIEW_REQUIRED",
+      "description_reuse_allowed": false,
+      "evidence": "Bounded public Lever API inventory on 2026-10-15; 102 postings, 1 primary Paraguay location. Access is not distribution permission.",
+      "delay_seconds": 0.25
+    },
+    {
+      "site": "TalentusGlobal",
+      "employer": "Talentus Global",
+      "region": "global",
+      "market_scope": "PY_PRIMARY",
+      "detail_verify_before_sink": true,
+      "enabled": false,
+      "permission_state": "REVIEW_REQUIRED",
+      "description_reuse_allowed": false,
+      "evidence": "Bounded public Lever API inventory on 2026-10-15; 16 postings, 7 include Paraguay in listed locations. Access is not distribution permission.",
+      "delay_seconds": 0.25
+    },
+    {
+      "site": "chipping-concrete",
+      "employer": "Chipping & Concrete",
+      "region": "global",
+      "market_scope": "PY_PRIMARY",
+      "detail_verify_before_sink": true,
+      "enabled": false,
+      "permission_state": "REVIEW_REQUIRED",
+      "description_reuse_allowed": false,
+      "evidence": "One native Lever detail was HTTP 200 on 2026-10-15; this proves public access only, not redistribution or consumer permission.",
+      "delay_seconds": 0.25
+    },
+    {
+      "site": "bluelightconsulting",
+      "employer": "Bluelight Consulting",
+      "region": "global",
+      "market_scope": "PY_PRIMARY",
+      "detail_verify_before_sink": true,
+      "enabled": false,
+      "permission_state": "REVIEW_REQUIRED",
+      "description_reuse_allowed": false,
+      "evidence": "Official public Lever board and API endpoint responded HTTP 200 on 2026-10-15; search listing showed Paraguay city-specific instances. Keep disabled until deduplicated and tenant/use permissions are reviewed.",
+      "delay_seconds": 0.25
+    }
+  ],
+  "smartrecruiters": [
+    {
+      "company": "deliveryhero",
+      "employer": "Delivery Hero / PedidosYa",
+      "enabled": false,
+      "permission_state": "REVIEW_REQUIRED",
+      "description_reuse_allowed": false,
+      "evidence": "Public country=py API returned 2 listings on 2026-10-15; one release date was 2026-10-02, one was 2025-01-17. Detail and expiry must be revalidated before eligibility.",
+      "delay_seconds": 0.25
+    },
+    {
+      "company": "SGS",
+      "employer": "SGS Paraguay",
+      "enabled": false,
+      "permission_state": "REVIEW_REQUIRED",
+      "description_reuse_allowed": false,
+      "evidence": "Public country=py API returned 3 listings on 2026-10-15, with released dates from 2023-06 to 2025-06; historical-looking entries are not treated as current.",
+      "delay_seconds": 0.25
+    },
+    {
+      "company": "Tieto2",
+      "employer": "Tieto Tech Consulting",
+      "enabled": false,
+      "permission_state": "REVIEW_REQUIRED",
+      "description_reuse_allowed": false,
+      "evidence": "Public country=py API returned 2 listings on 2026-10-15, released 2026-01-05 and 2026-08-10; detail and expiry must be revalidated before eligibility.",
+      "delay_seconds": 0.25
+    }
+  ]
 }

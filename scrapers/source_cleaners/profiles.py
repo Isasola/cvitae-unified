@@ -78,6 +78,43 @@ V2_PROFILES: dict[str, SourceProfile] = {
         supports_eligibility=False, known_assumptions=("site_allowlist_required", "skip_limit_to_eof", "public_get_is_not_distribution_permission", "workplace_type_is_not_eligibility"),
         source_attribution_required=True, search_engine_indexing_allowed=False,
     ),
+    "prodato_direct": SourceProfile(
+        source="prodato_direct", adapter_version="prodato-direct:v1.0.0", auto_enabled=False,
+        expected_description_coverage=0.0, adapter="ProdatoFirstPartyAdapter", cleaner="ProdatoCleaner",
+        scout="employer_first_party_board", discovery_strategy="single_page_html_cards", detail_strategy="individual_posting_html",
+        source_family="employer_career_portal", opportunity_kinds=("job",), max_workers=1,
+        max_detail_fetches_per_run=50, supports_eligibility=False, emitted_aliases=("prodato_scraper",),
+        operational_runner_ids=("prodato_scraper",),
+        known_assumptions=("numeric_career_path_segment_is_native_id", "listed_vacancies_have_no_explicit_deadline",
+                           "facts_and_original_link_only_until_reuse_permission_review", "talent_pool_is_not_a_job"),
+        source_attribution_required=True, search_engine_indexing_allowed=False,
+        web_catalog_allowed=False, third_party_job_distribution_allowed=False, google_jobs_distribution_allowed=False,
+    ),
+    "lizzy_castillo_py": SourceProfile(
+        source="lizzy_castillo_py", adapter_version="lizzy-castillo:v1.0.0", auto_enabled=False,
+        expected_description_coverage=0.0, adapter="LizzyCastilloJobPostingAdapter", cleaner="LizzyCastilloCleaner",
+        scout="featured_homepage_job_links", discovery_strategy="homepage_featured_cards", detail_strategy="jobposting_jsonld",
+        source_family="employment_agency", opportunity_kinds=("job",), max_workers=1, max_detail_fetches_per_run=50,
+        supports_eligibility=False, emitted_aliases=("lizzy_castillo_scraper",),
+        operational_runner_ids=("lizzy_castillo_scraper",),
+        known_assumptions=("homepage_is_featured_not_complete_archive", "jobLocation_absent_means_unknown",
+                           "generic_application_form_is_not_a_unique_posting_key", "validThrough_controls_source_currentness",
+                           "public_JobPosting_is_not_description_reuse_permission"),
+        source_attribution_required=True, search_engine_indexing_allowed=False,
+        web_catalog_allowed=False, third_party_job_distribution_allowed=False, google_jobs_distribution_allowed=False,
+    ),
+    "outsourcing_paraguay": SourceProfile(
+        source="outsourcing_paraguay", adapter_version="outsourcing-py:v1.0.0", auto_enabled=False,
+        expected_description_coverage=0.0, adapter="OutsourcingPyIndividualVacancyAdapter", cleaner="OutsourcingPyCleaner",
+        scout="current_public_vacancies_page", discovery_strategy="individual_vacancy_query_ids", detail_strategy="individual_html_heading",
+        source_family="employment_agency", opportunity_kinds=("job",), max_workers=1, max_detail_fetches_per_run=50,
+        supports_eligibility=False, emitted_aliases=("outsourcing_py_scraper",),
+        operational_runner_ids=("outsourcing_py_scraper",),
+        known_assumptions=("vacancy_query_parameter_is_native_id", "external_employer_not_disclosed", "job_location_unknown",
+                           "listing_has_no_total_or_eof_signal", "personal_application_form_is_never_read_or_submitted"),
+        source_attribution_required=True, search_engine_indexing_allowed=False,
+        web_catalog_allowed=False, third_party_job_distribution_allowed=False, google_jobs_distribution_allowed=False,
+    ),
     "unjobs": SourceProfile(
         source="unjobs", adapter_version="unjobs:v2.0.0", auto_enabled=True,
         expected_description_coverage=.80, adapter="UNJobsAdapter", cleaner="UNJobsCleaner",
@@ -154,6 +191,24 @@ V2_PROFILES: dict[str, SourceProfile] = {
         search_engine_indexing_allowed=False,
     ),
 }
+
+# Each SmartRecruiters company is a separate source/control identity even
+# though the API and parser are shared. The native posting ID is also tenant
+# scoped by the adapter, so records cannot collide across employers.
+for _tenant, _display_name in (("deliveryhero", "Delivery Hero / PedidosYa"), ("sgs", "SGS Paraguay"), ("tieto2", "Tieto Tech Consulting")):
+    _source = f"smartrecruiters_{_tenant}"
+    V2_PROFILES[_source] = SourceProfile(
+        source=_source, adapter_version="smartrecruiters:v1.0.0", auto_enabled=False,
+        expected_description_coverage=.85, adapter="SmartRecruitersPostingAdapter", cleaner="SmartRecruitersCleaner",
+        scout="company_scoped_public_api", discovery_strategy="company_country_paginated_api", detail_strategy="individual_posting_api",
+        source_family="employer_ats", opportunity_kinds=("job",), max_workers=1, max_detail_fetches_per_run=50,
+        supports_eligibility=False, emitted_aliases=(f"{_source}_scraper",),
+        operational_runner_ids=(f"{_source}_scraper",),
+        known_assumptions=("company_identifier_and_posting_id_form_identity", "job_location_is_not_candidate_eligibility",
+                           "public_get_is_not_description_or_distribution_permission", "released_date_is_not_deadline",
+                           f"company_account_{_display_name}_requires_independent_permission_review"),
+        source_attribution_required=True, search_engine_indexing_allowed=False,
+    )
 
 
 def _normalize_workflow_id(value: str) -> str:

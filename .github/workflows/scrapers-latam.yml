@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: '23 */6 * * *'
     - cron: '41 10 * * *'
+    - cron: '53 11 * * *'
+    - cron: '57 11 * * *'
+    - cron: '13 12 * * *'
+    - cron: '17 12 * * *'
+    - cron: '13 13 * * *'
   workflow_dispatch:
     inputs:
       source:
@@ -18,6 +23,22 @@ on:
           - py_official
           - paraguayconcursa_mef
           - psf_hiringroom
+          - smartrecruiters_py
+          - smartrecruiters_deliveryhero
+          - smartrecruiters_sgs
+          - smartrecruiters_tieto2
+          - prodato_direct
+          - lizzy_castillo_py
+          - outsourcing_paraguay
+          - lever_bluelightconsulting
+      native_id:
+        description: 'MEF canary: ID visible de un único concurso (solo con source=paraguayconcursa_mef).'
+        type: string
+        required: false
+      listing_page:
+        description: 'MEF canary: página actual del listado donde aparece el ID; el cursor recurrente no se mueve.'
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -43,6 +64,8 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       CVITAE_LATAM_MAX_PAGES: '3'
       CVITAE_LATAM_MAX_DETAILS: '20'
+      CVITAE_PARAGUAYCONCURSA_CANARY_NATIVE_ID: ${{ inputs.source == 'paraguayconcursa_mef' && inputs.native_id || '' }}
+      CVITAE_PARAGUAYCONCURSA_CANARY_LISTING_PAGE: ${{ inputs.source == 'paraguayconcursa_mef' && inputs.listing_page || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -92,5 +115,181 @@ jobs:
           psf_hiringroom_scraper scrapers/psf_hiringroom_scraper.py
           --timeout 900 --max-items-cap 20
       - name: Summarize monitored PSF run
+        if: always()
+        run: python scripts/summarize_scraper_run.py --require-progress
+
+  smartrecruiters-py:
+    if: >-
+      vars.CVITAE_LATAM_SCRAPERS_ENABLED == 'true' &&
+      vars.CVITAE_SMARTRECRUITERS_PY_CERTIFIED == 'true' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '57 11 * * *') ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.source == 'all' || inputs.source == 'smartrecruiters_py' ||
+       startsWith(inputs.source, 'smartrecruiters_'))))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - company: deliveryhero
+            source_id: smartrecruiters_deliveryhero
+            scraper_id: smartrecruiters_deliveryhero_scraper
+            script_path: scrapers/smartrecruiters_deliveryhero_scraper.py
+          - company: SGS
+            source_id: smartrecruiters_sgs
+            scraper_id: smartrecruiters_sgs_scraper
+            script_path: scrapers/smartrecruiters_sgs_scraper.py
+          - company: Tieto2
+            source_id: smartrecruiters_tieto2
+            scraper_id: smartrecruiters_tieto2_scraper
+            script_path: scrapers/smartrecruiters_tieto2_scraper.py
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CVITAE_SMARTRECRUITERS_COMPANY: ${{ matrix.company }}
+      CVITAE_MAX_ITEMS: '50'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: scrapers/requirements.txt
+      - name: Install bounded scraper dependencies
+        if: github.event_name == 'schedule' || inputs.source == 'all' || inputs.source == 'smartrecruiters_py' || inputs.source == matrix.source_id
+        run: pip install requests beautifulsoup4 lxml
+      - name: Run one company through its source control
+        if: github.event_name == 'schedule' || inputs.source == 'all' || inputs.source == 'smartrecruiters_py' || inputs.source == matrix.source_id
+        run: >-
+          python scripts/run_scraper_monitored.py
+          ${{ matrix.scraper_id }} ${{ matrix.source_id }}
+          ${{ matrix.script_path }} --max-pages 5 --max-details 50
+      - name: Summarize monitored company run
+        if: always() && (github.event_name == 'schedule' || inputs.source == 'all' || inputs.source == 'smartrecruiters_py' || inputs.source == matrix.source_id)
+        run: python scripts/summarize_scraper_run.py --require-progress
+
+  prodato-py:
+    if: >-
+      vars.CVITAE_LATAM_SCRAPERS_ENABLED == 'true' &&
+      vars.CVITAE_PRODATO_SOURCE_CERTIFIED == 'true' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '53 11 * * *') ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.source == 'all' || inputs.source == 'prodato_direct')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CVITAE_MAX_ITEMS: '50'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: scrapers/requirements.txt
+      - name: Install bounded scraper dependencies
+        run: pip install requests beautifulsoup4 lxml
+      - name: Run first-party board through its source control
+        run: >-
+          python scripts/run_scraper_monitored.py
+          prodato_scraper prodato_direct scrapers/prodato_scraper.py
+          --max-details 50
+      - name: Summarize monitored Prodato run
+        if: always()
+        run: python scripts/summarize_scraper_run.py --require-progress
+
+  lizzy-castillo-py:
+    if: >-
+      vars.CVITAE_LATAM_SCRAPERS_ENABLED == 'true' &&
+      vars.CVITAE_LIZZY_CASTILLO_PY_CERTIFIED == 'true' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '13 12 * * *') ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.source == 'all' || inputs.source == 'lizzy_castillo_py')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CVITAE_MAX_ITEMS: '50'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: scrapers/requirements.txt
+      - name: Install bounded scraper dependencies
+        run: pip install requests beautifulsoup4 lxml
+      - name: Run review-gated featured postings through source control
+        run: >-
+          python scripts/run_scraper_monitored.py
+          lizzy_castillo_scraper lizzy_castillo_py scrapers/lizzy_castillo_scraper.py
+          --max-details 50
+      - name: Summarize monitored Lizzy run
+        if: always()
+        run: python scripts/summarize_scraper_run.py --require-progress
+
+  outsourcing-paraguay:
+    if: >-
+      vars.CVITAE_LATAM_SCRAPERS_ENABLED == 'true' &&
+      vars.CVITAE_OUTSOURCING_PARAGUAY_CERTIFIED == 'true' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '17 12 * * *') ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.source == 'all' || inputs.source == 'outsourcing_paraguay')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CVITAE_MAX_ITEMS: '50'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: scrapers/requirements.txt
+      - name: Install bounded scraper dependencies
+        run: pip install requests beautifulsoup4 lxml
+      - name: Run review-gated individual vacancies through source control
+        run: >-
+          python scripts/run_scraper_monitored.py
+          outsourcing_py_scraper outsourcing_paraguay scrapers/outsourcing_py_scraper.py
+          --max-details 50
+      - name: Summarize monitored Outsourcing Paraguay run
+        if: always()
+        run: python scripts/summarize_scraper_run.py --require-progress
+
+  lever-bluelight-py:
+    if: >-
+      vars.CVITAE_LATAM_SCRAPERS_ENABLED == 'true' &&
+      vars.CVITAE_LEVER_BLUELIGHT_CERTIFIED == 'true' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '13 13 * * *') ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.source == 'all' || inputs.source == 'lever_bluelightconsulting')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CVITAE_LEVER_PRODUCTION_TENANTS: bluelightconsulting
+      CVITAE_LEVER_MAX_PAGES: '20'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: scrapers/requirements.txt
+      - name: Install bounded scraper dependencies
+        run: pip install requests beautifulsoup4 lxml
+      - name: Run only the certified Bluelight tenant through source control
+        run: >-
+          python scripts/run_scraper_monitored.py
+          lever_scraper lever scrapers/lever_scraper.py
+      - name: Summarize monitored Lever tenant run
         if: always()
         run: python scripts/summarize_scraper_run.py --require-progress

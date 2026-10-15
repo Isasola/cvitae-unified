@@ -210,6 +210,10 @@ def _normalize_py_geo(item: dict[str, Any]) -> None:
     if len(parts) > 1 and parts[0].casefold() == parts[1].casefold():
         parts = parts[:1] + parts[2:]
     city = parts[0] if parts else ""
+    # A country-only workplace is not a city. Keep the country-level location
+    # while leaving the city field unknown instead of storing "Paraguay" as a city.
+    if city.casefold() in {"paraguay", "py"}:
+        city = ""
     item["location"] = ", ".join(parts) or "Paraguay"
     item["country_code"] = "PY"
     item["city"] = item.get("city") or city or None
