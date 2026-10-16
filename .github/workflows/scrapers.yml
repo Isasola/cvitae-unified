@@ -574,6 +574,16 @@ jobs:
         run: python scripts/run_scraper_monitored.py laborum_pe laborum_pe scrapers/laborum_pe.py
         continue-on-error: true
 
+      - name: InfoJobs Perú — portal de empleo con fuerte presencia local
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'infojobs_pe' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py infojobs_pe infojobs_pe scrapers/infojobs_pe.py
+        continue-on-error: true
+
+      - name: Trabajando Perú — portal de empleo regional
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'trabajando_pe' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py trabajando_pe trabajando_pe scrapers/trabajando_pe.py
+        continue-on-error: true
+
       # ── Paraguay — portales especializados y reclutamiento ───────────────
 
       - name: Paraguay Concursa MEF — portal oficial de concursos públicos
