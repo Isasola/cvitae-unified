@@ -16,7 +16,24 @@ on:
         default: ''
 
 jobs:
+  healthcheck:
+    if: github.event_name == 'workflow_dispatch' || vars.CVITAE_PROD_RELEASE_VALIDATED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Ping Supabase
+        run: |
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 8 "${SUPABASE_URL}/rest/v1/" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}")
+          echo "Supabase HTTP: $HTTP"
+          [ "$HTTP" = "200" ] || exit 1
+
   run-scrapers:
+    needs: healthcheck
     if: github.event_name == 'workflow_dispatch' || vars.CVITAE_PROD_RELEASE_VALIDATED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60

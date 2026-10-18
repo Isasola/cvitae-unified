@@ -29,7 +29,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  healthcheck:
+    if: (github.event_name == 'schedule' && vars.CVITAE_RECOVERY_CRON_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.confirm_prod_recovery == 'YES')
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Ping Supabase
+        run: |
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 8 "${SUPABASE_URL}/rest/v1/" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}")
+          echo "Supabase HTTP: $HTTP"
+          [ "$HTTP" = "200" ] || exit 1
+
   expand:
+    needs: healthcheck
     if: (github.event_name == 'schedule' && vars.CVITAE_RECOVERY_CRON_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.confirm_prod_recovery == 'YES')
     runs-on: ubuntu-latest
     timeout-minutes: 20
