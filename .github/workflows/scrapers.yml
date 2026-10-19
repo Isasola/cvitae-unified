@@ -125,8 +125,8 @@ jobs:
         run: python scripts/run_scraper_monitored.py arbeitnow_scraper arbeitnow_scraper scrapers/arbeitnow_scraper.py
         continue-on-error: true
 
-      - name: Himalayas — 86k empleos remote-first (hasta 2000)
-        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'himalayas' || github.event_name == 'schedule' }}
+      - name: Himalayas — DISABLED (WW remote, no LATAM focus, excess DB weight)
+        if: ${{ github.event.inputs.scraper == 'himalayas' }}
         run: python scripts/run_scraper_monitored.py himalayas_scraper himalayas_scraper scrapers/himalayas_scraper.py
         continue-on-error: true
 
