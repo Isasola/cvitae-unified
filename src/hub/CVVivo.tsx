@@ -18,6 +18,14 @@ import jsPDF from 'jspdf'
 const MATCH_BATCH_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1/match-batch'
 const ease = [0.22, 1, 0.36, 1] as const
 
+const COLOR_THEMES = [
+  { id: 'navy' as const, label: 'Azul marino', hex: '#1e3a5f', rgb: [30, 58, 95] as [number, number, number] },
+  { id: 'emerald' as const, label: 'Verde esmeralda', hex: '#155843', rgb: [21, 88, 67] as [number, number, number] },
+  { id: 'slate' as const, label: 'Gris pizarra', hex: '#2c3e50', rgb: [44, 62, 80] as [number, number, number] },
+]
+type ColorThemeId = typeof COLOR_THEMES[number]['id']
+type Language = 'es' | 'en' | 'pt'
+
 type EvidenceItem = {
   id: string
   category: string
@@ -75,6 +83,8 @@ export default function CVVivo() {
   const [savingVersion, setSavingVersion] = useState(false)
   const [manualAttested, setManualAttested] = useState(false)
   const [showEvidence, setShowEvidence] = useState(true)
+  const [language, setLanguage] = useState<Language>('es')
+  const [colorTheme, setColorTheme] = useState<ColorThemeId>('navy')
   const cvRef = useRef<HTMLDivElement>(null)
 
   const pendingEvidence = evidence.filter((item) => item.status === 'pending')
@@ -227,7 +237,7 @@ export default function CVVivo() {
       const res = await fetch('/.netlify/functions/generate-cv-vivo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ vacancy: vacancyToUse, force: true, parentVersionId: selectedVersionId }),
+        body: JSON.stringify({ vacancy: vacancyToUse, force: true, parentVersionId: selectedVersionId, language }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'No pudimos adaptar el CV')
@@ -307,49 +317,169 @@ export default function CVVivo() {
   }
 
   const downloadPDF = () => {
-    const source = generatedCV.trim()
+    const source = (editMode ? editableCV : generatedCV).trim()
     if (!source || !canExportSelectedVersion) {
       setWorkspaceError('Revisá y confirmá esta versión antes de descargar el PDF.')
       return
     }
 
-    // Export a real text PDF instead of rasterizing the preview. This keeps the
-    // document selectable/searchable and avoids image-only PDFs for ATS readers.
+    const theme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0]
+    const [cr, cg, cb] = theme.rgb
+
     const pdf = new jsPDF('p', 'mm', 'a4')
-    const pageWidth = pdf.internal.pageSize.getWidth()
-    const pageHeight = pdf.internal.pageSize.getHeight()
-    const margin = 16
-    const usableWidth = pageWidth - (margin * 2)
-    const bottom = pageHeight - margin
-    let y = margin
+    const pageW = pdf.internal.pageSize.getWidth()
+    const pageH = pdf.internal.pageSize.getHeight()
+    const ml = 16
+    const mr = 16
+    const bodyW = pageW - ml - mr
+    const footerY = pageH - 7
 
-    const addLines = (text: string, size: number, style: 'normal' | 'bold' = 'normal', gap = 1.8) => {
-      pdf.setFont('helvetica', style)
-      pdf.setFontSize(size)
-      const lines = pdf.splitTextToSize(text, usableWidth) as string[]
-      const lineHeight = size * 0.42
-      for (const line of lines) {
-        if (y + lineHeight > bottom) {
-          pdf.addPage()
-          y = margin
-        }
-        pdf.text(line, margin, y)
-        y += lineHeight
+    // ── Parse header block ──────────────────────────────────────────────────
+    const allLines = source.split(/\r?\n/)
+    let nameText = ''
+    let subtitleText = ''
+    let contactText = ''
+    let secondContactText = ''
+    let bodyStart = 0
+
+    for (let i = 0; i < Math.min(allLines.length, 12); i++) {
+      const l = allLines[i].trim()
+      if (!l) { bodyStart = i + 1; continue }
+      if (l.startsWith('# ')) {
+        nameText = l.slice(2).replace(/\*\*/g, '')
+        bodyStart = i + 1
+        continue
       }
-      y += gap
+      if (!nameText) continue
+      const hasContact = l.includes('@') || /\+?\d[\d\s\-().]{6,}/.test(l) || l.includes('·') || l.includes('|')
+      if (!subtitleText && !hasContact && !l.startsWith('#')) {
+        subtitleText = l.replace(/\*\*/g, '')
+        bodyStart = i + 1
+        continue
+      }
+      if (hasContact) {
+        if (!contactText) { contactText = l.replace(/\*\*/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); bodyStart = i + 1; continue }
+        if (!secondContactText) { secondContactText = l.replace(/\*\*/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); bodyStart = i + 1; continue }
+      }
+      if (nameText && contactText) break
     }
 
-    for (const rawLine of source.split(/\r?\n/)) {
-      const line = rawLine.trim()
+    // ── Draw header block ───────────────────────────────────────────────────
+    const headerH = 40
+    pdf.setFillColor(cr, cg, cb)
+    pdf.rect(0, 0, pageW, headerH, 'F')
+
+    let hy = 15
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(19)
+    pdf.setTextColor(255, 255, 255)
+    const nameWrapped = pdf.splitTextToSize(nameText || 'Candidato', bodyW) as string[]
+    for (const nl of nameWrapped) { pdf.text(nl, ml, hy); hy += 7.5 }
+
+    if (subtitleText) {
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(9.5)
+      pdf.setTextColor(200, 220, 245)
+      pdf.text(subtitleText.slice(0, 120), ml, hy)
+      hy += 5.5
+    }
+    if (contactText) {
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(8.5)
+      pdf.setTextColor(170, 198, 228)
+      pdf.text(contactText.slice(0, 150), ml, hy)
+      hy += 4.5
+    }
+    if (secondContactText) {
+      pdf.setFontSize(8.5)
+      pdf.setTextColor(170, 198, 228)
+      pdf.text(secondContactText.slice(0, 150), ml, hy)
+    }
+
+    // ── Body ────────────────────────────────────────────────────────────────
+    let y = headerH + 9
+    pdf.setTextColor(40, 40, 40)
+
+    const checkPage = (needed = 7) => {
+      if (y + needed > footerY) { pdf.addPage(); y = 12 }
+    }
+
+    const renderWrapped = (text: string, size: number, bold: boolean, color: [number, number, number], indent = 0, spacing = 5) => {
+      pdf.setFont('helvetica', bold ? 'bold' : 'normal')
+      pdf.setFontSize(size)
+      pdf.setTextColor(...color)
+      const wrapped = pdf.splitTextToSize(text, bodyW - indent) as string[]
+      for (const l of wrapped) { checkPage(); pdf.text(l, ml + indent, y); y += spacing }
+    }
+
+    for (let i = bodyStart; i < allLines.length; i++) {
+      const line = allLines[i].trim()
       if (!line) { y += 2; continue }
-      if (line.startsWith('# ')) addLines(line.slice(2), 18, 'bold', 3)
-      else if (line.startsWith('## ')) addLines(line.slice(3).toUpperCase(), 11, 'bold', 2.5)
-      else if (line.startsWith('### ')) addLines(line.slice(4), 11, 'bold', 1.5)
-      else if (/^[-*]\s+/.test(line)) addLines(`• ${line.replace(/^[-*]\s+/, '')}`, 10, 'normal', 1)
-      else addLines(line.replace(/\*\*/g, ''), 10, 'normal', 1.2)
+
+      if (line.startsWith('# ')) continue
+
+      if (line.startsWith('## ')) {
+        y += 6
+        checkPage(14)
+        const heading = line.slice(3).replace(/\*\*/g, '').toUpperCase()
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(8.5)
+        pdf.setTextColor(cr, cg, cb)
+        pdf.text(heading, ml, y)
+        y += 2.2
+        pdf.setDrawColor(cr, cg, cb)
+        pdf.setLineWidth(0.35)
+        pdf.line(ml, y, pageW - mr, y)
+        y += 5.5
+        continue
+      }
+
+      if (line.startsWith('### ')) {
+        checkPage(9)
+        y += 1.5
+        renderWrapped(line.slice(4).replace(/\*\*/g, ''), 10.5, true, [20, 20, 20], 0, 5.8)
+        continue
+      }
+
+      if (/^[-*]\s+/.test(line)) {
+        const bt = line.replace(/^[-*]\s+/, '').replace(/\*\*/g, '')
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(9.5)
+        pdf.setTextColor(60, 60, 60)
+        const wrapped = pdf.splitTextToSize(bt, bodyW - 5.5) as string[]
+        for (let j = 0; j < wrapped.length; j++) {
+          checkPage()
+          if (j === 0) pdf.text('•', ml, y)
+          pdf.text(wrapped[j], ml + 4.5, y)
+          y += 4.9
+        }
+        continue
+      }
+
+      // Regular line — detect meta (dates, company, location) vs paragraph
+      const clean = line.replace(/\*\*/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      const isMeta = /\d{4}/.test(clean) || clean.includes('·') || clean.includes('|') || (clean.length < 90 && /^[A-ZÁÉÍÓÚÑ]/.test(clean) && !clean.endsWith('.') && !clean.endsWith(','))
+      if (isMeta) {
+        renderWrapped(clean, 9, false, [110, 110, 110], 0, 4.8)
+      } else {
+        renderWrapped(clean, 10, false, [55, 55, 55], 0, 5)
+      }
     }
 
-    pdf.save(`CVitae_${profile?.full_name || 'Candidato'}_${new Date().toISOString().split('T')[0]}.pdf`)
+    // ── Footer on every page ────────────────────────────────────────────────
+    const totalPages = (pdf.internal as any).getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) {
+      pdf.setPage(p)
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(7)
+      pdf.setTextColor(170, 170, 170)
+      pdf.text(profile?.full_name || 'Candidato', ml, pageH - 4)
+      pdf.text(`${p} / ${totalPages}`, pageW / 2, pageH - 4, { align: 'center' })
+      pdf.text('cvitae.lat', pageW - mr, pageH - 4, { align: 'right' })
+    }
+
+    const safeName = (profile?.full_name || 'Candidato').replace(/\s+/g, '_')
+    pdf.save(`CVitae_${safeName}_${new Date().toISOString().split('T')[0]}.pdf`)
   }
 
   const downloadOriginalCV = async () => {
@@ -429,7 +559,21 @@ export default function CVVivo() {
               ))}
             </div>
 
-            {mode === 'match' ? (
+            <div className="flex items-center gap-2">
+            <span className="shrink-0 text-xs text-white/35">Idioma:</span>
+            <div className="flex flex-1 rounded-xl border border-white/10 bg-white/[0.02] p-0.5">
+              {(['es', 'en', 'pt'] as const).map((lang) => (
+                <button key={lang} onClick={() => setLanguage(lang)}
+                  className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-all ${
+                    language === lang ? 'bg-[#c9a84c] text-[#0a0a0a]' : 'text-muted-foreground hover:text-white'
+                  }`}>
+                  {lang === 'es' ? 'Español' : lang === 'en' ? 'English' : 'Português'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mode === 'match' ? (
               <select
                 className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-4 py-2.5 text-sm text-white outline-none focus:border-[#c9a84c]/50 transition"
                 onChange={e => setSelectedVacancy(vacancies.find(v => v.id === e.target.value) || null)}
@@ -738,6 +882,18 @@ export default function CVVivo() {
                     Borrador generado por IA. Revisalo y guardalo con tu confirmación antes de exportar.
                   </div>
                 )}
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-white/35">Color PDF:</span>
+                  <div className="flex gap-2">
+                    {COLOR_THEMES.map((theme) => (
+                      <button key={theme.id} onClick={() => setColorTheme(theme.id)}
+                        title={theme.label}
+                        className={`h-5 w-5 rounded-full transition-all ${colorTheme === theme.id ? 'ring-2 ring-white/50 ring-offset-2 ring-offset-[#0a0a0a]' : 'opacity-60 hover:opacity-100'}`}
+                        style={{ backgroundColor: theme.hex }}
+                      />
+                    ))}
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={downloadPDF}

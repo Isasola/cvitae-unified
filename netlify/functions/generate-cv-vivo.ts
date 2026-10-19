@@ -68,7 +68,9 @@ export const handler = async (event: any) => {
       vacancy: requestedVacancy,
       force = false,
       parentVersionId = null,
+      language: requestedLanguage = 'es',
     } = JSON.parse(event.body)
+    const lang = ['es', 'en', 'pt'].includes(requestedLanguage) ? requestedLanguage as 'es' | 'en' | 'pt' : 'es'
     const supabase = makeSupabaseAdmin()
 
     const { data: storedProfile, error: profileError } = await supabase
@@ -199,50 +201,122 @@ export const handler = async (event: any) => {
 
     const isBaseCV = !vacancy
 
+    const LANG_CONFIG = {
+      es: {
+        instruction: 'Generá un CV profesional ATS-friendly en markdown, escrito íntegramente en **español**.',
+        adapt: 'Adaptalo a la vacante objetivo sin modificar los hechos del candidato.',
+        base: 'Es una versión general del CV.',
+        sections: {
+          summary: 'Resumen Profesional',
+          skills: 'Competencias y Habilidades',
+          results: 'Resultados y Logros',
+          experience: 'Experiencia Profesional',
+          education: 'Educación y Formación',
+          courses: 'Cursos y Certificaciones',
+          languages: 'Idiomas',
+        },
+        dateHint: 'Mes Año – Mes Año (ej: Enero 2022 – Actualidad)',
+        vacancy: 'VACANTE OBJETIVO',
+        evidence: 'EVIDENCIAS CONFIRMADAS POR EL USUARIO',
+        rules: 'REGLAS DE VERACIDAD — PRIORIDAD MÁXIMA',
+        structure: 'ESTRUCTURA PREFERIDA CUANDO EXISTA EVIDENCIA',
+        footer: 'Respondé ÚNICAMENTE con el CV en markdown, sin explicaciones ni texto adicional.',
+      },
+      en: {
+        instruction: 'Generate a professional ATS-friendly CV in markdown, written entirely in **English**.',
+        adapt: 'Tailor it to the target vacancy without modifying the candidate\'s facts.',
+        base: 'This is a general-purpose CV version.',
+        sections: {
+          summary: 'Professional Summary',
+          skills: 'Skills & Competencies',
+          results: 'Key Achievements',
+          experience: 'Work Experience',
+          education: 'Education',
+          courses: 'Certifications & Training',
+          languages: 'Languages',
+        },
+        dateHint: 'Month Year – Month Year (e.g., January 2022 – Present)',
+        vacancy: 'TARGET VACANCY',
+        evidence: 'USER-CONFIRMED EVIDENCE',
+        rules: 'TRUTH RULES — HIGHEST PRIORITY',
+        structure: 'PREFERRED STRUCTURE WHEN EVIDENCE EXISTS',
+        footer: 'Reply ONLY with the CV in markdown, no explanations or additional text.',
+      },
+      pt: {
+        instruction: 'Gere um currículo profissional e ATS-friendly em markdown, escrito inteiramente em **português**.',
+        adapt: 'Adapte-o à vaga alvo sem modificar os fatos do candidato.',
+        base: 'Esta é uma versão geral do currículo.',
+        sections: {
+          summary: 'Resumo Profissional',
+          skills: 'Competências e Habilidades',
+          results: 'Resultados e Conquistas',
+          experience: 'Experiência Profissional',
+          education: 'Educação e Formação',
+          courses: 'Cursos e Certificações',
+          languages: 'Idiomas',
+        },
+        dateHint: 'Mês Ano – Mês Ano (ex: Janeiro 2022 – Presente)',
+        vacancy: 'VAGA ALVO',
+        evidence: 'EVIDÊNCIAS CONFIRMADAS PELO USUÁRIO',
+        rules: 'REGRAS DE VERACIDADE — PRIORIDADE MÁXIMA',
+        structure: 'ESTRUTURA PREFERIDA QUANDO HOUVER EVIDÊNCIA',
+        footer: 'Responda SOMENTE com o currículo em markdown, sem explicações ou texto adicional.',
+      },
+    }
+    const lc = LANG_CONFIG[lang]
+    const { sections: sec } = lc
+
     const vacancyContext = vacancy ? `
-VACANTE OBJETIVO:
-- Título: ${vacancy.titulo}
-- Categoría: ${vacancy.categoria}
-- Ubicación: ${vacancy.ubicacion}
-- Descripción: ${vacancy.cuerpo || vacancy.titulo}
-- Habilidades requeridas: ${vacancy.vacancySkills?.join(', ') || 'No especificadas'}
+${lc.vacancy}:
+- ${lang === 'en' ? 'Title' : lang === 'pt' ? 'Título' : 'Título'}: ${vacancy.titulo}
+- ${lang === 'en' ? 'Category' : lang === 'pt' ? 'Categoria' : 'Categoría'}: ${vacancy.categoria}
+- ${lang === 'en' ? 'Location' : lang === 'pt' ? 'Localização' : 'Ubicación'}: ${vacancy.ubicacion}
+- ${lang === 'en' ? 'Description' : lang === 'pt' ? 'Descrição' : 'Descripción'}: ${vacancy.cuerpo || vacancy.titulo}
+- ${lang === 'en' ? 'Required skills' : lang === 'pt' ? 'Habilidades requeridas' : 'Habilidades requeridas'}: ${vacancy.vacancySkills?.join(', ') || (lang === 'en' ? 'Not specified' : 'No especificadas')}
 ` : ''
 
-    const prompt = `Generá un CV profesional ATS-friendly en markdown y en español.
-${isBaseCV ? 'Es una versión general del CV.' : 'Adaptalo a la vacante objetivo sin modificar los hechos del candidato.'}
+    const prompt = `${lc.instruction}
+${isBaseCV ? lc.base : lc.adapt}
 
-EVIDENCIAS CONFIRMADAS POR EL USUARIO:
+${lc.evidence}:
 ${JSON.stringify(generationEvidence, null, 2)}
 ${vacancyContext}
-REGLAS DE VERACIDAD — PRIORIDAD MÁXIMA:
-- Usá exclusivamente hechos presentes en EVIDENCIAS CONFIRMADAS.
-- Nunca inventes ni estimes porcentajes, cantidades, fechas, períodos, cargos, empresas, estudios, certificaciones, idiomas, niveles o responsabilidades.
-- Una palabra clave de la vacante solo puede incluirse como habilidad del candidato si aparece en sus evidencias confirmadas.
-- Podés mejorar claridad, orden y redacción sin cambiar el significado factual.
-- Si no hay evidencia para una sección, omití esa sección; no uses placeholders ni texto como "por confirmar".
-- Conservá literalmente toda cifra confirmada. No redondees ni amplifiques resultados.
-- No presentes inferencias como experiencia real.
+${lc.rules}:
+- ${lang === 'en' ? 'Use exclusively facts present in CONFIRMED EVIDENCE.' : lang === 'pt' ? 'Use exclusivamente fatos presentes nas EVIDÊNCIAS CONFIRMADAS.' : 'Usá exclusivamente hechos presentes en EVIDENCIAS CONFIRMADAS.'}
+- ${lang === 'en' ? 'Never invent or estimate percentages, quantities, dates, periods, roles, companies, studies, certifications, languages, levels or responsibilities.' : lang === 'pt' ? 'Nunca invente nem estime percentuais, quantidades, datas, períodos, cargos, empresas, estudos, certificações, idiomas, níveis ou responsabilidades.' : 'Nunca inventes ni estimes porcentajes, cantidades, fechas, períodos, cargos, empresas, estudios, certificaciones, idiomas, niveles o responsabilidades.'}
+- ${lang === 'en' ? 'A vacancy keyword may only appear as a candidate skill if it is present in confirmed evidence.' : lang === 'pt' ? 'Uma palavra-chave da vaga só pode ser incluída como habilidade do candidato se estiver nas evidências confirmadas.' : 'Una palabra clave de la vacante solo puede incluirse como habilidad si aparece en sus evidencias confirmadas.'}
+- ${lang === 'en' ? 'You may improve clarity, order and phrasing without changing factual meaning.' : lang === 'pt' ? 'Pode melhorar clareza, ordem e redação sem alterar o significado factual.' : 'Podés mejorar claridad, orden y redacción sin cambiar el significado factual.'}
+- ${lang === 'en' ? 'If there is no evidence for a section, omit it entirely — no placeholders.' : lang === 'pt' ? 'Se não houver evidência para uma seção, omita-a completamente — sem marcadores.' : 'Si no hay evidencia para una sección, omití esa sección; no uses placeholders.'}
+- ${lang === 'en' ? 'Preserve all confirmed figures literally. Do not round or amplify results.' : lang === 'pt' ? 'Preserve literalmente todos os números confirmados. Não arredonde nem amplifique resultados.' : 'Conservá literalmente toda cifra confirmada. No redondees ni amplifiques resultados.'}
+- ${lang === 'en' ? 'Use date format: ' : lang === 'pt' ? 'Use o formato de data: ' : 'Usá el formato de fecha: '}${lc.dateHint}
+- ATS: ${lang === 'en' ? 'Use standard section names, avoid special characters in headings, keep single-column linear structure.' : lang === 'pt' ? 'Use nomes de seção padrão, evite caracteres especiais nos títulos, mantenha estrutura linear de coluna única.' : 'Usá nombres de sección estándar, evitá caracteres especiales en encabezados, mantené estructura de columna única.'}
 
-ESTRUCTURA PREFERIDA CUANDO EXISTA EVIDENCIA:
-# [Nombre]
-[Título y datos de contacto confirmados]
+${lc.structure}:
+# [${lang === 'en' ? 'Full Name' : lang === 'pt' ? 'Nome Completo' : 'Nombre Completo'}]
+[${lang === 'en' ? 'Professional title' : lang === 'pt' ? 'Título profissional' : 'Título profesional'}]
+[${lang === 'en' ? 'City · Phone · Email · Portfolio' : lang === 'pt' ? 'Cidade · Telefone · Email · Portfólio' : 'Ciudad · Teléfono · Email · Proyecto/Portfolio'}]
 
-## Resumen Profesional
-[Síntesis fiel de la evidencia, sin afirmaciones nuevas]
+## ${sec.summary}
+[${lang === 'en' ? 'Faithful synthesis of evidence, 3-4 sentences, no new claims' : lang === 'pt' ? 'Síntese fiel da evidência, 3-4 frases, sem novas afirmações' : 'Síntesis fiel de la evidencia, 3-4 oraciones, sin afirmaciones nuevas'}]
 
-## Habilidades
-[Solo habilidades confirmadas]
+## ${sec.skills}
+[${lang === 'en' ? 'Confirmed skills only — list format, grouped by category if possible' : lang === 'pt' ? 'Apenas habilidades confirmadas — formato de lista, agrupadas por categoria se possível' : 'Solo habilidades confirmadas — formato de lista, agrupadas por categoría si es posible'}]
 
-## Experiencia Profesional
-[Solo cargos, empresas, períodos y logros confirmados]
+${lang === 'en' ? '## ' + sec.results + '\n[Only if achievement evidence with metrics exists — big numbers (15+, 500+) stand out to recruiters]' : lang === 'pt' ? '## ' + sec.results + '\n[Apenas se houver evidência de conquistas com métricas — números grandes (15+, 500+) se destacam para recrutadores]' : '## ' + sec.results + '\n[Solo si hay evidencia de logros con métricas — cifras grandes (15+, 500+) destacan ante reclutadores]'}
 
-## Educación
-[Solo formación confirmada]
+## ${sec.experience}
+[${lang === 'en' ? '### Job Title | Company\nDates · Location\n- Confirmed achievement bullet\n- Use action verbs (Led, Built, Coordinated)' : lang === 'pt' ? '### Cargo | Empresa\nDatas · Localização\n- Bullet de conquista confirmada\n- Use verbos de ação (Liderou, Desenvolveu, Coordenou)' : '### Cargo | Empresa\nFechas · Ubicación\n- Bullet de logro confirmado\n- Usá verbos de acción (Lideré, Construí, Coordiné)'}]
 
-## Cursos e Idiomas
-[Solo elementos confirmados]
+## ${sec.education}
+[${lang === 'en' ? '**Degree** | Institution · Year' : lang === 'pt' ? '**Grau** | Instituição · Ano' : '**Título** | Institución · Año'}]
 
-Respondé ÚNICAMENTE con el CV en markdown, sin explicaciones ni texto adicional.`
+## ${sec.courses}
+[${lang === 'en' ? 'Course · Institution · Year (only confirmed)' : lang === 'pt' ? 'Curso · Instituição · Ano (apenas confirmados)' : 'Curso · Institución · Año (solo confirmados)'}]
+
+## ${sec.languages}
+[${lang === 'en' ? 'Language: Level (e.g., English: Native, Spanish: C1)' : lang === 'pt' ? 'Idioma: Nível (ex: Português: Nativo, Inglês: C1)' : 'Idioma: Nivel (ej: Español: Nativo, Inglés: C1)'}]
+
+${lc.footer}`
 
     const cvMarkdown = await invokeModel(prompt, 1500)
 

@@ -15,6 +15,7 @@ export function evaluateOpportunityEligibility(candidateValue: unknown, opp: any
   if (global && !residency && !citizenship) return {state:'ELIGIBLE',reason:'OPPORTUNITY_GLOBAL_ELIGIBILITY'}
   if (global && citizenship && !cs.length && rs.every((region:string)=>region==='GLOBAL')) return {state:'UNKNOWN',reason:'OPPORTUNITY_CITIZENSHIP_REQUIREMENT_UNSTRUCTURED'}
   if (global && residency && !cs.length && rs.every((region:string)=>region==='GLOBAL')) return {state:'UNKNOWN',reason:'OPPORTUNITY_RESIDENCY_REQUIREMENT_UNSTRUCTURED'}
+  if(remote&&!residency&&!citizenship&&!cs.length&&!rs.length) return {state:'ELIGIBLE',reason:'OPPORTUNITY_REMOTE_OPEN_ELIGIBLE'}
   if(!cs.length&&!rs.length) return {state:'UNKNOWN',reason:'OPPORTUNITY_ELIGIBILITY_UNKNOWN'}
   if(!remote&&!residency&&!citizenship) return {state:'UNKNOWN',reason:'OPPORTUNITY_ELIGIBILITY_BASIS_UNKNOWN'}
   const allowed=(country:string)=>cs.includes(country)||(rs.includes('LATAM')&&LATAM_COUNTRIES.has(country))

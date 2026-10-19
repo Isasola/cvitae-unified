@@ -12,7 +12,7 @@ fi
 # If ANY changed file is outside scrapers-only paths, we must build
 while IFS= read -r file; do
   case "$file" in
-    scrapers/*|.github/workflows/*|docs/*|*.md|*.py)
+    scrapers/*|.github/workflows/*|docs/*|supabase/migrations/*|*.md|*.py)
       # scraper/docs-only change, keep checking
       ;;
     *)
