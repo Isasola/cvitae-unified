@@ -91,8 +91,8 @@ jobs:
 
       # ── Internacional — empleos remotos para latinos ─────────────────────
 
-      - name: Remotive — empleos remotos (~88)
-        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'remotive' || github.event_name == 'schedule' }}
+      - name: Remotive — DISABLED (WW remote, no LATAM focus, excess DB IO)
+        if: ${{ github.event.inputs.scraper == 'remotive' }}
         run: python scripts/run_scraper_monitored.py remotive_scraper remotive_scraper scrapers/remotive_scraper.py
         continue-on-error: true
 
@@ -120,8 +120,8 @@ jobs:
 
       # ── Internacional — remotos globales ─────────────────────────────────
 
-      - name: Arbeitnow — tech/remote global (hasta 1000)
-        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'arbeitnow' || github.event_name == 'schedule' }}
+      - name: Arbeitnow — DISABLED (WW remote, no LATAM focus, excess DB IO)
+        if: ${{ github.event.inputs.scraper == 'arbeitnow' }}
         run: python scripts/run_scraper_monitored.py arbeitnow_scraper arbeitnow_scraper scrapers/arbeitnow_scraper.py
         continue-on-error: true
 
@@ -135,13 +135,13 @@ jobs:
         run: python scripts/run_source_scan_automation_bridge.py --run-id "$GITHUB_RUN_ID"
         continue-on-error: true
 
-      - name: Jobicy — remotos por industria (50×12 = 600)
-        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'jobicy' || github.event_name == 'schedule' }}
+      - name: Jobicy — DISABLED (WW remote, no LATAM focus, excess DB IO)
+        if: ${{ github.event.inputs.scraper == 'jobicy' }}
         run: python scripts/run_scraper_monitored.py jobicy_scraper jobicy_scraper scrapers/jobicy_scraper.py
         continue-on-error: true
 
-      - name: WeWorkRemotely — RSS 14 categorías (~400)
-        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'weworkremotely' || github.event_name == 'schedule' }}
+      - name: WeWorkRemotely — DISABLED (WW remote, no LATAM focus, excess DB IO)
+        if: ${{ github.event.inputs.scraper == 'weworkremotely' }}
         run: python scripts/run_scraper_monitored.py weworkremotely_scraper weworkremotely_scraper scrapers/weworkremotely_scraper.py
         continue-on-error: true
 
@@ -432,8 +432,8 @@ jobs:
         run: python scripts/run_scraper_monitored.py jooble_scraper jooble_scraper scrapers/jooble_scraper.py
         continue-on-error: true
 
-      - name: Talent.com — agregador global con foco Paraguay/LatAm
-        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'talentcom' || github.event_name == 'schedule' }}
+      - name: Talent.com — DISABLED (WW global volume, excess DB IO)
+        if: ${{ github.event.inputs.scraper == 'talentcom' }}
         run: python scripts/run_scraper_monitored.py talentcom_scraper talentcom_scraper scrapers/talentcom_scraper.py
         continue-on-error: true
 
