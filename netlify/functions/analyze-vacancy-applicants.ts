@@ -32,7 +32,7 @@ async function callBedrock(system: string, user: string, maxTokens: number): Pro
       system,
       messages: [{ role: 'user', content: user }],
     }),
-  })))
+  }), { abortSignal: AbortSignal.timeout(25_000) }))
   const parsed = JSON.parse(new TextDecoder().decode(response.body))
   return parsed.content[0]?.text ?? ''
 }

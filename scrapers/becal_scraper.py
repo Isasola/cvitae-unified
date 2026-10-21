@@ -9,6 +9,7 @@ import time
 import os
 import re
 import json
+from datetime import datetime, timedelta, timezone
 
 from opportunity_sink import OpportunitySink
 
@@ -17,7 +18,9 @@ FETCH_HEADERS = {
     "Accept-Language": "es-PY,es;q=0.9",
 }
 
-WP_API = "https://becal.gov.py/wp-json/wp/v2/posts?per_page=20&_fields=id,title,link,excerpt,date&page={page}"
+# Only fetch posts from last 18 months (reduces old blog noise)
+_AFTER = (datetime.now(timezone.utc) - timedelta(days=548)).strftime("%Y-%m-%dT%H:%M:%S")
+WP_API = f"https://becal.gov.py/wp-json/wp/v2/posts?per_page=20&_fields=id,title,link,excerpt,date&after={_AFTER}&page={{page}}"
 
 BASE_PAGES = [
     "https://becal.gov.py/convocatorias/",
@@ -25,10 +28,12 @@ BASE_PAGES = [
     "https://becal.gov.py/",
 ]
 
+# More specific keywords to avoid news/retrospective articles
 KEYWORDS = [
-    "beca", "convocatoria", "postulación", "postulacion", "aplica",
-    "posgrado", "maestría", "doctorado", "pasantía", "programa",
-    "opportunity", "call for", "fellowship", "grant",
+    "convocatoria", "postulación", "postulacion", "inscripci",
+    "beca 202", "becas 202", "aplica hasta", "plazo", "abierta",
+    "posgrado", "maestría", "doctorado", "fellowship", "grant",
+    "call for", "oportunidad de beca",
 ]
 
 

@@ -41,10 +41,18 @@ def fetch_page(category_code, slug, page=1):
     url = f"{BASE_URL}/ofertas/{category_code}/{slug}"
     if page > 1:
         url += f"/{page}"
-    h = {"User-Agent": "Mozilla/5.0"}
+    h = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "es-PY,es;q=0.9,en;q=0.8",
+        "Referer": "https://www.buscojobs.com.py/",
+    }
     try:
         r = requests.get(url, headers=h, timeout=30)
-        return r.text if r.status_code == 200 else None
+        if r.status_code == 200:
+            return r.text
+        print(f"  HTTP {r.status_code} en {url}")
+        return None
     except Exception as e:
         print(f"  fetch error: {e}")
         return None

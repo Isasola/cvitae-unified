@@ -84,6 +84,7 @@ def scrape_hospital(key, url, org):
                     "application_url": job_url,
                     "source": f"hosp_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["salud", "hospital", "medicina", key],
                 })
             if jobs:
@@ -107,6 +108,7 @@ def scrape_hospital(key, url, org):
                     "application_url": job_url,
                     "source": f"hosp_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["salud", "hospital", key],
                 })
 

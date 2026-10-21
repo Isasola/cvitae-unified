@@ -74,6 +74,7 @@ def scrape_company(key, url, org, rubro):
                     "application_url": job_url,
                     "source": f"cc_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["call-center", "bpo", key],
                 })
             if jobs:
@@ -97,6 +98,7 @@ def scrape_company(key, url, org, rubro):
                     "application_url": job_url,
                     "source": f"cc_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["call-center", "bpo", key],
                 })
 

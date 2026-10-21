@@ -212,7 +212,7 @@ Respondé ÚNICAMENTE JSON válido:
       system: 'Sos un editor de CV riguroso. Solo reescribís hechos autorizados y respondés JSON válido.',
       messages: [{ role: 'user', content: prompt }],
     }),
-  }), { abortSignal: AbortSignal.timeout(20_000) }))
+  }), { abortSignal: AbortSignal.timeout(25_000) }))
   const decoded = JSON.parse(new TextDecoder().decode(response.body))
   return extractJSON(decoded.content?.[0]?.text || '{}')
 }

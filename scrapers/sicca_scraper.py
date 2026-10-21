@@ -70,6 +70,7 @@ def parse_jobs(html, source_url, source_key):
             "application_url": url,
             "source": source_key,
             "is_active": True,
+            "country_code": "PY",
             "tags": ["gobierno", "sector-publico", "concurso", "sicca"],
         })
     return jobs

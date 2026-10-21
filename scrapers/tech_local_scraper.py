@@ -83,6 +83,7 @@ def scrape_empresa(key, url, org, rubro):
                     "application_url": job_url,
                     "source": f"tech_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["tech", "tecnologia", "desarrollo", key],
                 })
             if jobs:
@@ -106,6 +107,7 @@ def scrape_empresa(key, url, org, rubro):
                     "application_url": job_url,
                     "source": f"tech_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["tech", "tecnologia", key],
                 })
 

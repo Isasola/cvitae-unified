@@ -18,11 +18,8 @@ JOOBLE_API_KEY = os.environ.get("JOOBLE_API_KEY", "")
 JOOBLE_API = f"https://jooble.org/api/{JOOBLE_API_KEY}"
 
 SEARCHES = [
-    ("", "Lima, Peru", "General"),
-    ("", "Peru", "General"),
-    ("remoto", "Peru", "General"),
-    ("desarrollador", "Peru", "Tecnología e IT"),
-    ("analista de sistemas", "Peru", "Tecnología e IT"),
+    ("desarrollador", "Lima, Peru", "Tecnología e IT"),
+    ("analista", "Lima, Peru", "Tecnología e IT"),
     ("contador", "Lima, Peru", "Banca y Finanzas"),
     ("administración", "Lima, Peru", "Administración"),
     ("ventas", "Lima, Peru", "Ventas y Comercial"),
@@ -30,10 +27,15 @@ SEARCHES = [
     ("recursos humanos", "Lima, Peru", "Recursos Humanos"),
     ("ingeniería", "Lima, Peru", "Ingeniería"),
     ("logística", "Lima, Peru", "Logística y Transporte"),
-    ("salud enfermera", "Lima, Peru", "Salud y Medicina"),
-    ("educación docente", "Lima, Peru", "Educación"),
-    ("diseño gráfico", "Lima, Peru", "Diseño"),
+    ("salud", "Lima, Peru", "Salud y Medicina"),
+    ("docente", "Lima, Peru", "Educación"),
+    ("diseño", "Lima, Peru", "Diseño"),
+    ("atención al cliente", "Lima, Peru", "Atención al Cliente"),
+    ("finanzas", "Lima, Peru", "Banca y Finanzas"),
 ]
+
+# Palabras en la ubicación que confirman que el empleo es de Perú
+_PE_LOCATION_TOKENS = {"peru", "perú", "lima", "arequipa", "trujillo", "cusco", "piura", "callao", "ica", "chiclayo"}
 
 
 def _strip_html(text):
@@ -67,6 +69,11 @@ def search_jooble(keywords, location, rubro):
         description = _strip_html(item.get("snippet", ""))[:2000]
         company = (item.get("company") or "").strip()
         loc = (item.get("location") or location).strip()
+
+        # Verificar que la ubicación realmente sea Perú — Jooble mezcla resultados de otros países
+        loc_lower = loc.lower()
+        if not any(token in loc_lower for token in _PE_LOCATION_TOKENS):
+            continue
 
         jobs.append({
             "title": title,

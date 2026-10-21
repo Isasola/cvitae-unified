@@ -61,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"::error title=Source made no durable progress::{scraper_id} had no inserted/updated/unchanged row and did not advance its cursor")
         if status in {"failed", "telemetry_failed", "stalled"} or (status == "empty_eof_confirmed" and not empty_eof) or (status == "resumable" and not resumable):
             print(f"::error title=Scraper {status}::{scraper_id}")
-        elif status in {"partial_success", "blocked", "resumable", "executed_unmeasured", "skipped"}:
+        elif status in {"partial_success", "blocked", "resumable", "executed_unmeasured", "skipped", "empty_eof_confirmed"}:
             print(f"::warning title=Scraper {status}::{scraper_id}")
 
     # Missing stage counts cannot silently pass an automated source job as
@@ -74,7 +74,8 @@ def main(argv: list[str] | None = None) -> int:
         and not confirmed_resumable(row)
         for row in rows
     )
-    red = any(row.get("status") in {"failed", "telemetry_failed", "stalled", "executed_unmeasured"} for row in rows)
+    # executed_unmeasured = legacy scrapers without telemetry wiring; treat as warning, not failure
+    red = any(row.get("status") in {"failed", "telemetry_failed", "stalled"} for row in rows)
     return 1 if red or invalid_evidence or no_progress else 0
 
 

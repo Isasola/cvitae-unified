@@ -53,7 +53,7 @@ def main():
 
     for link in soup.find_all("a", href=True):
         href = link["href"]
-        if "/ofertas/" not in href:
+        if not any(p in href for p in ["/ofertas/", "/oferta/", "/empleo/", "/trabajo/", "/vacante/"]):
             continue
 
         full_url = href if href.startswith("http") else BASE_URL + href
@@ -83,6 +83,7 @@ def main():
             "title": title,
             "organization": company,
             "location": location or "Paraguay",
+            "country_code": "PY",
             "rubro": "General",
             "type": "Tiempo completo",
             "description": "",

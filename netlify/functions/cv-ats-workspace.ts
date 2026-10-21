@@ -154,7 +154,7 @@ ${cvText}`
       system: 'Sos un auditor de CV riguroso. Respondés solamente JSON válido y fundamentás cada conclusión en el texto recibido.',
       messages: [{ role: 'user', content: prompt }],
     }),
-  }), { abortSignal: AbortSignal.timeout(20_000) }))
+  }), { abortSignal: AbortSignal.timeout(25_000) }))
   const decoded = JSON.parse(new TextDecoder().decode(response.body))
   return normalizeAtsResult(extractJSON(decoded.content?.[0]?.text || '{}'))
 }

@@ -82,6 +82,7 @@ def scrape_univ(key, url, org):
                     "application_url": job_url,
                     "source": f"univ_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["universidad", "educacion", "docente", key],
                 })
             if jobs:
@@ -105,6 +106,7 @@ def scrape_univ(key, url, org):
                     "application_url": job_url,
                     "source": f"univ_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["universidad", "educacion", key],
                 })
 

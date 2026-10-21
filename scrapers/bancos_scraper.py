@@ -83,6 +83,7 @@ def scrape_banco(key, url, org):
                     "application_url": job_url,
                     "source": f"banco_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["banco", "finanzas", key],
                 })
             if jobs:
@@ -107,6 +108,7 @@ def scrape_banco(key, url, org):
                     "application_url": job_url,
                     "source": f"banco_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["banco", "finanzas", key],
                 })
 

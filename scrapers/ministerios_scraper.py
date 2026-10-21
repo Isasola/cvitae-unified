@@ -70,6 +70,7 @@ def parse_ministry(html, base_url, key, org_name):
             "application_url": url,
             "source": f"ministerio_{key.lower()}",
             "is_active": True,
+            "country_code": "PY",
             "tags": ["gobierno", "ministerio", key.lower()],
         })
     seen = set()

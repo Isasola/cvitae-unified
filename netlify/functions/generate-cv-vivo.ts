@@ -38,7 +38,7 @@ async function invokeModel(userPrompt: string, maxTokens: number): Promise<strin
       messages: [{ role: "user", content: userPrompt }],
     }),
   })
-  const response = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'cv_vivo_generation', trigger: 'user_action', actor: 'user' }, () => bedrockClient.send(command))
+  const response = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'cv_vivo_generation', trigger: 'user_action', actor: 'user' }, () => bedrockClient.send(command, { abortSignal: AbortSignal.timeout(25_000) }))
   const result = JSON.parse(new TextDecoder().decode(response.body))
   return result.content[0]?.text ?? ""
 }

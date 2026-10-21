@@ -440,7 +440,7 @@ async function callApplicationModel(prompt: string, maxTokens: number) {
       system: 'Sos un asistente de postulación riguroso. Nunca completás hechos del candidato y respondés JSON válido.',
       messages: [{ role: 'user', content: prompt }],
     }),
-  })))
+  }), { abortSignal: AbortSignal.timeout(25_000) }))
   const decoded = JSON.parse(new TextDecoder().decode(response.body))
   return extractJSON(decoded.content?.[0]?.text || '{}')
 }

@@ -85,6 +85,7 @@ def scrape_org(key, url, org):
                     "application_url": job_url,
                     "source": f"ong_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["ong", "cooperacion", "internacional", key],
                 })
             if jobs:
@@ -108,6 +109,7 @@ def scrape_org(key, url, org):
                     "application_url": job_url,
                     "source": f"ong_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["ong", "cooperacion", key],
                 })
 

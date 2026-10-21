@@ -539,6 +539,7 @@ export default function ProfileBuilder() {
         experience: Array.isArray(extracted.experience) ? extracted.experience : prev.experience,
         languages: Array.isArray(extracted.languages) ? extracted.languages : prev.languages,
       }))
+      setStep(1)
     } catch (err: any) {
       const msg = err?.message || ''
       if (msg === 'AI_ANALYZE_FAILED') {

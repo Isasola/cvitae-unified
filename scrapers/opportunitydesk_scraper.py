@@ -87,7 +87,8 @@ def scrape_category(path, opp_type, max_pages=None):
             if not href or href in seen:
                 continue
             # Only include actual post URLs (not category/tag pages)
-            if not re.match(r'https://opportunitydesk\.org/\d{4}/', href):
+            if not re.match(r'https://opportunitydesk\.org/[^/]+/', href) or \
+               re.search(r'/(?:category|tag|author|page|wp-content|wp-admin|feed)/', href):
                 continue
             seen.add(href)
 

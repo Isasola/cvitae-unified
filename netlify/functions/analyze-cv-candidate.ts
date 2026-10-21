@@ -44,7 +44,8 @@ async function invokeModel(system: string, userPrompt: string, maxTokens: number
       messages: [{ role: "user", content: userPrompt }],
     }),
   })
-  const response = await observeAiCall({ provider: 'bedrock', model: modelId || MODEL_ID_ANALYZE, feature: 'candidate_cv_analysis', trigger: 'user_action', actor: 'user' }, () => bedrockClient.send(command))
+  const isHaiku = (modelId || MODEL_ID_ANALYZE) === MODEL_ID_EXTRACT
+  const response = await observeAiCall({ provider: 'bedrock', model: modelId || MODEL_ID_ANALYZE, feature: 'candidate_cv_analysis', trigger: 'user_action', actor: 'user' }, () => bedrockClient.send(command, { abortSignal: AbortSignal.timeout(isHaiku ? 15_000 : 25_000) }))
   const result = JSON.parse(new TextDecoder().decode(response.body))
   return result.content[0]?.text ?? ""
 }
@@ -115,7 +116,7 @@ async function extractFromFile(
     })
     const resp = await observeAiCall(
       { provider: 'bedrock', model: MODEL_ID_EXTRACT, feature: 'cv_file_extraction', trigger: 'user_action', actor: 'user' },
-      () => bedrockClient.send(command),
+      () => bedrockClient.send(command, { abortSignal: AbortSignal.timeout(15_000) }),
     )
     const result = JSON.parse(new TextDecoder().decode(resp.body))
     responseText = result.content[0]?.text ?? ''
@@ -134,7 +135,7 @@ async function extractFromFile(
       system: [{ text: EXTRACT_FILE_SYSTEM }],
       inferenceConfig: { maxTokens: 2500 },
     })
-    const resp = await bedrockClient.send(command)
+    const resp = await bedrockClient.send(command, { abortSignal: AbortSignal.timeout(15_000) })
     responseText = ((resp.output?.message?.content ?? [])[0] as any)?.text ?? ''
   }
 
@@ -305,7 +306,7 @@ ${cvText}`
     const responseText = await invokeModel(
       "Sos un reclutador experto latinoamericano. Respondés ÚNICAMENTE con JSON válido y bien formateado, sin texto adicional, sin markdown.",
       prompt,
-      mode === 'batch_analyze' ? 1500 : 1000,
+      mode === 'extract' ? 2048 : mode === 'batch_analyze' ? 1500 : 1000,
       mode === 'extract' ? MODEL_ID_EXTRACT : MODEL_ID_ANALYZE
     )
     const result = extractJSON(responseText)

@@ -73,6 +73,7 @@ def scrape_url(url, org):
                     "application_url": job_url,
                     "source": "grupo_cartes",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["grupo-cartes", "corporativo"],
                 })
             if jobs:
@@ -96,6 +97,7 @@ def scrape_url(url, org):
                     "application_url": job_url,
                     "source": "grupo_cartes",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["grupo-cartes", "corporativo"],
                 })
 

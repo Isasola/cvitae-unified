@@ -421,6 +421,11 @@ export default function ATSDiagnostic() {
                 <section className="rounded-3xl border border-white/8 bg-white/[0.02] p-5"><h3 className="font-display text-lg text-cream">Mejoras rápidas</h3><ol className="mt-4 space-y-3">{selectedAssessment.quick_wins.map((item, index) => <li key={index} className="flex gap-3 text-sm"><span className="font-display text-[#c9a84c]">0{index + 1}</span><span className="text-white/55"><strong className="font-normal text-cream">{item.action}</strong><span className="mt-0.5 block text-xs text-white/35">{item.expectedEffect}</span></span></li>)}</ol></section>
                 <section className="rounded-3xl border border-white/8 bg-white/[0.02] p-5"><h3 className="font-display text-lg text-cream">Vocabulario observado</h3><div className="mt-4 space-y-3">{selectedAssessment.keyword_observations.length ? selectedAssessment.keyword_observations.map((item, index) => <div key={index} className="flex gap-3"><span className="h-fit rounded-full border border-white/10 px-2 py-1 text-[10px] text-white/55">{item.term}</span><p className="text-xs leading-relaxed text-white/40">{item.observation}</p></div>) : <p className="text-xs text-white/40">Sin observaciones prioritarias de vocabulario.</p>}</div></section>
               </div>
+
+              <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.04] p-5 sm:flex-row sm:items-center">
+                <div><p className="text-sm font-medium text-cream">¿Querés aplicar estas mejoras?</p><p className="mt-0.5 text-xs text-white/45">La IA propone cambios concretos respaldados en tu evidencia confirmada. Revisás todo antes de guardar.</p></div>
+                <a href="/mi-carrera/rewrite" className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]">Mejorar mi CV <ArrowRight className="h-4 w-4" /></a>
+              </div>
             </motion.div>
           </AnimatePresence>
         ) : (
