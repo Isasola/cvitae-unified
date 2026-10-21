@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       scraper:
-        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi | arbeitnow | himalayas | jobicy | weworkremotely | sicca | ministerios | bancos | cooperativas | callcenters | seguros | universidades | constructoras | vierci | cartes | hospitales | foros | supermercados | ongs | tech_local | jooble | talentcom | googlejobs | automotriz | farmacias | gastronomia | agroindustria | frigorificos | industria | telecomunicaciones | medios | retail_malls | logistica | energia | puertos | cde_frontera | workday | bolsas_locales | bumeran_pe | computrabajo_pe | jooble_pe | indeed_pe | laborum_pe | trabajando_pe | buscojobs_pe | aptitus_pe | infojobs_pe | getonboard'
+        description: 'all | PY: computrabajo buscojobs becal sicca ministerios bancos tech_local jooble... | PE: bumeran_pe computrabajo_pe buscojobs_pe jooble_pe | WW: getonboard remotive arbeitnow himalayas | ID del scraper o "all"'
         required: false
         default: 'all'
       scan_request_id:
