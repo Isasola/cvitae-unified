@@ -101,6 +101,7 @@ def scrape_category(category_slug, rubro, max_pages=3):
                 "source_authority": "aggregator",
                 "original_source_verified": True,
                 "is_active": True,
+                "country_code": "PE",
                 "tags": [category_slug.replace("-", " ")],
             })
 

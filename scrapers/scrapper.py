@@ -41,7 +41,7 @@ def insert_job(job):
 
 # ---------- CLASIPAR ----------
 def scrape_clasipar():
-    html = fetch("https://www.clasipar.com/empleos", verify=False)
+    html = fetch("https://www.clasipar.com/categorias/empleos", verify=False)
     if not html:
         print("[clasipar] No se pudo obtener HTML")
         return []

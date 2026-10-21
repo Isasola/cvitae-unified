@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       scraper:
-        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi | arbeitnow | himalayas | jobicy | weworkremotely | sicca | ministerios | bancos | cooperativas | callcenters | seguros | universidades | constructoras | vierci | cartes | hospitales | foros | supermercados | ongs | tech_local | jooble | talentcom | googlejobs | automotriz | farmacias | gastronomia | agroindustria | frigorificos | industria | telecomunicaciones | medios | retail_malls | logistica | energia | puertos | cde_frontera | workday | bolsas_locales'
+        description: 'all | computrabajo | buscojobs | oya | opportunitydesk | remotive | unjobs | becal | carolina | abc | fundacion | multi | arbeitnow | himalayas | jobicy | weworkremotely | sicca | ministerios | bancos | cooperativas | callcenters | seguros | universidades | constructoras | vierci | cartes | hospitales | foros | supermercados | ongs | tech_local | jooble | talentcom | googlejobs | automotriz | farmacias | gastronomia | agroindustria | frigorificos | industria | telecomunicaciones | medios | retail_malls | logistica | energia | puertos | cde_frontera | workday | bolsas_locales | bumeran_pe | computrabajo_pe | jooble_pe | indeed_pe | laborum_pe | trabajando_pe | buscojobs_pe | aptitus_pe | infojobs_pe | getonboard'
         required: false
         default: 'all'
       scan_request_id:
@@ -571,8 +571,8 @@ jobs:
         run: python scripts/run_scraper_monitored.py computrabajo_pe computrabajo_pe scrapers/computrabajo_pe.py
         continue-on-error: true
 
-      - name: Aptitus Perú — portal de empleo peruano
-        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'aptitus_pe' || github.event_name == 'schedule' }}
+      - name: Aptitus Perú — portal de empleo peruano (deshabilitado: URL muerta)
+        if: ${{ github.event.inputs.scraper == 'aptitus_pe' }}
         run: python scripts/run_scraper_monitored.py aptitus_pe aptitus_pe scrapers/aptitus_pe.py
         continue-on-error: true
 
@@ -591,14 +591,19 @@ jobs:
         run: python scripts/run_scraper_monitored.py laborum_pe laborum_pe scrapers/laborum_pe.py
         continue-on-error: true
 
-      - name: InfoJobs Perú — portal de empleo con fuerte presencia local
-        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'infojobs_pe' || github.event_name == 'schedule' }}
+      - name: InfoJobs Perú — portal de empleo (deshabilitado: URL muerta)
+        if: ${{ github.event.inputs.scraper == 'infojobs_pe' }}
         run: python scripts/run_scraper_monitored.py infojobs_pe infojobs_pe scrapers/infojobs_pe.py
         continue-on-error: true
 
       - name: Trabajando Perú — portal de empleo regional
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'trabajando_pe' || github.event_name == 'schedule' }}
         run: python scripts/run_scraper_monitored.py trabajando_pe trabajando_pe scrapers/trabajando_pe.py
+        continue-on-error: true
+
+      - name: BuscoJobs Perú — portal de empleo por categorías
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'buscojobs_pe' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py buscojobs_pe buscojobs_pe scrapers/buscojobs_pe.py
         continue-on-error: true
 
       # ── Paraguay — portales especializados y reclutamiento ───────────────
@@ -621,6 +626,11 @@ jobs:
       - name: Outsourcing Paraguay — empresa de outsourcing local
         if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'outsourcing_py' || github.event_name == 'schedule' }}
         run: python scripts/run_scraper_monitored.py outsourcing_paraguay outsourcing_py_scraper scrapers/outsourcing_py_scraper.py
+        continue-on-error: true
+
+      - name: Get on Board — API pública LATAM
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'getonboard' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py getonboard getonboard_scraper scrapers/getonboard_scraper.py
         continue-on-error: true
 
       # Scrapers stay isolated, but the final job conclusion reflects real
