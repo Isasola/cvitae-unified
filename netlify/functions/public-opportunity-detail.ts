@@ -31,9 +31,16 @@ ${canonical ? `<meta property="og:url" content="${escapeHtml(canonical)}">` : ''
 <meta property="og:image" content="https://cvitae.lat/og-image.jpg">
 ${schema ? `<script type="application/ld+json">${JSON.stringify(schema).replace(/</g, '\\u003c')}</script>` : ''}`
   const original = row?.source_url ? safeExternalUrl(row.source_url) : null
+  const enrich = row?.ai_enrichment
+  const enrichHtml = enrich ? `
+${enrich.skills?.length ? `<section><h2>Habilidades clave</h2><ul>${enrich.skills.map((s: string) => `<li>${escapeHtml(s)}</li>`).join('')}</ul></section>` : ''}
+${enrich.ideal_profile ? `<section><h2>Perfil ideal</h2><p>${escapeHtml(enrich.ideal_profile)}</p></section>` : ''}
+${enrich.application_tips ? `<section><h2>Consejos para postularse</h2><p>${escapeHtml(enrich.application_tips)}</p></section>` : ''}
+${enrich.sector_context ? `<section><h2>Contexto del sector</h2><p>${escapeHtml(enrich.sector_context)}</p></section>` : ''}` : ''
   const content = row ? `<main><article><h1>${escapeHtml(row.title)}</h1>
 ${row.organization ? `<p>${escapeHtml(row.organization)}</p>` : ''}
 <section><h2>Descripción</h2><p style="white-space:pre-wrap">${escapeHtml(description)}</p></section>
+${enrichHtml}
 ${original && original !== '#' ? `<p>Fuente: <a href="${escapeHtml(original)}" rel="noopener noreferrer">${escapeHtml(row.distribution?.canonicalSource || row.source)}</a></p>` : ''}
 </article></main>` : `<main><h1>${unavailable ? 'No disponible' : '404'}</h1><p>${escapeHtml(description)}</p><a href="/empleos">Volver a empleos</a></main>`
   // Remove the Home snapshot/metadata while retaining compiled module/style

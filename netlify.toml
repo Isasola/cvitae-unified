@@ -41,11 +41,21 @@
 # await. Include both pnpm's link and its physical store path in the only
 # functions that parse PDFs; no package source is copied into this repository.
 [functions."extract-pdf-text"]
+  timeout = 30
   included_files = ["node_modules/pdfjs-dist/**", "node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/**"]
 
 [functions."submit-lead"]
   included_files = ["node_modules/pdfjs-dist/**", "node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/**"]
 
+
+[functions."sitemap"]
+  timeout = 30
+
+[functions."enrich-opportunity"]
+  timeout = 30
+
+[functions."enrich-opportunities-cron"]
+  timeout = 30
 
 [functions."cv-ats-workspace"]
   timeout = 30

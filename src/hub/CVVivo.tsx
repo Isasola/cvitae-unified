@@ -941,13 +941,17 @@ export default function CVVivo() {
                   {generatedCV ? (
                     <ReactMarkdown
                       components={{
-                        h1: ({...props}) => <h1 className={`-mx-10 mb-2 border-b pb-6 pt-8 px-10 text-3xl font-black ${darkMode ? 'border-[#c9a84c]/30 bg-[#0a0a0a] text-white' : 'border-gray-300 bg-gray-50 text-gray-900'}`} {...props} />,
+                        h1: ({...props}) => {
+                          const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0]
+                          return <h1 className="-mx-10 mb-2 pb-6 pt-8 px-10 text-3xl font-black text-white" style={{ backgroundColor: activeTheme.hex }} {...props} />
+                        },
                         h2: ({...props}) => <h2 className={`mb-4 mt-10 border-l-2 border-[#c9a84c] pl-4 text-xs font-bold uppercase tracking-[0.2em] ${darkMode ? 'text-[#c9a84c]' : 'text-[#8a6a1f]'}`} {...props} />,
                         h3: ({...props}) => <h3 className={`mb-1 mt-6 text-base font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`} {...props} />,
                         p: ({...props}) => {
+                          const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0]
                           const isContact = typeof props.children === 'string' && String(props.children).includes('|')
                           return isContact
-                            ? <p className={`-mx-10 -mt-2 mb-8 px-10 pb-4 text-xs font-medium tracking-wide ${darkMode ? 'bg-[#0a0a0a] text-muted-foreground' : 'bg-gray-50 text-gray-500'}`} {...props} />
+                            ? <p className="-mx-10 -mt-2 mb-8 px-10 pb-4 text-xs font-medium tracking-wide text-white/70" style={{ backgroundColor: activeTheme.hex }} {...props} />
                             : <p className={`mb-3 text-sm leading-relaxed ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`} {...props} />
                         },
                         li: ({...props}) => <li className={`relative mb-2 list-none pl-5 text-sm before:absolute before:left-0 before:top-[0.55em] before:h-1.5 before:w-1.5 before:rounded-full before:bg-[#c9a84c] before:content-[''] ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`} {...props} />,

@@ -34,9 +34,10 @@ type CvVersion = {
   id: string; vacancy_id: string; version_number: number; label: string
   generation_kind: string; created_at: string
 }
+type ProfileCv = { fileName: string | null; hasText: boolean }
 type Workspace = {
   rubricVersion: string; rubricNotice: string; assessments: Assessment[]
-  versions: CvVersion[]; openQuestionCount: number
+  versions: CvVersion[]; openQuestionCount: number; profileCv?: ProfileCv
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -196,7 +197,7 @@ export default function ATSDiagnostic() {
   const applyWorkspace = (data: Workspace) => {
     setWorkspace(data)
     setSelectedAssessmentId((current) => current && data.assessments.some((item) => item.id === current) ? current : data.assessments[0]?.id || null)
-    setSelectedVersionId((current) => current || data.versions[0]?.id || '')
+    setSelectedVersionId((current) => current || data.versions[0]?.id || (data.profileCv?.hasText ? '__profile_cv__' : ''))
   }
 
   useEffect(() => {
@@ -241,14 +242,20 @@ export default function ATSDiagnostic() {
     finally { setExtracting(false) }
   }
 
-  const analyze = async (source: 'generated_cv' | 'uploaded_cv') => {
+  const analyze = async (source: 'generated_cv' | 'uploaded_cv' | 'profile_cv') => {
     if (source === 'generated_cv' && !selectedVersionId) return
     if (source === 'uploaded_cv' && !uploaded) return
     setAnalyzing(true); setError(''); setMessage('')
     try {
-      const data = await postWorkspace(source === 'generated_cv'
-        ? { action: 'analyze', sourceKind: source, sourceVersionId: selectedVersionId }
-        : { action: 'analyze', sourceKind: source, sourceLabel: uploaded!.name, cvText: uploaded!.text })
+      let requestBody: Record<string, unknown>
+      if (source === 'profile_cv') {
+        requestBody = { action: 'analyze', sourceKind: 'profile_cv' }
+      } else if (source === 'generated_cv') {
+        requestBody = { action: 'analyze', sourceKind: source, sourceVersionId: selectedVersionId }
+      } else {
+        requestBody = { action: 'analyze', sourceKind: source, sourceLabel: uploaded!.name, cvText: uploaded!.text }
+      }
+      const data = await postWorkspace(requestBody)
       applyWorkspace(data)
       setUploaded(null)
       setMessage(data.idempotent ? 'Este CV ya estaba analizado; abrimos su diagnóstico guardado.' : 'Diagnóstico guardado. Revisá primero los bloqueos y después respondé las preguntas.')
@@ -339,12 +346,20 @@ export default function ATSDiagnostic() {
               <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#c9a84c]/20 bg-[#c9a84c]/10 text-[#c9a84c]"><History className="h-5 w-5" /></span>
               <div><h2 className="font-display text-xl text-cream">Usar un CV guardado</h2><p className="text-xs text-white/40">Usa exactamente el contenido de tu historial.</p></div>
             </div>
-            {workspace?.versions.length ? (
+            {(workspace?.versions.length || workspace?.profileCv?.hasText) ? (
               <>
                 <select value={selectedVersionId} onChange={(event) => setSelectedVersionId(event.target.value)} className="mt-5 w-full rounded-xl border border-white/10 bg-[#0d0d0d] px-3 py-3 text-sm text-cream outline-none focus:border-[#c9a84c]/40">
-                  {workspace.versions.map((version) => <option key={version.id} value={version.id}>{version.label} · v{version.version_number} · {formatDate(version.created_at)}</option>)}
+                  {workspace?.profileCv?.hasText && (
+                    <option value="__profile_cv__">{workspace.profileCv.fileName || 'CV subido'} · (original)</option>
+                  )}
+                  {workspace?.versions.map((version) => <option key={version.id} value={version.id}>{version.label} · v{version.version_number} · {formatDate(version.created_at)}</option>)}
                 </select>
-                <button type="button" onClick={() => analyze('generated_cv')} disabled={analyzing || !selectedVersionId} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-[#c9a84c]/35 bg-[#c9a84c]/10 py-2.5 text-sm text-[#e6cf8a] transition hover:bg-[#c9a84c]/15 disabled:opacity-40">
+                <button
+                  type="button"
+                  onClick={() => selectedVersionId === '__profile_cv__' ? analyze('profile_cv') : analyze('generated_cv')}
+                  disabled={analyzing || !selectedVersionId}
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-[#c9a84c]/35 bg-[#c9a84c]/10 py-2.5 text-sm text-[#e6cf8a] transition hover:bg-[#c9a84c]/15 disabled:opacity-40"
+                >
                   {analyzing ? <CVLoader variant="button" size={20} /> : <FileSearch className="h-4 w-4" />} Diagnosticar esta versión
                 </button>
               </>

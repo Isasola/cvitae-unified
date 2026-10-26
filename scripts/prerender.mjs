@@ -162,6 +162,23 @@ function snapshotNav(backHref, backLabel) {
 </nav>`
 }
 
+function enrichmentSnapshotHtml(e) {
+  if (!e) return ''
+  const skills = Array.isArray(e.skills) && e.skills.length
+    ? `<section><h2 style="${H2_STYLE}">Habilidades clave</h2><ul style="margin:0 0 1rem;padding-left:1.5rem">${e.skills.map(s => `<li style="${LI_STYLE}">${escapeHtml(String(s))}</li>`).join('')}</ul></section>`
+    : ''
+  const idealProfile = e.ideal_profile
+    ? `<section><h2 style="${H2_STYLE}">Perfil ideal</h2><p style="${P_STYLE}">${escapeHtml(String(e.ideal_profile))}</p></section>`
+    : ''
+  const tips = e.application_tips
+    ? `<section><h2 style="${H2_STYLE}">Consejos para postularse</h2><p style="${P_STYLE}">${escapeHtml(String(e.application_tips))}</p></section>`
+    : ''
+  const context = e.sector_context
+    ? `<section><h2 style="${H2_STYLE}">Contexto del sector</h2><p style="${P_STYLE}">${escapeHtml(String(e.sector_context))}</p></section>`
+    : ''
+  return skills + idealProfile + tips + context
+}
+
 // ── Content snapshot generators ────────────────────────────────────────────
 function blogPostSnapshotContent(post) {
   const dateStr = post.created_at
@@ -207,6 +224,7 @@ ${snapshotNav('/empleos', '← Empleos')}
   </div>
   <div style="height:1px;background:rgba(255,255,255,.08);margin:1.5rem 0"></div>
   ${job.description ? `<section><h2 style="${H2_STYLE}">Descripción</h2>${markdownToSnapshotHtml(job.description, 2000)}</section>` : ''}
+  ${job.ai_enrichment ? enrichmentSnapshotHtml(job.ai_enrichment) : ''}
   ${sourceAttribution}
   <div style="margin-top:2.5rem">
     <a href="/empleos" style="color:#c9a84c;text-decoration:none;font-size:.875rem;font-family:system-ui,sans-serif">← Ver más empleos</a>
@@ -233,6 +251,7 @@ ${snapshotNav('/oportunidades', '← Oportunidades')}
   </div>
   <div style="height:1px;background:rgba(255,255,255,.08);margin:1.5rem 0"></div>
   ${opp.description ? `<section><h2 style="${H2_STYLE}">Descripción</h2>${markdownToSnapshotHtml(opp.description, 2000)}</section>` : ''}
+  ${opp.ai_enrichment ? enrichmentSnapshotHtml(opp.ai_enrichment) : ''}
   ${sourceAttribution}
   <div style="margin-top:2.5rem">
     <a href="/oportunidades" style="color:#c9a84c;text-decoration:none;font-size:.875rem;font-family:system-ui,sans-serif">← Ver más oportunidades</a>

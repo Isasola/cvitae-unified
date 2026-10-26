@@ -7,6 +7,7 @@ export const STATIC_PUBLIC_SITEMAP_ROUTES = [
   { url: '/oportunidades/latam', priority: '0.8', freq: 'weekly' },
   { url: '/blog', priority: '0.8', freq: 'weekly' },
   { url: '/sobre-cvitae', priority: '0.6', freq: 'monthly' },
+  { url: '/contacto', priority: '0.5', freq: 'monthly' },
   { url: '/privacy', priority: '0.3', freq: 'monthly' },
   { url: '/terminos', priority: '0.3', freq: 'yearly' },
   { url: '/cookies', priority: '0.3', freq: 'yearly' },

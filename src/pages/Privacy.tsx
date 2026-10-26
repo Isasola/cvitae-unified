@@ -1,10 +1,16 @@
 import React from 'react';
+import { Helmet } from 'react-helmet-async';
 import { GlassCard } from '@/components/cvitae/UI-Elements';
 import { Navbar } from '@/components/cvitae/Navbar';
 import { Footer } from '@/components/cvitae/Footer';
 
 const Privacy: React.FC = () => (
   <div className="min-h-screen bg-background">
+    <Helmet>
+      <title>Política de Privacidad | CVitae</title>
+      <meta name="description" content="Conocé cómo CVitae trata tus datos personales, qué información recolectamos, con quién la compartimos y cuáles son tus derechos sobre tu perfil y CV." />
+      <link rel="canonical" href="https://cvitae.lat/privacy" />
+    </Helmet>
     <Navbar />
     <div className="container mx-auto px-4 py-32 max-w-4xl">
       <GlassCard className="p-8">

@@ -163,12 +163,14 @@ const ASSESSMENT_FIELDS = 'id,source_kind,source_label,source_version_id,content
 const QUESTION_FIELDS = 'id,assessment_id,position,priority,category,question,why_asked,suggested_context,status,answer_text,evidence_id,answered_at,created_at,updated_at'
 
 async function loadWorkspace(supabase: any, userId: string) {
-  const [{ data: assessments, error: assessmentError }, { data: versions, error: versionError }] = await Promise.all([
+  const [{ data: assessments, error: assessmentError }, { data: versions, error: versionError }, { data: profile }] = await Promise.all([
     supabase.from('cv_ats_assessments').select(ASSESSMENT_FIELDS)
       .eq('user_id', userId).order('created_at', { ascending: false }).limit(12),
     supabase.from('generated_cvs')
       .select('id,vacancy_id,version_number,label,generation_kind,created_at')
       .eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
+    supabase.from('user_master_profiles')
+      .select('cv_file_name,cv_text').eq('user_id', userId).maybeSingle(),
   ])
   if (assessmentError) throw assessmentError
   if (versionError) throw versionError
@@ -193,6 +195,10 @@ async function loadWorkspace(supabase: any, userId: string) {
     openQuestionCount: questions.filter((question) =>
       question.status === 'open' && question.assessment_id === assessments?.[0]?.id
     ).length,
+    profileCv: {
+      fileName: profile?.cv_file_name || null,
+      hasText: Boolean(profile?.cv_text && profile.cv_text.length > 50),
+    },
   }
 }
 
@@ -231,13 +237,22 @@ export const handler = async (event: any) => {
     }
 
     if (action === 'analyze') {
-      const sourceKind = body.sourceKind === 'generated_cv' ? 'generated_cv' : body.sourceKind === 'uploaded_cv' ? 'uploaded_cv' : null
+      const sourceKind = body.sourceKind === 'generated_cv' ? 'generated_cv' : body.sourceKind === 'uploaded_cv' ? 'uploaded_cv' : body.sourceKind === 'profile_cv' ? 'uploaded_cv' : null
       if (!sourceKind) return jsonResponse(event, 400, { error: 'Origen del CV inválido' })
 
       let cvText = cleanCvText(body.cvText)
       let sourceLabel = cleanText(body.sourceLabel, 240) || 'CV cargado'
       let sourceVersionId: string | null = null
-      if (sourceKind === 'generated_cv') {
+      if (body.sourceKind === 'profile_cv') {
+        const { data: profileData, error: profileErr } = await supabase
+          .from('user_master_profiles').select('cv_file_name,cv_text').eq('user_id', user.id).maybeSingle()
+        if (profileErr) throw profileErr
+        if (!profileData?.cv_text || profileData.cv_text.length < 50) {
+          return jsonResponse(event, 404, { error: 'No encontramos el texto de tu CV original. Volvé a subirlo desde Mi Perfil.' })
+        }
+        cvText = cleanCvText(profileData.cv_text)
+        sourceLabel = profileData.cv_file_name || 'CV subido'
+      } else if (sourceKind === 'generated_cv') {
         sourceVersionId = cleanText(body.sourceVersionId, 80)
         const { data: version, error } = await supabase.from('generated_cvs')
           .select('id,label,version_number,cv_markdown').eq('id', sourceVersionId).eq('user_id', user.id).maybeSingle()

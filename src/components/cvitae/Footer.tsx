@@ -31,7 +31,7 @@ export function Footer() {
         { label: 'Privacidad', href: '/privacy' },
         { label: 'Términos', href: '/terminos' },
         { label: 'Cookies', href: '/cookies' },
-        { label: 'Sobre nosotros', href: '/about' },
+        { label: 'Sobre nosotros', href: '/sobre-cvitae' },
       ],
     },
   ]

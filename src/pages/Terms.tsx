@@ -1,3 +1,4 @@
+import { Helmet } from 'react-helmet-async'
 import { motion } from 'framer-motion'
 import { Navbar } from '@/components/cvitae/Navbar'
 import { Footer } from '@/components/cvitae/Footer'
@@ -8,6 +9,11 @@ import { Link } from 'wouter'
 export default function Terms() {
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>Términos de Uso | CVitae</title>
+        <meta name="description" content="Leé los términos y condiciones de uso de CVitae: qué podés hacer con la plataforma, privacidad de tus datos, propiedad intelectual y condiciones de servicio." />
+        <link rel="canonical" href="https://cvitae.lat/terminos" />
+      </Helmet>
       <Navbar />
       <div className="pt-32 pb-20 px-4 max-w-4xl mx-auto">
         <div className="mb-8">
