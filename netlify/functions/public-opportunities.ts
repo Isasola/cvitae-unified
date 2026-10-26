@@ -4,7 +4,7 @@ import { publicDistributionProjection, type SourcePolicyRow } from '../../src/li
 import { matchesPublicOpportunityMode, type PublicOpportunityMode } from '../../src/lib/opportunity-truth'
 import { publicCatalogQuery, publicCatalogPage } from './lib/public-opportunity-pagination'
 
-const COLUMNS = 'id,slug,title,organization,location,city,department,country_code,onsite_country,remote,remote_scope,type,employment_type,rubro,description,tags,requirements,responsibilities,benefits,duration_text,start_date,start_date_text,opportunity_type,opportunity_kind,deadline,published_at,value,currency,funding_type,funding_amount,fully_funded,experience_required,education_level,citizenship_requirement,residency_requirement,sector,source,source_url,application_url,eligible_countries,eligible_regions,is_active,verification_status,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,seo_status,deleted_at,archived_at,created_at,updated_at,ai_enrichment'
+const COLUMNS = 'id,slug,title,organization,location,city,department,country_code,onsite_country,remote,remote_scope,type,employment_type,rubro,description,tags,requirements,responsibilities,benefits,duration_text,start_date,start_date_text,opportunity_type,opportunity_kind,deadline,published_at,value,currency,funding_type,funding_amount,fully_funded,experience_required,education_level,citizenship_requirement,residency_requirement,sector,source,source_url,application_url,eligible_countries,eligible_regions,is_active,verification_status,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,seo_status,deleted_at,archived_at,created_at,updated_at'
 
 export function publicOpportunityResponse<T>(rows: T[], slug?: string) {
   if (slug && !rows[0]) return { statusCode: 404, body: { error:'not_found' } }

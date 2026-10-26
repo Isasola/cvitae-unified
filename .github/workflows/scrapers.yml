@@ -571,7 +571,7 @@ jobs:
         run: python scripts/run_scraper_monitored.py computrabajo_pe computrabajo_pe scrapers/computrabajo_pe.py
         continue-on-error: true
 
-      - name: Aptitus Perú — portal de empleo peruano (deshabilitado: URL muerta)
+      - name: "Aptitus Perú — portal de empleo peruano (deshabilitado - URL muerta)"
         if: ${{ github.event.inputs.scraper == 'aptitus_pe' }}
         run: python scripts/run_scraper_monitored.py aptitus_pe aptitus_pe scrapers/aptitus_pe.py
         continue-on-error: true
@@ -591,7 +591,7 @@ jobs:
         run: python scripts/run_scraper_monitored.py laborum_pe laborum_pe scrapers/laborum_pe.py
         continue-on-error: true
 
-      - name: InfoJobs Perú — portal de empleo (deshabilitado: URL muerta)
+      - name: "InfoJobs Perú — portal de empleo (deshabilitado - URL muerta)"
         if: ${{ github.event.inputs.scraper == 'infojobs_pe' }}
         run: python scripts/run_scraper_monitored.py infojobs_pe infojobs_pe scrapers/infojobs_pe.py
         continue-on-error: true
