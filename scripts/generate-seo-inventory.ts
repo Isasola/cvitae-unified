@@ -11,7 +11,7 @@ const root = path.resolve(import.meta.dirname, '..')
 const output = path.join(root, 'generated', 'public-seo-inventory.json')
 const policyOutput = path.join(root, 'generated', 'source-distribution-policy-snapshot.json')
 const fixture = process.env.SEO_INVENTORY_FIXTURE
-const OPPORTUNITY_COLUMNS = 'id,slug,title,organization,description,location,city,department,country_code,eligible_countries,eligible_regions,remote_scope,tags,deadline,application_url,source_url,source,opportunity_type,opportunity_kind,type,created_at,updated_at,is_active,verification_status,catalog_eligible,seo_eligible,seo_status,deleted_at,archived_at'
+const OPPORTUNITY_COLUMNS = 'id,slug,title,organization,description,location,city,department,country_code,eligible_countries,eligible_regions,remote_scope,tags,deadline,application_url,source_url,source,opportunity_type,opportunity_kind,type,created_at,updated_at,is_active,verification_status,catalog_eligible,seo_eligible,seo_status,deleted_at,archived_at,ai_enrichment'
 
 async function input(): Promise<Input> {
   if (fixture) return JSON.parse(fs.readFileSync(path.resolve(fixture), 'utf8'))
