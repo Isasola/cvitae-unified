@@ -107,6 +107,13 @@ function SuccessState({ name, magicLinkSent }: { name: string; magicLinkSent: bo
 
       <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
         <Link
+          href="/mi-carrera/cv"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-[#c9a84c] px-6 py-3 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_30px_-4px_rgba(201,168,76,0.4)]"
+        >
+          Mejorá tu CV con CVitae
+          <ArrowRight strokeWidth={1.75} className="h-4 w-4" />
+        </Link>
+        <Link
           href="/oportunidades"
           className="inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-6 py-3 text-sm text-white/70 transition hover:border-white/30 hover:text-white"
         >

@@ -60,6 +60,23 @@ const demoMatches = [
   },
 ]
 
+const cvBeforeRaw = `Ana García Morales
+Email: ana.garcia@email.com | Tel: 011-5555-1234
+
+Objetivo: Busco trabajo en marketing digital donde pueda aportar mis conocimientos y crecer profesionalmente en el área.
+
+Experiencia:
+- Coordinadora de Marketing, TechStart AR (2021–2023)
+  Hice campañas en redes sociales y email. Trabajé en equipo con ventas y diseño.
+
+- Asistente de Comunicación, Agencia Pulso (2019–2021)
+  Redacté notas de prensa y administré redes sociales.
+
+Educación:
+Lic. en Comunicación Social, UBA, 2019
+
+Habilidades: Redes sociales, Canva, Email marketing, Word, PowerPoint`
+
 const demoCourses = [
   { skill: 'Power BI', course: 'Power BI para principiantes', platform: 'Udemy', impact: '+18% posibilidades en finanzas' },
   { skill: 'Inglés', course: 'English for Business B1–B2', platform: 'Coursera', impact: '+31% para roles remotos' },
@@ -135,6 +152,64 @@ const recIcon: Record<string, ReactElement> = {
   'Llamar': <CheckCircle2 className="w-4 h-4" />,
   'Considerar': <AlertCircle className="w-4 h-4" />,
   'No llamar': <XCircle className="w-4 h-4" />,
+}
+
+// ─── Antes/después CV ────────────────────────────────────────────────────────
+
+function CvBeforeAfter() {
+  return (
+    <div>
+      <p className="text-xs text-white/50 uppercase tracking-widest mb-3">CV antes y después</p>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* ANTES */}
+        <div className="editorial-panel p-5">
+          <span className="text-[10px] uppercase tracking-[0.2em] text-white/30 border border-white/10 px-2 py-0.5 rounded-full mb-4 inline-block">Antes</span>
+          <pre className="font-mono text-xs text-white/30 leading-relaxed whitespace-pre-wrap break-words">{cvBeforeRaw}</pre>
+        </div>
+
+        {/* DESPUÉS */}
+        <div className="glass-panel p-5 border border-[#c9a84c]/15">
+          <span className="text-[10px] uppercase tracking-[0.2em] text-[#c9a84c] border border-[#c9a84c]/30 px-2 py-0.5 rounded-full mb-4 inline-block">CVitae</span>
+
+          <div className="text-center mb-3">
+            <p className="text-xs font-medium text-cream tracking-[0.14em] uppercase">A N A &nbsp; G A R C Í A &nbsp; M O R A L E S</p>
+            <p className="text-[11px] text-white/45 mt-1">Especialista en Marketing Digital · Buenos Aires, AR</p>
+          </div>
+
+          <div className="border-t border-[#c9a84c]/25 my-3" />
+
+          <p className="text-[9px] uppercase tracking-[0.22em] text-[#c9a84c] mb-1">E X P E R I E N C I A</p>
+          <div className="border-t border-white/8 mb-3" />
+
+          <div className="mb-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-xs font-semibold text-cream">Coordinadora de Marketing</p>
+              <p className="text-[11px] text-white/35 shrink-0">2021 – 2023</p>
+            </div>
+            <p className="text-[11px] text-white/45 mb-2">TechStart Argentina</p>
+            <ul className="space-y-1 text-[11px] text-white/60 leading-relaxed">
+              <li>▪ Aumenté la tasa de apertura de email de 12% a 34% con A/B testing.</li>
+              <li>▪ Gestioné pauta en Meta Ads con ROI promedio de 4.2× en 18 meses.</li>
+              <li>▪ Reduje el CPL en 38% optimizando landing pages y segmentación.</li>
+            </ul>
+          </div>
+
+          <div className="border-t border-[#c9a84c]/25 my-3" />
+          <p className="text-[9px] uppercase tracking-[0.22em] text-[#c9a84c] mb-1">H A B I L I D A D E S</p>
+          <div className="border-t border-white/8 mb-3" />
+          <p className="text-[11px] text-white/55 leading-relaxed">Meta Ads · Google Ads · Email Marketing · HubSpot · Canva Pro · Análisis de datos</p>
+
+          <div className="border-t border-[#c9a84c]/25 my-3" />
+          <p className="text-[9px] uppercase tracking-[0.22em] text-[#c9a84c] mb-1">F O R M A C I Ó N</p>
+          <div className="border-t border-white/8 mb-3" />
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-xs font-semibold text-cream">Lic. en Comunicación Social</p>
+            <p className="text-[11px] text-white/35 shrink-0">UBA · 2019</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ─── Tab B2C ──────────────────────────────────────────────────────────────────
@@ -236,6 +311,9 @@ function TabCandidato() {
           ))}
         </div>
       </div>
+
+      {/* Antes/después CV */}
+      <CvBeforeAfter />
 
       {/* Cursos recomendados */}
       <div>
