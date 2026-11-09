@@ -1909,20 +1909,18 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
     event.preventDefault()
     setLoading(true); setError('')
     try {
-      const res = await fetch('/.netlify/functions/submit-lead', {
+      const res = await fetch('/.netlify/functions/submit-b2b-lead', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: verificationForm.name, email: verificationForm.email, company_name: verificationForm.company,
-          source: 'company_verification',
-          verification_data: {
-            legal_name: verificationForm.legalName, ruc: verificationForm.ruc, website: verificationForm.website,
-            contact_role: verificationForm.contactRole, phone: verificationForm.phone, hiring_need: verificationForm.hiringNeed,
-          },
+          name: verificationForm.name,
+          email: verificationForm.email,
+          company: verificationForm.company,
+          message: verificationForm.hiringNeed || '',
         }),
       })
       const data = await res.json()
       if (!res.ok || data.error) throw new Error(data.error || 'No pudimos enviar la solicitud')
-      setRequestEmailSent(data.confirmationSent === true)
+      setRequestEmailSent(true)
       setRequestSent(true)
     } catch (requestError: any) { setError(requestError.message) }
     finally { setLoading(false) }
@@ -1944,10 +1942,10 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
   }
 
   const features = [
-    'Analizá CVs individualmente o en modo masivo con ranking IA',
-    'Ranking comparativo con score, fortalezas y red flags',
-    'Banco de talento histórico, acumulado por tu empresa',
-    'Link de postulación propio que alimenta tu base',
+    'Ranking IA por ajuste al puesto — no por intuición',
+    'Cada CV viene con fortalezas, brechas y evidencia explicable',
+    'Banco de talento histórico: nunca perdés un candidato fuerte',
+    'Link de postulación propio, tu base de datos crece sola',
   ]
 
   return (
@@ -1981,14 +1979,17 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
               <span className="h-px w-8 bg-white/20" /> Para empresas
             </div>
             <h1 className="mt-6 font-display text-4xl leading-[1.05] tracking-[-0.01em] text-white md:text-6xl">
-              Priorizá candidatos con <em className="italic font-normal">evidencia clara</em>.
+              ¿Perdés horas revisando CVs <em className="italic font-normal">a mano?</em>
             </h1>
             <p className="mt-5 max-w-md text-sm font-light leading-relaxed text-white/55 md:text-base">
-              CVitae organiza los CVs con criterios ATS, muestra fortalezas y brechas, y ayuda a tu equipo a decidir qué perfiles revisar primero.
+              Revisás 50 CVs manualmente para cada vacante. Perdés 3 horas, tomás decisiones subjetivas y el mejor candidato queda enterrado en el stack. CVitae analiza todos en 2 minutos: ranking, brechas y justificación por candidato. IA que no se cansa ni sesga.
+            </p>
+            <p className="mt-3 max-w-md text-xs font-light leading-relaxed text-white/35">
+              Diseñado con estándares de selección de organismos internacionales (BID, ONU) — ese mismo nivel de evidencia lo aplicamos a tu proceso.
             </p>
 
             <ol className="mt-7 grid max-w-xl grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Flujo de evaluación">
-              {['CVs recibidos', 'Análisis explicable', 'Shortlist para revisar'].map((step, index) => (
+              {['CVs recibidos', 'Ranking con justificación', 'Shortlist en 2 min'].map((step, index) => (
                 <li key={step} className="flex items-center gap-2 border-y border-white/8 py-3 text-[10px] uppercase tracking-[0.12em] text-white/60">
                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-[#c9a84c]/40 text-[#c9a84c]">{index + 1}</span>
                   {step}
@@ -2006,10 +2007,10 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
 
             <div className="mt-8 rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] px-5 py-4">
               <p className="text-sm font-medium text-[#c9a84c]">
-                Acceso gratuito para las primeras 10 empresas
+                5 CVs gratis para que lo pruebes
               </p>
               <p className="mt-1 text-xs font-light text-white/55">
-                Valor real USD 79/mes — sin costo para el grupo fundador mientras estamos en beta.
+                Sin tarjeta. Sin contrato. Si querés más capacidad, hablamos.
               </p>
             </div>
           </div>
@@ -2024,7 +2025,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
               <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/10">
                 <Building2 strokeWidth={1.25} className="h-4 w-4 text-[#c9a84c]" />
               </div>
-              <p className="text-[11px] uppercase tracking-[0.22em] text-white/40">Ya tengo acceso · token de empresa</p>
+              <p className="text-[11px] uppercase tracking-[0.22em] text-white/40">Ya tengo acceso</p>
             </div>
 
             <h2 className="mt-4 font-display text-2xl text-white">Ingresá tu token de empresa.</h2>
@@ -2068,7 +2069,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
             <div className="mt-8 border-t border-white/8 pt-6 text-center">
               <p className="text-xs font-light text-white/35">¿Todavía no tenés token?</p>
               <button onClick={() => setShowVerification(value => !value)} className="mt-1.5 inline-flex min-h-11 items-center gap-1.5 px-2 text-sm text-[#c9a84c] transition hover:text-[#e6cf8a]">
-                Solicitar acceso verificado <ChevronRight strokeWidth={1.5} className={`h-3.5 w-3.5 transition ${showVerification ? 'rotate-90' : ''}`} />
+                Quiero probarlo gratis <ChevronRight strokeWidth={1.5} className={`h-3.5 w-3.5 transition ${showVerification ? 'rotate-90' : ''}`} />
               </button>
             </div>
 
@@ -2078,30 +2079,30 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
                   {requestSent ? (
                     <div className="mt-6 border-t border-white/8 pt-6 text-center">
                       <CheckCircle2 className="mx-auto h-6 w-6 text-emerald-400" />
-                      <p className="mt-3 text-sm text-white">Recibimos la solicitud.</p>
-                      <p className="mt-1 text-xs leading-relaxed text-white/40">Revisaremos los datos antes de habilitar publicaciones y matching.</p>
+                      <p className="mt-3 text-sm text-white">¡Perfecto! Te contactamos en menos de 24hs.</p>
+                      <p className="mt-1 text-xs leading-relaxed text-white/40">Vas a recibir un token de prueba con 5 análisis gratis para evaluar la herramienta. Si después de probarlo querés más capacidad, hablamos.</p>
                       <p className={`mt-3 text-xs leading-relaxed ${requestEmailSent ? 'text-emerald-300/80' : 'text-amber-200/80'}`}>
                         {requestEmailSent
-                          ? `También enviamos una confirmación a ${verificationForm.email}.`
-                          : 'La solicitud quedó registrada, pero no pudimos confirmar el envío del email. Escribinos a contacto@cvitae.lat si no recibís novedades.'}
+                          ? `Confirmación enviada a ${verificationForm.email}.`
+                          : 'Si no recibís novedades en 24hs, escribinos a contacto@cvitae.lat.'}
                       </p>
                     </div>
                   ) : (
                     <form onSubmit={submitVerification} className="mt-6 space-y-3 border-t border-white/8 pt-6 text-left">
                       <div>
-                        <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Verificación de empresa</p>
-                        <p className="mt-1 text-xs leading-relaxed text-white/40">Estos datos no se publican; se usan para confirmar identidad y proteger a los candidatos.</p>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Probalo gratis — 5 CVs sin costo</p>
+                        <p className="mt-1 text-xs leading-relaxed text-white/40">Te enviamos un token de prueba en menos de 24hs. Sin contrato ni tarjeta.</p>
                       </div>
                       {[
-                        ['name', 'Nombre y apellido', 'text', true], ['email', 'Email corporativo', 'email', true],
-                        ['company', 'Nombre comercial', 'text', true], ['legalName', 'Razón social', 'text', true],
-                        ['ruc', 'RUC', 'text', true], ['website', 'Sitio web o LinkedIn de la empresa', 'url', false],
-                        ['contactRole', 'Tu cargo', 'text', true], ['phone', 'Teléfono de contacto', 'tel', true],
+                        ['name', 'Tu nombre', 'text', true],
+                        ['email', 'Email de trabajo', 'email', true],
+                        ['company', 'Empresa', 'text', true],
                       ].map(([key, placeholder, type, required]) => (
                         <input key={String(key)} required={Boolean(required)} type={String(type)} value={verificationForm[key as keyof typeof verificationForm]} onChange={event => setVerificationForm(current => ({ ...current, [String(key)]: event.target.value }))} placeholder={String(placeholder)} className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none" />
                       ))}
-                      <textarea required value={verificationForm.hiringNeed} onChange={event => setVerificationForm(current => ({ ...current, hiringNeed: event.target.value }))} rows={3} placeholder="¿Qué perfiles contratan y con qué frecuencia?" className="w-full resize-none rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none" />
-                      <button disabled={loading} className="w-full rounded-full border border-[#c9a84c]/40 px-5 py-3 text-sm text-[#c9a84c] transition hover:bg-[#c9a84c]/10 disabled:opacity-40">{loading ? 'Enviando…' : 'Enviar para verificación'}</button>
+                      <textarea value={verificationForm.hiringNeed} onChange={event => setVerificationForm(current => ({ ...current, hiringNeed: event.target.value }))} rows={2} placeholder="¿Cuántos CVs revisás por proceso? (opcional)" className="w-full resize-none rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none" />
+                      {error && <p className="text-sm text-red-400">{error}</p>}
+                      <button disabled={loading} className="w-full rounded-full bg-[#c9a84c] px-5 py-3 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-40">{loading ? 'Enviando…' : 'Quiero probarlo gratis →'}</button>
                     </form>
                   )}
                 </motion.div>

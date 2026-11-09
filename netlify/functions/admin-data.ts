@@ -723,10 +723,10 @@ const handler: Handler = async (event) => {
         supabase.from("recruiter_tokens").select("id", { count: "exact", head: true }).in("verification_status", ["pending", "in_review"]),
         supabase.rpc("admin_daily_growth", { p_days: 14 }),
       ])
-      const required = [usersRes, oppsRes, subsRes, b2bRes, reviewRes, quarantinedRes, feedbackRes, recruiterReviewRes, growthRes]
+      const required = [usersRes, oppsRes, subsRes, b2bRes, reviewRes, quarantinedRes, feedbackRes, recruiterReviewRes]
       const failed = required.find(result => result.error)
       if (failed?.error) throw failed.error
-      const growth = (growthRes.data || []).map((row: any) => ({
+      const growth = growthRes.error ? [] : (growthRes.data || []).map((row: any) => ({
         day: row.day,
         userSignups: Number(row.user_signups || 0),
         opportunitiesAdded: Number(row.opportunities_added || 0),

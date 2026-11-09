@@ -9,7 +9,6 @@ import {
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { ProductGuide } from '@/components/cv/ProductGuide'
-import { GrowthLine } from '@/components/cv/visuals'
 import { auth, supabase } from '@/lib/supabase'
 import { CVLoader } from '@/components/cv/CVLoader'
 import { playComplete } from '@/lib/sounds'
@@ -224,9 +223,9 @@ export default function CVVivo() {
 
   const generateVersion = async (vacancyToUse: any) => {
     if (!profile) return
-    if (pendingEvidence.length > 0 || confirmedEvidence.length === 0) {
+    if (pendingEvidence.length > 0) {
       setShowEvidence(true)
-      setWorkspaceError('Revisá las evidencias antes de crear una versión nueva.')
+      setWorkspaceError('Revisá y confirmá tus evidencias antes de adaptar tu CV.')
       return
     }
     setAdapting(true)
@@ -509,10 +508,7 @@ export default function CVVivo() {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center gap-6 py-32">
-          <div className="relative h-20 w-full max-w-sm">
-            <GrowthLine className="absolute inset-0 h-full w-full" />
-          </div>
-          <p className="text-sm text-muted-foreground">Preparando tu espacio de CV…</p>
+          <CVLoader size={80} label="Preparando tu espacio de CV…" />
         </div>
       </DashboardLayout>
     )

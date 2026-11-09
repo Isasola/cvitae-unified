@@ -23,18 +23,15 @@ function Hero() {
       <div className="relative mx-auto max-w-6xl px-6 pb-10 pt-16 sm:pb-16 sm:pt-24">
         <Eyebrow>Gratis · Paraguay &amp; LATAM</Eyebrow>
         <h1 className="font-display mt-3 max-w-3xl text-4xl leading-[1.05] text-cream sm:text-6xl">
-          Encontrá oportunidades y prepará mejores <em>postulaciones</em>.
+          Pegá la vacante. CVitae adapta tu CV en 3 minutos, <em>sin inventar nada.</em>
         </h1>
         <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-          CVitae reúne empleos, becas y otras oportunidades, entiende qué busca cada
-          una y las compara con tu experiencia para ayudarte a adaptar tu CV y
-          postular mejor, sin inventar experiencia.
+          Subís tu CV, CVitae extrae tu experiencia real, pegás la vacante que encontraste y te genera una versión adaptada. Sin frases vacías. Sin inventar lo que no tenés. Con evidencias que podés defender en una entrevista.
         </p>
         <div className="relative mt-10 max-w-3xl border-y border-white/[0.12] py-5">
-          {/* Línea conectora horizontal en desktop */}
           <div className="absolute left-[12.5%] right-[12.5%] top-1/2 hidden h-px -translate-y-1/2 bg-gold/20 sm:block" aria-hidden="true" />
           <ol className="relative grid grid-cols-2 gap-4 sm:grid-cols-4" aria-label="Recorrido de CVitae">
-            {['CV', 'Perfil entendido', 'Matches', 'Próxima acción'].map((step, index) => (
+            {['Subís tu CV', 'Pegás la vacante', 'CVitae adapta', 'Postulás con confianza'].map((step, index) => (
               <li key={step} className="flex items-center gap-3 text-[11px] uppercase tracking-[0.12em] text-cream">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-gold/70 bg-[#0a0a0a] text-gold shadow-[0_0_12px_rgba(201,168,76,0.4)]">
                   <span className="font-display text-base font-bold leading-none">{index + 1}</span>
@@ -46,17 +43,17 @@ function Hero() {
         </div>
         <div className="mt-10 flex flex-wrap gap-3">
           <a
-            href="#analizador"
+            href="#registro"
             className="inline-flex h-11 items-center gap-2 rounded-full bg-[#c9a84c] px-6 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)]"
           >
-            <Upload className="h-4 w-4" /> Analizar mi CV gratis
+            <Upload className="h-4 w-4" /> Probalo gratis
           </a>
-          <a
-            href="#registro"
+          <Link
+            href="/empresas"
             className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 px-6 text-sm text-cream transition hover:border-white/25"
           >
-            Crear mi perfil <ArrowRight className="h-4 w-4" />
-          </a>
+            Para empresas <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
     </section>

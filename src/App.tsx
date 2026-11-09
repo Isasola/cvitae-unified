@@ -29,7 +29,6 @@ const BatchAnalysis = lazy(() => import('./pages/BatchAnalysis'))
 const VacantePage = lazy(() => import('./pages/VacantePage'))
 const Dashboard = lazy(() => import('./hub/Dashboard'))
 const ProfileBuilder = lazy(() => import('./hub/ProfileBuilder'))
-const JobMatcher = lazy(() => import('./hub/JobMatcher'))
 const CVVivo = lazy(() => import('./hub/CVVivo'))
 const ATSDiagnostic = lazy(() => import('./hub/ATSDiagnostic'))
 const CVRewrite = lazy(() => import('./hub/CVRewrite'))
@@ -76,7 +75,6 @@ export default function App() {
       <Route path="/reclutadores/batch"><Redirect to="/empresas/masivo" /></Route>
       <Route path="/mi-carrera" component={Dashboard} />
       <Route path="/mi-carrera/perfil" component={ProfileBuilder} />
-      <Route path="/mi-carrera/analizar" component={JobMatcher} />
       <Route path="/mi-carrera/cv" component={CVVivo} />
       <Route path="/mi-carrera/ats" component={ATSDiagnostic} />
       <Route path="/mi-carrera/mejorar" component={CVRewrite} />

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { useLocation } from 'wouter'
+import { Link, useLocation } from 'wouter'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ArrowLeft, Save, Plus, X, CheckCircle, ChevronRight, ChevronLeft,
+  ArrowLeft, ArrowRight, Save, Plus, X, CheckCircle, ChevronRight, ChevronLeft,
   Upload, Loader2, Brain, Download, FileText,
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
@@ -1018,7 +1018,7 @@ export default function ProfileBuilder() {
                     </div>
                     <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
                       <CheckCircle size={16} className="text-emerald-400" />
-                      <p className="text-xs text-emerald-400">Al guardar, usaremos esta información para encontrarte las mejores oportunidades en Paraguay.</p>
+                      <p className="text-xs text-emerald-400">Al guardar, usaremos esta información para encontrarte las mejores oportunidades en LATAM.</p>
                     </div>
                   </div>
                 )}
@@ -1056,6 +1056,15 @@ export default function ProfileBuilder() {
                 </button>
               )}
             </div>
+            {saved && (
+              <div className="mt-6 rounded-2xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.04] p-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#c9a84c]">Siguiente paso</p>
+                <p className="mt-2 text-sm text-white/70">Tu perfil está listo. Generá tu <strong className="text-cream">CV Vivo</strong> y adaptalo a cada vacante que encuentres.</p>
+                <Link href="/mi-carrera/cv" className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-semibold text-[#0a0a0a] transition hover:bg-[#e6cf8a]">
+                  Ir a Mi CV <ArrowRight size={16} />
+                </Link>
+              </div>
+            )}
           </div>
         </motion.div>
       </div>

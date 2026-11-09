@@ -13,7 +13,7 @@ import { FeedbackReporter } from '@/components/cv/FeedbackReporter'
 const sidebarLinks = [
   { href: '/mi-carrera', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/mi-carrera/perfil', label: 'Mi Perfil', icon: User },
-  { href: '/mi-carrera/oportunidades', label: 'Oportunidades', icon: Briefcase },
+  { href: '/oportunidades', label: 'Oportunidades', icon: Briefcase },
   { href: '/mi-carrera/cv', label: 'Mi CV', icon: FileText },
   { href: '/mi-carrera/ats', label: 'Diagnóstico ATS', icon: FileSearch },
   { href: '/mi-carrera/mejorar', label: 'Mejorar CV', icon: WandSparkles },
@@ -42,6 +42,21 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     auth.getUser().then(async (nextUser) => {
       setUser(nextUser)
       if (!nextUser) return
+
+      // Cache for 5 minutes to avoid calling on every tab navigation
+      const CACHE_KEY = 'cvitae_notif_cache'
+      const CACHE_TTL = 5 * 60 * 1000
+      try {
+        const cached = sessionStorage.getItem(CACHE_KEY)
+        if (cached) {
+          const { count, fetchedAt } = JSON.parse(cached)
+          if (Date.now() - fetchedAt < CACHE_TTL) {
+            setAtsOpenQuestions(Number(count || 0))
+            return
+          }
+        }
+      } catch { /* ignore */ }
+
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session?.access_token) return
@@ -52,7 +67,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         })
         if (!response.ok) return
         const data = await response.json()
-        setAtsOpenQuestions(Number(data.openQuestionCount || 0))
+        const count = Number(data.openQuestionCount || 0)
+        setAtsOpenQuestions(count)
+        try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ count, fetchedAt: Date.now() })) } catch { /* ignore */ }
       } catch {
         // El contador es informativo; la navegación sigue disponible si falla.
       }

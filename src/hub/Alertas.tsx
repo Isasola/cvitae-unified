@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, BellOff, MapPin, Briefcase, ExternalLink, Loader2, CheckCircle2, Sparkles } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { ProductGuide } from '@/components/cv/ProductGuide'
+import { CVLoader } from '@/components/cv/CVLoader'
 import { auth, supabase } from '@/lib/supabase'
 import type { MatchDecision } from '@/lib/match-decision'
 
@@ -215,7 +216,7 @@ export default function Alertas() {
         {/* Content */}
         {loading ? (
           <div className="flex justify-center py-20">
-            <Loader2 className="animate-spin text-[#c9a84c]" />
+            <CVLoader size={56} label="Cargando alertas…" />
           </div>
         ) : noProfile ? (
           <div className="glass-card rounded-2xl py-16 text-center">

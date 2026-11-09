@@ -10,10 +10,10 @@ export const config = { schedule: '0 */6 * * *' }
 const MODEL_ID = 'gemini-3.5-flash-lite'
 const GEMINI_API = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent`
 const GEMINI_TIMEOUT_MS = 22_000
-const BATCH_SIZE = 10
+const BATCH_SIZE = 150
 const IN_PROGRESS_TTL_MS = 5 * 60 * 1000 // 5 minutes — treat stale locks as available
 const ENRICHMENT_TTL_DAYS = 90
-const DAILY_CAP = 400
+const DAILY_CAP = 1500
 
 const ENRICHMENT_SCHEMA = {
   type: 'OBJECT',

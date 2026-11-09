@@ -9,6 +9,7 @@ import {
 import { analytics } from '@/lib/analytics'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { B2BInfoPopover } from '@/components/cv/B2BInfoPopover'
+import { CVLoader } from '@/components/cv/CVLoader'
 import { clearPendingOperation, pendingOperationId } from '@/lib/pendingOperation'
 import { FeedbackReporter } from '@/components/cv/FeedbackReporter'
 
@@ -437,7 +438,7 @@ export default function BatchAnalysis() {
           {isProcessing && (
             <motion.div key="processing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-16">
               <div className="glass-card rounded-[2rem] p-10 text-center">
-                <Loader2 strokeWidth={1.5} className="mx-auto h-10 w-10 animate-spin text-[#c9a84c]" />
+                <div className="flex justify-center"><CVLoader size={80} /></div>
                 <h2 className="mt-6 font-display text-3xl text-white">Leyendo el pool de candidatos…</h2>
                 <p className="mt-2 text-sm font-light text-white/50">{doneCount} de {candidates.length} CVs analizados</p>
 
@@ -578,6 +579,20 @@ export default function BatchAnalysis() {
                 <Link href="/empresas" className="inline-flex items-center gap-2 rounded-full border border-white/10 px-5 py-2.5 text-sm text-white/60 transition hover:border-white/25 hover:text-white">
                   <Brain strokeWidth={1.5} className="h-4 w-4" /> Análisis individual
                 </Link>
+              </div>
+
+              {/* Feedback offer */}
+              <div className="mt-8 rounded-2xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.04] p-6">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#c9a84c]">¿Fue útil el análisis?</p>
+                <p className="mt-2 text-sm font-light leading-relaxed text-white/65">
+                  Contanos qué funcionó y qué mejorarías — a cambio, te regalamos <strong className="text-white">un mes gratis</strong> de acceso completo.
+                </p>
+                <a
+                  href="mailto:contacto@cvitae.lat?subject=Feedback CVitae B2B&body=Hola, acabo de usar el análisis masivo y quiero compartir mi experiencia:"
+                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]"
+                >
+                  Dar feedback y ganar un mes gratis →
+                </a>
               </div>
             </motion.div>
           )}
