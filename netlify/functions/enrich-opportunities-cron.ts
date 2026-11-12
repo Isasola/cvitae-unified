@@ -5,7 +5,8 @@ import { observeAiCall } from './lib/ai-telemetry'
 // Scheduled: runs every 6 hours. Processes a small batch of unenriched opportunities.
 // 4 runs/day × 10 ops/run = 40 enrichments/day from cron.
 // User-triggered lazy enrichment adds more. Total stays well under 500 RPD free tier.
-export const config = { schedule: '0 */6 * * *' }
+// Schedule moved to GitHub Actions (.github/workflows/enrich-cron.yml) to save Netlify compute
+export const config = {}
 
 const MODEL_ID = 'gemini-3.5-flash-lite'
 const GEMINI_API = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent`

@@ -252,6 +252,11 @@ jobs:
         run: python scripts/run_scraper_monitored.py tech_local_scraper tech_local_scraper scrapers/tech_local_scraper.py
         continue-on-error: true
 
+      - name: FuentePy ATS — empleos tech/fintech Paraguay
+        if: ${{ github.event.inputs.scraper == 'all' || github.event.inputs.scraper == 'fuentepy' || github.event_name == 'schedule' }}
+        run: python scripts/run_scraper_monitored.py fuentepy_scraper fuentepy_scraper scrapers/fuentepy_scraper.py
+        continue-on-error: true
+
       # ── Fuentes source_registry — becas, organismos y aceleradoras ──────────
 
       - name: EU Delegation Paraguay — empleo, traineeships, grants, tenders

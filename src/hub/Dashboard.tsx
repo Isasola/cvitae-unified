@@ -387,19 +387,37 @@ export default function Dashboard() {
   const loaderSteps = ['Leyendo tu perfil', 'Buscando oportunidades elegibles', 'Comparando requisitos y experiencia', 'Ordenando tus mejores coincidencias']
 
   useEffect(() => {
+    let settled = false
+    const settle = (u: any) => {
+      if (settled) return
+      settled = true
+      setUser(u)
+      setAuthLoading(false)
+    }
+
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (session) { setUser(session.user); setAuthLoading(false); return }
+      if (session) { settle(session.user); return }
       for (let i = 0; i < 4; i++) {
         await new Promise(r => setTimeout(r, 1000))
         const { data: { session: s } } = await supabase.auth.getSession()
-        if (s) { setUser(s.user); setAuthLoading(false); return }
+        if (s) { settle(s.user); return }
       }
-      setUser(null); setAuthLoading(false)
+      settle(null)
     }
+
+    // Si Supabase devuelve 504 en el refresh del token, getSession() queda
+    // colgado indefinidamente. Este failsafe garantiza que el usuario ve el
+    // formulario de login en lugar de pantalla negra.
+    const failsafe = setTimeout(() => settle(null), 8000)
+
     init()
-    const subscription = auth.onAuthStateChange((u) => { setUser(u); setAuthLoading(false) })
-    return () => { subscription?.unsubscribe() }
+    const subscription = auth.onAuthStateChange((u) => { settle(u) })
+    return () => {
+      settled = true
+      clearTimeout(failsafe)
+      subscription?.unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
@@ -574,7 +592,7 @@ export default function Dashboard() {
   const nextStep = useMemo(() => {
     if (!hasProfile) return { label: 'Completar mi perfil', detail: 'Necesitamos tus habilidades para encontrarte el trabajo ideal.', href: '/mi-carrera/perfil' }
     if (missingSkills.length > 0) return { label: `Sumá ${missingSkills[0]}`, detail: `Agregar esta skill puede mejorar tu score significativamente.`, href: '/mi-carrera/perfil' }
-    if (matches.length === 0) return { label: 'Explorar oportunidades', detail: 'Todavía no encontramos coincidencias suficientemente respaldadas. También podés explorar el catálogo.', href: '/oportunidades' }
+    if (matches.length === 0) return { label: 'Adaptar mi CV a una vacante', detail: 'Encontraste algo que te interesa? Pegá el texto y CVitae adapta tu CV en minutos, sin inventar nada.', href: '/mi-carrera/cv' }
     return { label: 'Generá tu CV Vivo', detail: 'Creá un CV adaptado por IA para tu mejor oportunidad actual.', href: '/mi-carrera/cv' }
   }, [hasProfile, missingSkills, matches])
 
@@ -652,20 +670,30 @@ export default function Dashboard() {
 
                   {matches.length === 0 ? (
                     <>
-                    <div className="glass-panel p-10 text-center">
-                      <Search className="mx-auto mb-4 h-10 w-10 text-muted-foreground/30" />
-                      <h3 className="font-display mb-2 text-lg text-cream">Todavía no encontramos coincidencias suficientemente respaldadas</h3>
-                      <p className="mx-auto mb-6 max-w-xs text-sm text-muted-foreground">
-                        {matchingCoverage?.coverage_state === 'ELIGIBILITY_UNKNOWN'
-                          ? 'Encontramos oportunidades potenciales, pero necesitamos confirmar tu país de residencia para evaluar aquellas restricciones que sí se pueden comprobar. Otras pueden seguir sin datos suficientes. También podés explorar el catálogo.'
-                          : 'Esto no significa que no haya oportunidades. Podés ajustar tu perfil u objetivo, o explorar el catálogo mientras mejoramos tus recomendaciones.'}
-                      </p>
-                      <div className="flex flex-wrap justify-center gap-2">
-                        {matchingCoverage?.coverage_state === 'ELIGIBILITY_UNKNOWN'
-                          ? <a href="/mi-carrera/perfil" className="inline-flex h-9 items-center gap-2 rounded-full border border-[#c9a84c]/50 px-4 text-sm text-cream transition hover:border-[#c9a84c]">Confirmar mi elegibilidad</a>
-                          : <a href="/mi-carrera/perfil" className="inline-flex h-9 items-center gap-2 rounded-full border border-white/10 px-4 text-sm text-cream transition hover:border-white/25">Mejorar mi perfil</a>}
-                        <a href="/mi-carrera/aprender" className="inline-flex h-9 items-center gap-2 rounded-full border border-white/10 px-4 text-sm text-cream transition hover:border-white/25">Definir mi objetivo</a>
-                        <a href="/oportunidades" className="inline-flex h-9 items-center gap-2 rounded-full bg-[#c9a84c] px-4 text-sm font-medium text-black transition hover:bg-[#e6cf8a]">Explorar oportunidades</a>
+                    <div className="glass-panel overflow-hidden">
+                      <div className="h-px w-full bg-gradient-to-r from-transparent via-[#c9a84c]/50 to-transparent" />
+                      <div className="px-8 py-10 text-center">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#c9a84c]/70 mb-4">
+                          Mientras afinamos tus recomendaciones
+                        </p>
+                        <h3 className="font-display text-2xl text-cream leading-snug mb-3">
+                          ¿Encontraste una vacante<br/>que te interesa?
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-7 max-w-[270px] mx-auto leading-relaxed">
+                          Pegá el texto de esa oferta y CVitae adapta tu CV en 3 minutos — sin inventar nada. Solo tu experiencia real, mejor presentada para ese puesto.
+                        </p>
+                        <a
+                          href="/mi-carrera/cv"
+                          className="inline-flex items-center gap-2.5 rounded-full bg-[#c9a84c] px-7 py-3.5 text-sm font-semibold text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)]"
+                        >
+                          Adaptar mi CV a esa vacante <ArrowRight className="h-4 w-4" />
+                        </a>
+                        {matchingCoverage?.coverage_state === 'ELIGIBILITY_UNKNOWN' && (
+                          <p className="mt-5 text-xs text-muted-foreground">
+                            Para mejorar tus recomendaciones,{' '}
+                            <a href="/mi-carrera/perfil" className="text-[#c9a84c] underline-offset-2 hover:underline">confirmá tu país de residencia</a>.
+                          </p>
+                        )}
                       </div>
                     </div>
                     {potentialMatches.length > 0 && (
@@ -726,14 +754,20 @@ export default function Dashboard() {
 
                 {/* Sidebar */}
                 <aside className="space-y-5">
-                  {/* Visibility hint */}
+                  {/* ATS Diagnostic CTA */}
                   <div className="glass-panel p-5">
-                    <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-[#c9a84c]">
-                      Del otro lado del ecosistema
-                    </div>
-                    <p className="font-display mt-2 text-base leading-snug text-cream">
-                      Tu perfil optimizado te hace visible para empresas que buscan talento en CVitae.
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#c9a84c] mb-2">
+                      Diagnóstico ATS
                     </p>
+                    <p className="font-display text-base leading-snug text-cream mb-1">
+                      ¿Tu CV pasa los filtros automáticos?
+                    </p>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Subí tu CV y en segundos sabés qué mejorar antes de postular.
+                    </p>
+                    <a href="/mi-carrera/ats" className="inline-flex items-center gap-1.5 text-xs font-medium text-[#c9a84c] hover:text-[#e6cf8a] transition">
+                      Diagnosticar mi CV <ArrowRight className="h-3 w-3" />
+                    </a>
                   </div>
 
                   {/* Missing skills */}

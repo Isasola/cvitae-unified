@@ -37,7 +37,10 @@
       "status": "research_pending",
       "priority": 1,
       "priority_grade": "A",
-      "opportunity_scopes": ["public_sector_job", "government_concours"],
+      "opportunity_scopes": [
+        "public_sector_job",
+        "government_concours"
+      ],
       "collection_enabled": false,
       "initial_is_enabled": false,
       "require_review": true,
@@ -47,7 +50,9 @@
         "max_runtime_seconds": 900,
         "auto_pause_on_failure": true,
         "consecutive_failures_before_pause": 2,
-        "allowed_country_codes": ["PY"],
+        "allowed_country_codes": [
+          "PY"
+        ],
         "frequency": "manual_dispatch_only_until_location_and_vacancy_fields_are_verified"
       },
       "catalog_enabled": false,
@@ -95,10 +100,27 @@
       "source_id": "prodato_direct",
       "script": "scrapers/prodato_scraper.py",
       "start_url": "https://empleos.prodato.uk/",
-      "market": "PY", "kind": "job", "source_tier": "A", "status": "review_required",
-      "collection_enabled": false, "require_review": true,
-      "operational_control": {"scraper_id": "prodato_scraper", "max_items_per_run": 50, "max_runtime_seconds": 900, "auto_pause_on_failure": true, "consecutive_failures_before_pause": 2, "allowed_country_codes": ["PY"], "frequency": "daily_schedule_only_after_first_party_source_permission_review"},
-      "catalog_enabled": false, "matching_enabled": false, "alerts_enabled": false, "seo_enabled": false,
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "A",
+      "status": "review_required",
+      "collection_enabled": false,
+      "require_review": true,
+      "operational_control": {
+        "scraper_id": "prodato_scraper",
+        "max_items_per_run": 50,
+        "max_runtime_seconds": 900,
+        "auto_pause_on_failure": true,
+        "consecutive_failures_before_pause": 2,
+        "allowed_country_codes": [
+          "PY"
+        ],
+        "frequency": "daily_schedule_only_after_first_party_source_permission_review"
+      },
+      "catalog_enabled": false,
+      "matching_enabled": false,
+      "alerts_enabled": false,
+      "seo_enabled": false,
       "original_source_required": true,
       "access_note": "Bounded public first-party board returned eight individual jobs and a separate non-job talent pool on 2026-10-15. Captured only factual metadata and original links; no explicit deadline or permission for description reuse, so default OFF and in_review."
     },
@@ -156,10 +178,27 @@
       "source_id": "smartrecruiters_deliveryhero",
       "script": "scrapers/smartrecruiters_deliveryhero_scraper.py",
       "start_url": "https://api.smartrecruiters.com/v1/companies/deliveryhero/postings?country=py&destination=PUBLIC",
-      "market": "PY", "kind": "job", "source_tier": "A", "status": "review_required",
-      "collection_enabled": false, "require_review": true,
-      "operational_control": {"scraper_id": "smartrecruiters_deliveryhero_scraper", "max_items_per_run": 50, "max_runtime_seconds": 900, "auto_pause_on_failure": true, "consecutive_failures_before_pause": 2, "allowed_country_codes": ["PY"], "frequency": "daily_schedule_only_after_company_permission_review"},
-      "catalog_enabled": false, "matching_enabled": false, "alerts_enabled": false, "seo_enabled": false,
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "A",
+      "status": "review_required",
+      "collection_enabled": false,
+      "require_review": true,
+      "operational_control": {
+        "scraper_id": "smartrecruiters_deliveryhero_scraper",
+        "max_items_per_run": 50,
+        "max_runtime_seconds": 900,
+        "auto_pause_on_failure": true,
+        "consecutive_failures_before_pause": 2,
+        "allowed_country_codes": [
+          "PY"
+        ],
+        "frequency": "daily_schedule_only_after_company_permission_review"
+      },
+      "catalog_enabled": false,
+      "matching_enabled": false,
+      "alerts_enabled": false,
+      "seo_enabled": false,
       "original_source_required": true,
       "access_note": "Public country=py API returned two postings on 2026-10-15, including one released 2026-10-02 and one historical 2025-01-17. Keep collection and consumers off until detail freshness, permission and production dedupe are verified."
     },
@@ -167,10 +206,27 @@
       "source_id": "smartrecruiters_sgs",
       "script": "scrapers/smartrecruiters_sgs_scraper.py",
       "start_url": "https://api.smartrecruiters.com/v1/companies/SGS/postings?country=py&destination=PUBLIC",
-      "market": "PY", "kind": "job", "source_tier": "A", "status": "review_required",
-      "collection_enabled": false, "require_review": true,
-      "operational_control": {"scraper_id": "smartrecruiters_sgs_scraper", "max_items_per_run": 50, "max_runtime_seconds": 900, "auto_pause_on_failure": true, "consecutive_failures_before_pause": 2, "allowed_country_codes": ["PY"], "frequency": "daily_schedule_only_after_company_permission_review"},
-      "catalog_enabled": false, "matching_enabled": false, "alerts_enabled": false, "seo_enabled": false,
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "A",
+      "status": "review_required",
+      "collection_enabled": false,
+      "require_review": true,
+      "operational_control": {
+        "scraper_id": "smartrecruiters_sgs_scraper",
+        "max_items_per_run": 50,
+        "max_runtime_seconds": 900,
+        "auto_pause_on_failure": true,
+        "consecutive_failures_before_pause": 2,
+        "allowed_country_codes": [
+          "PY"
+        ],
+        "frequency": "daily_schedule_only_after_company_permission_review"
+      },
+      "catalog_enabled": false,
+      "matching_enabled": false,
+      "alerts_enabled": false,
+      "seo_enabled": false,
       "original_source_required": true,
       "access_note": "Public country=py API returned three listings with release dates from 2023-2025; they are not counted current without freshness/expiry evidence. Keep collection and consumers off."
     },
@@ -178,10 +234,27 @@
       "source_id": "smartrecruiters_tieto2",
       "script": "scrapers/smartrecruiters_tieto2_scraper.py",
       "start_url": "https://api.smartrecruiters.com/v1/companies/Tieto2/postings?country=py&destination=PUBLIC",
-      "market": "PY", "kind": "job", "source_tier": "A", "status": "review_required",
-      "collection_enabled": false, "require_review": true,
-      "operational_control": {"scraper_id": "smartrecruiters_tieto2_scraper", "max_items_per_run": 50, "max_runtime_seconds": 900, "auto_pause_on_failure": true, "consecutive_failures_before_pause": 2, "allowed_country_codes": ["PY"], "frequency": "daily_schedule_only_after_company_permission_review"},
-      "catalog_enabled": false, "matching_enabled": false, "alerts_enabled": false, "seo_enabled": false,
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "A",
+      "status": "review_required",
+      "collection_enabled": false,
+      "require_review": true,
+      "operational_control": {
+        "scraper_id": "smartrecruiters_tieto2_scraper",
+        "max_items_per_run": 50,
+        "max_runtime_seconds": 900,
+        "auto_pause_on_failure": true,
+        "consecutive_failures_before_pause": 2,
+        "allowed_country_codes": [
+          "PY"
+        ],
+        "frequency": "daily_schedule_only_after_company_permission_review"
+      },
+      "catalog_enabled": false,
+      "matching_enabled": false,
+      "alerts_enabled": false,
+      "seo_enabled": false,
       "original_source_required": true,
       "access_note": "Public country=py API returned two postings released 2026-01-05 and 2026-08-10. Expiry and consumer permissions are unknown; keep collection and consumers off."
     },
@@ -1199,7 +1272,10 @@
       "status": "review_required",
       "priority": 2,
       "priority_grade": "B",
-      "opportunity_scopes": ["employer_job", "retail_job"],
+      "opportunity_scopes": [
+        "employer_job",
+        "retail_job"
+      ],
       "collection_enabled": false,
       "initial_is_enabled": false,
       "require_review": true,
@@ -1209,7 +1285,9 @@
         "max_runtime_seconds": 900,
         "auto_pause_on_failure": true,
         "consecutive_failures_before_pause": 2,
-        "allowed_country_codes": ["PY"],
+        "allowed_country_codes": [
+          "PY"
+        ],
         "frequency": "daily_schedule_only_after_written_feed_rights_and_source_certification"
       },
       "catalog_enabled": false,
@@ -1229,7 +1307,10 @@
       "status": "review_required",
       "priority": 1,
       "priority_grade": "A",
-      "opportunity_scopes": ["employer_job", "paraguay_job"],
+      "opportunity_scopes": [
+        "employer_job",
+        "paraguay_job"
+      ],
       "collection_enabled": false,
       "initial_is_enabled": false,
       "require_review": true,
@@ -1239,7 +1320,9 @@
         "max_runtime_seconds": 900,
         "auto_pause_on_failure": true,
         "consecutive_failures_before_pause": 2,
-        "allowed_country_codes": ["PY"],
+        "allowed_country_codes": [
+          "PY"
+        ],
         "frequency": "daily_schedule_10_41_utc_only_after_written_feed_rights_and_source_certification"
       },
       "catalog_enabled": false,
@@ -1248,6 +1331,42 @@
       "seo_enabled": false,
       "original_source_required": true,
       "access_note": "Public employer board returned 12 listed postings in one bounded GET on 2026-10-14; one individual posting detail was checked. HiringRoom documents its integration API for customer accounts with client credentials. Public HTML does not grant CVitae redistribution or consumer use. Keep discovery/review-only; code requires CVITAE_PSF_HIRINGROOM_FEED_AUTHORIZED=true before any scheduled HTTP request. Do not enable until written permission specifies fields, storage, linking, and each consumer. Relative posted-age labels and lack of a closing date keep records inactive/in_review."
+    },
+    {
+      "source_id": "fuentepy",
+      "script": "scrapers/fuentepy_scraper.py",
+      "start_url": "https://ats.fuentepy.com",
+      "market": "PY",
+      "kind": "job",
+      "source_tier": "A",
+      "status": "active",
+      "priority": 2,
+      "priority_grade": "A",
+      "opportunity_scopes": [
+        "tech_job",
+        "fintech_job",
+        "startup_job"
+      ],
+      "collection_enabled": true,
+      "initial_is_enabled": true,
+      "require_review": false,
+      "operational_control": {
+        "scraper_id": "fuentepy_scraper",
+        "max_items_per_run": 500,
+        "max_runtime_seconds": 120,
+        "auto_pause_on_failure": true,
+        "consecutive_failures_before_pause": 3,
+        "allowed_country_codes": [
+          "PY"
+        ],
+        "frequency": "daily"
+      },
+      "catalog_enabled": true,
+      "matching_enabled": true,
+      "alerts_enabled": true,
+      "seo_enabled": true,
+      "original_source_required": false,
+      "notes": "API pública de FuentePy ATS (Supabase anon key — lectura pública). Tech/fintech/startups en Paraguay."
     }
   ]
 }

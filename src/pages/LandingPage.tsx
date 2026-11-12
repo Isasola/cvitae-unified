@@ -446,6 +446,14 @@ function ComoFunciona() {
           ))}
         </div>
       </div>
+      <div className="mt-12 text-center">
+        <a
+          href="#registro"
+          className="inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-7 py-3.5 text-sm font-semibold text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)]"
+        >
+          Adaptá tu primer CV gratis <ArrowRight className="h-4 w-4" />
+        </a>
+      </div>
     </section>
   )
 }
@@ -481,6 +489,14 @@ function IATech() {
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{d}</p>
           </motion.div>
         ))}
+      </div>
+      <div className="mt-10">
+        <a
+          href="#analizador"
+          className="inline-flex items-center gap-2 rounded-full border border-[#c9a84c]/40 px-7 py-3.5 text-sm font-medium text-[#c9a84c] transition hover:border-[#c9a84c] hover:bg-[#c9a84c]/10"
+        >
+          Analizar mi CV ahora <ArrowRight className="h-4 w-4" />
+        </a>
       </div>
     </section>
   )

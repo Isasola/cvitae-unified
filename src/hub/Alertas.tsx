@@ -3,7 +3,7 @@ import { Helmet } from 'react-helmet-async'
 import { Link } from 'wouter'
 import { safeExternalUrl } from '@/lib/safe-url'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, BellOff, MapPin, Briefcase, ExternalLink, Loader2, CheckCircle2, Sparkles } from 'lucide-react'
+import { Bell, BellOff, MapPin, Briefcase, ExternalLink, Loader2, CheckCircle2, Sparkles, ArrowRight } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { CVLoader } from '@/components/cv/CVLoader'
@@ -249,10 +249,16 @@ export default function Alertas() {
         ) : matches.length === 0 ? (
           <div className="glass-card rounded-2xl py-16 text-center">
             <CheckCircle2 strokeWidth={1.25} className="mx-auto mb-4 h-10 w-10 text-white/20" />
-            <p className="text-white font-display text-xl mb-2">Todo al día</p>
-            <p className="text-sm font-light text-white/45">
-              No encontramos nuevas oportunidades con tus skills hoy. Volvé a revisar pronto.
+            <p className="text-white font-display text-xl mb-2">Todo al día por ahora</p>
+            <p className="text-sm font-light text-white/45 mb-6">
+              No encontramos nuevas oportunidades con tus skills hoy. ¿Ya encontraste algo que te interesa?
             </p>
+            <a
+              href="/mi-carrera/cv"
+              className="inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]"
+            >
+              Adaptar mi CV a esa vacante <ArrowRight className="h-4 w-4" />
+            </a>
           </div>
         ) : (
           <AnimatePresence>

@@ -129,15 +129,18 @@ def main():
 
     for path, opp_type in CATEGORIES:
         print(f"\nRastreando: {path} ({opp_type})")
-        jobs = scrape_category(path, opp_type)
-        total_found += len(jobs)
+        try:
+            jobs = scrape_category(path, opp_type)
+            total_found += len(jobs)
 
-        # Keep legacy discovery, but send every row through the common
-        # normalizer/persistence boundary.  A listing title is not promoted to
-        # a fabricated rich description; detail enrichment remains explicit.
-        summary = OpportunitySink().upsert(jobs)
-        total_inserted += summary.inserted + summary.updated + summary.unchanged
-        print(f"  normalized: valid={summary.valid} rejected={summary.rejected}")
+            # Keep legacy discovery, but send every row through the common
+            # normalizer/persistence boundary.  A listing title is not promoted to
+            # a fabricated rich description; detail enrichment remains explicit.
+            summary = OpportunitySink().upsert(jobs)
+            total_inserted += summary.inserted + summary.updated + summary.unchanged
+            print(f"  normalized: valid={summary.valid} rejected={summary.rejected}")
+        except Exception as e:
+            print(f"  [error] {path}: {type(e).__name__}: {e}")
 
         time.sleep(2)
 
