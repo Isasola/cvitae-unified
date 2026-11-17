@@ -294,7 +294,7 @@ ${lc.rules}:
 - ATS: ${lang === 'en' ? 'Use standard section names, avoid special characters in headings, keep single-column linear structure.' : lang === 'pt' ? 'Use nomes de seção padrão, evite caracteres especiais nos títulos, mantenha estrutura linear de coluna única.' : 'Usá nombres de sección estándar, evitá caracteres especiales en encabezados, mantené estructura de columna única.'}
 
 ${lc.structure}:
-REGLA OBLIGATORIA DE MARKDOWN: `#` para el nombre, `##` para cada sección (Resumen, Habilidades, Experiencia, etc.), `###` para cada cargo. NUNCA escribas un título de sección como texto plano sin `##`.
+REGLA OBLIGATORIA DE MARKDOWN: "#" para el nombre, "##" para cada sección (Resumen, Habilidades, Experiencia, etc.), "###" para cada cargo. NUNCA escribas un título de sección como texto plano sin "##".
 
 # [${lang === 'en' ? 'Full Name' : lang === 'pt' ? 'Nome Completo' : 'Nombre Completo'}]
 [${lang === 'en' ? 'Professional title | Email | City | Phone' : lang === 'pt' ? 'Título profissional | Email | Cidade | Telefone' : 'Título profesional | Email | Ciudad | Teléfono'}]
