@@ -146,6 +146,12 @@ const CATEGORIES = ['Tecnología', 'Administración', 'Ventas', 'Marketing', 'Sa
 const REVIEW_PAGE_SIZE = 50
 const QUICK_REVIEW_LABELS = ['APROBAR', 'CUARENTENA', 'RECHAZAR'] as const
 const MONO = "'JetBrains Mono', 'Courier New', monospace"
+const FLAG_LABELS: Record<string, { label: string; hint: string }> = {
+  catalog: { label: 'Catálogo', hint: 'Visible en la lista de oportunidades' },
+  matching: { label: 'Matching', hint: 'Incluida en el motor de match B2C' },
+  alerts: { label: 'Alertas', hint: 'Usada en alertas de email a usuarios' },
+  seo: { label: 'SEO', hint: 'Indexable como JobPosting en buscadores' },
+}
 const ADMIN_PREVIEW_MODE = ['127.0.0.1', 'localhost'].includes(window.location.hostname)
   ? new URLSearchParams(window.location.search).get('admin-preview')
   : null
@@ -630,7 +636,9 @@ export default function Admin() {
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'No se pudo ejecutar Review Bot')
-      setReviewBotResult(payload.results?.[0]?.result || null)
+      const botResult = payload.results?.[0]?.result || null
+      setReviewBotResult(botResult)
+      if (botResult?.confidence != null) setReviewScore(Math.round(botResult.confidence))
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message })
     } finally {
@@ -1917,12 +1925,12 @@ export default function Admin() {
                     <button onClick={() => { loadOpportunityReviews(); loadReviewSummary() }} className="border border-white/10 px-3 py-2 text-xs text-white/50 transition hover:text-white" style={{ fontFamily: MONO }}>↻ ACTUALIZAR</button>
                   </div>
 
-                  <div className="mb-5 grid grid-cols-2 gap-px border border-white/[0.07] bg-white/[0.07] sm:grid-cols-6">
+                  <div className="mb-5 grid grid-cols-2 gap-px border border-white/[0.07] bg-white/[0.07] sm:grid-cols-7">
                     {[
-                      ['needs_review', 'Por decidir'], ['pending', 'Pendientes'], ['in_review', 'En revisión'], ['verified', 'Verificadas'], ['rejected', 'Rechazadas'], ['quarantined', 'Cuarentena'],
+                      ['needs_review', 'Por decidir'], ['all_pending', 'Todos pend.'], ['pending', 'Pendientes'], ['in_review', 'En revisión'], ['verified', 'Verificadas'], ['rejected', 'Rechazadas'], ['quarantined', 'Cuarentena'],
                     ].map(([status, label]) => (
                       <button key={status} onClick={() => setReviewStatus(status)} className={`bg-[#0a0a0a] px-4 py-3 text-left transition ${reviewStatus === status ? 'text-[#c9a84c]' : 'text-white/45 hover:text-white/70'}`}>
-                        <span className="block text-xl text-inherit">{status === 'needs_review' ? (reviewSummary.pending || 0) + (reviewSummary.in_review || 0) : reviewSummary[status] || 0}</span>
+                        <span className="block text-xl text-inherit">{status === 'needs_review' ? (reviewSummary.pending || 0) + (reviewSummary.in_review || 0) : status === 'all_pending' ? (reviewSummary.pending || 0) + (reviewSummary.in_review || 0) + (reviewSummary.quarantined || 0) : reviewSummary[status] || 0}</span>
                         <span className="text-[10px] uppercase tracking-[0.12em]" style={{ fontFamily: MONO }}>{label}</span>
                       </button>
                     ))}
@@ -2172,13 +2180,19 @@ export default function Admin() {
                                 </div>
                                 <div className="grid gap-2 sm:grid-cols-4">
                                   {(['catalog', 'matching', 'alerts', 'seo'] as const).map(key => (
-                                    <div key={key} className="border border-white/[0.06] p-2 text-xs">
-                                      <span className={reviewBotResult.flags[key].recommended ? 'text-emerald-300' : 'text-white/30'}>{key}: {reviewBotResult.flags[key].recommended ? 'sí' : 'no'}</span>
+                                    <div key={key} className={`border p-2 text-xs ${reviewBotResult.flags[key].recommended ? 'border-emerald-400/20' : 'border-white/[0.06]'}`}>
+                                      <span className={reviewBotResult.flags[key].recommended ? 'font-medium text-emerald-300' : 'text-white/30'}>{FLAG_LABELS[key]?.label || key}: {reviewBotResult.flags[key].recommended ? 'sí' : 'no'}</span>
+                                      <p className="mt-0.5 text-[9px] uppercase tracking-wide text-white/20" style={{ fontFamily: MONO }}>{key}</p>
                                       <p className="mt-1 text-[10px] leading-snug text-white/30">{reviewBotResult.flags[key].reason}</p>
                                     </div>
                                   ))}
                                 </div>
-                                {reviewBotResult.issues.length > 0 && <div className="space-y-1">{reviewBotResult.issues.slice(0, 8).map((issue: any) => <p key={`${issue.code}-${issue.message}`} className={`text-xs ${issue.severity === 'hard_block' ? 'text-red-300/80' : issue.severity === 'review' ? 'text-amber-200/70' : 'text-white/35'}`}>{issue.code} · {issue.message}</p>)}</div>}
+                                {reviewBotResult.recommendation === 'do_not_publish' && reviewBotResult.issues.some((item: any) => item.severity === 'hard_block') && (
+                                  <button onClick={() => submitOpportunityReview('quarantined')} className="border border-red-400/30 bg-red-400/10 px-3 py-2 text-xs text-red-300">
+                                    Quarantinar directo — {reviewBotResult.issues.filter((item: any) => item.severity === 'hard_block').length} bloqueo(s) crítico(s) detectado(s)
+                                  </button>
+                                )}
+                                {reviewBotResult.issues.length > 0 && <div className="space-y-1">{reviewBotResult.issues.slice(0, 8).map((issue: any) => <p key={`${issue.code}-${issue.message}`} className={`text-xs ${issue.severity === 'hard_block' ? 'text-red-300/80' : issue.severity === 'review' ? 'text-amber-200/70' : 'text-white/35'}`}>{FLAG_LABELS[issue.code]?.label || issue.code} · <span className="text-white/20" style={{ fontFamily: MONO }}>{issue.code}</span> · {issue.message}</p>)}</div>}
                                 <details><summary className="cursor-pointer text-xs text-white/35">Ver evidencia ({reviewBotResult.evidence.length})</summary><div className="mt-2 space-y-1">{reviewBotResult.evidence.map((item: any, index: number) => <p key={`${item.check}-${index}`} className="break-all text-[10px] text-white/35" style={{ fontFamily: MONO }}>{item.check}: {item.value}</p>)}</div></details>
                               </div>
                             )}

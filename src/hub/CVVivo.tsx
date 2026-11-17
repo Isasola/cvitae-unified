@@ -56,6 +56,24 @@ const EVIDENCE_LABELS: Record<string, string> = {
   education: 'Educación', language: 'Idioma', contact: 'Contacto', other: 'Dato',
 }
 
+const WS_TTL_MS = 24 * 60 * 60 * 1000
+const wsKey = (uid: string) => `cvvivo_ws_v1_${uid}`
+function readWsCache(uid: string) {
+  try {
+    const raw = localStorage.getItem(wsKey(uid))
+    if (!raw) return null
+    const { v, ts } = JSON.parse(raw)
+    if (Date.now() - ts > WS_TTL_MS) { localStorage.removeItem(wsKey(uid)); return null }
+    return v
+  } catch { return null }
+}
+function writeWsCache(uid: string, data: unknown) {
+  try { localStorage.setItem(wsKey(uid), JSON.stringify({ v: data, ts: Date.now() })) } catch {}
+}
+function clearWsCache(uid: string) {
+  try { localStorage.removeItem(wsKey(uid)) } catch {}
+}
+
 export default function CVVivo() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
@@ -132,17 +150,26 @@ export default function CVVivo() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
       }
-      const [matchesRes, workspaceRes] = await Promise.all([
-        fetch(MATCH_BATCH_URL, { method: 'POST', headers: authenticatedHeaders }).catch(() => null),
-        fetch('/.netlify/functions/cv-workspace', {
-          method: 'POST',
-          headers: authenticatedHeaders,
-          body: JSON.stringify({ action: 'overview' }),
-        }),
-      ])
-      const matchesData = matchesRes?.ok ? await matchesRes.json().catch(() => ({})) : {}
-      const workspaceData = await workspaceRes.json()
-      if (!workspaceRes.ok) throw new Error(workspaceData.error || 'No pudimos cargar tu espacio de CV')
+      const cached = readWsCache(user.id)
+      let matchesData: any
+      let workspaceData: any
+      if (cached) {
+        matchesData = cached.matchesData
+        workspaceData = cached.workspaceData
+      } else {
+        const [matchesRes, workspaceRes] = await Promise.all([
+          fetch(MATCH_BATCH_URL, { method: 'POST', headers: authenticatedHeaders }).catch(() => null),
+          fetch('/.netlify/functions/cv-workspace', {
+            method: 'POST',
+            headers: authenticatedHeaders,
+            body: JSON.stringify({ action: 'overview' }),
+          }),
+        ])
+        matchesData = matchesRes?.ok ? await matchesRes.json().catch(() => ({})) : {}
+        workspaceData = await workspaceRes.json()
+        if (!workspaceRes.ok) throw new Error(workspaceData.error || 'No pudimos cargar tu espacio de CV')
+        writeWsCache(user.id, { matchesData, workspaceData })
+      }
       // The custom pasted-vacancy flow is separate. CVitae suggestions must
       // originate only from a visible MatchDecision.
       setVacancies((matchesData.matches || []).filter((match: any) => match.matchDecision?.outcome === 'MATCH'))
@@ -182,6 +209,7 @@ export default function CVVivo() {
     })
     const data = await response.json()
     if (!response.ok) throw new Error(data.error || 'No pudimos actualizar tu CV')
+    if (user?.id) clearWsCache(user.id)
     return data
   }
 
@@ -245,6 +273,7 @@ export default function CVVivo() {
         applyVersion(version)
         playComplete()
         setFromCache(data.fromCache || false)
+        if (user?.id) clearWsCache(user.id)
         if (!isSubscribed) {
           const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Asuncion' })
           const currentUsage = profile?.profile_data?.daily_usage
@@ -960,13 +989,18 @@ export default function CVVivo() {
                         h3: ({...props}) => <h3 className={`mb-1 mt-6 text-base font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`} {...props} />,
                         p: ({...props}) => {
                           const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0]
-                          const isContact = typeof props.children === 'string' && String(props.children).includes('|')
+                          const childText = Array.isArray(props.children)
+                            ? props.children.map((c: any) => typeof c === 'string' ? c : '').join('')
+                            : String(props.children ?? '')
+                          const isContact = childText.includes('|')
                           return isContact
                             ? <p className="-mx-10 -mt-2 mb-8 px-10 pb-4 text-xs font-medium tracking-wide text-white/70" style={{ backgroundColor: activeTheme.hex }} {...props} />
                             : <p className={`mb-3 text-sm leading-relaxed ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`} {...props} />
                         },
                         li: ({...props}) => <li className={`relative mb-2 list-none pl-5 text-sm before:absolute before:left-0 before:top-[0.55em] before:h-1.5 before:w-1.5 before:rounded-full before:bg-[#c9a84c] before:content-[''] ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`} {...props} />,
                         strong: ({...props}) => <strong className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`} {...props} />,
+                        em: ({...props}) => <em className={`not-italic text-xs font-normal ${darkMode ? 'text-white/40' : 'text-gray-400'}`} {...props} />,
+                        hr: ({...props}) => <hr className="my-4 border-[#c9a84c]/20" {...props} />,
                       }}
                     >
                       {generatedCV}

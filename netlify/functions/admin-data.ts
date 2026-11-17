@@ -813,10 +813,11 @@ const handler: Handler = async (event) => {
       const offset = Math.max(0, Number(payload?.offset) || 0)
       let query = supabase
         .from("opportunities")
-        .select("id,slug,title,organization,location,country_code,city,department,type,opportunity_kind,opportunity_type,rubro,description,application_url,source,source_authority,original_source_url,original_source_verified,eligible_countries,eligible_regions,deadline,is_active,verification_status,verification_score,verification_reasons,verification_note,reviewed_at,reviewed_by,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,policy_overrides,archived_at,deleted_at,deletion_reason,deletion_review_status,deletion_requested_at,created_at,updated_at,factory_status,content_fingerprint,semantic_fingerprint,embedding_model,embedding_updated_at", { count: "exact" })
+        .select("id,slug,title,organization,location,country_code,city,department,type,opportunity_kind,opportunity_type,rubro,application_url,source,source_authority,original_source_url,original_source_verified,eligible_countries,eligible_regions,deadline,is_active,verification_status,verification_score,verification_reasons,verification_note,reviewed_at,reviewed_by,catalog_eligible,match_eligible,alerts_eligible,seo_eligible,policy_overrides,archived_at,deleted_at,deletion_reason,deletion_review_status,deletion_requested_at,created_at,updated_at,factory_status,content_fingerprint,semantic_fingerprint,embedding_model,embedding_updated_at", { count: "exact" })
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1)
       if (status === "needs_review") query = query.in("verification_status", ["pending", "in_review"])
+      else if (status === "all_pending") query = query.in("verification_status", ["pending", "in_review", "quarantined"])
       else if (status !== "all") query = query.eq("verification_status", status)
       if (source !== "all") query = query.eq("source", source)
       if (payload?.lifecycle === "deletion_pending") query = query.eq("deletion_review_status", "pending").is("deleted_at", null)

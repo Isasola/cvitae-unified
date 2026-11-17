@@ -122,7 +122,7 @@ export async function syncEvidence(
     const fingerprint = evidenceFingerprint(draft.category, draft.claim, draft.context || '')
     const { data: existing, error: findError } = await supabase
       .from('cv_evidence_items')
-      .select('id,source_kind,source_label')
+      .select('id,source_kind,source_label,status')
       .eq('user_id', userId)
       .eq('fingerprint', fingerprint)
       .limit(1)
@@ -130,7 +130,7 @@ export async function syncEvidence(
     if (findError) throw findError
 
     const preserveUploadedSource = existing?.source_kind === 'uploaded_cv' && draft.sourceKind === 'profile'
-    const payload = {
+    const payload: Record<string, any> = {
       profile_id: profileId,
       category: draft.category,
       claim: text(draft.claim),
@@ -142,13 +142,17 @@ export async function syncEvidence(
       active: true,
       updated_at: new Date().toISOString(),
     }
+    // Profile evidence is auto-confirmed — no manual review needed
+    if (draft.sourceKind === 'profile' && existing?.status === 'pending') {
+      payload.status = 'confirmed'
+    }
     const result = existing
       ? await supabase.from('cv_evidence_items').update(payload).eq('id', existing.id).eq('user_id', userId)
       : await supabase.from('cv_evidence_items').insert({
           ...payload,
           user_id: userId,
           fingerprint,
-          status: 'pending',
+          status: draft.sourceKind === 'profile' ? 'confirmed' : 'pending',
         })
     if (result.error) throw result.error
   }

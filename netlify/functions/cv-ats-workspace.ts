@@ -11,7 +11,7 @@ import {
   securityHeaders,
 } from './lib/b2c-security'
 
-const MODEL_ID = 'global.anthropic.claude-sonnet-4-6'
+const MODEL_ID = 'global.anthropic.claude-haiku-4-5-20251001-v1:0'
 const RUBRIC_VERSION = 'ats-v1'
 const CATEGORY_KEYS = [
   'parsing_structure',
@@ -150,11 +150,11 @@ ${cvText}`
     accept: 'application/json',
     body: JSON.stringify({
       anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: 3000,
+      max_tokens: 2000,
       system: 'Sos un auditor de CV riguroso. Respondés solamente JSON válido y fundamentás cada conclusión en el texto recibido.',
       messages: [{ role: 'user', content: prompt }],
     }),
-  }), { abortSignal: AbortSignal.timeout(25_000) }))
+  }), { abortSignal: AbortSignal.timeout(18_000) }))
   const parsed = JSON.parse(new TextDecoder().decode(response.body))
   const fullText = parsed.content?.[0]?.text || '{}'
   return normalizeAtsResult(extractJSON(fullText))

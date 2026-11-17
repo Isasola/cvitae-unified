@@ -179,6 +179,24 @@ function QuestionCard({ question, busy, defaultOpen = false, onReview }: {
   )
 }
 
+const ATS_TTL_MS = 24 * 60 * 60 * 1000
+const atsKey = (uid: string) => `atsws_v1_${uid}`
+function readAtsCache(uid: string) {
+  try {
+    const raw = localStorage.getItem(atsKey(uid))
+    if (!raw) return null
+    const { v, ts } = JSON.parse(raw)
+    if (Date.now() - ts > ATS_TTL_MS) { localStorage.removeItem(atsKey(uid)); return null }
+    return v
+  } catch { return null }
+}
+function writeAtsCache(uid: string, data: unknown) {
+  try { localStorage.setItem(atsKey(uid), JSON.stringify({ v: data, ts: Date.now() })) } catch {}
+}
+function clearAtsCache(uid: string) {
+  try { localStorage.removeItem(atsKey(uid)) } catch {}
+}
+
 export default function ATSDiagnostic() {
   const inputRef = useRef<HTMLInputElement>(null)
   const [user, setUser] = useState<any>(null)
@@ -204,7 +222,17 @@ export default function ATSDiagnostic() {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user || null); setAuthLoading(false)
       if (!session?.user) { setLoading(false); return }
-      try { applyWorkspace(await postWorkspace({ action: 'overview' })) }
+      try {
+        const uid = session.user.id
+        const cached = readAtsCache(uid)
+        if (cached) {
+          applyWorkspace(cached)
+        } else {
+          const data = await postWorkspace({ action: 'overview' })
+          writeAtsCache(uid, data)
+          applyWorkspace(data)
+        }
+      }
       catch (err: any) { setError(err.message) }
       finally { setLoading(false) }
     })
@@ -256,6 +284,7 @@ export default function ATSDiagnostic() {
         requestBody = { action: 'analyze', sourceKind: source, sourceLabel: uploaded!.name, cvText: uploaded!.text }
       }
       const data = await postWorkspace(requestBody)
+      if (user?.id) clearAtsCache(user.id)
       applyWorkspace(data)
       setUploaded(null)
       setMessage(data.idempotent ? 'Este CV ya estaba analizado; abrimos su diagnóstico guardado.' : 'Diagnóstico guardado. Revisá primero los bloqueos y después respondé las preguntas.')

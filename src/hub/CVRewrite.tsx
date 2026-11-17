@@ -131,6 +131,24 @@ function ChangeCard({ change, index }: { change: RewriteChange; index: number })
   )
 }
 
+const RW_TTL_MS = 24 * 60 * 60 * 1000
+const rwKey = (uid: string) => `rwws_v1_${uid}`
+function readRwCache(uid: string) {
+  try {
+    const raw = localStorage.getItem(rwKey(uid))
+    if (!raw) return null
+    const { v, ts } = JSON.parse(raw)
+    if (Date.now() - ts > RW_TTL_MS) { localStorage.removeItem(rwKey(uid)); return null }
+    return v
+  } catch { return null }
+}
+function writeRwCache(uid: string, data: unknown) {
+  try { localStorage.setItem(rwKey(uid), JSON.stringify({ v: data, ts: Date.now() })) } catch {}
+}
+function clearRwCache(uid: string) {
+  try { localStorage.removeItem(rwKey(uid)) } catch {}
+}
+
 export default function CVRewrite() {
   const [user, setUser] = useState<any>(null)
   const [authLoading, setAuthLoading] = useState(true)
@@ -162,7 +180,17 @@ export default function CVRewrite() {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user || null); setAuthLoading(false)
       if (!session?.user) { setLoading(false); return }
-      try { applyWorkspace(await postWorkspace({ action: 'overview' })) }
+      try {
+        const uid = session.user.id
+        const cached = readRwCache(uid)
+        if (cached) {
+          applyWorkspace(cached)
+        } else {
+          const data = await postWorkspace({ action: 'overview' })
+          writeRwCache(uid, data)
+          applyWorkspace(data)
+        }
+      }
       catch (err: any) { setError(err.message) }
       finally { setLoading(false) }
     })
@@ -179,6 +207,7 @@ export default function CVRewrite() {
     setCreating(true); setError(''); setMessage(''); setAttested(false)
     try {
       const data = await postWorkspace({ action: 'create', sourceVersionId: selectedVersionId, objective })
+      if (user?.id) clearRwCache(user.id)
       applyWorkspace(data, data.proposalId)
       setView('changes')
       setMessage(data.idempotent ? 'Esta combinación ya estaba revisada; abrimos la propuesta guardada.' : 'Propuesta preparada. Revisá cada cambio antes de aceptarla.')
@@ -191,6 +220,7 @@ export default function CVRewrite() {
     setAccepting(true); setError(''); setMessage('')
     try {
       const data = await postWorkspace({ action: 'accept', proposalId: selectedProposal.id, attested: true })
+      if (user?.id) clearRwCache(user.id)
       applyWorkspace(data, selectedProposal.id)
       setAttested(false)
       setMessage(`Reescritura aceptada como versión ${data.accepted?.version_number || 'nueva'}. La versión anterior sigue en el historial.`)
@@ -203,6 +233,7 @@ export default function CVRewrite() {
     setDiscarding(true); setError(''); setMessage('')
     try {
       const data = await postWorkspace({ action: 'discard', proposalId: selectedProposal.id })
+      if (user?.id) clearRwCache(user.id)
       applyWorkspace(data)
       setAttested(false)
       setMessage('Propuesta descartada. El CV de origen no cambió.')

@@ -294,9 +294,10 @@ ${lc.rules}:
 - ATS: ${lang === 'en' ? 'Use standard section names, avoid special characters in headings, keep single-column linear structure.' : lang === 'pt' ? 'Use nomes de seção padrão, evite caracteres especiais nos títulos, mantenha estrutura linear de coluna única.' : 'Usá nombres de sección estándar, evitá caracteres especiales en encabezados, mantené estructura de columna única.'}
 
 ${lc.structure}:
+REGLA OBLIGATORIA DE MARKDOWN: `#` para el nombre, `##` para cada sección (Resumen, Habilidades, Experiencia, etc.), `###` para cada cargo. NUNCA escribas un título de sección como texto plano sin `##`.
+
 # [${lang === 'en' ? 'Full Name' : lang === 'pt' ? 'Nome Completo' : 'Nombre Completo'}]
-[${lang === 'en' ? 'Professional title' : lang === 'pt' ? 'Título profissional' : 'Título profesional'}]
-[${lang === 'en' ? 'City · Phone · Email · Portfolio' : lang === 'pt' ? 'Cidade · Telefone · Email · Portfólio' : 'Ciudad · Teléfono · Email · Proyecto/Portfolio'}]
+[${lang === 'en' ? 'Professional title | Email | City | Phone' : lang === 'pt' ? 'Título profissional | Email | Cidade | Telefone' : 'Título profesional | Email | Ciudad | Teléfono'}]
 
 ## ${sec.summary}
 [${lang === 'en' ? 'Faithful synthesis of evidence, 3-4 sentences, no new claims' : lang === 'pt' ? 'Síntese fiel da evidência, 3-4 frases, sem novas afirmações' : 'Síntesis fiel de la evidencia, 3-4 oraciones, sin afirmaciones nuevas'}]
@@ -320,7 +321,7 @@ ${lang === 'en' ? '## ' + sec.results + '\n[Only if achievement evidence with me
 
 ${lc.footer}`
 
-    const cvMarkdown = await invokeModel(prompt, 1500)
+    const cvMarkdown = await invokeModel(prompt, 3000)
 
     const { data: versionRows, error: versionError } = await supabase.rpc('create_cv_version', {
       p_user_id: user.id,
