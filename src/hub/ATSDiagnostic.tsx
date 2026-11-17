@@ -363,7 +363,18 @@ export default function ATSDiagnostic() {
                   {analyzing ? <CVLoader variant="button" size={20} /> : <FileSearch className="h-4 w-4" />} Diagnosticar esta versión
                 </button>
               </>
-            ) : <p className="mt-5 rounded-xl border border-dashed border-white/10 p-4 text-xs text-white/40">Todavía no tenés versiones guardadas. Podés cargar un archivo aquí o crear tu CV en Mi CV.</p>}
+            ) : (
+              <div className="mt-5 rounded-xl border border-dashed border-amber-400/20 bg-amber-400/[0.04] p-5 text-center">
+                <p className="text-sm font-medium text-amber-200">Primero necesitamos tu CV</p>
+                <p className="mt-1 text-xs text-white/45">Para diagnosticar, subí tu CV en Mi Perfil. El diagnóstico analiza el texto real de tu CV, no el archivo.</p>
+                <a
+                  href="/mi-carrera/perfil"
+                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-5 py-2 text-xs font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]"
+                >
+                  Ir a Mi Perfil → subir CV
+                </a>
+              </div>
+            )}
           </div>
 
           <div className="rounded-3xl border border-white/8 bg-white/[0.025] p-5 md:p-6">

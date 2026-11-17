@@ -42,6 +42,7 @@ const handler: Handler = async (event) => {
       salary_range,
       rubro,
       tags,
+      company_name: formCompanyName,
     } = JSON.parse(event.body || "{}")
 
     if (!token?.trim()) {
@@ -75,8 +76,13 @@ const handler: Handler = async (event) => {
         body: JSON.stringify({ error: "La empresa debe completar y aprobar su verificación antes de publicar vacantes" }),
       }
     }
-    if (!String(tokenData.company_name || "").trim()) {
-      return { statusCode: 409, body: JSON.stringify({ error: "La empresa verificada no tiene un nombre registrado" }) }
+    const resolvedCompanyName = String(tokenData.company_name || "").trim() || String(formCompanyName || "").trim()
+    if (!resolvedCompanyName) {
+      return { statusCode: 409, body: JSON.stringify({ error: "Ingresá el nombre de tu empresa antes de publicar" }) }
+    }
+    // Persist the name if it was missing from the token record
+    if (!String(tokenData.company_name || "").trim() && resolvedCompanyName) {
+      await supabase.from("recruiter_tokens").update({ company_name: resolvedCompanyName }).eq("id", tokenData.id)
     }
 
     const slug = `${toKebab(title)}-${randomSuffix()}`

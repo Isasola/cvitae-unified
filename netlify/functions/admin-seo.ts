@@ -152,14 +152,22 @@ const handler: Handler = async (event) => {
       if (!flags.SEO_PIPELINE_V2) {
         return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: 'SEO_PIPELINE_V2 flag is off' }) }
       }
-      const { data: pending } = await supabase
+      // Use cursor from body to paginate across runs — required when dry run is ON
+      // since dry run doesn't write seo_status and the same batch would repeat forever.
+      const cursorCreatedAt: string | null = body.cursorCreatedAt || null
+      let query = supabase
         .from('opportunities')
-        .select('id')
+        .select('id,created_at')
         .is('seo_status', null)
         .eq('verification_status', 'verified')
         .eq('is_active', true)
         .is('deleted_at', null)
+        .order('created_at', { ascending: true })
         .limit(200)
+      if (cursorCreatedAt) {
+        query = query.gt('created_at', cursorCreatedAt)
+      }
+      const { data: pending } = await query
 
       if (!pending || pending.length === 0) {
         return { statusCode: 200, body: JSON.stringify({ processed: 0, message: 'Nothing to process' }) }
@@ -171,7 +179,8 @@ const handler: Handler = async (event) => {
       )
       const ok = results.filter(r => r.status === 'fulfilled' && (r.value as any).ok).length
       const failed = results.length - ok
-      return { statusCode: 200, body: JSON.stringify({ processed: results.length, ok, failed, dryRun }) }
+      const nextCursor = pending[pending.length - 1]?.created_at || null
+      return { statusCode: 200, body: JSON.stringify({ processed: results.length, ok, failed, dryRun, nextCursor }) }
     }
 
     // Source Quality metrics (component I)
@@ -317,6 +326,9 @@ const handler: Handler = async (event) => {
 
     // Batch-accept — only safe fields with confidence >= 0.95
     if (action === 'batch_accept_safe') {
+      if (flags.SEO_DRY_RUN) {
+        return { statusCode: 200, body: JSON.stringify({ accepted: 0, skipped: 0, dry_run: true, message: 'Dry run activo — ningún cambio fue aplicado. Desactivá SEO_DRY_RUN para escribir.' }) }
+      }
       const { data: pending, error: fetchErr } = await supabase
         .from('seo_suggestions')
         .select('*')

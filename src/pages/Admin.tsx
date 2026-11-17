@@ -111,6 +111,7 @@ interface ProductFeedback {
 
 interface AdminMetrics {
   usuarios: number
+  testCount: number
   matches: number
   oportunidades: number
   suscriptores: number
@@ -125,7 +126,7 @@ interface AdminMetrics {
 }
 
 const EMPTY_ADMIN_METRICS: AdminMetrics = {
-  usuarios: 0, matches: 0, oportunidades: 0, suscriptores: 0,
+  usuarios: 0, testCount: 0, matches: 0, oportunidades: 0, suscriptores: 0,
   usuariosHoy: 0, usuariosAyer: 0, usuariosEstaSemana: 0, empresasActivas: 0,
   queues: { opportunityReview: 0, quarantined: 0, feedbackOpen: 0, recruiterReview: 0 },
   growth: [], generatedAt: null, timeZone: 'America/Asuncion',
@@ -486,6 +487,7 @@ export default function Admin() {
       const json = await adminFetch('metrics')
       setMetrics({
         usuarios: json.usuarios || 0,
+        testCount: json.testCount || 0,
         matches: 0,
         oportunidades: json.oportunidades || 0,
         suscriptores: json.suscriptores || 0,
@@ -1428,7 +1430,7 @@ export default function Admin() {
                   {/* Metrics grid — row 1 */}
                   <div className="brief-before-scrapers grid grid-cols-2 gap-px border border-white/[0.07] bg-white/[0.07] xl:grid-cols-4">
                     {[
-                      { label: 'USUARIOS TOTALES', value: metrics.usuarios, sub: 'en base de datos' },
+                      { label: 'USUARIOS REALES', value: metrics.usuarios, sub: `${metrics.testCount} en test` },
                       { label: 'PRO ACTIVOS', value: metrics.suscriptores, sub: 'is_subscribed = true' },
                       { label: 'OPORTUNIDADES', value: metrics.oportunidades, sub: 'activas hoy' },
                       { label: 'EMPRESAS B2B', value: metrics.empresasActivas, sub: 'tokens activos' },

@@ -133,16 +133,15 @@ export default function CVVivo() {
         'Authorization': `Bearer ${session.access_token}`,
       }
       const [matchesRes, workspaceRes] = await Promise.all([
-        fetch(MATCH_BATCH_URL, { method: 'POST', headers: authenticatedHeaders }),
+        fetch(MATCH_BATCH_URL, { method: 'POST', headers: authenticatedHeaders }).catch(() => null),
         fetch('/.netlify/functions/cv-workspace', {
           method: 'POST',
           headers: authenticatedHeaders,
           body: JSON.stringify({ action: 'overview' }),
         }),
       ])
-      const matchesData = await matchesRes.json()
+      const matchesData = matchesRes?.ok ? await matchesRes.json().catch(() => ({})) : {}
       const workspaceData = await workspaceRes.json()
-      if (!matchesRes.ok) throw new Error(matchesData.error || 'No pudimos cargar las vacantes')
       if (!workspaceRes.ok) throw new Error(workspaceData.error || 'No pudimos cargar tu espacio de CV')
       // The custom pasted-vacancy flow is separate. CVitae suggestions must
       // originate only from a visible MatchDecision.
@@ -590,6 +589,20 @@ export default function CVVivo() {
               />
             )}
 
+            {confirmedEvidence.length === 0 && pendingEvidence.length > 0 && (
+              <div className="rounded-xl border border-amber-400/25 bg-amber-400/[0.06] px-4 py-3 text-xs text-amber-200/80">
+                <p className="font-medium text-amber-200">Un paso antes de adaptar</p>
+                <p className="mt-1">Encontramos evidencias en tu CV. Confirmá que son correctas para habilitar la adaptación.</p>
+                <button
+                  type="button"
+                  onClick={confirmAllEvidence}
+                  disabled={reviewingEvidence !== null}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-400/30 disabled:opacity-40"
+                >
+                  <CheckCircle size={12} /> Confirmar todas y continuar
+                </button>
+              </div>
+            )}
             <div className="space-y-1">
                 <button
                   onClick={handleAdaptCV} disabled={!canAdapt || adapting || pendingEvidence.length > 0 || confirmedEvidence.length === 0}
@@ -599,7 +612,9 @@ export default function CVVivo() {
                     ? <><RefreshCw className="animate-spin" size={16} /> Adaptando…</>
                     : pendingEvidence.length > 0
                       ? <><ShieldCheck size={16} /> Revisá evidencias primero</>
-                      : <><Briefcase size={16} /> Crear versión adaptada</>}
+                      : confirmedEvidence.length === 0
+                        ? <><Upload size={16} /> Subí tu CV en Mi Perfil primero</>
+                        : <><Briefcase size={16} /> Crear versión adaptada</>}
                 </button>
                 {!isSubscribed && <p className="text-center text-xs text-white/40">Durante esta beta, el uso no tiene límite diario.</p>}
             </div>
@@ -957,10 +972,52 @@ export default function CVVivo() {
                       {generatedCV}
                     </ReactMarkdown>
                   ) : (
-                    <div className="flex h-full flex-col items-center justify-center py-20 text-center opacity-30">
-                      <FileText size={64} className="mb-6" />
-                      <h3 className={`mb-2 text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Tu CV aparecerá acá</h3>
-                      <p className="max-w-xs text-sm">Revisá tus evidencias y creá una versión general o adaptada. Nada se sobrescribe.</p>
+                    <div className="py-10 px-2">
+                      {profile ? (
+                        <>
+                          <div className="mb-6 rounded-xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.04] px-5 py-4 text-sm">
+                            <p className="font-medium text-[#c9a84c]">Vista previa con tus datos actuales</p>
+                            <p className="mt-1 text-xs text-white/50">Adaptá a una vacante para generar una versión real y descargable. Los datos de abajo son los que tenemos de tu perfil.</p>
+                            {confirmedEvidence.length === 0 && pendingEvidence.length === 0 && (
+                              <a href="/mi-carrera/perfil" className="mt-2 inline-flex items-center gap-1 text-xs text-[#c9a84c] underline">Completar mi perfil →</a>
+                            )}
+                          </div>
+                          <div className={`space-y-4 text-sm ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {profile.full_name && <h1 className="text-2xl font-bold">{profile.full_name}</h1>}
+                            {profile.professional_title && <p className={darkMode ? 'text-[#c9a84c]' : 'text-[#8a6a1f]'}>{profile.professional_title}</p>}
+                            {confirmedEvidence.filter((item: any) => item.category === 'summary').slice(0, 1).map((item: any) => (
+                              <p key={item.id} className={`text-sm leading-relaxed ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`}>{item.confirmed_value || item.claim}</p>
+                            ))}
+                            {confirmedEvidence.filter((item: any) => item.category === 'experience').length > 0 && (
+                              <div>
+                                <p className="mb-2 text-xs font-bold uppercase tracking-widest text-[#c9a84c]">Experiencia</p>
+                                {confirmedEvidence.filter((item: any) => item.category === 'experience').slice(0, 3).map((item: any) => (
+                                  <p key={item.id} className={`mb-1 text-sm ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`}>• {item.confirmed_value || item.claim}</p>
+                                ))}
+                              </div>
+                            )}
+                            {confirmedEvidence.filter((item: any) => item.category === 'skill').length > 0 && (
+                              <div>
+                                <p className="mb-2 text-xs font-bold uppercase tracking-widest text-[#c9a84c]">Habilidades</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {confirmedEvidence.filter((item: any) => item.category === 'skill').slice(0, 8).map((item: any) => (
+                                    <span key={item.id} className="rounded border border-white/10 px-2 py-0.5 text-xs text-white/60">{item.confirmed_value || item.claim}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {confirmedEvidence.length === 0 && (
+                              <p className={`text-center text-sm ${darkMode ? 'text-white/30' : 'text-gray-400'}`}>Subí tu CV en Mi Perfil para ver una vista previa aquí.</p>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex h-full flex-col items-center justify-center py-20 text-center opacity-30">
+                          <FileText size={64} className="mb-6" />
+                          <h3 className={`mb-2 text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Tu CV aparecerá acá</h3>
+                          <p className="max-w-xs text-sm">Completá tu perfil y adaptá el CV a una vacante.</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

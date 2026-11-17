@@ -23,15 +23,29 @@ function Hero() {
       <div className="relative mx-auto max-w-6xl px-6 pb-10 pt-16 sm:pb-16 sm:pt-24">
         <Eyebrow>Gratis · Paraguay &amp; LATAM</Eyebrow>
         <h1 className="font-display mt-3 max-w-3xl text-4xl leading-[1.05] text-cream sm:text-6xl">
-          Pegá la vacante. CVitae adapta tu CV en 3 minutos, <em>sin inventar nada.</em>
+          Tu carrera, con IA. <em>Sin inventar nada.</em>
         </h1>
         <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-          Subís tu CV, CVitae extrae tu experiencia real, pegás la vacante que encontraste y te genera una versión adaptada. Sin frases vacías. Sin inventar lo que no tenés. Con evidencias que podés defender en una entrevista.
+          CVitae analiza tu CV, encuentra oportunidades que encajan con tu perfil y te genera una versión adaptada para cada postulación — con tu experiencia real, sin frases vacías que no puedas defender.
         </p>
-        <div className="relative mt-10 max-w-3xl border-y border-white/[0.12] py-5">
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { icon: '📄', label: 'Diagnóstico ATS', desc: 'Qué tan legible es tu CV para los sistemas de filtro' },
+            { icon: '🔍', label: 'Oportunidades', desc: 'Empleos, becas y puestos en Paraguay y LATAM' },
+            { icon: '✦', label: 'CV Vivo', desc: 'CV adaptado a cada vacante, sin inventar experiencia' },
+            { icon: '⚡', label: 'Matching', desc: 'Qué tan bien encajás con cada oportunidad' },
+          ].map((item) => (
+            <div key={item.label} className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+              <span className="text-lg">{item.icon}</span>
+              <p className="mt-2 text-xs font-semibold text-cream">{item.label}</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-white/40">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+        <div className="relative mt-8 max-w-3xl border-y border-white/[0.12] py-5">
           <div className="absolute left-[12.5%] right-[12.5%] top-1/2 hidden h-px -translate-y-1/2 bg-gold/20 sm:block" aria-hidden="true" />
           <ol className="relative grid grid-cols-2 gap-4 sm:grid-cols-4" aria-label="Recorrido de CVitae">
-            {['Subís tu CV', 'Pegás la vacante', 'CVitae adapta', 'Postulás con confianza'].map((step, index) => (
+            {['Subís tu CV', 'Encontrás oportunidades', 'CVitae adapta', 'Postulás con confianza'].map((step, index) => (
               <li key={step} className="flex items-center gap-3 text-[11px] uppercase tracking-[0.12em] text-cream">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-gold/70 bg-[#0a0a0a] text-gold shadow-[0_0_12px_rgba(201,168,76,0.4)]">
                   <span className="font-display text-base font-bold leading-none">{index + 1}</span>
@@ -620,19 +634,18 @@ function ParaEmpresas() {
         <div>
           <Eyebrow>Para empresas</Eyebrow>
           <h2 className="font-display mt-2 max-w-xl text-3xl text-cream sm:text-4xl">
-            Subí un <em>lote de CVs</em>. Recibí el Top 3 listo para entrevistar.
+            Publicá vacantes y encontrá <em>candidatos que encajan</em>.
           </h2>
           <p className="mt-4 max-w-lg text-muted-foreground">
-            La IA lee, clasifica con criterio ATS, compara entre sí y te entrega
-            un ranking con justificación. Cero horas filtrando PDFs.
+            CVitae tiene dos lados. Para candidatos: CV, diagnóstico y matching. Para empresas: publicación de vacantes, análisis masivo de CVs y ranking explicable de candidatos. Todo en un solo lugar.
           </p>
           <ul className="mt-6 space-y-2 text-sm text-cream/90">
             {[
-              'Análisis masivo de CVs',
-              'Ranking comparativo con score y matches clave',
+              'Publicá tu vacante con un link de postulación propio',
+              'Análisis masivo de CVs recibidos',
+              'Ranking comparativo con score y justificación',
               'Pipeline de candidatos visual',
               'Exportación CSV del banco de talento',
-              'Link de postulación propio para tu empresa',
             ].map((f) => (
               <li key={f} className="flex items-start gap-2">
                 <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#c9a84c]" /> {f}

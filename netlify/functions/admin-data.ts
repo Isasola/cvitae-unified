@@ -688,9 +688,14 @@ const handler: Handler = async (event) => {
       const { data, error } = await supabase
         .from("user_master_profiles")
         .select("*")
+        .eq("is_test", false)
         .order("created_at", { ascending: false })
       if (error) throw error
-      return { statusCode: 200, body: JSON.stringify({ data }) }
+      const { count: testCount } = await supabase
+        .from("user_master_profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("is_test", true)
+      return { statusCode: 200, body: JSON.stringify({ data, test_count: testCount || 0 }) }
     }
 
     if (action === "list_content") {
@@ -712,7 +717,7 @@ const handler: Handler = async (event) => {
     }
 
     if (action === "metrics") {
-      const [usersRes, oppsRes, subsRes, b2bRes, reviewRes, quarantinedRes, feedbackRes, recruiterReviewRes, growthRes] = await Promise.all([
+      const [usersRes, oppsRes, subsRes, b2bRes, reviewRes, quarantinedRes, feedbackRes, recruiterReviewRes, growthRes, testUsersRes] = await Promise.all([
         supabase.from("user_master_profiles").select("id", { count: "exact", head: true }).eq("is_test", false),
         supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("is_active", true).eq("verification_status", "verified").is("deleted_at", null),
         supabase.from("user_master_profiles").select("id", { count: "exact", head: true }).eq("is_subscribed", true).eq("is_test", false),
@@ -722,6 +727,7 @@ const handler: Handler = async (event) => {
         supabase.from("product_feedback").select("id", { count: "exact", head: true }).in("status", ["new", "triaged", "in_progress"]),
         supabase.from("recruiter_tokens").select("id", { count: "exact", head: true }).in("verification_status", ["pending", "in_review"]),
         supabase.rpc("admin_daily_growth", { p_days: 14 }),
+        supabase.from("user_master_profiles").select("id", { count: "exact", head: true }).eq("is_test", true),
       ])
       const required = [usersRes, oppsRes, subsRes, b2bRes, reviewRes, quarantinedRes, feedbackRes, recruiterReviewRes]
       const failed = required.find(result => result.error)
@@ -739,6 +745,7 @@ const handler: Handler = async (event) => {
         statusCode: 200,
         body: JSON.stringify({
           usuarios: usersRes.count || 0,
+          testCount: testUsersRes.count || 0,
           oportunidades: oppsRes.count || 0,
           suscriptores: subsRes.count || 0,
           usuariosHoy: today.userSignups,

@@ -514,6 +514,31 @@ export default function ProfileBuilder() {
         body: JSON.stringify({ action: 'import_extraction', extracted, sourceFileName: file.name }),
       })
       if (!evidenceRes.ok) throw new Error('No pudimos preparar las evidencias del CV para tu revisión')
+      const evidenceData = await evidenceRes.json().catch(() => ({}))
+
+      // ── PASO 5b: auto-confirmar evidencias para habilitar CV Vivo sin pasos extra ──
+      if (evidenceData.imported > 0) {
+        setAnalyzeStatus('Confirmando evidencias…')
+        // Cargar las evidencias recién creadas para obtener sus IDs
+        const wsOverviewRes = await fetch('/.netlify/functions/cv-workspace', {
+          method: 'POST',
+          headers: authenticatedHeaders,
+          body: JSON.stringify({ action: 'overview' }),
+        })
+        if (wsOverviewRes.ok) {
+          const wsData = await wsOverviewRes.json().catch(() => ({}))
+          const pendingIds = (wsData.evidence || [])
+            .filter((item: any) => item.status === 'pending')
+            .map((item: any) => item.id)
+          if (pendingIds.length > 0) {
+            await fetch('/.netlify/functions/cv-workspace', {
+              method: 'POST',
+              headers: authenticatedHeaders,
+              body: JSON.stringify({ action: 'review_all', evidenceIds: pendingIds }),
+            }).catch(() => null)
+          }
+        }
+      }
 
       // ── PASO 6: draft ────────────────────────────────────────────────────────
       const draftRes = await fetch('/.netlify/functions/b2c-profile', {

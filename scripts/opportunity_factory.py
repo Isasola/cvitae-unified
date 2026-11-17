@@ -11,6 +11,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -503,16 +504,21 @@ def main() -> int:
         }
         if args.dry_run:
             continue
-        try:
-            client.commit(row, snapshot, vector)
-        except requests.HTTPError as exc:
-            # A concurrent scraper/admin edit makes this attempt stale. The row
-            # remains pending and the next incremental run recomputes it.
-            if exc.response is not None and exc.response.status_code == 409:
-                summary[status] -= 1
-                summary["failed"] += 1
-                continue
-            raise
+        for attempt in range(3):
+            try:
+                client.commit(row, snapshot, vector)
+                break
+            except requests.HTTPError as exc:
+                # Concurrent edit — row is stale, skip it.
+                if exc.response is not None and exc.response.status_code == 409:
+                    summary[status] -= 1
+                    summary["failed"] += 1
+                    break
+                # Supabase 5xx (e.g. Disk IO budget exhausted) — retry with backoff.
+                if exc.response is not None and exc.response.status_code >= 500 and attempt < 2:
+                    time.sleep(5 * (attempt + 1))
+                    continue
+                raise
 
     if not ids:
         queue_after = client.queue_counts(now)
