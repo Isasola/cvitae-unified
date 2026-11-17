@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { observeAiCall } from './lib/ai-telemetry'
 import { makeSupabaseAdmin } from './_supabase'
 import {
@@ -144,7 +144,7 @@ Cada dimensión vale de 0 a 20. Devolvé las cinco exactamente una vez. Máximo 
 CV EXTRAÍDO:
 ${cvText}`
 
-  const stream = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'cv_ats_diagnostic', trigger: 'user_action', actor: 'user' }, () => bedrock.send(new InvokeModelWithResponseStreamCommand({
+  const response = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'cv_ats_diagnostic', trigger: 'user_action', actor: 'user' }, () => bedrock.send(new InvokeModelCommand({
     modelId: MODEL_ID,
     contentType: 'application/json',
     accept: 'application/json',
@@ -155,17 +155,9 @@ ${cvText}`
       messages: [{ role: 'user', content: prompt }],
     }),
   }), { abortSignal: AbortSignal.timeout(25_000) }))
-  let fullText = ''
-  const decoder = new TextDecoder()
-  for await (const event of stream.body) {
-    if (event.chunk?.bytes) {
-      const chunk = JSON.parse(decoder.decode(event.chunk.bytes))
-      if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
-        fullText += chunk.delta.text
-      }
-    }
-  }
-  return normalizeAtsResult(extractJSON(fullText || '{}'))
+  const parsed = JSON.parse(new TextDecoder().decode(response.body))
+  const fullText = parsed.content?.[0]?.text || '{}'
+  return normalizeAtsResult(extractJSON(fullText))
 }
 
 const ASSESSMENT_FIELDS = 'id,source_kind,source_label,source_version_id,content_hash,rubric_version,overall_score,category_scores,strengths,blockers,quick_wins,keyword_observations,analysis_model,created_at'

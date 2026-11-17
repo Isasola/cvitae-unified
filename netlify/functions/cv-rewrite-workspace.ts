@@ -225,7 +225,9 @@ async function loadWorkspace(supabase: any, user: any) {
     .select('id,user_id,full_name,professional_title,summary,profile_data,updated_at')
     .eq('user_id', user.id).maybeSingle()
   if (profileError) throw profileError
-  if (profile) await syncEvidence(supabase, user.id, profile.id, evidenceFromProfile(profile), 'profile')
+  if (profile) await syncEvidence(supabase, user.id, profile.id, evidenceFromProfile(profile), 'profile').catch((err: any) => {
+    console.warn('cv-rewrite-workspace: syncEvidence non-fatal error:', err?.message || err)
+  })
 
   const [versionsResult, proposalsResult, pendingResult, confirmedResult] = await Promise.all([
     supabase.from('generated_cvs').select(VERSION_FIELDS).eq('user_id', user.id).order('created_at', { ascending: false }).limit(30),
@@ -285,7 +287,9 @@ export const handler = async (event: any) => {
         .select('id,user_id,full_name,professional_title,summary,profile_data').eq('user_id', user.id).maybeSingle()
       if (profileError) throw profileError
       if (!profile) return jsonResponse(event, 404, { error: 'Completá tu perfil antes de mejorar el CV' })
-      await syncEvidence(supabase, user.id, profile.id, evidenceFromProfile(profile), 'profile')
+      await syncEvidence(supabase, user.id, profile.id, evidenceFromProfile(profile), 'profile').catch((err: any) => {
+        console.warn('cv-rewrite-workspace create: syncEvidence non-fatal error:', err?.message || err)
+      })
 
       const [{ count: pendingCount, error: pendingError }, confirmed] = await Promise.all([
         supabase.from('cv_evidence_items').select('id', { count: 'exact', head: true })

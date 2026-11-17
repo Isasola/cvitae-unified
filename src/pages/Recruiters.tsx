@@ -1259,6 +1259,8 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
+  const isCompanyNameLocked = Boolean(companyName)
+
   if (selectedVacancy) {
     return (
       <ApplicantsPanel
@@ -1327,15 +1329,15 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
           <div>
             <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Empresa *</label>
             <input
-              readOnly={!!form.company_name}
+              readOnly={isCompanyNameLocked}
               value={form.company_name}
-              onChange={e => !form.company_name && set('company_name')({ target: { value: e.target.value } } as any)}
+              onChange={isCompanyNameLocked ? undefined : set('company_name')}
               placeholder="Nombre de tu empresa"
               aria-describedby="verified-company-help"
-              className={`w-full rounded-xl border px-4 py-3 text-sm text-white outline-none transition ${form.company_name ? 'cursor-not-allowed border-emerald-400/15 bg-emerald-400/[0.03] text-white/75' : 'border-[#c9a84c]/40 bg-white/[0.02] placeholder:text-white/25 focus:border-[#c9a84c]/70'}`}
+              className={`w-full rounded-xl border px-4 py-3 text-sm text-white outline-none transition ${isCompanyNameLocked ? 'cursor-not-allowed border-emerald-400/15 bg-emerald-400/[0.03] text-white/75' : 'border-[#c9a84c]/40 bg-white/[0.02] placeholder:text-white/25 focus:border-[#c9a84c]/70'}`}
             />
             <p id="verified-company-help" className="mt-1.5 text-xs text-white/35">
-              {form.company_name ? 'Identidad verificada por CVitae. Contactanos si necesitás corregirla.' : 'Ingresá el nombre de tu empresa para publicar vacantes.'}
+              {isCompanyNameLocked ? 'Identidad verificada por CVitae. Contactanos si necesitás corregirla.' : 'Ingresá el nombre de tu empresa para publicar vacantes.'}
             </p>
           </div>
 

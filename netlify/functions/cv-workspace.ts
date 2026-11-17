@@ -25,7 +25,9 @@ async function loadWorkspace(supabase: any, user: any) {
   if (profileError) throw profileError
 
   if (profile) {
-    await syncEvidence(supabase, user.id, profile.id, evidenceFromProfile(profile), 'profile')
+    await syncEvidence(supabase, user.id, profile.id, evidenceFromProfile(profile), 'profile').catch((err: any) => {
+      console.warn('cv-workspace: syncEvidence non-fatal error:', err?.message || err)
+    })
   }
 
   const [{ data: evidence, error: evidenceError }, { data: versions, error: versionsError }] = await Promise.all([

@@ -2099,7 +2099,7 @@ export default function Admin() {
                               <p className="mt-2 line-clamp-2 text-sm leading-snug text-[#e8e8e0]">{opportunity.title}</p>
                               <p className="mt-1 truncate text-xs text-white/40">{opportunity.organization || 'Organización no informada'} · {opportunity.location || 'Sin ubicación'}</p>
                             </button>
-                            {['needs_review', 'pending', 'in_review'].includes(reviewStatus) && (
+                            {['pending', 'in_review'].includes(opportunity.verification_status) && (
                               <div className="flex items-center gap-1.5 px-4 pb-3">
                                 <button disabled={loading} onClick={e => { e.stopPropagation(); submitQuickReview(opportunity, 'verified') }} className="border border-emerald-500/30 px-3 py-1.5 text-[10px] text-emerald-400/80 hover:bg-emerald-500/10 active:bg-emerald-500/20 transition disabled:opacity-30" style={{ fontFamily: MONO }} title="Verificar">{QUICK_REVIEW_LABELS[0]}</button>
                                 <button disabled={loading} onClick={e => { e.stopPropagation(); submitQuickReview(opportunity, 'quarantined') }} className="border border-amber-500/20 px-3 py-1.5 text-[10px] text-amber-400/70 hover:bg-amber-500/10 active:bg-amber-500/20 transition disabled:opacity-30" style={{ fontFamily: MONO }} title="Cuarentena">{QUICK_REVIEW_LABELS[1]}</button>

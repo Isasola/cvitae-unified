@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import {
   Download, Copy, RefreshCw, Briefcase, FileText, CheckCircle,
   Sun, Moon, Edit3, Eye, Sparkles, AlertCircle, Loader2, ChevronRight, Lock,
-  History, ShieldCheck, XCircle, Save, RotateCcw, GitBranch,
+  History, ShieldCheck, XCircle, Save, RotateCcw, GitBranch, Upload,
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { ProductGuide } from '@/components/cv/ProductGuide'

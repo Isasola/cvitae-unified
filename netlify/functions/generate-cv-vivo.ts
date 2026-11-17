@@ -83,7 +83,9 @@ export const handler = async (event: any) => {
       return jsonResponse(event, 404, { error: 'Completá tu perfil antes de generar un CV' })
     }
     const profile = { ...storedProfile, email: user.email || null, user_id: user.id }
-    await syncEvidence(supabase, user.id, storedProfile.id, evidenceFromProfile(storedProfile), 'profile')
+    await syncEvidence(supabase, user.id, storedProfile.id, evidenceFromProfile(storedProfile), 'profile').catch((err: any) => {
+      console.warn('generate-cv-vivo: syncEvidence non-fatal error:', err?.message || err)
+    })
 
     let vacancy: any = null
     if (requestedVacancy) {
