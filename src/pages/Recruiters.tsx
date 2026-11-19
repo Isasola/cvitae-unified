@@ -9,7 +9,7 @@ import {
   Star, Brain, Users, Trophy, ArrowLeft, Share2, Database,
   FileText, Upload, RotateCcw, X, Link2, Plus, Copy, Check as CheckIcon,
   UserCheck, Mail, Calendar, ChevronLeft, Download, Search,
-  BarChart2, TrendingUp,
+  BarChart2, TrendingUp, List, Trello, GripVertical,
 } from 'lucide-react'
 
 const ease = [0.22, 1, 0.36, 1] as const
@@ -577,6 +577,222 @@ const ACTION_LABELS: Record<string, string> = {
   rejected: 'Descartado',
 }
 
+const PIPELINE_STAGES = ['pending', 'contacted', 'interviewing', 'hired', 'rejected'] as const
+
+function PipelineBoard({ applicants, onMoveCandidate, onExpandCard, expandedId, updatingAction, onAnalyzeSingle }: {
+  applicants: Applicant[]
+  onMoveCandidate: (appId: string, newStatus: string) => void
+  onExpandCard: (id: string) => void
+  expandedId: string | null
+  updatingAction: string | null
+  onAnalyzeSingle: (cvText: string, name: string) => void
+}) {
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
+
+  const groupedApplicants = PIPELINE_STAGES.reduce((acc, stage) => {
+    acc[stage] = applicants.filter(a => (a.recruiter_action || 'pending') === stage)
+    return acc
+  }, {} as Record<string, Applicant[]>)
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedId(id)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragEnd = () => {
+    setDraggedId(null)
+    setDragOverColumn(null)
+  }
+
+  const handleDragOver = (e: React.DragEvent, stage: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverColumn(stage)
+  }
+
+  const handleDragLeave = () => {
+    setDragOverColumn(null)
+  }
+
+  const handleDrop = (e: React.DragEvent, stage: string) => {
+    e.preventDefault()
+    if (draggedId) {
+      onMoveCandidate(draggedId, stage)
+    }
+    setDraggedId(null)
+    setDragOverColumn(null)
+  }
+
+  const stageColors: Record<string, { bg: string; border: string; text: string; count: string }> = {
+    pending: { bg: 'bg-white/[0.02]', border: 'border-white/10', text: 'text-white/40', count: 'text-white/60' },
+    contacted: { bg: 'bg-sky-500/[0.03]', border: 'border-sky-500/20', text: 'text-sky-400/60', count: 'text-sky-400' },
+    interviewing: { bg: 'bg-[#c9a84c]/[0.03]', border: 'border-[#c9a84c]/20', text: 'text-[#c9a84c]/60', count: 'text-[#c9a84c]' },
+    hired: { bg: 'bg-emerald-500/[0.03]', border: 'border-emerald-500/20', text: 'text-emerald-400/60', count: 'text-emerald-400' },
+    rejected: { bg: 'bg-red-500/[0.03]', border: 'border-red-500/20', text: 'text-red-400/60', count: 'text-red-400' },
+  }
+
+  return (
+    <div className="flex gap-4 overflow-x-auto pb-4">
+      {PIPELINE_STAGES.map(stage => {
+        const colors = stageColors[stage]
+        const count = groupedApplicants[stage].length
+        const isOver = dragOverColumn === stage
+
+        return (
+          <div
+            key={stage}
+            className="flex-shrink-0 w-80"
+            onDragOver={(e) => handleDragOver(e, stage)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, stage)}
+          >
+            {/* Column header */}
+            <div className={`rounded-xl border ${colors.border} ${colors.bg} px-4 py-3 mb-3`}>
+              <div className="flex items-center justify-between">
+                <p className={`text-xs uppercase tracking-[0.15em] font-medium ${colors.text}`}>
+                  {PIPELINE_LABELS[stage as keyof typeof PIPELINE_LABELS]}
+                </p>
+                <span className={`font-display text-lg ${colors.count}`}>{count}</span>
+              </div>
+            </div>
+
+            {/* Drop zone */}
+            <div
+              className={`min-h-[500px] rounded-xl border-2 border-dashed p-2 space-y-2 transition-colors ${
+                isOver
+                  ? `${colors.border} ${colors.bg}`
+                  : 'border-white/5 bg-transparent'
+              }`}
+            >
+              {groupedApplicants[stage].map(applicant => (
+                <motion.div
+                  key={applicant.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e as any, applicant.id)}
+                  onDragEnd={handleDragEnd}
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: draggedId === applicant.id ? 0.5 : 1, scale: 1 }}
+                  transition={{ duration: 0.2 }}
+                  className={`rounded-xl border border-white/10 bg-white/[0.02] p-3 cursor-move hover:border-white/20 transition-all ${
+                    updatingAction === applicant.id ? 'opacity-50' : ''
+                  }`}
+                >
+                  {/* Card content */}
+                  <div className="flex items-start gap-2 mb-2">
+                    <GripVertical strokeWidth={1.5} className="h-4 w-4 text-white/20 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white font-medium truncate">{applicant.name}</p>
+                      <p className="text-[11px] text-white/35 truncate">{applicant.email}</p>
+                    </div>
+                  </div>
+
+                  {applicant.fit_score !== null && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${applicant.fit_score}%`,
+                            backgroundColor: fitColor(applicant.fit_score),
+                          }}
+                        />
+                      </div>
+                      <span className="text-xs font-display tabular-nums" style={{ color: fitColor(applicant.fit_score) }}>
+                        {applicant.fit_score}
+                      </span>
+                    </div>
+                  )}
+
+                  {applicant.recommendation && (
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] ${recColor(applicant.recommendation)}`}>
+                      {applicant.recommendation}
+                    </span>
+                  )}
+
+                  {applicant.ai_summary && (
+                    <p className="mt-2 text-[10px] font-light text-white/40 leading-relaxed line-clamp-2">
+                      {applicant.ai_summary}
+                    </p>
+                  )}
+
+                  {/* Expandable details */}
+                  <button
+                    onClick={() => onExpandCard(applicant.id)}
+                    className="w-full mt-2 flex items-center justify-center gap-1 text-[10px] text-white/30 hover:text-white/50 transition-colors"
+                  >
+                    {expandedId === applicant.id ? (
+                      <><ChevronUp strokeWidth={1.5} className="h-3 w-3" /> Ocultar</>
+                    ) : (
+                      <><ChevronDown strokeWidth={1.5} className="h-3 w-3" /> Ver más</>
+                    )}
+                  </button>
+
+                  <AnimatePresence>
+                    {expandedId === applicant.id && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="mt-3 pt-3 border-t border-white/5 space-y-2"
+                      >
+                        {applicant.strengths?.length > 0 && (
+                          <div>
+                            <p className="text-[9px] uppercase tracking-[0.15em] text-emerald-400/60 mb-1">Fortalezas</p>
+                            <ul className="space-y-0.5">
+                              {applicant.strengths.map((s, i) => (
+                                <li key={i} className="flex items-start gap-1.5 text-[10px] text-white/50">
+                                  <CheckCircle2 strokeWidth={1.5} className="h-3 w-3 text-emerald-400/60 shrink-0 mt-0.5" />
+                                  <span>{s}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {applicant.key_gaps?.length > 0 && (
+                          <div>
+                            <p className="text-[9px] uppercase tracking-[0.15em] text-red-400/60 mb-1">Brechas</p>
+                            <ul className="space-y-0.5">
+                              {applicant.key_gaps.map((g, i) => (
+                                <li key={i} className="flex items-start gap-1.5 text-[10px] text-white/50">
+                                  <XCircle strokeWidth={1.5} className="h-3 w-3 text-red-400/60 shrink-0 mt-0.5" />
+                                  <span>{g}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {applicant.cv_text && (
+                          <button
+                            onClick={() => onAnalyzeSingle(applicant.cv_text!, applicant.name)}
+                            className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                          >
+                            <Brain strokeWidth={1.5} className="h-3 w-3" /> Analizar
+                          </button>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              ))}
+
+              {count === 0 && !isOver && (
+                <div className="flex items-center justify-center h-32 text-white/15 text-xs">
+                  Sin candidatos
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSingle }: {
   token: string
   vacancyId: string
@@ -593,6 +809,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
   const [filter, setFilter] = useState<'all' | 'Llamar' | 'Considerar' | 'No llamar'>('all')
   const [rankError, setRankError] = useState('')
   const [updatingAction, setUpdatingAction] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'list' | 'pipeline'>('list')
 
   const handleActionUpdate = async (applicationId: string, action: string, notes?: string) => {
     setUpdatingAction(applicationId)
@@ -777,27 +994,58 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
         </div>
       ) : (
         <>
-          {/* Filter tabs — only when analyzed */}
-          {analyzed.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {(['all', 'Llamar', 'Considerar', 'No llamar'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
-                    filter === f
-                      ? 'bg-white/10 text-white'
-                      : 'border border-white/10 text-white/40 hover:border-white/25 hover:text-white/70'
-                  }`}
-                >
-                  {f === 'all' ? `Todos (${applicants.length})` : `${f} (${counts[f]})`}
-                </button>
-              ))}
+          {/* View toggle + Filter tabs */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* View mode toggle */}
+            <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.02] p-1">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                  viewMode === 'list'
+                    ? 'bg-white/10 text-white'
+                    : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                <List strokeWidth={1.5} className="h-3.5 w-3.5" /> Lista
+              </button>
+              <button
+                onClick={() => setViewMode('pipeline')}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                  viewMode === 'pipeline'
+                    ? 'bg-white/10 text-white'
+                    : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                <Trello strokeWidth={1.5} className="h-3.5 w-3.5" /> Pipeline
+              </button>
             </div>
-          )}
 
-          {/* Candidate list */}
-          <ol className="space-y-3">
+            {/* Filter tabs — only in list view when analyzed */}
+            {viewMode === 'list' && analyzed.length > 0 && (
+              <>
+                <div className="h-6 w-px bg-white/10" />
+                <div className="flex flex-wrap gap-2">
+                  {(['all', 'Llamar', 'Considerar', 'No llamar'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setFilter(f)}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                        filter === f
+                          ? 'bg-white/10 text-white'
+                          : 'border border-white/10 text-white/40 hover:border-white/25 hover:text-white/70'
+                      }`}
+                    >
+                      {f === 'all' ? `Todos (${applicants.length})` : `${f} (${counts[f]})`}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* ListView */}
+          {viewMode === 'list' && (
+            <ol className="space-y-3">
             {filtered.map((a, i) => (
               <motion.li
                 key={a.id}
@@ -989,6 +1237,19 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
               </motion.li>
             ))}
           </ol>
+          )}
+
+          {/* Pipeline View */}
+          {viewMode === 'pipeline' && (
+            <PipelineBoard
+              applicants={applicants}
+              onMoveCandidate={(appId, newStatus) => handleActionUpdate(appId, newStatus)}
+              onExpandCard={(id) => setExpandedId(expandedId === id ? null : id)}
+              expandedId={expandedId}
+              updatingAction={updatingAction}
+              onAnalyzeSingle={onAnalyzeSingle}
+            />
+          )}
         </>
       )}
     </div>
