@@ -20,17 +20,20 @@ if (!fs.existsSync(distPath)) fs.mkdirSync(distPath, { recursive: true })
 
 async function generate() {
   const today = new Date().toISOString().split('T')[0]
+  const todayISO = new Date().toISOString()
 
   const { data: blogPosts } = await supabase
     .from('content_hub').select('slug, created_at')
     .eq('tipo', 'blog').eq('is_active', true)
 
+  // CRÍTICO SEO: Solo incluir oportunidades activas Y no expiradas
   const { data: opportunities } = await supabase
-    .from('content_hub').select('slug, created_at')
+    .from('content_hub').select('slug, created_at, fecha_vencimiento')
     .in('tipo', ['oportunidad', 'empleo', 'beca'])
     .eq('is_active', true)
+    .gte('fecha_vencimiento', todayISO) // Solo incluir si fecha_vencimiento >= hoy
     .order('created_at', { ascending: false })
-    .limit(200)
+    .limit(5000) // Aumentado de 200 a 5000 para incluir todas las oportunidades válidas
 
   let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n'
   sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'

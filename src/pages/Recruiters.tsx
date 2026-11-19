@@ -102,7 +102,7 @@ function PanelHeader({ session, balance, onLogout }: { session: RecruiterSession
   return (
     <header className="border-b border-white/5 px-6 py-5">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-6">
-        <Link href="/" className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/45 transition-colors hover:text-white">
+        <Link href="/empresas" className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/45 transition-colors hover:text-white">
           <ArrowLeft strokeWidth={1.5} className="h-4 w-4" /> Volver
         </Link>
         <div className="flex items-center gap-4">
@@ -1600,7 +1600,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
       {/* Top bar */}
       <header className="border-b border-white/5 px-6 py-5">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <Link href="/" className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/45 transition-colors hover:text-white">
+          <Link href="/empresas" className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/45 transition-colors hover:text-white">
             <ArrowLeft strokeWidth={1.5} className="h-4 w-4" /> Inicio
           </Link>
           <span className="text-xs uppercase tracking-[0.18em] text-white/30">Panel de empresas</span>

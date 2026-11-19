@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useParams, useLocation } from 'wouter'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Building2, MapPin, Calendar, Briefcase, ExternalLink } from 'lucide-react'
+import { Helmet } from 'react-helmet-async'
 import { GlassCard, Badge, GoldButton } from '@/components/cvitae/UI-Elements'
 import { Navbar } from '@/components/cvitae/Navbar'
 import { Footer } from '@/components/cvitae/Footer'
@@ -44,9 +45,48 @@ export default function OpportunityDetail() {
   if (!opportunity) return <div className="min-h-screen bg-background text-white flex items-center justify-center">Oportunidad no encontrada.</div>
 
   const appUrl = opportunity.metadata?.application_url
+  const organization = opportunity.metadata?.organization || 'CVitae'
+
+  // Construir JobPosting structured data para SEO
+  const jobPostingSchema = {
+    "@context": "https://schema.org",
+    "@type": "JobPosting",
+    "title": opportunity.titulo,
+    "description": opportunity.cuerpo.substring(0, 5000), // Google recomienda max 5000 chars
+    "datePosted": new Date(opportunity.fecha_vencimiento).toISOString().split('T')[0],
+    "validThrough": opportunity.fecha_vencimiento,
+    "employmentType": opportunity.tipo === 'Tiempo completo' ? 'FULL_TIME' :
+                       opportunity.tipo === 'Medio tiempo' ? 'PART_TIME' :
+                       opportunity.tipo === 'Por contrato' ? 'CONTRACTOR' : 'OTHER',
+    "hiringOrganization": {
+      "@type": "Organization",
+      "name": organization,
+      "sameAs": appUrl || "https://cvitae.lat"
+    },
+    "jobLocation": {
+      "@type": "Place",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": opportunity.ubicacion.split(',')[0].trim(),
+        "addressCountry": opportunity.ubicacion.includes('Paraguay') ? 'PY' :
+                          opportunity.ubicacion.includes('Mexico') ? 'MX' :
+                          opportunity.ubicacion.includes('Argentina') ? 'AR' : 'LATAM'
+      }
+    },
+    "industry": opportunity.categoria,
+    "url": `https://cvitae.lat/empleos/${opportunity.slug}`
+  }
 
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>{opportunity.titulo} | CVitae</title>
+        <meta name="description" content={`${organization} busca ${opportunity.titulo} en ${opportunity.ubicacion}. Postulate ahora en CVitae.`} />
+        <link rel="canonical" href={`https://cvitae.lat/empleos/${opportunity.slug}`} />
+        <script type="application/ld+json">
+          {JSON.stringify(jobPostingSchema)}
+        </script>
+      </Helmet>
       <Navbar />
       <div className="pt-32 pb-20 px-4 max-w-4xl mx-auto">
         <div className="mb-8">

@@ -69,13 +69,14 @@ export const handler = async (event: any) => {
 - Resaltar sus habilidades y experiencia de forma clara y profesional
 - Usar métricas y logros concretos donde sea posible
 - Ser 100% legible por sistemas ATS (sin tablas, sin columnas, texto plano estructurado)
+- CRÍTICO: NO RESUMIR NADA. Extraé TODA la experiencia profesional completa del perfil
 
 ESTRUCTURA OBLIGATORIA (en este orden exacto):
 # [NOMBRE COMPLETO]
 [título profesional] | [email] | [teléfono] | [ubicación] | [LinkedIn si existe]
 
 ## Resumen Profesional
-[3-4 líneas con su propuesta de valor y logros principales]
+[3-4 líneas con su propuesta de valor y logros principales cuantificados]
 
 ## Habilidades
 **Técnicas:** [lista de habilidades técnicas]
@@ -83,8 +84,17 @@ ESTRUCTURA OBLIGATORIA (en este orden exacto):
 
 ## Experiencia Profesional
 ### [Cargo] — [Empresa] | [Período]
-- [Logro medible con verbo de acción]
-- [Logro medible con verbo de acción]
+- [Logro medible con verbo de acción y métrica numérica]
+- [Logro medible con verbo de acción y métrica numérica]
+- [Logro medible con verbo de acción y métrica numérica]
+- [Si hay más información en el perfil, agregá más bullets - NO resumas, EXPANDÍ]
+
+IMPORTANTE EXPERIENCIA PROFESIONAL:
+- Incluí MÍNIMO 3-4 logros cuantificados por cada rol
+- Si el perfil menciona programas, proyectos, equipos, números → incluí TODO
+- Ejemplo: "Lideré implementación de programa X que benefició a 500+ personas"
+- Ejemplo: "Gestioné equipo de 15 personas y presupuesto de $2M"
+- NO escribas bullets genéricos. Cada bullet debe tener números concretos.
 
 ## Educación
 ### [Título] — [Institución] | [Año]
@@ -98,8 +108,9 @@ ${JSON.stringify(profile, null, 2)}
 REGLAS DE ESTILO OBLIGATORIAS:
 - Todo el CV en PRIMERA PERSONA. Verbos: "Lideré", "Desarrollé", "Implementé", "Gestioné", "Aumenté X%", "Reduje", "Coordiné", "Diseñé", "Logré"
 - Nunca uses tercera persona ("Profesional con experiencia en..." está MAL. "Cuento con experiencia en..." está BIEN)
-- Incluí métricas reales o estimadas en cada logro: porcentajes, cantidades, períodos de tiempo
-- El resumen profesional debe empezar con "Soy..." o "Cuento con..."
+- CADA LOGRO DEBE TENER MÉTRICAS: números, porcentajes, cantidades, períodos
+- El resumen profesional debe empezar con "Soy..." o "Cuento con..." e incluir logros numéricos
+- Si el perfil tiene experiencias detalladas con muchos logros → incluí TODO, no selecciones solo algunos
 
 Respondé ÚNICAMENTE con el CV en markdown, sin explicaciones, sin texto antes ni después.`
       : `Sos un experto en redacción de CVs para el mercado latinoamericano, especializado en formato híbrido ATS-friendly.
@@ -111,13 +122,14 @@ Generá un CV profesional en markdown adaptado específicamente para esta vacant
 - Incluir métricas y logros concretos donde sea posible
 - Ser 100% legible por sistemas ATS (sin tablas, sin columnas, texto plano estructurado)
 - Estar en español
+- CRÍTICO: NO RESUMIR NADA. Extraé TODA la experiencia profesional completa del perfil
 
 ESTRUCTURA OBLIGATORIA (en este orden exacto):
 # [NOMBRE COMPLETO]
 [título profesional adaptado al puesto] | [email] | [teléfono] | [ubicación] | [LinkedIn si existe]
 
 ## Resumen Profesional
-[3-4 líneas con palabras clave de la vacante, logros cuantificables, propuesta de valor]
+[3-4 líneas con palabras clave de la vacante, logros cuantificables con números, propuesta de valor conectada al puesto]
 
 ## Habilidades
 **Técnicas:** [lista priorizando las que pide la vacante]
@@ -125,8 +137,18 @@ ESTRUCTURA OBLIGATORIA (en este orden exacto):
 
 ## Experiencia Profesional
 ### [Cargo] — [Empresa] | [Período]
-- [Logro medible con verbo de acción]
-- [Logro medible con verbo de acción]
+- [Logro medible con verbo de acción y métrica numérica relevante a la vacante]
+- [Logro medible con verbo de acción y métrica numérica relevante a la vacante]
+- [Logro medible con verbo de acción y métrica numérica relevante a la vacante]
+- [Si hay más información en el perfil, agregá más bullets - NO resumas, EXPANDÍ]
+
+IMPORTANTE EXPERIENCIA PROFESIONAL:
+- Incluí MÍNIMO 3-4 logros cuantificados por cada rol
+- Priorizá experiencias que conecten con la vacante, pero incluí TODO lo relevante
+- Si el perfil menciona programas, proyectos, equipos, números → incluí TODO
+- Conectá cada logro con palabras clave de la vacante cuando sea posible
+- Ejemplo: "Lideré implementación de [tecnología de la vacante] que benefició a 500+ personas"
+- NO escribas bullets genéricos. Cada bullet debe tener números concretos y conectar con el puesto.
 
 ## Educación
 ### [Título] — [Institución] | [Año]
@@ -147,12 +169,14 @@ Habilidades requeridas: ${vacancy.vacancySkills?.join(', ') || 'No especificadas
 REGLAS DE ESTILO OBLIGATORIAS:
 - Todo el CV en PRIMERA PERSONA. Verbos: "Lideré", "Desarrollé", "Implementé", "Gestioné", "Aumenté X%", "Reduje", "Coordiné", "Diseñé", "Logré"
 - Nunca uses tercera persona ("Profesional con experiencia en..." está MAL. "Cuento con experiencia en..." está BIEN)
-- Incluí métricas reales o estimadas en cada logro: porcentajes, cantidades, períodos de tiempo
-- El resumen profesional debe empezar con "Soy..." o "Cuento con..."
+- CADA LOGRO DEBE TENER MÉTRICAS: números, porcentajes, cantidades, períodos
+- El resumen profesional debe empezar con "Soy..." o "Cuento con..." e incluir logros numéricos conectados al puesto
+- Si el perfil tiene experiencias detalladas con muchos logros → incluí TODO, no selecciones solo algunos
+- Usá palabras clave de la descripción de la vacante en TODO el CV
 
 Respondé ÚNICAMENTE con el CV en markdown, sin explicaciones, sin texto antes ni después.`
 
-    const cvMarkdown = await invokeModel(prompt, 1500)
+    const cvMarkdown = await invokeModel(prompt, 3000)
 
     // Si es vacante externa (pegada por el candidato), guardarla en opportunities para enriquecer el pool
     if (!isBaseCV && vacancy?.id === 'custom' && vacancy?.cuerpo?.length > 20) {

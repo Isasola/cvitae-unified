@@ -12,7 +12,6 @@ import { cn } from '@/lib/utils'
 const sidebarLinks = [
   { href: '/mi-carrera', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/mi-carrera/perfil', label: 'Mi Perfil', icon: User },
-  { href: '/mi-carrera/oportunidades', label: 'Oportunidades', icon: Briefcase },
   { href: '/mi-carrera/cv', label: 'Mi CV', icon: FileText },
   { href: '/mi-carrera/alertas', label: 'Alertas', icon: Bell },
   { href: '/blog', label: 'Blog', icon: BookOpen },
