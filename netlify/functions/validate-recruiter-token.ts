@@ -236,6 +236,66 @@ const handler: Handler = async (event) => {
       }
     }
 
+    // ─── Acción: Analytics detallado ───
+    if (action === "get_analytics") {
+      // Obtener aplicaciones por fuente
+      const vacancyIds = (await supabase.from("recruiter_vacancies").select("id").eq("recruiter_token_id", data.id)).data?.map((v: any) => v.id) || []
+
+      const { data: applications } = await supabase
+        .from("vacancy_applications")
+        .select("id, vacancy_id, applied_at")
+        .in("vacancy_id", vacancyIds)
+
+      const directApplications = applications?.filter((a: any) => a.vacancy_id).length || 0
+
+      const { data: analyses } = await supabase
+        .from("recruiter_analyses")
+        .select("id, file_name")
+        .eq("token_id", data.id)
+
+      const manualUploads = analyses?.filter((a: any) => a.file_name).length || 0
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          analytics: {
+            directApplications,
+            vacancyLinks: directApplications, // Mismo valor por ahora
+            manualUploads,
+          },
+        }),
+      }
+    }
+
+    // ─── Acción: Solicitar más saldo ───
+    if (action === "request_balance") {
+      const RESEND_KEY = process.env.RESEND_API_KEY
+      if (RESEND_KEY) {
+        try {
+          await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              from: "CVitae <contacto@cvitae.lat>",
+              to: ["contacto@cvitae.lat"],
+              subject: `🔔 Solicitud de saldo: ${body.company_name || data.company_name}`,
+              html: `<h3>Solicitud de recarga de saldo</h3>
+                     <p><strong>Empresa:</strong> ${body.company_name || data.company_name}</p>
+                     <p><strong>Email:</strong> ${data.email}</p>
+                     <p><strong>Token ID:</strong> ${data.id}</p>
+                     <p><strong>Balance actual:</strong> ${body.current_balance || data.token_balance} créditos</p>
+                     <p><strong>Fecha:</strong> ${new Date().toLocaleString('es-PY')}</p>
+                     <hr>
+                     <p style="font-size: 12px; color: #666;">Accedé al admin para gestionar: <a href="https://cvitae.lat/admin">cvitae.lat/admin</a></p>`
+            }),
+          })
+        } catch (e) {
+          console.error("Error enviando email de solicitud de saldo:", e)
+        }
+      }
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
     // ─── Validación simple / inicio de sesión ───
     // Auto-activate prospect if was invited
     supabase.from("b2b_prospects").update({ status: "activated", activated_at: new Date().toISOString() }).eq("status", "invited").ilike("email", data.email).then(() => {})
