@@ -98,7 +98,22 @@ function Ambient() {
 
 // ─── Panel header (when authenticated) ───────────────────────────────────────
 
-function PanelHeader({ session, balance, onLogout }: { session: RecruiterSession; balance: number; onLogout: () => void }) {
+function PanelHeader({ session, balance, onLogout, onRequestBalance }: { session: RecruiterSession; balance: number; onLogout: () => void; onRequestBalance: () => void }) {
+  const [requesting, setRequesting] = useState(false)
+  const [requested, setRequested] = useState(false)
+
+  const handleRequest = async () => {
+    if (requesting || requested) return
+    setRequesting(true)
+    try {
+      await onRequestBalance()
+      setRequested(true)
+      setTimeout(() => setRequested(false), 3000)
+    } finally {
+      setRequesting(false)
+    }
+  }
+
   return (
     <header className="border-b border-white/5 px-6 py-5">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-6">
@@ -118,6 +133,25 @@ function PanelHeader({ session, balance, onLogout }: { session: RecruiterSession
               <span className="text-[#c9a84c]">{balance}</span> créditos
             </span>
           </div>
+          {balance < 10 && (
+            <button
+              onClick={handleRequest}
+              disabled={requesting || requested}
+              className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs transition ${
+                requested
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 cursor-default'
+                  : 'border-white/10 text-white/50 hover:border-white/25 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed'
+              }`}
+            >
+              {requesting ? (
+                <><Loader2 strokeWidth={1.5} className="h-3.5 w-3.5 animate-spin" /> Solicitando...</>
+              ) : requested ? (
+                <><CheckIcon strokeWidth={1.5} className="h-3.5 w-3.5" /> Solicitado</>
+              ) : (
+                <><Plus strokeWidth={1.5} className="h-3.5 w-3.5" /> Pedir saldo</>
+              )}
+            </button>
+          )}
           <button
             onClick={onLogout}
             className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3.5 py-1.5 text-xs text-white/50 transition hover:border-white/25 hover:text-white"
@@ -1237,6 +1271,23 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
     }).then(r => r.json()).then(d => { if (d.stats) setStats(d.stats) }).catch(() => {})
   }, [])
 
+  const handleRequestBalance = async () => {
+    try {
+      await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: session.token,
+          action: 'request_balance',
+          company_name: session.company_name,
+          current_balance: balance
+        }),
+      })
+    } catch (err) {
+      console.error('Error solicitando saldo:', err)
+    }
+  }
+
   const handleFile = (f: File) => {
     const ok = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']
     if (!ok.includes(f.type)) { setError('Formato no soportado. Usá PDF, DOCX o TXT.'); return }
@@ -1325,7 +1376,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
         <meta name="robots" content="noindex" />
       </Helmet>
 
-      <PanelHeader session={session} balance={balance} onLogout={onLogout} />
+      <PanelHeader session={session} balance={balance} onLogout={onLogout} onRequestBalance={handleRequestBalance} />
 
       <section className="relative mx-auto max-w-7xl px-6 pt-16 pb-24 md:px-10 md:pt-20">
         {/* Page heading */}
