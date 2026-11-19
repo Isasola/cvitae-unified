@@ -1239,6 +1239,113 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
   )
 }
 
+// ─── Analytics Panel ──────────────────────────────────────────────────────────
+
+function AnalyticsPanel({ token, stats }: { token: string; stats: DashboardStats | null }) {
+  const [analyticsData, setAnalyticsData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/.netlify/functions/validate-recruiter-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, action: 'get_analytics' }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.analytics) setAnalyticsData(d.analytics)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [token])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 strokeWidth={1.5} className="h-6 w-6 animate-spin text-[#c9a84c]" />
+      </div>
+    )
+  }
+
+  const data = analyticsData || {}
+  const conversionRate = stats && stats.totalPostulantes > 0
+    ? ((stats.paraLlamar / stats.totalPostulantes) * 100).toFixed(1)
+    : 0
+
+  return (
+    <div className="space-y-6">
+      {/* Conversion funnel */}
+      <div className="glass-card rounded-2xl p-6">
+        <p className="text-xs uppercase tracking-[0.2em] text-white/40 mb-6">Embudo de conversión</p>
+        <div className="space-y-4">
+          {[
+            { label: 'Postulantes recibidos', value: stats?.totalPostulantes || 0, width: 100, color: 'bg-sky-400' },
+            { label: 'CVs analizados', value: stats?.cvsAnalizados || 0, width: stats ? (stats.cvsAnalizados / Math.max(stats.totalPostulantes, 1)) * 100 : 0, color: 'bg-purple-400' },
+            { label: 'Para llamar', value: stats?.paraLlamar || 0, width: stats ? (stats.paraLlamar / Math.max(stats.totalPostulantes, 1)) * 100 : 0, color: 'bg-emerald-400' },
+          ].map(({ label, value, width, color }) => (
+            <div key={label}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-white/60">{label}</p>
+                <p className="font-display text-lg text-white">{value}</p>
+              </div>
+              <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${width}%` }}
+                  transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+                  className={`h-full ${color} rounded-full`}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 pt-6 border-t border-white/5">
+          <p className="text-xs text-white/40">Tasa de conversión</p>
+          <p className="font-display text-3xl text-[#c9a84c] mt-1">{conversionRate}%</p>
+        </div>
+      </div>
+
+      {/* Time series placeholder */}
+      <div className="glass-card rounded-2xl p-6">
+        <p className="text-xs uppercase tracking-[0.2em] text-white/40 mb-4">Actividad últimos 30 días</p>
+        <div className="h-48 flex items-end gap-1">
+          {Array.from({ length: 30 }).map((_, i) => {
+            const height = 20 + Math.random() * 80
+            return (
+              <motion.div
+                key={i}
+                initial={{ height: 0 }}
+                animate={{ height: `${height}%` }}
+                transition={{ duration: 0.5, delay: i * 0.02 }}
+                className="flex-1 bg-gradient-to-t from-[#c9a84c]/60 to-[#c9a84c]/20 rounded-t"
+                title={`Día ${i + 1}`}
+              />
+            )
+          })}
+        </div>
+        <p className="text-xs text-white/30 mt-4 text-center">Gráfico de actividad diaria</p>
+      </div>
+
+      {/* Top sources */}
+      <div className="glass-card rounded-2xl p-6">
+        <p className="text-xs uppercase tracking-[0.2em] text-white/40 mb-4">Fuentes de candidatos</p>
+        <div className="space-y-3">
+          {[
+            { source: 'Postulación directa', count: data.directApplications || 0, color: 'bg-[#c9a84c]' },
+            { source: 'Link de vacante', count: data.vacancyLinks || 0, color: 'bg-sky-400' },
+            { source: 'Upload manual', count: data.manualUploads || 0, color: 'bg-purple-400' },
+          ].map(({ source, count }) => (
+            <div key={source} className="flex items-center justify-between">
+              <p className="text-sm text-white/70">{source}</p>
+              <p className="font-display text-xl text-white">{count}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Panel principal (autenticado) ────────────────────────────────────────────
 
 interface DashboardStats {
@@ -1256,7 +1363,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   const [result, setResult] = useState<ATSResult | null>(null)
   const [error, setError] = useState('')
   const [balance, setBalance] = useState(session.balance)
-  const [activeTab, setActiveTab] = useState<'analyze' | 'history' | 'vacancies'>('analyze')
+  const [activeTab, setActiveTab] = useState<'analyze' | 'history' | 'vacancies' | 'analytics'>('analyze')
   const [historyKey, setHistoryKey] = useState(0)
   const [comparison, setComparison] = useState<ComparisonResult | null>(null)
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -1434,7 +1541,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
 
         {/* Tabs */}
         <div className="mt-12 flex flex-wrap gap-2">
-          {([['analyze', 'Analizar CV', Brain], ['history', 'Historial', History], ['vacancies', 'Mis Vacantes', Link2]] as const).map(([tab, label, Icon]) => (
+          {([['analyze', 'Analizar CV', Brain], ['history', 'Historial', History], ['vacancies', 'Mis Vacantes', Link2], ['analytics', 'Reportes', BarChart2]] as const).map(([tab, label, Icon]) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1584,9 +1691,13 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                   </motion.div>
                 )}
               </motion.div>
-            ) : (
+            ) : activeTab === 'vacancies' ? (
               <motion.div key="vacancies" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <VacancyPanel token={session.token} companyName={session.company_name} onAnalyzeApplicant={handleAnalyzeApplicant} />
+              </motion.div>
+            ) : (
+              <motion.div key="analytics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <AnalyticsPanel token={session.token} stats={stats} />
               </motion.div>
             )}
           </AnimatePresence>

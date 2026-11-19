@@ -236,6 +236,37 @@ const handler: Handler = async (event) => {
       }
     }
 
+    // ─── Acción: Analytics detallado ───
+    if (action === "get_analytics") {
+      // Obtener aplicaciones por fuente
+      const vacancyIds = (await supabase.from("recruiter_vacancies").select("id").eq("recruiter_token_id", data.id)).data?.map((v: any) => v.id) || []
+
+      const { data: applications } = await supabase
+        .from("vacancy_applications")
+        .select("id, vacancy_id, applied_at")
+        .in("vacancy_id", vacancyIds)
+
+      const directApplications = applications?.filter((a: any) => a.vacancy_id).length || 0
+
+      const { data: analyses } = await supabase
+        .from("recruiter_analyses")
+        .select("id, file_name")
+        .eq("token_id", data.id)
+
+      const manualUploads = analyses?.filter((a: any) => a.file_name).length || 0
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          analytics: {
+            directApplications,
+            vacancyLinks: directApplications, // Mismo valor por ahora
+            manualUploads,
+          },
+        }),
+      }
+    }
+
     // ─── Acción: Solicitar más saldo ───
     if (action === "request_balance") {
       const RESEND_KEY = process.env.RESEND_API_KEY
