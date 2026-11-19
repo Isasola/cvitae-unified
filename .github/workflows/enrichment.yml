@@ -1,0 +1,44 @@
+name: Opportunity Enrichment
+
+on:
+  schedule:
+    # Cada 6 horas: 00:00, 06:00, 12:00, 18:00 UTC
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Cantidad de oportunidades a enriquecer'
+        required: false
+        default: '50'
+
+jobs:
+  enrich-opportunities:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: scrapers/requirements.txt
+
+      - name: Install dependencies
+        run: pip install requests google-generativeai
+
+      - name: Enrich opportunities with Gemini
+        run: python scrapers/enrichment.py
+        env:
+          LIMIT: ${{ github.event.inputs.limit || '50' }}
+        continue-on-error: true
+
+      - name: Summary
+        run: echo "✅ Enrichment completed"
