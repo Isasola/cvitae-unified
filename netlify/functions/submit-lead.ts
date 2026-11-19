@@ -60,13 +60,35 @@ function buildMagicLinkEmail(name: string, magicLink: string): string {
             Tu postulación fue enviada con éxito. Accedé a tu perfil para ver el estado y completar tu información para futuras oportunidades.
           </p>
           <!-- CTA -->
-          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
             <tr><td style="background-color:#c9a84c;border-radius:50px;text-align:center;">
               <a href="${magicLink}" style="display:inline-block;padding:14px 32px;font-size:14px;font-weight:600;color:#0a0a0a;text-decoration:none;letter-spacing:0.01em;">
                 Acceder a mi perfil →
               </a>
             </td></tr>
           </table>
+          <!-- Benefits section -->
+          <div style="background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.15);border-radius:12px;padding:24px;margin-bottom:28px;">
+            <p style="margin:0 0 16px;font-size:14px;font-weight:600;color:rgba(255,255,255,0.7);">🎁 Tu acceso incluye gratis:</p>
+            <ul style="margin:0;padding:0 0 0 20px;list-style:none;">
+              <li style="margin:0 0 10px;font-size:13px;line-height:1.5;color:rgba(255,255,255,0.55);position:relative;padding-left:6px;">
+                <span style="position:absolute;left:-14px;top:0;color:#c9a84c;">✓</span>
+                Generá CVs ilimitados con IA (LinkedIn solo te permite 16)
+              </li>
+              <li style="margin:0 0 10px;font-size:13px;line-height:1.5;color:rgba(255,255,255,0.55);position:relative;padding-left:6px;">
+                <span style="position:absolute;left:-14px;top:0;color:#c9a84c;">✓</span>
+                Diagnóstico ATS: revisá qué tan compatible es tu CV
+              </li>
+              <li style="margin:0 0 10px;font-size:13px;line-height:1.5;color:rgba(255,255,255,0.55);position:relative;padding-left:6px;">
+                <span style="position:absolute;left:-14px;top:0;color:#c9a84c;">✓</span>
+                Matching inteligente con 1,500+ oportunidades activas
+              </li>
+              <li style="margin:0;font-size:13px;line-height:1.5;color:rgba(255,255,255,0.55);position:relative;padding-left:6px;">
+                <span style="position:absolute;left:-14px;top:0;color:#c9a84c;">✓</span>
+                Alertas personalizadas cuando aparecen vacantes que encajan con vos
+              </li>
+            </ul>
+          </div>
           <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.25);line-height:1.5;">
             Este link expira en 24 horas. Si no postulaste a ninguna vacante, ignorá este mensaje.
           </p>

@@ -47,16 +47,25 @@ Para cada recomendación considerá:
 2. Cómo esa habilidad complementa lo que el usuario YA sabe
 3. El impacto concreto en sus chances de lograr el objetivo (estimá un % de mejora realista)
 4. Que sea accesible (gratuito o económico, en español preferentemente)
+5. IMPORTANTE: Buscá en TODA internet - incluí documentación oficial, sitios especializados, canales de YouTube, cursos gratuitos, etc.
+
+FUENTES RECOMENDADAS (priorizá las MÁS relevantes para la skill):
+- Documentación oficial (MDN, docs.python.org, react.dev, etc.)
+- Cursos online: Udemy, Coursera, edX, Platzi, LinkedIn Learning
+- Gratuitos: freeCodeCamp, Khan Academy, Google Digital Garage, Microsoft Learn
+- YouTube: canales especializados con tutoriales completos
+- Plataformas específicas: LeetCode (programación), Duolingo (idiomas), etc.
+- Certificaciones oficiales: Google, Microsoft, AWS, etc.
 
 Respondé ÚNICAMENTE con este JSON válido, sin texto extra ni markdown:
 [
   {
     "skill": "nombre de la habilidad faltante",
     "course": "nombre real y específico del curso o recurso",
-    "platform": "Udemy|Coursera|YouTube|LinkedIn Learning|Google|Microsoft",
-    "url": "URL de búsqueda real: https://www.udemy.com/courses/search/?q=TERMINO o https://www.coursera.org/search?query=TERMINO o https://www.youtube.com/results?search_query=TERMINO+curso+español",
+    "platform": "nombre de la plataforma o fuente (ej: MDN Web Docs, freeCodeCamp, YouTube - [Canal], Udemy, Coursera, edX, Platzi, Google, Microsoft Learn, etc.)",
+    "url": "URL real y directa al recurso - Ejemplos: https://developer.mozilla.org/es/docs/Learn, https://www.freecodecamp.org/learn, https://www.udemy.com/course/[slug-real], https://www.youtube.com/@[canal-real], https://www.coursera.org/learn/[slug-real], https://learn.microsoft.com/es-es/training/[ruta]",
     "level": "Básico|Intermedio|Avanzado",
-    "duration": "estimación: ej. 8 horas, 4 semanas",
+    "duration": "estimación: ej. 8 horas, 4 semanas, 20 artículos",
     "impact": "Dominar [skill] puede aumentar tus chances de conseguir empleo en un X% porque [razón específica basada en el mercado paraguayo]",
     "why": "Con tu objetivo de [objetivo de carrera] y tu experiencia en [habilidades actuales], agregar [skill] te permite [beneficio concreto y específico para ese objetivo]"
   }
@@ -135,7 +144,7 @@ async function useFallbackHaiku(
         max_tokens: 1000,
         messages: [{
           role: 'user',
-          content: `Sos asesor de carrera para Paraguay. El usuario es ${profileTitle || 'profesional'} ${profileSeniority || ''} con skills: ${profileSkills?.join(', ')}.${routeHint} Le faltan: ${missingSkills.join(', ')}. Recomendá ${Math.min(missingSkills.length, 4)} cursos online accesibles alineados con su objetivo. Respondé SOLO con JSON array: [{"skill":"...","course":"...","platform":"Udemy|Coursera|YouTube","url":"URL de búsqueda real","level":"Básico|Intermedio","duration":"X horas","impact":"Puede mejorar tus chances un X%","why":"Con tu objetivo de... y tu experiencia en..."}]`
+          content: `Sos asesor de carrera para Paraguay. El usuario es ${profileTitle || 'profesional'} ${profileSeniority || ''} con skills: ${profileSkills?.join(', ')}.${routeHint} Le faltan: ${missingSkills.join(', ')}. Recomendá ${Math.min(missingSkills.length, 4)} recursos de aprendizaje accesibles (cursos, documentación oficial, YouTube, freeCodeCamp, etc.) alineados con su objetivo. Buscá en TODA internet - priorizá recursos gratuitos y de alta calidad. Respondé SOLO con JSON array: [{"skill":"...","course":"nombre específico del recurso","platform":"fuente real (ej: MDN Web Docs, freeCodeCamp, YouTube, Udemy, Microsoft Learn, etc.)","url":"URL real y directa al recurso","level":"Básico|Intermedio","duration":"X horas","impact":"Puede mejorar tus chances un X%","why":"Con tu objetivo de... y tu experiencia en..."}]`
         }],
       }),
     })
