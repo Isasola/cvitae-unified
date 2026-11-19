@@ -1,0 +1,303 @@
+# Backlog posterior al release
+
+Este archivo guarda la memoria persistente de bugs, mejoras, deuda técnica, nuevas fuentes, optimizaciones, problemas de infraestructura, oportunidades de producto y observaciones que deliberadamente se posponen para releases futuros. No reemplaza `docs/GRAND_CHECKPOINT.md`, C01–C21 ni el MASTER 1–67.
+
+## Gobernanza
+
+1. GRAND_CHECKPOINT = verdad del release ACTUAL.
+2. POST_RELEASE_BACKLOG = cosas deliberadamente pospuestas para deploys FUTUROS.
+3. Un item del backlog sólo pasa a trabajo activo cuando el usuario lo autoriza.
+4. Cuando un item entra a ejecución, registrar qué Cxx/release lo absorbe.
+5. Nunca borrar items terminados: marcar DONE y agregar evidencia.
+6. No usar este archivo para justificar cambios adicionales durante el release actual.
+
+R3 local deduplication note (2026-10-12): BUG-001 through BUG-008 are tracked only in `docs/BUG_REGISTRY.md`. Their local fixes are no longer duplicate ACTIVE backlog work; production validation, unapplied SQL, Jobicy continuation, isolated-DB E2E and external Google verification remain pending there. Historical rows below are preserved.
+7. Si aparece un bug mientras trabajamos, registrarlo inmediatamente aquí antes de seguir, salvo que bloquee el release actual.
+8. Si bloquea el release actual, debe entrar primero en la Biblia C01–C21 y el backlog sólo puede referenciarlo.
+
+Los IDs son persistentes y consecutivos: `PD-001`, `PD-002`, `PD-003`, etc. No renumerar ni reutilizar IDs. Cada item conserva los campos TYPE, STATUS, DISCOVERED_AT, FOUND_WHILE, PROBLEM, EXPECTED, CURRENT, AFFECTED_FILES_OR_SYSTEMS, EVIDENCE, SCOPE_NEXT_DEPLOY, DO_NOT_DO_NOW y CLOSURE_TEST.
+
+TYPE admite: BUG | SOURCE | PERFORMANCE | INFRASTRUCTURE | UX | SEO | MATCHING | ADMIN | OTHER.
+
+STATUS admite: BACKLOG | READY_FOR_NEXT_DEPLOY | BLOCKED | DONE.
+
+### Canonical postdeploy bug linkage — 2026-10-11
+
+Observed user-facing defects live only in `docs/BUG_REGISTRY.md`; this backlog
+must reference their stable IDs instead of duplicating facts, hypotheses, or
+closure evidence.
+
+| Bug IDs | Backlog relationship |
+|---|---|
+| BUG-001, BUG-002, BUG-003 | P0 beta restoration; next grouped diagnostic pass. |
+| BUG-004, BUG-009 | CV journey and shared loader work after the P0 operation is reliable. |
+| BUG-005, BUG-006, BUG-007 | Opportunity coverage, classification and Admin projection pass. |
+| BUG-008 | Evidence-based SEO recovery; PD-006 is separate first-page performance debt, not the explanation for traffic decline. |
+
+None is `DONE`, `CLOSED_LOCAL`, or `PROD_VALIDATED` merely because the release
+is deployed. When work is authorized, update the canonical bug ID and refer to
+the absorbing Cxx/release here rather than creating a duplicate PD incident.
+
+PD-002 conserva la excepción de gobernanza `TYPE=OTHER / PROCESS` y `STATUS=DONE_AS_GOVERNANCE_RULE`, definida explícitamente por el usuario. Los bloqueos del release actual se registran primero en C01–C21; aquí sólo se referencian.
+
+### PD-001 — Añadir UNICEF Jobs como fuente de oportunidades
+
+TYPE: SOURCE
+
+STATUS: BACKLOG
+
+DISCOVERED_AT: 2026-10-04
+
+FOUND_WHILE: Cierre B2C C01–C21
+
+SOURCE: UNICEF Jobs
+
+URL: https://jobs.unicef.org/en-us/listing/
+
+PROBLEM: CVitae todavía no incorpora esta fuente en su sistema de oportunidades.
+
+EXPECTED: UNICEF Jobs debe poder ingresar por la misma arquitectura canónica de fuentes que los demás scrapers, sin crear un pipeline especial.
+
+CURRENT: No implementado.
+
+AFFECTED_FILES_OR_SYSTEMS: UNKNOWN — no investigar ahora.
+
+EVIDENCE: Fuente, URL y estado actual proporcionados por el usuario el 2026-10-04. No se investigó la web, el mecanismo de extracción ni los permisos en esta tarea.
+
+SCOPE_NEXT_DEPLOY:
+
+Antes de implementar:
+
+- comprobar términos/robots/permisos;
+- identificar mecanismo de listado y detalle;
+- determinar si existe API/feed o requiere HTML;
+- mapear canonical source;
+- Adapter/Cleaner;
+- factual observations;
+- lineage;
+- Factory;
+- Universe;
+- Catalog;
+- Matching;
+- Alerts;
+- SEO según permiso real;
+- Admin Source Intelligence;
+- source-specific tests;
+- incremental/bounded scraping;
+- deduplicación.
+
+DO_NOT_DO_NOW:
+
+- no investigar la web;
+- no escribir scraper;
+- no registrar permisos inventados;
+- no modificar Registry;
+- no añadir schedules;
+- no tocar release actual.
+
+CLOSURE_TEST:
+
+Una oportunidad UNICEF real debe demostrar end-to-end:
+
+```text
+discovery
+→ adapter
+→ cleaner
+→ sink
+→ lineage
+→ factual observation
+→ Factory
+→ verification/lifecycle
+→ Universe
+→ consumers permitidos
+→ Admin
+```
+
+Sin bypasses y sin introducir full scans.
+
+### PD-002 — Declaración falsa de cable conectado por evidencia sólo local
+
+TYPE: OTHER / PROCESS
+
+STATUS: DONE_AS_GOVERNANCE_RULE
+
+DISCOVERED_AT: 2026-10-04
+
+FOUND_WHILE: C09 / C20 — cierre B2C C01–C21
+
+PROBLEM: Durante varias pasadas se consideró avanzado/cerrado el cableado porque la lógica local y los tests pasaban, aunque los switches/configuración efectivos de PROD seguían impidiendo que oportunidades listas llegaran a Catálogo, Matching y Alertas.
+
+EXPECTED: Cierre con evidencia de existing data, future data, negative path y effective state, distinguiendo prueba local de validación PROD.
+
+CURRENT: Regla permanente registrada; aplicación y validación PROD todavía pendientes.
+
+AFFECTED_FILES_OR_SYSTEMS: WORKING_PRINCIPLES.md; GRAND_CHECKPOINT C09/C20; source policy; Universe; Catálogo, Matching y Alertas.
+
+EVIDENCE: PROD 2026-10-04 informado por el usuario: inventory=16497; catalog_final_ready=0; matching_final_ready=0; alerts_final_ready=0; seo_final_ready=6284. Himalayas: catalog_permission=ALLOWED, matching_permission=ALLOWED, alerts_permission=ALLOWED; catalog_row_ready=5477, matching_row_ready=5441, alerts_row_ready=5441; los tres switches estaban DENIED.
+
+PREVENTION: Aplicar CABLE CONNECTION CLOSURE CONTRACT de WORKING_PRINCIPLES.md. No borrar este item nunca.
+
+SCOPE_NEXT_DEPLOY: C09 absorbe la corrección del bloqueo demostrado y exige reconciliación histórica, automatización futura y validación PROD autorizada.
+
+DO_NOT_DO_NOW: No declarar PROD_VALIDATED por evidencia local; no ejecutar writes, reconciliación ni deploy PROD durante esta pasada.
+
+CLOSURE_TEST: La regla permanece registrada y cada cierre de cable evidencia las cuatro condiciones, con estados locales y PROD separados.
+
+### PD-003 — Snapshots paginados sin presupuesto total de ejecución
+
+TYPE: PERFORMANCE
+
+STATUS: DONE
+
+DISCOVERED_AT: 2026-10-04
+
+FOUND_WHILE: C20, al conectar inputs de política efectiva de Alertas y comprobar el CLI de recovery.
+
+PROBLEM: Paginar una lectura no limita el trabajo total si se acumulan todas las páginas antes de procesar. Este pendiente está registrado primero en C20 de la Biblia actual; el backlog sólo lo referencia.
+
+EXPECTED: Presupuesto explícito por ejecución, memoria acotada, cursor durable y cobertura eventual; no perder oportunidades ni perfiles por un límite fijo.
+
+CURRENT: C20 cerrado localmente 2026-10-05: sender y maintenance limitan antes de acumular, con cursor/pending effects y cobertura eventual. Schema/runtime/canary PROD pendientes.
+
+AFFECTED_FILES_OR_SYSTEMS: netlify/functions/send-high-match-alerts.ts; shared/matching-retrieval.ts collectAlertCandidateSnapshot; scripts/run_source_maintenance.py fetch_inventory; C20.
+
+EVIDENCE: Hallazgo original conservado: alertOpportunities/cacheRows completos, profiles limit(250), fetch_inventory anterior al work_budget. Correccion probada con handler real, PostgreSQL local de selector/lease/delivery y maintenance: 7 filas en 4+ paginas, 251 perfiles elegibles, retries/checkpoint outage, consentimiento/threshold/dedup, TTL y memoria por batch PASS. No lectura ni validacion PROD.
+
+SCOPE_NEXT_DEPLOY: C20 absorbe el pendiente dentro del cierre actual. Reusar estado/ledger existente para budget/cursor y probar múltiples páginas/perfiles; preservar scoring, thresholds, consentimiento y deduplicación. Este item no abre una fase ni una lista operativa alternativa.
+
+DO_NOT_DO_NOW: No ocultar el pendiente con un límite que trunque producto; no inventar cierre; no cambiar scoring ni reconstruir consumers principales; no medir desplegando ni ejecutar jobs PROD.
+
+CLOSURE_TEST: Más de una ventana/batch y más de 250 perfiles reciben cobertura eventual mediante cursor; costo/memoria por ejecución permanece acotado y una segunda ejecución no repite filas UNCHANGED innecesariamente. C20 debe contener la evidencia antes de marcar este item DONE.
+
+
+
+### PD-004 — Clave duplicada en el resumen de lifecycle
+
+TYPE: BUG
+
+STATUS: BACKLOG
+
+DISCOVERED_AT: 2026-10-04
+
+FOUND_WHILE: C09, compilación local del código que usa el inspector Admin.
+
+PROBLEM: summarizeOpportunityUniverse declara dos veces TOP_LIFECYCLE_UNRESOLVED_REASONS en el mismo objeto. JavaScript conserva la última expresión y el compilador advierte la duplicación.
+
+EXPECTED: Una sola definición explícita del campo, con su alcance documentado y probado.
+
+CURRENT: El resumen usa la última definición. No se demostró una regresión de producto que bloquee este release; las pruebas de Universe pasan. No se modificó este campo durante el cableado.
+
+AFFECTED_FILES_OR_SYSTEMS: src/lib/opportunity-universe.ts, summarizeOpportunityUniverse.
+
+EVIDENCE: Compilación local con esbuild: Duplicate key TOP_LIFECYCLE_UNRESOLVED_REASONS. El código contiene una expresión sobre decisions y otra posterior sobre lifecycleUnresolved. No se consultó PROD.
+
+SCOPE_NEXT_DEPLOY: Con autorización del usuario, comprobar el alcance que espera Admin, conservar la única definición correcta y agregar una prueba del resumen para lifecycle resuelto y pendiente.
+
+DO_NOT_DO_NOW: No cambiar clasificación, readiness, Matching ni el contrato de salida durante el release actual sólo para silenciar un warning.
+
+CLOSURE_TEST: Compilación sin esa duplicación y una prueba que confirma el alcance acordado del campo sin alterar los demás totales.
+
+### PD-005 — Evaluar retorno a cuenta Netlify anterior
+
+TYPE: INFRASTRUCTURE
+
+STATUS: BACKLOG
+
+DISCOVERED_AT: 2026-10-05
+
+FOUND_WHILE: C20 / preflight del release actual.
+
+PROBLEM: La cuenta Netlify actual agotó prácticamente sus créditos durante debugging. Existe una cuenta Netlify anterior que previamente alojaba CVitae y probablemente conserva configuración/environment variables. El dominio fue movido en Namecheap.
+
+EXPECTED: Elegir una cuenta con configuración válida y créditos disponibles para el único release final, sin usar producción para debug.
+
+CURRENT: Pendiente de comparar; no se accedió a cuentas ni se verificó su configuración en esta pasada.
+
+AFFECTED_FILES_OR_SYSTEMS: Cuentas/proyectos Netlify, environment variables, production branch, build/functions/redirects y dominio/DNS en Namecheap. Identificadores y configuración exactos todavía no investigados.
+
+EVIDENCE: Información proporcionada por el usuario: créditos actuales prácticamente agotados, cuenta anterior que alojaba CVitae y dominio movido en Namecheap. La conservación de variables/configuración es probable, no verificada. No se consultaron secrets.
+
+SCOPE_NEXT_DEPLOY:
+
+Antes del deployment final comparar ambas cuentas:
+
+- site/project existente;
+- environment variables;
+- production branch;
+- build command;
+- publish directory;
+- functions directory;
+- redirects;
+- domain/DNS;
+- deploy history;
+- available credits/quota.
+
+Si la cuenta anterior permite publicar sin costo inmediato y tiene configuración válida, preparar migración controlada y usarla para el único release final. Activar este item sólo con autorización explícita del usuario; registrar el release/C21 que lo absorba.
+
+DO_NOT_DO_NOW:
+
+- No cambiar Namecheap.
+- No cambiar dominio.
+- No mover deploy.
+- No revelar secrets.
+- No ejecutar deploy.
+
+CLOSURE_TEST: cvitae.lat sirve el mismo release, functions y variables requeridas desde la cuenta elegida y smoke tests pasan.
+
+### PD-006 — SEO Universe — optimizar primera página del keyset
+
+TYPE: PERFORMANCE
+
+STATUS: BACKLOG
+
+DISCOVERED_AT: 2026-10-08
+
+FOUND_WHILE: Verificación PROD del SEO Universe read path, posterior a 202610080001; resultados informados por el usuario.
+
+PROBLEM: La primera página todavía trabaja sobre el conjunto completo SEO READY antes de ordenar y obtener las primeras 250 filas. Su costo crece con el universo completo, mientras que las páginas posteriores ya trabajan cerca del tamaño de página. Al agregar/corregir scrapers y aumentar oportunidades elegibles, la primera lectura puede volver a degradarse aunque el resto del cursor siga eficiente.
+
+EXPECTED: También la primera página debe comenzar directamente desde el índice/camino SEO READY ordenado y trabajar aproximadamente con el page budget necesario, conservando los gates y la cobertura exhaustiva. PAGE SIZE != TOTAL LIMIT.
+
+CURRENT: POST-RELEASE / NEAR-TERM PERFORMANCE IMPROVEMENT. NO bloquea el release actual. La deuda se conserva deliberadamente: el release pasó el criterio PROD (~0.8 s para la primera página, frente al fallo anterior de varios segundos/timeout), está ampliamente por debajo del timeout y es seguro actualmente. Se registra para evitar que el crecimiento mensual reintroduzca el incidente.
+
+AFFECTED_FILES_OR_SYSTEMS: public.opportunity_seo_universe; opportunity_universe_seo_ready_id_idx; supabase/migrations/202610080001_seo_universe_read_path.sql (referencia de la implementación actual); src/lib/seo-universe-fetch.js; scripts/generate-seo-inventory.ts; netlify/functions/sitemap.ts.
+
+EVIDENCE:
+
+Contexto PROD validado 2026-10-08, proporcionado por el usuario; no se consultó PROD en esta tarea documental:
+
+- opportunity_universe_seo_ready_id_idx está activo.
+- Las páginas posteriores usan opportunity_id > cursor mediante el índice parcial SEO READY.
+- Una página posterior procesa aproximadamente 251 IDs para devolver 250.
+- Ya no existe el patrón anterior de ~16.357 lookups por página.
+- La verificación completa quedó alrededor de 900 ms.
+- La primera página todavía examina aproximadamente 6.054 opportunity_universe_state con seo_state='READY'; ~6.026 filas sobreviven los gates y después ordena para obtener las primeras 250.
+- Tiempo observado PROD de esa primera lectura: ~781 ms.
+
+SCOPE_NEXT_DEPLOY:
+
+Mejora cercana/no bloqueante; activar su implementación sólo con autorización del usuario y registrar el release/Cxx que la absorba. Revisar este punto cuando Codex vuelva a trabajar sobre read path / SEO Universe / sitemap, e incluirlo en revisión periódica de rendimiento conforme crezca el inventario.
+
+Comparar al menos:
+
+- total SEO READY;
+- Execution Time de la primera página;
+- filas examinadas para producir 250;
+- Execution Time de una página posterior;
+- presencia/uso de opportunity_universe_seo_ready_id_idx.
+
+La meta no es perseguir micro-optimizaciones: intervenir cuando el crecimiento muestre que la primera página empieza a escalar materialmente con el universo. Optimizar el acceso ordenado inicial sin recorrer todo READY antes del LIMIT, preservando canonical SEO Universe → gates → ordered keyset → exhaustive coverage.
+
+DO_NOT_DO_NOW:
+
+- No reabrir la implementación SEO ni cambiar código productivo durante el release actual por este pendiente.
+- No aumentar statement_timeout.
+- No bajar artificialmente page size.
+- No introducir un cap global.
+- No excluir fuentes.
+- No quitar deadline ni source operational gates.
+- No duplicar la verdad SEO.
+- No hardcodear scrapers.
+- No consultar/modificar PROD ni ejecutar deploy en esta tarea documental.
+
+CLOSURE_TEST: Con distintos tamaños de SEO READY, comprobar mediante planes y métricas que la primera página accede al camino READY ordenado y examina aproximadamente el presupuesto de candidatos necesario para producir 250, sin trabajo previo sobre todo READY. Las páginas posteriores mantienen id > cursor y uso efectivo del índice; deadline OPEN/UNKNOWN y source operational gates permanecen aplicados. El recorrido hasta EOF conserva todas las URLs elegibles, sin cap global, fuentes excluidas ni pérdidas; comparar contra los baselines PROD registrados arriba y añadir evidencia antes de marcar DONE.

@@ -64,7 +64,7 @@ def scrape_url(url, org):
                     href = link_el.get("href", "")
                     job_url = href if href.startswith("http") else f"{url.rstrip('/')}/{href.lstrip('/')}"
                 jobs.append({
-                    "titulo": title,
+                    "title": title,
                     "organization": org,
                     "location": "Paraguay",
                     "rubro": "Corporativo / Conglomerado",
@@ -73,6 +73,7 @@ def scrape_url(url, org):
                     "application_url": job_url,
                     "source": "grupo_cartes",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["grupo-cartes", "corporativo"],
                 })
             if jobs:
@@ -87,7 +88,7 @@ def scrape_url(url, org):
             if any(kw in text.lower() for kw in LINK_KEYWORDS):
                 job_url = href if href.startswith("http") else url
                 jobs.append({
-                    "titulo": text,
+                    "title": text,
                     "organization": org,
                     "location": "Paraguay",
                     "rubro": "Corporativo / Conglomerado",
@@ -96,6 +97,7 @@ def scrape_url(url, org):
                     "application_url": job_url,
                     "source": "grupo_cartes",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["grupo-cartes", "corporativo"],
                 })
 

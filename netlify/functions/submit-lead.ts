@@ -1,6 +1,6 @@
 import { Handler } from "@netlify/functions"
-import * as pdfParse from "pdf-parse"
 import { makeSupabaseAdmin } from "./_supabase"
+import { extractPdfText as parsePdfText } from "./lib/pdf"
 
 const SITE_URL = process.env.SITE_URL || "https://cvitae.lat"
 const RESEND_KEY = process.env.RESEND_API_KEY
@@ -27,11 +27,12 @@ async function sendResendEmail(to: string, subject: string, html: string): Promi
   }
 }
 
-async function extractCvText(base64: string): Promise<string> {
+export async function extractCvText(base64: string): Promise<string> {
   try {
     const buf = Buffer.from(base64, "base64")
-    const data = await pdfParse.default(buf)
-    return (data.text || "").substring(0, 8000)
+    if (buf.length < 5 || buf.subarray(0, 5).toString("ascii") !== "%PDF-") return ""
+    const text = await parsePdfText(buf)
+    return text.substring(0, 8000)
   } catch {
     return ""
   }
@@ -142,7 +143,7 @@ const handler: Handler = async (event) => {
 
   try {
     const body = JSON.parse(event.body || "{}")
-    const { name, email, company, company_name, source, cv_base64, cv_file_name, cover_letter } = body
+    const { name, email, company, company_name, source, cv_base64, cv_file_name, cover_letter, verification_data, talent_pool_consent } = body
 
     if (!email) {
       return { statusCode: 400, body: JSON.stringify({ error: "Email requerido" }) }
@@ -163,6 +164,15 @@ const handler: Handler = async (event) => {
         email: email.trim().toLowerCase(),
         company_name: resolvedCompany,
         source: source || "landing_b2b",
+        verification_status: "pending",
+        verification_data: verification_data && typeof verification_data === "object" ? {
+          legal_name: String(verification_data.legal_name || "").slice(0, 200),
+          ruc: String(verification_data.ruc || "").slice(0, 40),
+          website: String(verification_data.website || "").slice(0, 500),
+          contact_role: String(verification_data.contact_role || "").slice(0, 120),
+          phone: String(verification_data.phone || "").slice(0, 60),
+          hiring_need: String(verification_data.hiring_need || "").slice(0, 1000),
+        } : {},
       })
 
       if (error) {
@@ -172,7 +182,7 @@ const handler: Handler = async (event) => {
         throw error
       }
 
-      await sendResendEmail(
+      const adminNotified = await sendResendEmail(
         "contacto@cvitae.lat",
         `🎯 Nuevo lead Beta: ${resolvedCompany} (${email})`,
         `<h2>Nuevo lead en la landing</h2>
@@ -182,9 +192,10 @@ const handler: Handler = async (event) => {
       )
 
       // Send confirmation email to B2B lead
+      let confirmationSent = false
       try {
         const confirmationHtml = buildB2BConfirmationEmail(name || "", resolvedCompany)
-        await sendResendEmail(
+        confirmationSent = await sendResendEmail(
           email.trim().toLowerCase(),
           `CVitae recibió tu solicitud, ${resolvedCompany} ✦`,
           confirmationHtml
@@ -193,38 +204,66 @@ const handler: Handler = async (event) => {
         console.error("B2B confirmation email failed:", e.message)
       }
 
-      return { statusCode: 200, body: JSON.stringify({ success: true }) }
+      return { statusCode: 200, body: JSON.stringify({ success: true, adminNotified, confirmationSent }) }
     }
 
     // ── Vacancy application flow
     const vacancySlug = source.replace("vacante:", "")
     const normalizedEmail = email.trim().toLowerCase()
 
-    // 1. Extract CV text for analysis (runs in parallel with profile upsert)
-    const cvText = cv_base64 ? await extractCvText(cv_base64) : ""
-
-    // 2. Look up vacancy id
+    // Resolve the active vacancy before accepting or storing candidate data.
     const { data: vacancyRow } = await supabase
       .from("recruiter_vacancies")
       .select("id, title, recruiter_token_id")
       .eq("slug", vacancySlug)
-      .single()
+      .eq("is_active", true)
+      .maybeSingle()
 
-    // 3. Save application record (separate from user profile)
+    if (!vacancyRow) {
+      return { statusCode: 404, body: JSON.stringify({ error: "La vacante ya no está disponible" }) }
+    }
+
+    if (typeof cv_base64 !== "string" || !cv_base64) {
+      return { statusCode: 400, body: JSON.stringify({ error: "Adjuntá tu CV en PDF" }) }
+    }
+    const cvBuffer = Buffer.from(cv_base64, "base64")
+    if (cvBuffer.length < 5 || cvBuffer.subarray(0, 5).toString("ascii") !== "%PDF-") {
+      return { statusCode: 400, body: JSON.stringify({ error: "El archivo enviado no es un PDF válido" }) }
+    }
+    if (cvBuffer.length > 4 * 1024 * 1024) {
+      return { statusCode: 413, body: JSON.stringify({ error: "El PDF supera 4 MB. Comprimilo o generá una versión optimizada desde Mi Carrera en CVitae." }) }
+    }
+
+    const cvText = await extractCvText(cv_base64)
+    const cvStoragePath = `${vacancyRow.id}/${crypto.randomUUID()}.pdf`
+    const { error: uploadError } = await supabase.storage
+      .from("candidate-cvs")
+      .upload(cvStoragePath, cvBuffer, { contentType: "application/pdf", upsert: false })
+
+    if (uploadError) {
+      console.error("upload candidate CV:", uploadError.message)
+      return { statusCode: 500, body: JSON.stringify({ error: "No pudimos guardar tu CV de forma segura. Intentá nuevamente." }) }
+    }
+
+    // Save the application even when text extraction fails; it remains available for manual review.
     const { error: appError } = await supabase
       .from("vacancy_applications")
       .insert({
-        vacancy_id: vacancyRow?.id || null,
+        vacancy_id: vacancyRow.id,
         vacancy_slug: vacancySlug,
         name: name || "",
         email: normalizedEmail,
         cv_text: cvText || null,
         cv_file_name: cv_file_name || null,
+        cv_storage_path: cvStoragePath,
+        cv_parse_status: cvText ? "parsed" : "manual_review",
         cover_letter: cover_letter || null,
       })
 
     if (appError) {
       console.error("insert vacancy_applications:", appError.message)
+      await supabase.storage.from("candidate-cvs").remove([cvStoragePath])
+      return { statusCode: 500, body: JSON.stringify({ error: "No pudimos registrar tu postulación. Tu archivo no fue conservado; intentá nuevamente." }) }
     }
 
     // Notify recruiter when a new application arrives
@@ -281,27 +320,43 @@ const handler: Handler = async (event) => {
       }
     }
 
-    // 4. Upsert candidate into user_master_profiles
+    let magicLinkSent = false
+    if (talent_pool_consent === true) {
+    // Create a reusable CVitae profile only with explicit, optional consent.
+    const { data: existingProfile } = await supabase
+      .from("user_master_profiles")
+      .select("id, user_id, profile_data")
+      .eq("email", normalizedEmail)
+      .maybeSingle()
     const profilePayload: Record<string, any> = {
       email: normalizedEmail,
       full_name: name || null,
+      cv_file_name: cv_file_name || null,
+      cv_storage_path: cvStoragePath,
+      cv_text: cvText || null,
+      cv_uploaded_at: new Date().toISOString(),
+      embedding: null,
       updated_at: new Date().toISOString(),
     }
-    const profileData: Record<string, any> = { vacancy_slug: vacancySlug }
+    const profileData: Record<string, any> = { ...(existingProfile?.profile_data || {}), vacancy_slug: vacancySlug }
     if (cover_letter) profileData.cover_letter = cover_letter
     if (cv_file_name) profileData.cv_file_name = cv_file_name
     profilePayload.profile_data = profileData
 
-    const { error: upsertError } = await supabase
-      .from("user_master_profiles")
-      .upsert(profilePayload, { onConflict: "email", ignoreDuplicates: false })
+    // A public application must never overwrite a profile already linked to an
+    // authenticated account merely because the applicant supplied its email.
+    if (!existingProfile?.user_id) {
+      const profileWrite = existingProfile
+        ? supabase.from("user_master_profiles").update(profilePayload).eq("id", existingProfile.id).is("user_id", null)
+        : supabase.from("user_master_profiles").insert(profilePayload)
+      const { error: upsertError } = await profileWrite
 
-    if (upsertError) {
-      console.error("upsert user_master_profiles:", upsertError.message)
+      if (upsertError) {
+        console.error("upsert user_master_profiles:", upsertError.message)
+      }
     }
 
     // 2. Generate magic link via admin API (no email sent by Supabase)
-    let magicLinkSent = false
     try {
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: "magiclink",
@@ -348,13 +403,16 @@ const handler: Handler = async (event) => {
     } catch (err: any) {
       console.error("magic link flow error:", err.message)
     }
+    }
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         success: true,
         magicLinkSent,
-        message: "Postulación recibida. Revisá tu email para acceder a tu perfil.",
+        message: talent_pool_consent === true
+          ? "Postulación recibida. Revisá tu email para acceder a tu perfil."
+          : "Postulación recibida correctamente.",
       }),
     }
   } catch (err: any) {

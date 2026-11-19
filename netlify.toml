@@ -1,18 +1,20 @@
 [build]
-  command = "pnpm build && node scripts/prerender.mjs && node scripts/generate-sitemap.mjs && node scripts/generate-robots.mjs"
+  command = "pnpm build"
   publish = "dist"
   functions = "netlify/functions"
+  ignore = "bash netlify-should-build.sh"
 
 [build.environment]
-  NODE_VERSION = "20"
-  PNPM_VERSION = "9"
+  NODE_VERSION = "24"
+  PNPM_VERSION = "11.8.0"
 
 [functions]
   node_bundler = "esbuild"
+  external_node_modules = ["pdfjs-dist"]
 
 # Funciones con riesgo de timeout (análisis con Bedrock)
 [functions."analyze-cv-candidate"]
-  timeout = 30
+  timeout = 45
 
 [functions."generate-cv-vivo"]
   timeout = 30
@@ -20,8 +22,49 @@
 [functions."compare-candidates"]
   timeout = 30
 
+[functions."analyze-vacancy-applicants"]
+  timeout = 30
+
+[functions."send-high-match-alerts"]
+  timeout = 30
+
 [functions."analyze-recruiters-batch"]
   timeout = 26
+
+[functions."admin-analytics"]
+  timeout = 30
+
+[functions."public-opportunity-detail"]
+  included_files = ["dist/index.html"]
+
+# The helper resolves PDF.js dynamically to preserve its native ESM top-level
+# await. Include both pnpm's link and its physical store path in the only
+# functions that parse PDFs; no package source is copied into this repository.
+[functions."extract-pdf-text"]
+  timeout = 30
+  included_files = ["node_modules/pdfjs-dist/**", "node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/**"]
+
+[functions."submit-lead"]
+  included_files = ["node_modules/pdfjs-dist/**", "node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/**"]
+
+
+[functions."sitemap"]
+  timeout = 30
+
+[functions."enrich-opportunity"]
+  timeout = 30
+
+[functions."enrich-opportunities-cron"]
+  timeout = 30
+
+[functions."cv-ats-workspace"]
+  timeout = 30
+
+[functions."application-workspace"]
+  timeout = 30
+
+[functions."cv-rewrite-workspace"]
+  timeout = 30
 
 [[redirects]]
   from = "/ads.txt"
@@ -34,6 +77,82 @@
   to = "/index.html"
   status = 200
 
+# Dynamic sitemap — always serve fresh from Netlify function (force overrides static dist/sitemap.xml)
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+  force = true
+
+# Explicit child-sitemap routes. Singleton routes are exact so the SPA fallback
+# cannot intercept them. Opportunity page 1 retains the legacy URL already sent
+# to search engines; new pages use a real path segment.
+[[redirects]]
+  from = "/sitemap-static.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/sitemap-blog.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/sitemap-vacancies.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/sitemap-opportunities-1.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/sitemap-opportunities/:page"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/blog"
+  to = "/.netlify/functions/public-blog-post?view=list"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/blog/index.html"
+  to = "/.netlify/functions/public-blog-post?view=list"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/blog/:slug"
+  to = "/.netlify/functions/public-blog-post?slug=:slug"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/blog/:slug/"
+  to = "/.netlify/functions/public-blog-post?slug=:slug"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/blog/:slug/index.html"
+  to = "/.netlify/functions/public-blog-post?slug=:slug"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/vacante/:slug"
+  to = "/404.html"
+  status = 404
+
+# SPA fallback for all other app routes (auth, hub, admin, etc.)
 [[redirects]]
   from = "/*"
   to = "/index.html"
@@ -47,6 +166,7 @@
     X-XSS-Protection = "1; mode=block"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com https://partner.googleadservices.com https://tpc.googlesyndication.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://analytics.google.com https://www.google.com https://stats.g.doubleclick.net https://www.googletagmanager.com; font-src 'self' data: https://fonts.gstatic.com; frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; object-src 'none'; base-uri 'self'"
 
 [[headers]]
   for = "/index.html"

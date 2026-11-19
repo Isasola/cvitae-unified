@@ -2,64 +2,98 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { createClient } from '@supabase/supabase-js'
+import WebSocket from 'ws'
+import { STATIC_PUBLIC_SITEMAP_ROUTES } from '../src/lib/static-sitemap-routes.js'
+import { fetchAllPages } from '../src/lib/paged-fetch.js'
+import { canonicalSitemapRows, sitemapIndexEntries } from '../src/lib/sitemap-universe.js'
+import { isCurrentPublicBlog, publicBlogExclusionReason } from '../src/lib/public-blog-contract.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const distPath = path.join(__dirname, '..', 'dist')
 const SITE_URL = 'https://cvitae.lat'
+const seoInventoryPath = path.join(__dirname, '..', 'generated', 'public-seo-inventory.json')
+const publicContentFixturePath = process.env.PUBLIC_CONTENT_FIXTURE
+if (!fs.existsSync(seoInventoryPath)) throw new Error('seo_inventory_missing')
+const seoInventory = JSON.parse(fs.readFileSync(seoInventoryPath, 'utf8'))
+if (!seoInventory.generated_at || !Array.isArray(seoInventory.rows)) throw new Error('seo_inventory_invalid')
+if (Date.now() - Date.parse(seoInventory.generated_at) > 24 * 60 * 60 * 1000) throw new Error('seo_inventory_stale')
+if (seoInventory.rows.length === 0 && process.env.SEO_INVENTORY_ALLOW_EMPTY !== 'true') throw new Error('seo_inventory_empty')
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
 
-const supabaseUrl = process.env.SUPABASE_URL
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY
+const supabase = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey, { realtime: { transport: WebSocket } })
+  : null
+if (!fs.existsSync(distPath)) fs.mkdirSync(distPath, { recursive: true })
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('⚠️ Variables de Supabase no definidas')
-  process.exit(0)
+const esc = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+const PAGE_SIZE = 1000
+
+function urlsetXml(rows, today) {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.map(row => `  <url>\n    <loc>${esc(`${SITE_URL}${row.canonical_path || row.url}`)}</loc>\n    <lastmod>${(row.updated_at || today).slice(0, 10)}</lastmod>\n    <changefreq>${row.freq || 'weekly'}</changefreq>\n    <priority>${row.priority || '0.7'}</priority>\n  </url>`).join('\n')}\n</urlset>`
 }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey)
-if (!fs.existsSync(distPath)) fs.mkdirSync(distPath, { recursive: true })
+async function fetchPublicBlogRows() {
+  if (!supabase) return []
+  const rows = await fetchAllPages(1000, async (offset, size) => {
+    const query = supabase.from('content_hub').select('id,slug,created_at,updated_at,fecha_vencimiento,metadata,is_active')
+      .not('slug', 'is', null).eq('tipo', 'blog').eq('is_active', true)
+      .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(offset, offset + size - 1)
+    const { data, error } = await query
+    if (error) throw error
+    return data || []
+  })
+  const invalidExpiry = rows.filter(row => publicBlogExclusionReason(row) === 'BLOG_EXPIRY_INVALID')
+  if (invalidExpiry.length) console.error('[sitemap-build:blog-invalid-expiry]', JSON.stringify({ count: invalidExpiry.length, ids: invalidExpiry.map(row => row.id).filter(Boolean) }))
+  return canonicalSitemapRows('/blog', rows.filter(row => isCurrentPublicBlog(row)))
+}
 
 async function generate() {
   const today = new Date().toISOString().split('T')[0]
+  const publicContentFixture = publicContentFixturePath
+    ? JSON.parse(fs.readFileSync(path.resolve(publicContentFixturePath), 'utf8'))
+    : null
+  if (publicContentFixture && !Array.isArray(publicContentFixture.blogs)) throw new Error('public_content_fixture_invalid')
+  const blogCandidates = publicContentFixture ? publicContentFixture.blogs : []
+  const invalidFixtureExpiry = blogCandidates.filter(row => publicBlogExclusionReason(row) === 'BLOG_EXPIRY_INVALID')
+  if (invalidFixtureExpiry.length) console.error('[sitemap-build:blog-invalid-expiry]', JSON.stringify({ count: invalidFixtureExpiry.length, ids: invalidFixtureExpiry.map(row => row.id).filter(Boolean) }))
+  const blogPosts = publicContentFixture
+    ? canonicalSitemapRows('/blog', blogCandidates.filter(row => isCurrentPublicBlog(row)))
+    : await fetchPublicBlogRows()
 
-  const { data: blogPosts } = await supabase
-    .from('content_hub').select('slug, created_at')
-    .eq('tipo', 'blog').eq('is_active', true)
+  // Opportunity URLs are exclusively the pre-filtered effective SEO inventory.
+  const jobs = seoInventory.rows || []
 
-  const { data: opportunities } = await supabase
-    .from('content_hub').select('slug, created_at')
-    .in('tipo', ['oportunidad', 'empleo', 'beca'])
-    .eq('is_active', true)
-    .order('created_at', { ascending: false })
-    .limit(200)
+  // Direct recruiter application URLs are private-context entry points. They
+  // remain reachable to recipients but are not an SEO/public-distribution
+  // universe until an explicit canonical consumer permission exists.
+  const vacancies = []
 
-  let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n'
-  sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+  const staticPages = STATIC_PUBLIC_SITEMAP_ROUTES
+  const staticRows = staticPages.map(route => ({ ...route, canonical_path: route.url, updated_at: today }))
+  fs.writeFileSync(path.join(distPath, 'sitemap-static.xml'), urlsetXml(staticRows, today))
+  if (blogPosts.length) fs.writeFileSync(path.join(distPath, 'sitemap-blog.xml'), urlsetXml(blogPosts, today))
+  if (fs.existsSync(path.join(distPath, 'sitemap-vacancies.xml'))) fs.rmSync(path.join(distPath, 'sitemap-vacancies.xml'))
 
-  const staticPages = [
-    { url: '/', priority: '1.0', freq: 'daily' },
-    { url: '/oportunidades', priority: '0.9', freq: 'daily' },
-    { url: '/blog', priority: '0.8', freq: 'weekly' },
-    { url: '/about', priority: '0.6', freq: 'monthly' },
-    { url: '/privacy', priority: '0.3', freq: 'monthly' },
-  ]
+  for (let page = 1; page <= Math.ceil(jobs.length / PAGE_SIZE); page += 1) {
+    const rows = jobs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(job => ({
+      canonical_path: job.canonical_path,
+      updated_at: job.updated_at,
+      priority: job.canonical_path?.startsWith('/empleos/') ? '0.8' : '0.7',
+    }))
+    const pagePath = path.join(distPath, 'sitemap-opportunities', `${page}.xml`)
+    fs.mkdirSync(path.dirname(pagePath), { recursive: true })
+    fs.writeFileSync(pagePath, urlsetXml(rows, today))
+    if (page === 1) fs.writeFileSync(path.join(distPath, 'sitemap-opportunities-1.xml'), urlsetXml(rows, today))
+  }
 
-  staticPages.forEach(p => {
-    sitemap += `  <url>\n    <loc>${SITE_URL}${p.url}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${p.freq}</changefreq>\n    <priority>${p.priority}</priority>\n  </url>\n`
-  })
-
-  blogPosts?.forEach(post => {
-    const lastmod = post.created_at?.split('T')[0] || today
-    sitemap += `  <url>\n    <loc>${SITE_URL}/blog/${post.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>\n`
-  })
-
-  opportunities?.forEach(opp => {
-    const lastmod = opp.created_at?.split('T')[0] || today
-    sitemap += `  <url>\n    <loc>${SITE_URL}/oportunidades/${opp.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.6</priority>\n  </url>\n`
-  })
-
-  sitemap += '</urlset>'
+  const entries = sitemapIndexEntries(jobs.length, blogPosts.length, PAGE_SIZE)
+  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map(name => `  <sitemap><loc>${esc(`${SITE_URL}/${name}`)}</loc><lastmod>${today}</lastmod></sitemap>`).join('\n')}\n</sitemapindex>`
   fs.writeFileSync(path.join(distPath, 'sitemap.xml'), sitemap)
-  console.log(`✅ Sitemap generado con ${(blogPosts?.length || 0) + (opportunities?.length || 0) + staticPages.length} URLs en ${SITE_URL}`)
+  console.log(`✅ Sitemap generado con ${(blogPosts?.length || 0) + jobs.length + staticPages.length + (vacancies?.length || 0)} URLs en ${SITE_URL}`)
 }
 
-generate().catch(console.error)
+generate().catch((error) => {
+  console.error(error)
+  process.exit(1)
+})

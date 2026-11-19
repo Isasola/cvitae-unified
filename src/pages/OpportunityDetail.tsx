@@ -1,100 +1,30 @@
-import { useState, useEffect } from 'react'
-import { Link, useParams, useLocation } from 'wouter'
-import { motion } from 'framer-motion'
-import { ArrowLeft, Building2, MapPin, Calendar, Briefcase, ExternalLink } from 'lucide-react'
-import { GlassCard, Badge, GoldButton } from '@/components/cvitae/UI-Elements'
-import { Navbar } from '@/components/cvitae/Navbar'
-import { Footer } from '@/components/cvitae/Footer'
-import { supabase } from '@/lib/supabase'
-import ReactMarkdown from 'react-markdown'
+import { useEffect, useLayoutEffect, useState } from 'react'
+import { Helmet } from 'react-helmet-async'
+import { publicDetailDescription, releaseInitialPublicDetailHead } from '@/lib/public-detail-head.js'
+import { Link, useLocation, useParams } from 'wouter'
+import { canonicalOpportunityPathForRow, canonicalOpportunityUrlForRow, deadlineLifecycle, publicOpportunitySchemaType } from '@/lib/opportunity-truth'
+import { aggregatedJobPosting } from '@/lib/factual-job-posting'
+import { safeExternalUrl } from '@/lib/safe-url'
+import { ArrowLeft, ExternalLink, ShieldCheck } from 'lucide-react'
+import { SiteShell } from '@/components/cv/SiteShell'
+import { loadPublicOpportunities } from '@/lib/public-source-policy'
+import { analytics } from '@/lib/analytics'
+import { CvitaeOpportunityValue, OpportunityApplicationCta, OpportunityFacts, OpportunitySourceBlock, StructuredOpportunityDescription } from '@/components/cvitae/OpportunityPresentation'
+import { OpportunityDetailSkeleton } from '@/components/cvitae/OpportunityDetailSkeleton'
 
-interface Opportunity {
-  id: string
-  titulo: string
-  slug: string
-  cuerpo: string
-  categoria: string
-  ubicacion: string
-  fecha_vencimiento: string
-  tipo: string
-  metadata?: { application_url?: string; organization?: string }
-}
+type StructuredItem = { text: string; category?: string }
+type AiEnrichment = { skills?: string[]; ideal_profile?: string; application_tips?: string; sector_context?: string; generated_at?: string }
+interface Opportunity { id:string; slug:string; title:string; organization:string|null; location:string|null; city:string|null; department:string|null; country_code:string|null; onsite_country?:string|null; remote?:boolean|null; remote_scope?:string|null; type:string|null; employment_type?:string|null; tags?:string[]|null; requirements?:StructuredItem[]|null; responsibilities?:StructuredItem[]|null; benefits?:StructuredItem[]|null; duration_text?:string|null; start_date?:string|null; start_date_text?:string|null; value?:string|null; description:string|null; opportunity_type:string|null; opportunity_kind?:string|null; application_url:string; source:string|null; source_url?:string|null; deadline:string|null; funding_type:string|null; funding_amount:number|null; currency:string|null; fully_funded:boolean|null; experience_required?:string|null; eligible_countries:string[]|null; eligible_regions:string[]|null; education_level:string|null; updated_at:string; ai_enrichment?:AiEnrichment|null; distribution?:{seo?:{allowed:boolean}; jobPosting?:{allowed:boolean}; googleJobs?:{allowed:boolean}; sourceAttributionRequired?:boolean} }
+const LABELS:Record<string,string>={scholarship:'Beca',fellowship:'Fellowship',grant:'Grant',seed_capital:'Capital semilla',accelerator:'Aceleradora',incubator:'Incubadora',startup_competition:'Competencia',research_funding:'Financiación de investigación',training:'Formación',exchange_program:'Intercambio',volunteering:'Voluntariado',tender:'Licitación'}
+const clean=(value:unknown)=>String(value||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim()
 
-const WA_NUMBER = '595992954169'
-
-export default function OpportunityDetail() {
-  const { slug } = useParams<{ slug: string }>()
-  const [opportunity, setOpportunity] = useState<Opportunity | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [, setLocation] = useLocation()
-
-  useEffect(() => {
-    if (slug) {
-      supabase
-        .from('content_hub')
-        .select('*')
-        .eq('slug', slug)
-        .eq('is_active', true)
-        .single()
-        .then(({ data }) => { setOpportunity(data); setLoading(false) })
-    }
-  }, [slug])
-
-  if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-4 border-gold border-t-transparent rounded-full animate-spin" /></div>
-  if (!opportunity) return <div className="min-h-screen bg-background text-white flex items-center justify-center">Oportunidad no encontrada.</div>
-
-  const appUrl = opportunity.metadata?.application_url
-
-  return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <div className="pt-32 pb-20 px-4 max-w-4xl mx-auto">
-        <div className="mb-8">
-          <Link href="/oportunidades" className="text-gold flex items-center gap-2 hover:underline text-sm">
-            <ArrowLeft size={16} /> Volver a oportunidades
-          </Link>
-        </div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <GlassCard>
-            <div className="flex items-center gap-2 mb-4">
-              <Badge variant={opportunity.tipo === 'beca' ? 'gold' : 'muted'}>{opportunity.tipo === 'beca' ? 'Beca' : 'Foro'}</Badge>
-              <span className="text-xs text-muted flex items-center gap-1">
-                <Calendar size={12} />
-                Vence: {new Date(opportunity.fecha_vencimiento).toLocaleDateString()}
-              </span>
-            </div>
-            <h1 className="text-3xl font-bold text-white mb-6">{opportunity.titulo}</h1>
-
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="flex items-center gap-2 text-sm text-muted">
-                <MapPin size={16} className="text-gold" /> {opportunity.ubicacion}
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted">
-                <Briefcase size={16} className="text-gold" /> {opportunity.categoria}
-              </div>
-            </div>
-
-            <div className="prose prose-invert max-w-none text-muted mb-8">
-              <ReactMarkdown>{opportunity.cuerpo}</ReactMarkdown>
-            </div>
-
-            <div className="flex gap-4">
-              {appUrl && (
-                <GoldButton onClick={() => window.open(appUrl, '_blank', 'noopener,noreferrer')}>
-                  Postularse a esta oportunidad <ExternalLink size={16} />
-                </GoldButton>
-              )}
-              <GoldButton
-                variant="outline"
-                onClick={() => window.open(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola! Quiero mejorar mi CV para la oportunidad: ' + opportunity.titulo)}`, '_blank')}
-              >
-                Mejorar mi CV para esta oportunidad
-              </GoldButton>
-            </div>
-          </GlassCard>
-        </motion.div>
-      </div>
-      <Footer />
-    </div>
-  )
+export default function OpportunityDetail(){
+  const {slug}=useParams<{slug:string}>(); const [,setLocation]=useLocation(); const [item,setItem]=useState<Opportunity|null>(null); const [loading,setLoading]=useState(true); const [enrichment,setEnrichment]=useState<AiEnrichment|null>(null)
+  useEffect(()=>{if(!slug)return; void loadPublicOpportunities<Opportunity>('all',slug).then(data=>{const loaded=data as Opportunity|null; if(loaded&&canonicalOpportunityPathForRow(loaded)!==`/oportunidades/${loaded.slug}`){setLocation(canonicalOpportunityPathForRow(loaded),{replace:true});return} if(!loaded){setLocation('/oportunidades',{replace:true});return} setItem(loaded); if(loaded){analytics.opportunityViewed(loaded.id,loaded.source||'unknown',{opportunity_slug:loaded.slug,opportunity_kind:loaded.opportunity_kind||loaded.opportunity_type,route_family:'oportunidades'}); if(loaded.ai_enrichment){setEnrichment(loaded.ai_enrichment)}else{void fetch('/.netlify/functions/enrich-opportunity',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:loaded.slug})}).then(r=>r.ok?r.json():null).then(res=>{if(res?.enrichment)setEnrichment(res.enrichment)}).catch(()=>{})}}}).finally(()=>setLoading(false))},[slug])
+  useLayoutEffect(()=>{if(!loading)releaseInitialPublicDetailHead()},[loading])
+  if(loading)return <SiteShell><OpportunityDetailSkeleton/></SiteShell>
+  if(!item)return <><Helmet><title>Página no encontrada | CVitae</title><meta name="description" content="Esta oportunidad no está disponible."/><meta name="robots" content="noindex,follow"/></Helmet><SiteShell><main className="mx-auto min-h-[60vh] max-w-5xl px-6 py-20"><p className="text-cream">Esta oportunidad ya no está activa o no existe.</p><Link href="/oportunidades" className="mt-4 inline-block text-sm text-[#c9a84c]">Volver a oportunidades</Link></main></SiteShell></>
+  const context={opportunityId:item.id,source:item.source,opportunityKind:item.opportunity_kind||item.opportunity_type,routeFamily:'oportunidades'}
+  const type=LABELS[item.opportunity_type||'']||clean(item.opportunity_type).replaceAll('_',' ')||'Oportunidad'; const eligibility=[...(item.eligible_countries||[]),...(item.eligible_regions||[])].join(', '); const title=`${clean(item.title)} | CVitae`; const description=clean(item.description)||clean(item.title); const funding=item.funding_amount?`${item.currency||''} ${Number(item.funding_amount).toLocaleString('es-PY')}`.trim():clean(item.funding_type); const canonicalUrl=canonicalOpportunityUrlForRow(item); const deadlineState=deadlineLifecycle(item.deadline); const factual=aggregatedJobPosting(item,canonicalUrl); const schemaType=publicOpportunitySchemaType(item,factual.state==='READY'); const structuredData=schemaType==='JobPosting'&&factual.structuredData?factual.structuredData:schemaType==='Scholarship'?{'@context':'https://schema.org', '@type':'Scholarship',name:clean(item.title),description,url:canonicalUrl,...(deadlineState==='OPEN'?{validThrough:item.deadline}:{}),...(clean(item.organization)?{provider:{'@type':'Organization',name:clean(item.organization)}}:{})}:{'@context':'https://schema.org','@type':'WebPage',name:clean(item.title),url:canonicalUrl,description}; const apply=()=>{analytics.applyClicked(item.id,item.source||'unknown',{opportunity_slug:item.slug,opportunity_kind:item.opportunity_kind||item.opportunity_type,route_family:'oportunidades',surface:'public_detail'});window.open(safeExternalUrl(item.application_url),'_blank','noopener,noreferrer')}
+  return <><Helmet>{item.distribution?.seo?.allowed!==true&&<meta name="robots" content="noindex,follow"/>}<title>{title}</title><meta name="description" content={publicDetailDescription(description)}/><link rel="canonical" href={canonicalUrl}/><meta property="og:title" content={title}/><meta property="og:description" content={publicDetailDescription(description)}/><meta property="og:url" content={canonicalUrl}/><meta property="og:type" content="article"/><meta property="og:image" content="https://cvitae.lat/og-image.jpg"/><script type="application/ld+json">{JSON.stringify(structuredData)}</script></Helmet><SiteShell><main className="mx-auto max-w-5xl px-6 py-12 sm:py-16"><Link href="/oportunidades" className="inline-flex items-center gap-2 text-sm text-white/40 transition hover:text-cream"><ArrowLeft className="h-4 w-4"/>Volver a oportunidades</Link><article className="mt-8 grid gap-8 lg:grid-cols-[1fr_300px]"><div><p className="text-[10px] uppercase tracking-[0.18em] text-[#c9a84c]">{type}</p><h1 className="mt-3 max-w-3xl font-display text-3xl leading-tight text-cream sm:text-5xl">{clean(item.title)}</h1><OpportunityFacts row={{slug:item.slug,title:item.title,organization:item.organization,location:item.location,type:item.employment_type||type,deadline:deadlineState==='OPEN'?item.deadline:null,tags:item.tags}} facts={[{label:'Financiación',value:item.fully_funded?'Financiación total':funding},{label:'Elegibilidad',value:eligibility},{label:'Nivel',value:item.education_level},{label:'Experiencia',value:item.experience_required},{label:'Duración',value:item.duration_text},{label:'Inicio',value:item.start_date||item.start_date_text}]}/><StructuredOpportunityDescription description={item.description} requirements={item.requirements} responsibilities={item.responsibilities} benefits={item.benefits} heading="Información de la convocatoria"/>{enrichment&&<div className="mt-8 space-y-6 border-t border-white/8 pt-6">{enrichment.skills&&enrichment.skills.length>0&&<div><p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#c9a84c]">Habilidades clave</p><div className="flex flex-wrap gap-2">{enrichment.skills.map((s,i)=><span key={i} className="border border-white/10 px-3 py-1 text-xs text-white/60">{s}</span>)}</div></div>}{enrichment.ideal_profile&&<div><p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[#c9a84c]">Perfil ideal</p><p className="text-sm leading-relaxed text-white/60">{enrichment.ideal_profile}</p></div>}{enrichment.application_tips&&<div><p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[#c9a84c]">Consejos para postularse</p><p className="text-sm leading-relaxed text-white/60">{enrichment.application_tips}</p></div>}{enrichment.sector_context&&<div><p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[#c9a84c]">Contexto del sector</p><p className="text-sm leading-relaxed text-white/60">{enrichment.sector_context}</p></div>}</div>}<CvitaeOpportunityValue/><div className="mt-7"><OpportunityApplicationCta slug={item.slug} {...context}/></div></div><aside className="h-fit border border-white/8 bg-white/[0.018] p-5 lg:sticky lg:top-24"><div className="hidden lg:block"><OpportunityApplicationCta slug={item.slug} {...context}/></div><button onClick={apply} className="mt-2 flex w-full items-center justify-center gap-2 border border-white/10 px-4 py-2.5 text-xs text-white/55 transition hover:border-white/25 hover:text-cream">Ir directamente al sitio <ExternalLink className="h-3.5 w-3.5"/></button><p className="mt-3 text-[11px] leading-relaxed text-white/35">Podés adaptar tu CV con evidencias reales, preparar el mensaje y revisar brechas antes de abrir el formulario oficial.</p><div className="mt-5 space-y-3 border-t border-white/8 pt-4 text-xs leading-relaxed text-white/35"><p className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400"/>Esta ficha pasó por revisión, pero las bases de la organización son siempre la referencia final.</p><p>Revisada {new Date(item.updated_at).toLocaleDateString('es-PY')}</p><OpportunitySourceBlock row={{slug:item.slug,title:item.title,source:item.source,source_url:item.source_url,sourceAttributionRequired:item.distribution?.sourceAttributionRequired}}/></div></aside></article></main></SiteShell></>
 }

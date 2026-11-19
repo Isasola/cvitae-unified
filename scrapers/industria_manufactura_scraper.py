@@ -107,7 +107,7 @@ def scrape_empresa(key, url, org, rubro):
 
 def _build_job(title, org, job_url, key, rubro):
     return {
-        "titulo": title,
+        "title": title,
         "organization": org,
         "location": DEFAULT_LOCATION,
         "rubro": rubro,
@@ -122,7 +122,7 @@ def _build_job(title, org, job_url, key, rubro):
 
 def _generic_entry(key, url, org, rubro):
     return {
-        "titulo": f"Empleo en {org}",
+        "title": f"Empleo en {org}",
         "organization": org,
         "location": DEFAULT_LOCATION,
         "rubro": rubro,
@@ -136,6 +136,9 @@ def _generic_entry(key, url, org, rubro):
 
 
 def insert_job(job):
+    if str(job.get("title", "")).casefold().startswith(("vacantes abiertas en", "empleos en", "empleo en")):
+        print("  NO_CONCRETE_VACANCY")
+        return "skipped"
     try:
         r = requests.post(
             TABLE_URL + "?on_conflict=application_url",

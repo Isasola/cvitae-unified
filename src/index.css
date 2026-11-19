@@ -96,3 +96,33 @@
   border-radius: var(--radius-lg);
   padding: 1.5rem;
 }
+
+@layer components {
+  .b2c-progress-loader__stage {
+    position: relative;
+    min-height: 7.25rem;
+    perspective: 700px;
+    isolation: isolate;
+  }
+  .b2c-progress-loader__card {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border: 1px solid rgb(201 168 76 / 30%);
+    border-radius: 1rem;
+    background: linear-gradient(135deg, rgb(201 168 76 / 12%), rgb(255 255 255 / 4%));
+    color: rgb(255 255 255 / 72%);
+    transform-style: preserve-3d;
+    transition: transform 500ms ease, opacity 500ms ease;
+  }
+  .b2c-progress-loader__card--0 { z-index: 3; transform: translateZ(34px) translateY(0); color: var(--cream); box-shadow: 0 18px 45px rgb(0 0 0 / 24%); }
+  .b2c-progress-loader__card--1 { z-index: 2; opacity: .62; transform: translateZ(0) translateY(10px) scale(.96); }
+  .b2c-progress-loader__card--2 { z-index: 1; opacity: .3; transform: translateZ(-28px) translateY(20px) scale(.92); }
+  @media (prefers-reduced-motion: reduce) {
+    .b2c-progress-loader__card { transition: none; transform: none; }
+    .b2c-progress-loader__card--1 { transform: translateY(8px) scale(.97); }
+    .b2c-progress-loader__card--2 { transform: translateY(16px) scale(.94); }
+  }
+}

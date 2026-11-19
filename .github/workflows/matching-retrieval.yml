@@ -1,0 +1,66 @@
+name: Matching retrieval coverage
+
+on:
+  schedule:
+    - cron: '37 * * * *'
+  workflow_dispatch:
+    inputs:
+      confirm_prod_recovery:
+        description: 'Confirm an authorized one-profile matching recovery canary'
+        type: choice
+        options: ['NO', 'YES']
+        default: 'NO'
+        required: true
+      max_users:
+        description: Profiles processed per run (bounded)
+        required: false
+        default: '1'
+      page_size:
+        description: Opportunities per page (maximum 500)
+        required: false
+        default: '25'
+      max_pages:
+        description: Pages per profile per run (bounded)
+        required: false
+        default: '1'
+
+concurrency:
+  group: cvitae-matching-retrieval
+  cancel-in-progress: false
+
+jobs:
+  healthcheck:
+    if: (github.event_name == 'schedule' && vars.CVITAE_RECOVERY_CRON_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.confirm_prod_recovery == 'YES')
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Ping Supabase
+        run: |
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 8 "${SUPABASE_URL}/rest/v1/" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}")
+          echo "Supabase HTTP: $HTTP"
+          [ "$HTTP" = "200" ] || exit 1
+
+  expand:
+    needs: healthcheck
+    if: (github.event_name == 'schedule' && vars.CVITAE_RECOVERY_CRON_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.confirm_prod_recovery == 'YES')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsx scripts/run_matching_retrieval_expansion.ts --max-users "${{ inputs.max_users || '2' }}" --page-size "${{ inputs.page_size || '250' }}" --max-pages "${{ inputs.max_pages || '4' }}"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

@@ -59,7 +59,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-function SuccessState({ name }: { name: string }) {
+function SuccessState({ name, magicLinkSent }: { name: string; magicLinkSent: boolean }) {
   const first = name.split(' ')[0] || 'Hola'
   return (
     <motion.div
@@ -82,11 +82,17 @@ function SuccessState({ name }: { name: string }) {
       <h2 className="mt-8 text-center font-display text-4xl leading-tight text-white sm:text-5xl">
         ¡Postulación enviada, <em className="not-italic text-white/70">{first}</em>!
       </h2>
-      <p className="mx-auto mt-4 max-w-md text-center text-sm font-light leading-relaxed text-white/55">
-        Revisá tu email — te enviamos un link para acceder a tu perfil en CVitae y ver el estado de tu postulación.
-      </p>
+      {magicLinkSent ? (
+        <p className="mx-auto mt-4 max-w-md text-center text-sm font-light leading-relaxed text-white/55">
+          Revisá tu email: te enviamos un link para acceder a tu perfil en CVitae y ver el estado de tu postulación.
+        </p>
+      ) : (
+        <p className="mx-auto mt-4 max-w-md text-center text-sm font-light leading-relaxed text-white/55">
+          Tu postulación fue registrada y enviada únicamente a la empresa. No creamos un perfil adicional porque esa opción es voluntaria.
+        </p>
+      )}
 
-      <div className="mx-auto mt-8 max-w-md rounded-2xl border border-[#c9a84c]/15 bg-[#c9a84c]/[0.04] p-5 text-left flex items-start gap-3">
+      {magicLinkSent && <div className="mx-auto mt-8 max-w-md rounded-2xl border border-[#c9a84c]/15 bg-[#c9a84c]/[0.04] p-5 text-left flex items-start gap-3">
         <Mail strokeWidth={1.5} className="h-5 w-5 text-[#c9a84c] mt-0.5 shrink-0" />
         <div>
           <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Revisá tu correo</p>
@@ -94,12 +100,19 @@ function SuccessState({ name }: { name: string }) {
             Asunto: <span className="text-white">"Tu acceso a CVitae está listo ✦"</span>
           </p>
           <p className="mt-2 text-xs text-white/35">
-            ¿No lo ves? Revisá la carpeta de <span className="text-white/55">Spam</span> o <span className="text-white/55">Promociones</span>. El email sale desde <span className="font-mono text-white/55">noreply@cvitae.lat</span>.
+            ¿No lo ves? Revisá la carpeta de <span className="text-white/55">Spam</span> o <span className="text-white/55">Promociones</span>. El email sale desde <span className="font-mono text-white/55">contacto@cvitae.lat</span>.
           </p>
         </div>
-      </div>
+      </div>}
 
       <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <Link
+          href="/mi-carrera/cv"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-[#c9a84c] px-6 py-3 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_30px_-4px_rgba(201,168,76,0.4)]"
+        >
+          Mejorá tu CV con CVitae
+          <ArrowRight strokeWidth={1.75} className="h-4 w-4" />
+        </Link>
         <Link
           href="/oportunidades"
           className="inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-6 py-3 text-sm text-white/70 transition hover:border-white/30 hover:text-white"
@@ -156,10 +169,12 @@ export default function VacantePage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [coverLetter, setCoverLetter] = useState('')
+  const [talentPoolConsent, setTalentPoolConsent] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [magicLinkSent, setMagicLinkSent] = useState(false)
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -182,7 +197,7 @@ export default function VacantePage() {
     if (!list || !list[0]) return
     const f = list[0]
     if (f.type !== 'application/pdf') { setError('Solo se aceptan archivos PDF.'); return }
-    if (f.size > 10 * 1024 * 1024) { setError('El archivo no puede superar 10 MB.'); return }
+    if (f.size > 4 * 1024 * 1024) { setError('El PDF supera 4 MB. Podés comprimirlo o crear una versión optimizada desde Mi Carrera en CVitae.'); return }
     setFile(f); setError('')
   }
 
@@ -222,10 +237,12 @@ export default function VacantePage() {
           cv_base64: base64,
           cv_file_name: file.name,
           cover_letter: coverLetter.trim() || undefined,
+          talent_pool_consent: talentPoolConsent,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error al enviar la postulación')
+      setMagicLinkSent(data.magicLinkSent === true)
       setSubmitted(true)
     } catch (err: any) {
       setError(err.message || 'Error de conexión. Intentá de nuevo.')
@@ -235,13 +252,25 @@ export default function VacantePage() {
   }
 
   const pageTitle = vacancy?.title || (slug ? slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'Vacante')
+  const canonical = `https://cvitae.lat/vacante/${slug}`
+  const metaDescription = vacancy
+    ? `${vacancy.title} en ${vacancy.company} — ${vacancy.location}. Postulá directamente desde CVitae.`
+    : `Postulá a ${pageTitle}. Tu perfil queda guardado en CVitae para futuras búsquedas.`
+  // Direct application is not authorization for indexing or JobPosting. The
+  // independent canonical B2C route is controlled by Opportunity Universe.
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
       <Ambient />
       <Helmet>
+        <meta name="robots" content="noindex,nofollow" />
         <title>{pageTitle} · CVitae</title>
-        <meta name="description" content={`Postulá a ${pageTitle}. Tu perfil queda guardado en CVitae para futuras búsquedas.`} />
+        <meta name="description" content={metaDescription} />
+        <link rel="canonical" href={canonical} />
+        <meta property="og:title" content={`${pageTitle} · CVitae`} />
+        <meta property="og:description" content={metaDescription} />
+        <meta property="og:url" content={canonical} />
+        <meta property="og:type" content="article" />
       </Helmet>
 
       {/* Top bar */}
@@ -263,7 +292,7 @@ export default function VacantePage() {
         ) : notFound ? (
           <NotFoundState slug={slug} />
         ) : submitted ? (
-          <SuccessState name={name} />
+          <SuccessState name={name} magicLinkSent={magicLinkSent} />
         ) : (
           <>
             {/* Vacancy header */}
@@ -277,7 +306,6 @@ export default function VacantePage() {
               <ul className="mt-8 flex flex-wrap gap-2">
                 <Meta icon={<MapPin strokeWidth={1.5} className="h-3.5 w-3.5" />}>{vacancy!.location}</Meta>
                 <Meta icon={<Briefcase strokeWidth={1.5} className="h-3.5 w-3.5" />}>{vacancy!.modality}</Meta>
-                <Meta icon={<Clock strokeWidth={1.5} className="h-3.5 w-3.5" />}>Tiempo completo</Meta>
                 {vacancy!.salary_range && (
                   <Meta icon={<span className="text-[10px]">₲</span>}>{vacancy!.salary_range}</Meta>
                 )}
@@ -308,7 +336,7 @@ export default function VacantePage() {
               </motion.div>
             )}
 
-            {/* Double-value note */}
+            {/* Optional talent-pool benefit */}
             <motion.div
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.14, ease }}
@@ -318,9 +346,7 @@ export default function VacantePage() {
                 <Sparkles strokeWidth={1.5} className="h-4 w-4 text-[#c9a84c]" />
               </div>
               <p className="text-sm font-light leading-relaxed text-white/70">
-                Al postular, no solo aplicás a esta búsqueda. Tu perfil queda guardado en
-                <span className="text-white"> CVitae</span> y otras empresas podrán encontrarte
-                para oportunidades parecidas, sin que tengas que volver a cargar tu CV.
+                Tu postulación siempre se envía únicamente a esta empresa. Más abajo podés elegir, de forma opcional, si también querés crear un perfil en CVitae para futuras oportunidades.
               </p>
             </motion.div>
 
@@ -381,10 +407,15 @@ export default function VacantePage() {
                     <div className="flex flex-col items-center gap-3 text-white/50">
                       <Upload strokeWidth={1.5} className="h-5 w-5" />
                       <p className="text-sm font-light">Arrastrá tu CV acá o <span className="text-white underline underline-offset-4">elegí un archivo</span></p>
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/30">PDF · hasta 10 MB</p>
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/30">PDF · hasta 4 MB</p>
                     </div>
                   )}
                 </div>
+                <p className="mt-3 text-xs leading-relaxed text-white/40">
+                  Si tu archivo pesa más o está escaneado, podés crear un CV liviano y legible en{' '}
+                  <Link href="/mi-carrera/cv" className="text-[#c9a84c] underline decoration-[#c9a84c]/35 underline-offset-4">CV Vivo</Link>.
+                  {' '}Tu postulación no se descarta si el texto no puede extraerse: el reclutador recibirá el PDF para revisión manual.
+                </p>
               </div>
 
               {/* Cover letter */}
@@ -400,6 +431,11 @@ export default function VacantePage() {
                   className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm font-light text-white placeholder:text-white/25 focus:border-[#c9a84c]/40 focus:outline-none resize-none transition"
                 />
               </div>
+
+              <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-white/8 bg-white/[0.02] p-4 text-sm leading-relaxed text-white/60">
+                <input type="checkbox" checked={talentPoolConsent} onChange={event => setTalentPoolConsent(event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-[#c9a84c]" />
+                <span><strong className="font-medium text-white/85">Quiero crear mi perfil en CVitae.</strong> Acepto recibir un acceso por correo y que empresas verificadas puedan encontrarme para oportunidades similares. Esto es opcional y no afecta esta postulación.</span>
+              </label>
 
               {error && (
                 <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-sm text-red-400">

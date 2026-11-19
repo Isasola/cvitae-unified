@@ -41,10 +41,18 @@ def fetch_page(category_code, slug, page=1):
     url = f"{BASE_URL}/ofertas/{category_code}/{slug}"
     if page > 1:
         url += f"/{page}"
-    h = {"User-Agent": "Mozilla/5.0"}
+    h = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "es-PY,es;q=0.9,en;q=0.8",
+        "Referer": "https://www.buscojobs.com.py/",
+    }
     try:
         r = requests.get(url, headers=h, timeout=30)
-        return r.text if r.status_code == 200 else None
+        if r.status_code == 200:
+            return r.text
+        print(f"  HTTP {r.status_code} en {url}")
+        return None
     except Exception as e:
         print(f"  fetch error: {e}")
         return None
@@ -56,17 +64,40 @@ def extract_jobs(html):
         return []
     try:
         data = json.loads(match.group(1))
-        # Try multiple known paths in the Next.js data structure
         page_props = data.get('props', {}).get('pageProps', {})
-        for key in ['resultadosIniciales', 'initialData', 'ofertas']:
-            if key in page_props:
-                val = page_props[key]
-                if isinstance(val, list):
+
+        for key in ['resultadosIniciales', 'initialData', 'ofertas', 'jobs', 'results', 'data', 'items', 'vacantes']:
+            if key not in page_props:
+                continue
+            val = page_props[key]
+            if isinstance(val, list) and val:
+                return val
+            if isinstance(val, dict):
+                for sub in ['ofertas', 'items', 'results', 'data', 'jobs', 'vacantes']:
+                    sub_val = val.get(sub)
+                    if isinstance(sub_val, list) and sub_val:
+                        return sub_val
+
+        job_id_keys = {'CargoVacante', 'Titulo', 'title', 'IdOferta', 'id', 'titulo', 'cargo'}
+        for key, val in page_props.items():
+            if isinstance(val, list) and val and isinstance(val[0], dict):
+                if job_id_keys & set(val[0].keys()):
+                    print(f"  [buscojobs] found jobs under pageProps.{key} ({len(val)} items)")
                     return val
-                if isinstance(val, dict) and 'ofertas' in val:
-                    return val['ofertas']
+
+        for key, val in page_props.items():
+            if not isinstance(val, dict):
+                continue
+            for sub_key, sub_val in val.items():
+                if isinstance(sub_val, list) and sub_val and isinstance(sub_val[0], dict):
+                    if job_id_keys & set(sub_val[0].keys()):
+                        print(f"  [buscojobs] found jobs under pageProps.{key}.{sub_key} ({len(sub_val)} items)")
+                        return sub_val
+
+        print(f"  [buscojobs] no job list found; pageProps keys: {list(page_props.keys())[:15]}")
         return []
-    except (json.JSONDecodeError, KeyError):
+    except (json.JSONDecodeError, KeyError) as e:
+        print(f"  [buscojobs] extract error: {e}")
         return []
 
 
@@ -89,14 +120,20 @@ def insert_job(job_raw, rubro):
     description = job_raw.get('Descripcion', '') or job_raw.get('description', '')
 
     payload = {
-        "titulo": title,
-        "organization": company,
+        "title": title,
+        "organization": company or None,
         "location": location,
+        "city": ciudad or None,
+        "department": depto or None,
+        "country_code": "PY",
         "rubro": rubro,
         "type": "Tiempo completo",
+        "opportunity_type": "job",
         "description": description[:800] if description else "",
         "application_url": url,
         "source": "buscojobs",
+        "source_authority": "aggregator",
+        "original_source_verified": True,
         "is_active": True,
         "tags": [],
     }
@@ -118,7 +155,9 @@ def main():
 
     for code, slug, rubro in CATEGORIES:
         print(f"\nCategoría: {rubro} ({code}/{slug})")
-        for page in range(1, 6):
+        seen_page_ids = set()
+        max_pages = int(os.getenv("CVITAE_MAX_PAGES", "50"))
+        for page in range(1, max_pages + 1):
             html = fetch_page(code, slug, page)
             if not html:
                 print(f"  página {page}: sin respuesta")
@@ -128,6 +167,12 @@ def main():
             if not jobs:
                 print(f"  página {page}: sin ofertas (fin de paginación o sin Next.js data)")
                 break
+            page_ids = {str(job.get('IdOferta', '') or job.get('id', '')) for job in jobs}
+            page_ids.discard('')
+            if page_ids and page_ids.issubset(seen_page_ids):
+                print(f"  página {page}: repetida; continuación detenida de forma explícita")
+                break
+            seen_page_ids.update(page_ids)
 
             total_found += len(jobs)
             for job in jobs:
@@ -138,6 +183,8 @@ def main():
                 print(f"  [{title[:45]}] -> {status}")
 
             time.sleep(1)
+        else:
+            print(f"  presupuesto de {max_pages} páginas agotado; cobertura pendiente, no EOF")
 
         time.sleep(1.5)
 

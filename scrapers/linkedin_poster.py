@@ -72,7 +72,7 @@ def get_recent_unseen_opportunities(limit=5):
     """Fetch opportunities added in the last 25 hours, not yet posted."""
     since = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
     params = {
-        "select": "id,titulo,organization,location,rubro,type,application_url,source,created_at",
+        "select": "id,title,organization,location,rubro,type,application_url,source,created_at",
         "is_active": "eq.true",
         "created_at": f"gte.{since}",
         "order": "created_at.desc",
@@ -128,7 +128,7 @@ def mark_as_posted(opportunity_id, linkedin_post_id):
 def build_post_text(opp):
     emoji = TYPE_EMOJIS.get(opp.get("type", ""), "🔔")
     tipo = opp.get("type", "Oportunidad")
-    titulo = opp.get("titulo", "")
+    titulo = opp.get("title", "")
     org = opp.get("organization", "")
     location = opp.get("location", "")
     rubro = opp.get("rubro", "")
@@ -248,7 +248,7 @@ def main():
 
     for opp in to_post:
         text = build_post_text(opp)
-        print(f"\n  Posteando: {opp['titulo'][:50]}...")
+        print(f"\n  Posteando: {opp['title'][:50]}...")
         post_id = post_to_linkedin(text)
         if post_id:
             mark_as_posted(opp["id"], post_id)

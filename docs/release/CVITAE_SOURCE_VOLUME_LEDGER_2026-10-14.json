@@ -1,0 +1,339 @@
+{
+  "schema": "cvitae.source-volume-ledger.v1",
+  "captured_at_utc": "2026-10-14T16:20:32Z",
+  "capture_origin": "docs/release/LATAM_SOURCE_CENSUS.json; prior authorized evidence; no new HTTP or production query in this pass",
+  "business_goal": {
+    "market": "PY",
+    "additional_unique_current_usable_persisted": 2000,
+    "proven_new_in_this_pass": 0,
+    "business_gate": "FAIL",
+    "gap_to_proven_result": 2000,
+    "old_three_market_list_candidate_upper_bound": 568,
+    "old_upper_bound_shortfall_to_goal_before_rejections": null,
+    "old_upper_bound_comparability": "NOT_COMPARABLE_DIFFERENT_MARKET_SCOPE",
+    "minimum_additional_py_candidate_inventory_before_rejections": 2000,
+    "interpretation": "The 568 is a list-level upper bound across PY/PE/AR, not a new-row estimate and not comparable to the PY-only goal; no candidate-level production reconciliation is complete."
+  },
+  "production_baseline": {
+    "evidence_level": "OPERATOR_SUPPLIED_READ_ONLY_PROD_2026-10-14",
+    "opportunities": 16683,
+    "active_not_deleted": 6789,
+    "universe_state_rows": 16683,
+    "universe_missing": 0,
+    "lifecycle_ready": 6684,
+    "matching_row_ready": 6224,
+    "final_matching_ready": 363,
+    "catalog_ready": 407,
+    "alerts_ready": 363,
+    "seo_universe_ready": 6058,
+    "warning": "These are separate Universe/consumer state counts, not indexation, permission or LATAM-supply counts. They were not re-queried."
+  },
+  "source_inventory": [
+    {
+      "source": "getonbrd",
+      "endpoints": [
+        "https://www.getonbrd.com/api/v0/categories",
+        "https://www.getonbrd.com/api/v0/categories/{category}/jobs?page={n}"
+      ],
+      "prior_http": 200,
+      "advertised_all_categories": 960,
+      "active_categories": 18,
+      "unique_native_ids": 960,
+      "duplicates_across_categories": 0,
+      "page_eof": "20 pages; programming pages 120,120,73; one page for remaining 17 categories",
+      "explicit_job_location_occurrences": {"PY": 0, "PE": 30, "AR": 9},
+      "remote_listed": 414,
+      "remote_with_target_country_field": 0,
+      "remote_text_eligibility_candidates": 33,
+      "remote_counted_eligible": 0,
+      "details_with_title_description_native_id": 960,
+      "current_status": "NOT_PROVEN_NO_EXPIRY_FIELD_AND_NO_PRODUCTION_DEDUP",
+      "consumer_permission": "REVIEW_REQUIRED_BY_CONSUMER; PUBLIC_ENDPOINT_IS_NOT_A_REDISTRIBUTION_GRANT",
+      "proven_new": 0
+    },
+    {
+      "source": "greenhouse",
+      "endpoint_template": "https://boards-api.greenhouse.io/v1/boards/{board}/jobs?content=true",
+      "prior_http": {"neoris": 404, "cabify": 200, "utt": 200},
+      "boards": [
+        {"board": "cabify", "employer": "Cabify", "advertised": 69, "target_location_ids": 15, "location_occurrences": {"PY": 0, "PE": 11, "AR": 4}},
+        {"board": "utt", "employer": "UTT", "advertised": 44, "target_location_ids": 14, "location_occurrences": {"PY": 0, "PE": 8, "AR": 7}, "overlap_posting_across_pe_ar": 1},
+        {"board": "neoris", "employer": "NEORIS", "advertised": 0, "target_location_ids": 0}
+      ],
+      "target_location_candidate_union": 29,
+      "detail_review": "CONTENT_RETURNED_IN_LIST; CLONE_AND_APPLICANT_ELIGIBILITY_REVIEW_INCOMPLETE",
+      "permission": "REVIEW_REQUIRED; PUBLIC_BOARD_API_DOES_NOT_CERTIFY_CVITAE_CONSUMER_USE",
+      "proven_new": 0
+    },
+    {
+      "source": "lever",
+      "endpoint_template": "https://api.lever.co/v0/postings/{site}?mode=json&skip={offset}&limit=100",
+      "prior_http": 200,
+      "sites": [
+        {"site": "coderio", "advertised": 15, "target_location_candidates": 11, "eof": true, "sample_description_chars": 0},
+        {"site": "aleph", "advertised": 103, "target_location_candidates": 7, "eof": true, "sample": "Paraguay - Remote"},
+        {"site": "TalentusGlobal", "advertised": 16, "target_location_candidates": 13, "eof": true, "generic_application_excluded": 1, "sample_eligibility_text": "LATAM CANDIDATES ONLY; Paraguay, Peru, Argentina listed"},
+        {"site": "chipping-concrete", "advertised": 40, "target_location_candidates": 28, "eof": true, "sample_all_locations_lists_paraguay": true}
+      ],
+      "advertised_total": 174,
+      "target_location_candidate_union": 59,
+      "country_distribution": "NOT_RECONCILED; COUNTRY_OCCURRENCES_AND_MULTILOCATION_OVERLAP_UNKNOWN",
+      "description_and_current_status": "SOME_DESCRIPTIONS_EMPTY; FULL_DETAIL_AND_CURRENTNESS_REVIEW_INCOMPLETE",
+      "permission": "REVIEW_REQUIRED_PER_BOARD_AND_CONSUMER",
+      "proven_new": 0
+    },
+    {
+      "source": "smartrecruiters",
+      "endpoint_template": "https://api.smartrecruiters.com/v1/companies/{company}/postings?country={py|pe|ar}&limit=100&offset={n}&destination=PUBLIC",
+      "detail_endpoint_template": "https://api.smartrecruiters.com/v1/companies/{company}/postings/{postingId}",
+      "prior_http": 200,
+      "company_boards": 14,
+      "advertised_regional_records": 441,
+      "country_occurrences": {"PY": 1, "PE": 401, "AR": 39},
+      "detail_gets": 4,
+      "details_not_checked": 437,
+      "detail_samples_active_public_apply_url": 4,
+      "sample_release_years_include": [2021, 2024, 2026],
+      "identity_overlap_between_country_queries": "NOT_RECONCILED",
+      "permission": "REVIEW_REQUIRED_PER_EMPLOYER_AND_CONSUMER",
+      "proven_new": 0
+    },
+    {
+      "source": "jooble_pe_ar",
+      "endpoints_not_called": ["https://pe.jooble.org/api/about", "https://ar.jooble.org/api/about"],
+      "http": null,
+      "requests_used": 0,
+      "regional_credentials": "NOT_CONFIRMED; NO_API_CALLS_MADE",
+      "lifetime_free_requests_per_key": 500,
+      "proven_new": 0
+    },
+    {
+      "source": "mtpe_datos_abiertos",
+      "dataset": "https://www.datosabiertos.gob.pe/dataset/vacantes-de-la-bolsa-de-trabajo-ministerio-de-trabajo-y-promoci%C3%B3n-del-empleo-mtpe",
+      "prior_api_http": 200,
+      "prior_csv_http": 200,
+      "rows": 53233,
+      "csv_last_modified": "2025-08-11",
+      "latest_fecha_fin": "2024-12-16",
+      "rows_current_at_2026_10_14": 0,
+      "individual_apply_url": false,
+      "proven_new_usable": 0
+    },
+    {
+      "source": "unjobs",
+      "historical_run": {"found": 519, "insertions_reported": 142, "failures": 99, "budget_skipped": 269},
+      "geo_split_for_historical_run": "UNKNOWN",
+      "repeated": false,
+      "historical_insertions_counted_as_new": 0,
+      "proven_new": 0
+    },
+    {
+      "source": "paraguayconcursa_mef",
+      "url": "https://paraguayconcursa.mef.gov.py/",
+      "prior_portal_announced_contests": 251,
+      "announcement_semantics": "CONTESTS_IN_MULTIPLE_STAGES; NOT_OPEN_JOB_COUNT",
+      "prior_sample": {"listing_cards": 16, "listing_pages": 2, "details_examined": 1, "detail_location": null, "detail_vacancy_count": null},
+      "current_adapter_status": "IMPLEMENTED_FIXTURE_ONLY_IN_THIS_PASS; IN_REVIEW_INACTIVE_WHEN_FACTS_INSUFFICIENT",
+      "permission_and_live_certification": "REVIEW_REQUIRED",
+      "proven_new": 0
+    },
+    {
+      "source": "poder_judicial_py",
+      "url": "https://www.pj.gov.py/",
+      "verified_openings": 0,
+      "adapter": "NOT_IMPLEMENTED",
+      "proven_new": 0
+    },
+    {
+      "source": "bumeran_computrabajo_pe_ar",
+      "authorized_feed_or_agreement": false,
+      "bulk_access_run": false,
+      "status": "PENDING_WRITTEN_AGREEMENT_OR_VALID_FEED",
+      "proven_new": 0
+    }
+  ],
+  "market_breakdown": {
+    "work_location_py": {"known_list_occurrences": 1, "lever_candidate_union_max_not_country_reconciled": 59, "confirmed_current_complete_new_persisted": 0},
+    "remote_explicit_py_eligibility": {"known_samples": ["Lever Aleph Paraguay - Remote", "Lever TalentusGlobal LATAM candidates includes Paraguay"], "complete_candidate_count": null, "confirmed_current_complete_new_persisted": 0},
+    "work_location_pe": {"getonbrd_occurrences": 30, "greenhouse_occurrences": 19, "smartrecruiters_occurrences": 401, "lever_country_count": null, "confirmed_current_complete_new_persisted": 0},
+    "work_location_ar": {"getonbrd_occurrences": 9, "greenhouse_occurrences": 11, "smartrecruiters_occurrences": 39, "lever_country_count": null, "confirmed_current_complete_new_persisted": 0},
+    "remote_is_eligibility": false,
+    "multi_country_postings_count_once": true
+  },
+  "reconciliation": {
+    "production_active_rows_in_prior_census": 6789,
+    "candidate_ids_and_urls_exported_for_all_568": false,
+    "candidate_level_id_url_clone_reconciliation": "PENDING",
+    "new_vs_production_proven": 0,
+    "119_previous_recovery_records_touched": false,
+    "production_rows_inserted_this_pass": 0
+  },
+  "authorization": {
+    "live_http_in_this_pass": false,
+    "production_queries_in_this_pass": false,
+    "production_writes": false,
+    "push": false,
+    "deploy": false,
+    "cron_or_switch_activation": false
+  },
+  "py_acquisition_delta_2026_10_14": {
+    "observed_at_utc": "2026-10-15T01:13:30Z",
+    "live_http_in_delta": true,
+    "evidence_grade": "BOUNDED_PUBLIC_HTTP_LOCAL plus FIXTURE and STATIC; no production reconciliation",
+    "goal": {
+      "new_unique_usable_py_target": 2000,
+      "proven_new_py": 0,
+      "new_inserted_prod": 0,
+      "new_consumer_ready_prod": 0,
+      "business_gate": "FAIL",
+      "gap_to_proven_result": 2000,
+      "baseline_reconciliation": "NOT_RUN; no new production query authorized or performed"
+    },
+    "sources": [
+      {
+        "source_canonical": "psf_hiringroom",
+        "tenant": "psf",
+        "listing_url": "https://psf.hiringroom.com/jobs",
+        "sample_original_urls": [
+          "https://psf.hiringroom.com/jobs/get_vacancy/6ac7b54848d84e58dbd9fa7e"
+        ],
+        "observed_http": 200,
+        "discovered": 12,
+        "native_ids_distinct": 12,
+        "listing_duplicates": 0,
+        "listing_eof_confirmed": true,
+        "detail_attempted": 2,
+        "individual_details_verified": 1,
+        "generic_intake_excluded": 1,
+        "explicit_py_job_location": 1,
+        "explicit_remote_py_eligibility": 0,
+        "eligibility_unknown": 1,
+        "active_date_verified": 0,
+        "relative_age_observed_days": 6,
+        "deadline_verified": 0,
+        "has_apply_url": 1,
+        "content_valid": 1,
+        "already_in_prod": "UNKNOWN",
+        "new_qualified_candidates": 0,
+        "new_inserted_prod": 0,
+        "new_consumer_ready_prod": 0,
+        "cross_source_duplicates": "NOT_RECONCILED",
+        "permission_by_consumer": {
+          "private_matching": "REVIEW_REQUIRED",
+          "catalog": "REVIEW_REQUIRED",
+          "alerts": "REVIEW_REQUIRED",
+          "ordinary_seo": "REVIEW_REQUIRED",
+          "jobposting_google_jobs": "REVIEW_REQUIRED",
+          "third_party_redistribution": "REVIEW_REQUIRED"
+        },
+        "blocked_first_gate": "WRITTEN_FEED_AND_CONSUMER_USE_RIGHTS_NOT_ESTABLISHED; exact publication date/deadline unavailable",
+        "continuation_pending": 0,
+        "cursor_status": "adapter_fixture_proves durable per-tenant continuation; live monitored cursor not run",
+        "permission_status": "REVIEW_REQUIRED; all consumer flags OFF",
+        "evidence_note": "The list returned 12 distinct native IDs in one bounded GET. One posting detail confirmed an Asuncion, Paraguay job location and an application route; relative age was shown as six days, but no exact publication/deadline evidence or license to ingest/reuse was established. A generic CV-intake page was excluded. No production row comparison or write occurred.",
+        "next_action": "Obtain employer/HiringRoom written feed and field/use-rights terms before enabling this source."
+      },
+      {
+        "source_canonical": "jobs_com_py",
+        "url": "https://www.jobs.com.py/es/empleos/oportunidades",
+        "discovered": "approximately 96 list-level postings observed; cached/public count varied",
+        "native_ids_distinct": "NOT_VERIFIED",
+        "individual_details_verified": 0,
+        "new_qualified_candidates": 0,
+        "already_in_prod": "UNKNOWN",
+        "permission_by_consumer": "REVIEW_REQUIRED; use/republication terms not established; linked terms PDF returned 404 in bounded check",
+        "blocked_first_gate": "listing IDs/detail freshness and access/use rights not proven",
+        "evidence_grade": "BOUNDED_PUBLIC_PAGE_OBSERVATION"
+      },
+      {
+        "source_canonical": "pivot_jobs",
+        "url": "https://www.pivot.com.py/",
+        "advertised_volume": ">1,000 active vacancies on homepage marketing copy",
+        "discovered": 0,
+        "native_ids_distinct": 0,
+        "individual_details_verified": 0,
+        "new_qualified_candidates": 0,
+        "permission_by_consumer": "REVIEW_REQUIRED",
+        "blocked_first_gate": "no authorized public feed/listing with native posting IDs or individual vacancy URLs demonstrated",
+        "next_action": "Request source-owned feed/API schema and written per-consumer use rights; do not treat homepage claim as inventory",
+        "evidence_grade": "PROMOTIONAL_CLAIM_ONLY"
+      },
+      {
+        "source_canonical": "empleapy_mtess",
+        "url": "https://bolsa.mtess.gov.py/login.php",
+        "discovered": 0,
+        "native_ids_distinct": 0,
+        "individual_details_verified": 0,
+        "new_qualified_candidates": 0,
+        "permission_by_consumer": "REVIEW_REQUIRED",
+        "blocked_first_gate": "postulation portal requires identity/login; no public feed/API authorization demonstrated; no login attempted",
+        "next_action": "Request official public export/API agreement; do not automate identity login or count past fair vacancies"
+      },
+      {
+        "source_canonical": "trabajito_py",
+        "url": "https://www.trabajito.com.py/",
+        "discovered": 2,
+        "native_ids_distinct": "NOT_VERIFIED",
+        "individual_details_verified": 0,
+        "new_qualified_candidates": 0,
+        "already_in_prod": "UNKNOWN",
+        "permission_by_consumer": "REVIEW_REQUIRED",
+        "blocked_first_gate": "only two featured cards observed; stable individual contract, freshness and reuse terms unverified"
+      },
+      {
+        "source_canonical": "grupovierci",
+        "tenant": "retail_sa",
+        "url": "https://empleo.grupovierci.com/vista_prueba.php",
+        "observed_http": 200,
+        "discovered": 0,
+        "native_ids_distinct": 0,
+        "individual_details_verified": 0,
+        "new_qualified_candidates": 0,
+        "permission_by_consumer": "REVIEW_REQUIRED",
+        "blocked_first_gate": "current portal explicitly displayed no current vacancies; non-empty markup remains fail-closed pending native ID/detail/feed rights",
+        "previous_direct_writer_removed_locally": true,
+        "collection_and_consumer_flags": "OFF"
+      },
+      {
+        "source_canonical": "paraguayconcursa_mef",
+        "additional_live_requests_this_delta": 0,
+        "prior_evidence_reused": "official portal count of 251 contests spans multiple states; prior adapter sample only; not 251 open jobs",
+        "new_qualified_candidates": 0,
+        "permission_status": "REVIEW_REQUIRED"
+      },
+      {
+        "source_canonical": "computrabajo_bumeran_py",
+        "bulk_collection_this_delta": 0,
+        "new_qualified_candidates": 0,
+        "permission_status": "PENDING_WRITTEN_AGREEMENT_OR_VALID_FEED",
+        "blocked_first_gate": "no authorized distribution feed; no bulk extraction performed"
+      }
+    ],
+    "market_breakdown": {
+      "new_py_job_location_candidates": 0,
+      "new_remote_with_explicit_py_eligibility_candidates": 0,
+      "pe_counted_separately": 0,
+      "ar_counted_separately": 0,
+      "fixtures_counted": 0,
+      "historical_recoveries_counted": 0,
+      "prior_568_three_market_list_upper_bound_recounted": false
+    },
+    "recurring_provider_candidates": [
+      "PSF HiringRoom only after written feed/use rights and source certification; adapter, tenant cursor, bounded 20-detail budget and daily 10:41 UTC schedule are prepared, all gates OFF",
+      "Paraguay Concursa remains separately certified/review gated from earlier local work; no claim of new volume",
+      "PIVOT and MTESS require a source-owned authorized feed/API before any automated ingestion"
+    ],
+    "portfolio_priority_by_potential_and_evidence_gap": [
+      {"rank": 1, "source": "PIVOT", "potential": "high but unverified", "next_dependency": "written feed/API plus individual posting IDs and use rights"},
+      {"rank": 2, "source": "MTESS EmpleaPY", "potential": "unknown; past plazas are not postings", "next_dependency": "official non-login feed/API and active individual opportunities"},
+      {"rank": 3, "source": "Jobs.com.py", "potential": "about 96 listing cards, not deduped or current-qualified", "next_dependency": "stable detail contract, terms and candidate-level reconciliation"},
+      {"rank": 4, "source": "direct employer ATS / PSF HiringRoom", "potential": "12 listed PSF items; only one detail confirmed PY; rights absent", "next_dependency": "tenant-by-tenant feed/use permission"},
+      {"rank": 5, "source": "Trabajito / Grupo Vierci", "potential": "two featured cards / current explicit zero", "next_dependency": "current individual records and source-owned use permission"}
+    ],
+    "production_writes": 0,
+    "production_queries": 0,
+    "push": false,
+    "deploy": false,
+    "global_switch_change": false
+  }
+}

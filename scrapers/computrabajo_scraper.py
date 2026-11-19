@@ -3,6 +3,11 @@ from bs4 import BeautifulSoup
 import time
 import os
 import re
+import json
+import html as html_mod
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from opportunity_sink import OpportunitySink
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -15,6 +20,10 @@ HEADERS = {
 }
 
 BASE_URL = "https://py.computrabajo.com"
+FOREIGN_COUNTRIES = re.compile(
+    r"\b(uruguay|argentina|brasil|brazil|bolivia|per[uú]|chile|colombia|m[eé]xico|espa[nñ]a)\b",
+    re.IGNORECASE,
+)
 
 # Categories to scrape — covers the main job sectors in Paraguay
 CATEGORIES = [
@@ -32,6 +41,10 @@ CATEGORIES = [
     ("comercio-exterior", "Comercio Exterior"),
     ("atencion-al-cliente", "Atención al Cliente"),
 ]
+
+# Set COMPUTRABAJO_FETCH_DETAILS=false to skip detail page fetching (faster, less data)
+FETCH_DETAILS = os.environ.get("COMPUTRABAJO_FETCH_DETAILS", "true").lower() != "false"
+DETAIL_WORKERS = int(os.environ.get("COMPUTRABAJO_DETAIL_WORKERS", "4"))
 
 FETCH_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -65,7 +78,154 @@ def fetch(url):
         return ""
 
 
+def _strip_html(text):
+    """Remove HTML tags and decode entities from a string."""
+    text = re.sub(r"<[^>]+>", " ", text or "")
+    text = html_mod.unescape(text)
+    return re.sub(r" {2,}", " ", text).strip()
+
+
+def parse_detail_html(raw_html):
+    """Extract only source-provided JobPosting fields; absence stays unknown."""
+    if not raw_html:
+        return {"description": "", "organization": "", "employment_type": "", "deadline": None, "salary": None, "currency": None, "skills": []}
+    soup = BeautifulSoup(raw_html, "html.parser")
+    detail = {"description": "", "organization": "", "employment_type": "", "deadline": None, "salary": None, "currency": None, "skills": []}
+    for script in soup.find_all("script", type="application/ld+json"):
+        try: data = json.loads(script.string or "")
+        except (json.JSONDecodeError, TypeError): continue
+        items = data.get("@graph", [data]) if isinstance(data, dict) else []
+        for item in items:
+            if item.get("@type") != "JobPosting": continue
+            raw_desc = item.get("description", "")
+            if raw_desc:
+                candidate = _strip_html(raw_desc)[:3000]
+                if len(candidate) > 50: detail["description"] = candidate
+            org_data = item.get("hiringOrganization", {})
+            detail["organization"] = (org_data.get("name", "") if isinstance(org_data, dict) else org_data or "").strip()
+            detail["employment_type"] = str(item.get("employmentType") or "").strip()[:100]
+            detail["deadline"] = str(item.get("validThrough") or "").strip()[:32] or None
+            salary = item.get("baseSalary")
+            if isinstance(salary, dict):
+                value = salary.get("value") or {}
+                amount = value.get("value") if isinstance(value, dict) else value
+                if amount is not None: detail["salary"] = str(amount)[:80]
+                detail["currency"] = str(salary.get("currency") or "").strip()[:12] or None
+            skills = item.get("skills") or item.get("qualifications") or []
+            detail["skills"] = [str(skill).strip() for skill in (skills if isinstance(skills, list) else [skills]) if str(skill).strip()][:20]
+            if detail["description"]: break
+    return detail
+
+
+def fetch_detail(url):
+    """Fetch a job detail page to get description and company name.
+    Computrabajo renders its pages as SPAs — the visible HTML lacks the job body.
+    The real content lives in an application/ld+json <script> with @type:JobPosting.
+    CSS selectors are kept as fallbacks for edge cases.
+    Never invents data — returns empty strings when not found."""
+    raw_html = fetch(url)
+    detail = parse_detail_html(raw_html)
+    if not raw_html: return detail
+    soup = BeautifulSoup(raw_html, "html.parser")
+    description = detail["description"]
+    organization = detail["organization"]
+
+    # Primary: extract from JSON-LD JobPosting (works on JS-rendered pages where HTML body is empty)
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string or "")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        items = data.get("@graph", [data]) if isinstance(data, dict) else []
+        for item in items:
+            if item.get("@type") != "JobPosting":
+                continue
+            raw_desc = item.get("description", "")
+            if raw_desc:
+                desc = _strip_html(raw_desc)[:3000]
+                if len(desc) > 50:
+                    description = desc
+            org_data = item.get("hiringOrganization", {})
+            if isinstance(org_data, dict):
+                organization = org_data.get("name", "").strip()
+            elif isinstance(org_data, str):
+                organization = org_data.strip()
+            if description:
+                break
+
+    # Fallback: CSS selectors for description (legacy layout / non-SPA pages)
+    if not description:
+        for sel in [
+            "div#offerDec",
+            "div.offerDesc",
+            "div[data-qa='job-description']",
+            "section.boxDescription",
+            "div.js-description",
+            "div[class*='description']",
+        ]:
+            el = soup.select_one(sel)
+            if el:
+                for tag in el.find_all(["script", "style"]):
+                    tag.decompose()
+                text = el.get_text(separator="\n", strip=True)
+                if len(text) > 50:
+                    description = text[:3000]
+                    break
+
+    # Fallback: CSS selectors for organization
+    if not organization:
+        company_el = soup.select_one("h2 a[href*='/empresas/'], a.it_bold[href*='/empresas/']")
+        if company_el:
+            organization = company_el.get_text(strip=True)
+        else:
+            for sel in ["p.dFlex > a", "div[class*='company'] a", "h3 a[href*='empresa']", "p.fs16 a"]:
+                el = soup.select_one(sel)
+                if el:
+                    text = el.get_text(strip=True)
+                    if text and len(text) > 1:
+                        organization = text
+                        break
+
+    detail.update({"description": description, "organization": organization})
+    return detail
+
+
+def enrich_with_details(jobs):
+    """Fetch detail pages concurrently for jobs missing description or organization."""
+    to_enrich = [
+        (i, j) for i, j in enumerate(jobs)
+        if not (j.get("description") and len(j["description"]) >= 50) or not j.get("organization")
+    ]
+    if not to_enrich:
+        return jobs
+
+    with ThreadPoolExecutor(max_workers=DETAIL_WORKERS) as executor:
+        futures = {executor.submit(fetch_detail, j["application_url"]): i for i, j in to_enrich}
+        for future in as_completed(futures):
+            idx = futures[future]
+            try:
+                detail = future.result()
+                if detail["description"] and not (jobs[idx].get("description") and len(jobs[idx]["description"]) >= 50):
+                    jobs[idx]["description"] = detail["description"]
+                if detail["organization"] and not jobs[idx].get("organization"):
+                    jobs[idx]["organization"] = detail["organization"]
+                if detail.get("employment_type"): jobs[idx]["type"] = detail["employment_type"]
+                if detail.get("deadline"): jobs[idx]["deadline"] = detail["deadline"]
+                if detail.get("salary"): jobs[idx]["value"] = detail["salary"]
+                if detail.get("currency"): jobs[idx]["currency"] = detail["currency"]
+                if detail.get("skills"): jobs[idx]["tags"] = list(dict.fromkeys(jobs[idx].get("tags", []) + detail["skills"]))[:20]
+            except Exception as e:
+                print(f"  detail enrich error for job at index {idx}: {e}")
+
+    time.sleep(1.5)
+    return jobs
+
+
+_insert_error_reported = False
+
+
 def insert_job(job):
+    global _insert_error_reported
     try:
         r = requests.post(
             TABLE_URL + "?on_conflict=application_url",
@@ -76,14 +236,18 @@ def insert_job(job):
                 "Prefer": "resolution=merge-duplicates",
             },
             json=job,
+            timeout=30,
         )
+        if r.status_code >= 400 and not _insert_error_reported:
+            print(f"  Supabase rechazó la oportunidad ({r.status_code}): {r.text[:800]}")
+            _insert_error_reported = True
         return r.status_code
     except Exception as e:
         print(f"  insert error: {e}")
         return "error"
 
 
-def scrape_category(slug, rubro, max_pages=3):
+def scrape_category(slug, rubro, max_pages=10):
     jobs = []
     for page in range(1, max_pages + 1):
         url = f"{BASE_URL}/trabajo-de-{slug}"
@@ -135,24 +299,23 @@ def scrape_category(slug, rubro, max_pages=3):
                     break
             if not location:
                 location = "Paraguay"
-
-            # Salary: inside .fs13 div
-            salary_el = card.select_one("div.fs13 span:last-child, div.fs13")
-            description = ""
-            if salary_el:
-                sal_text = salary_el.get_text(strip=True)
-                if "$" in sal_text or "G." in sal_text:
-                    description = sal_text
+            if FOREIGN_COUNTRIES.search(location):
+                print(f"  omitida fuera de Paraguay: {title} ({location})")
+                continue
 
             page_jobs.append({
-                "titulo": title,
+                "title": title,
                 "organization": company,
                 "location": location,
+                "country_code": "PY",
                 "rubro": rubro,
-                "type": "Tiempo completo",
-                "description": description,
+                "type": "",
+                "opportunity_type": "job",
+                "description": "",
                 "application_url": full_url,
                 "source": "computrabajo",
+                "source_authority": "aggregator",
+                "original_source_verified": True,
                 "is_active": True,
                 "tags": [slug.replace("-", " ")],
             })
@@ -160,31 +323,36 @@ def scrape_category(slug, rubro, max_pages=3):
         if not page_jobs:
             break
 
+        if FETCH_DETAILS:
+            page_jobs = enrich_with_details(page_jobs)
+
         jobs.extend(page_jobs)
-        print(f"  [{slug}] página {page}: {len(page_jobs)} ofertas")
+        enriched = sum(1 for j in page_jobs if j.get("description"))
+        print(f"  [{slug}] página {page}: {len(page_jobs)} ofertas, {enriched} con descripción")
         time.sleep(1.5)
 
     return jobs
 
 
 def main():
-    total_found = 0
-    total_inserted = 0
+    all_jobs = []
 
     for slug, rubro in CATEGORIES:
         print(f"\nRastreando: {slug} ({rubro})")
-        jobs = scrape_category(slug, rubro, max_pages=5)
-        total_found += len(jobs)
-
-        for job in jobs:
-            status = insert_job(job)
-            if status in (200, 201, 409):
-                total_inserted += 1
-            print(f"  [{job['organization'] or 'N/A'}] {job['titulo'][:50]} -> {status}")
+        jobs = scrape_category(slug, rubro, max_pages=10)
+        all_jobs.extend(jobs)
 
         time.sleep(2)
 
-    print(f"\n=== Computrabajo: {total_inserted}/{total_found} insertadas/actualizadas ===")
+    summary = OpportunitySink().upsert(all_jobs)
+    print("CVITAE_INGESTION_SUMMARY=" + json.dumps(summary.to_dict(), ensure_ascii=False))
+    print(
+        f"\n=== Computrabajo: {summary.inserted} nuevas, {summary.updated} actualizadas, "
+        f"{summary.duplicates_in_run} duplicadas, {summary.rejected} rechazadas "
+        f"de {summary.found} encontradas ==="
+    )
+    for error in summary.errors[:5]:
+        print(f"  ERROR: {error}")
 
 
 if __name__ == "__main__":

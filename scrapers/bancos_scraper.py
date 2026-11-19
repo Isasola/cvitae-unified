@@ -74,7 +74,7 @@ def scrape_banco(key, url, org):
                 if not job_url:
                     job_url = f"{url}#{title[:40].replace(' ', '-').lower()}"
                 jobs.append({
-                    "titulo": title,
+                    "title": title,
                     "organization": org,
                     "location": "Asunción, Paraguay",
                     "rubro": "Banca y Finanzas",
@@ -83,6 +83,7 @@ def scrape_banco(key, url, org):
                     "application_url": job_url,
                     "source": f"banco_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["banco", "finanzas", key],
                 })
             if jobs:
@@ -98,7 +99,7 @@ def scrape_banco(key, url, org):
             if any(kw in text.lower() or kw in href.lower() for kw in LINK_KEYWORDS):
                 job_url = href if href.startswith("http") else url
                 jobs.append({
-                    "titulo": text,
+                    "title": text,
                     "organization": org,
                     "location": "Paraguay",
                     "rubro": "Banca y Finanzas",
@@ -107,6 +108,7 @@ def scrape_banco(key, url, org):
                     "application_url": job_url,
                     "source": f"banco_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["banco", "finanzas", key],
                 })
 

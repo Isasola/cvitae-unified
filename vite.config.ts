@@ -2,6 +2,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+import { fileURLToPath } from 'node:url'
+
+const configDirectory = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -9,18 +12,41 @@ export default defineConfig({
   publicDir: 'public',
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(configDirectory, './src'),
     },
   },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
     rollupOptions: {
-      input: path.resolve(__dirname, 'index.html'),
+      input: path.resolve(configDirectory, 'index.html'),
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          // PDF generation — only loaded in CV/application hub routes
+          if (id.includes('jspdf') || id.includes('pdfjs')) return 'vendor-pdf'
+          // Supabase client
+          if (id.includes('@supabase')) return 'vendor-supabase'
+          // React runtime + its internal deps in one chunk to avoid circular init (TDZ)
+          // scheduler and use-sync-external-store are react-dom internals that must
+          // stay in the same chunk — splitting them causes "Cannot access X before initialization"
+          if (
+            id.includes('/react/') || id.includes('/react-dom/') ||
+            id.includes('/scheduler/') || id.includes('/use-sync-external-store/')
+          ) return 'vendor-react'
+          // heic-to: lazy-loaded only on HEIC conversion failure — keep out of initial bundle
+          if (id.includes('heic-to')) return undefined
+          // Everything else — shared vendor chunk
+          return 'vendor'
+        },
+      },
     },
   },
   server: {
     port: 3000,
+    watch: {
+      ignored: ['**/artifacts/**', '**/.netlify/**'],
+    },
     proxy: {
       '/.netlify/functions': {
         target: 'http://localhost:9999',

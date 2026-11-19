@@ -49,8 +49,8 @@ export default function Cookies() {
                   <h2 className="text-xl font-bold m-0">Google Analytics</h2>
                 </div>
                 <p>
-                  Utilizamos Google Analytics para recopilar información anónima sobre cómo los usuarios interactúan con CVitae. 
-                  Esto nos permite mejorar la experiencia de búsqueda de empleo y la precisión de nuestra IA basándonos en datos reales de navegación.
+                  Si lo aceptás, utilizamos Google Analytics para entender cómo las personas interactúan con CVitae.
+                  Analytics permanece desactivado hasta recibir esa autorización y podés retirarla desde “Preferencias de cookies”.
                 </p>
               </section>
 
@@ -60,8 +60,7 @@ export default function Cookies() {
                   <h2 className="text-xl font-bold m-0">Google AdSense</h2>
                 </div>
                 <p>
-                  Podemos utilizar Google AdSense para mostrar anuncios relevantes. Estas cookies ayudan a personalizar la publicidad 
-                  que ves para que sea de tu interés, evitando mostrarte el mismo anuncio repetidamente.
+                  Podemos utilizar Google AdSense únicamente en páginas públicas de contenido. La publicidad permanece desactivada hasta que la aceptes y no se muestra dentro de tu perfil, CV, matching, aprendizaje, diagnósticos o postulaciones.
                 </p>
               </section>
 
@@ -70,8 +69,7 @@ export default function Cookies() {
                   <h2 className="text-xl font-bold m-0">Cómo gestionar tus cookies</h2>
                 </div>
                 <p>
-                  Podés configurar tu navegador para rechazar todas las cookies o para que te avise cuando se envía una. 
-                  Tené en cuenta que si desactivás las cookies esenciales, algunas funciones de CVitae (como el login o la subida de CV) podrían no estar disponibles.
+                  Podés aceptar, rechazar o personalizar Analytics y publicidad desde el aviso inicial y volver a abrir “Preferencias de cookies” en el pie de página. Las cookies esenciales no se desactivan porque sostienen la sesión y las funciones solicitadas por vos.
                 </p>
               </section>
             </div>

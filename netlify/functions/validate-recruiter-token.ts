@@ -1,6 +1,20 @@
 import { Handler } from "@netlify/functions"
 import { makeSupabaseAdmin } from "./_supabase"
 
+const RESEND_KEY = process.env.RESEND_API_KEY
+const SITE_URL = process.env.SITE_URL || "https://cvitae.lat"
+
+async function sendEmail(to: string, subject: string, html: string) {
+  if (!RESEND_KEY) return
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: "CVitae <contacto@cvitae.lat>", to: [to], subject, html }),
+    })
+  } catch { /* non-fatal */ }
+}
+
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
@@ -19,49 +33,22 @@ const handler: Handler = async (event) => {
     // Buscar token
     const { data, error } = await supabase
       .from("recruiter_tokens")
-      .select("id, email, company_name, access_token, token_balance, plan_type, is_active, created_at")
+      .select("id, email, company_name, access_token, token_balance, plan_type, is_active, verification_status, created_at")
       .eq("access_token", token.trim())
       .eq("is_active", true)
+      .eq("verification_status", "verified")
       .single()
 
     if (error || !data) {
       return { statusCode: 200, body: JSON.stringify({ valid: false, error: "Token inválido o inactivo" }) }
     }
 
-    // ─── Acción: Guardar análisis (requiere créditos) ───
+    // Legacy write path intentionally disabled. Analyses must be created by
+    // analyze-cv-candidate so reservation, persistence and ledger stay atomic.
     if (action === "save_analysis" && analysisData) {
-      if (data.token_balance <= 0) {
-        return {
-          statusCode: 200,
-          body: JSON.stringify({ error: "Sin créditos disponibles. Contactá a CVitae para recargar." }),
-        }
-      }
-
-      const { error: insertError } = await supabase
-        .from("recruiter_analyses")
-        .insert({
-          token_id: data.id,
-          candidate_name: analysisData.candidate_name || null,
-          file_name: analysisData.file_name || null,
-          ats_score: analysisData.ats_score,
-          strengths: analysisData.strengths || [],
-          critical_improvements: analysisData.critical_improvements || [],
-          vacancy_label: analysisData.vacancy_label || null,
-          raw_cv_text: analysisData.raw_cv_text || null,
-          is_starred: false,
-          created_at: new Date().toISOString()
-        })
-
-      if (!insertError) {
-        await supabase
-          .from("recruiter_tokens")
-          .update({ token_balance: data.token_balance - 1 })
-          .eq("id", data.id)
-      }
-
       return {
-        statusCode: 200,
-        body: JSON.stringify({ saved: !insertError, new_balance: data.token_balance - 1 }),
+        statusCode: 410,
+        body: JSON.stringify({ saved: false, error: "Ruta antigua deshabilitada. Actualizá la aplicación y repetí el análisis." }),
       }
     }
 
@@ -114,12 +101,32 @@ const handler: Handler = async (event) => {
         return { statusCode: 403, body: JSON.stringify({ error: "Vacante no pertenece a este token" }) }
       }
 
-      const { data: applicants } = await supabase
+      const page = Math.max(0, Math.floor(Number(body.page) || 0))
+      const pageSize = Math.min(100, Math.max(20, Math.floor(Number(body.page_size) || 60)))
+      const from = page * pageSize
+      const to = from + pageSize - 1
+      const { data: applicants, count: totalApplicants } = await supabase
         .from("vacancy_applications")
-        .select("id, name, email, cv_file_name, cover_letter, cv_text, ats_score, fit_score, recommendation, ai_summary, strengths, key_matches, key_gaps, analyzed_at, applied_at, recruiter_action, recruiter_notes")
+        .select("id, name, email, cv_file_name, cv_storage_path, cv_parse_status, cover_letter, cv_text, ats_score, fit_score, recommendation, ai_summary, strengths, key_matches, key_gaps, analyzed_at, applied_at, recruiter_action, recruiter_notes, review_status, review_batch_number, batch_selected, progressive_shortlist, progressive_rank, triage_tier, selection_reason", { count: "exact" })
         .eq("vacancy_id", body.vacancy_id)
+        .order("progressive_shortlist", { ascending: false })
+        .order("progressive_rank", { ascending: true, nullsFirst: false })
         .order("applied_at", { ascending: false })
-        .limit(100)
+        .range(from, to)
+
+      const countRows = async (configure: (query: any) => any) => {
+        const base = supabase.from("vacancy_applications").select("id", { count: "exact", head: true }).eq("vacancy_id", body.vacancy_id)
+        const { count } = await configure(base)
+        return count || 0
+      }
+      const [analyzedCount, pendingCount, manualCount, strongCount, shortlistCount, batchesResult] = await Promise.all([
+        countRows(query => query.eq("review_status", "analyzed")),
+        countRows(query => query.in("review_status", ["pending", "failed", "processing"]).not("cv_text", "is", null)),
+        countRows(query => query.is("cv_text", null)),
+        countRows(query => query.eq("triage_tier", "strong")),
+        countRows(query => query.eq("progressive_shortlist", true)),
+        supabase.from("vacancy_review_batches").select("id", { count: "exact", head: true }).eq("vacancy_id", body.vacancy_id).eq("status", "completed"),
+      ])
 
       // Enrich with B2C badges
       const emails = (applicants || []).map((a: any) => a.email).filter(Boolean)
@@ -138,31 +145,94 @@ const handler: Handler = async (event) => {
         }
       }
 
-      const enrichedApplicants = (applicants || []).map((a: any) => ({
-        ...a,
-        badges: badgesByEmail[a.email] || [],
+      const enrichedApplicants = await Promise.all((applicants || []).map(async (a: any) => {
+        let cvDownloadUrl: string | null = null
+        if (a.cv_storage_path) {
+          const { data: signed } = await supabase.storage.from("candidate-cvs").createSignedUrl(a.cv_storage_path, 600)
+          cvDownloadUrl = signed?.signedUrl || null
+        }
+        const { cv_storage_path: _privatePath, ...safeApplicant } = a
+        return {
+          ...safeApplicant,
+          cv_download_url: cvDownloadUrl,
+          cv_reupload_required: Boolean(a.cv_file_name && !cvDownloadUrl),
+          badges: badgesByEmail[a.email] || [],
+        }
       }))
 
       return {
         statusCode: 200,
-        body: JSON.stringify({ applicants: enrichedApplicants }),
+        body: JSON.stringify({
+          applicants: enrichedApplicants,
+          pagination: {
+            page,
+            page_size: pageSize,
+            total: totalApplicants || 0,
+            has_more: from + enrichedApplicants.length < (totalApplicants || 0),
+          },
+          review: {
+            total: totalApplicants || 0,
+            analyzed: analyzedCount,
+            pending: pendingCount,
+            manual_review: manualCount,
+            strong: strongCount,
+            shortlist: shortlistCount,
+            batches_completed: batchesResult.count || 0,
+          },
+        }),
       }
     }
 
-    // ─── Acción: Listar vacantes del reclutador ───
+    // ─── Acción: Listar vacantes del reclutador (activas + cerradas) ───
     if (action === "get_vacancies") {
       const { data: vacancies } = await supabase
         .from("recruiter_vacancies")
         .select("id, title, slug, location, modality, is_active, created_at, vacancy_applications(count)")
         .eq("recruiter_token_id", data.id)
-        .eq("is_active", true)
         .order("created_at", { ascending: false })
-        .limit(50)
+        .limit(100)
 
       return {
         statusCode: 200,
         body: JSON.stringify({ vacancies: vacancies || [] }),
       }
+    }
+
+    // ─── Acción: Cerrar vacante ───
+    if (action === "close_vacancy" && body.vacancy_id) {
+      const { data: vac } = await supabase
+        .from("recruiter_vacancies")
+        .select("id")
+        .eq("id", body.vacancy_id)
+        .eq("recruiter_token_id", data.id)
+        .single()
+
+      if (!vac) {
+        return { statusCode: 403, body: JSON.stringify({ error: "Vacante no pertenece a este token" }) }
+      }
+
+      await Promise.all([
+        supabase.from("recruiter_vacancies").update({ is_active: false }).eq("id", body.vacancy_id),
+        supabase.from("opportunities").update({ is_active: false }).eq("recruiter_vacancy_id", body.vacancy_id),
+      ])
+
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
+    // ─── Acción: Solicitar recarga de créditos ───
+    if (action === "request_credits") {
+      const requested = Math.min(500, Math.max(10, Math.floor(Number(body.amount) || 50)))
+      await sendEmail(
+        "contacto@cvitae.lat",
+        `💳 Solicitud de créditos: ${data.company_name || data.email}`,
+        `<h2>Solicitud de recarga de créditos</h2>
+         <p><strong>Empresa:</strong> ${data.company_name || "Sin nombre"}</p>
+         <p><strong>Email:</strong> ${data.email}</p>
+         <p><strong>Créditos solicitados:</strong> ${requested}</p>
+         <p><strong>Balance actual:</strong> ${data.token_balance}</p>
+         <p><a href="${SITE_URL}/admin">Ir al admin →</a></p>`,
+      )
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
     // ─── Acción: Actualizar estado de postulante ───
@@ -211,23 +281,29 @@ const handler: Handler = async (event) => {
 
     // ─── Acción: Dashboard stats ───
     if (action === "get_dashboard_stats") {
-      const [vacRes, appRes, anaRes, callRes] = await Promise.all([
-        supabase.from("recruiter_vacancies").select("id", { count: "exact", head: true }).eq("recruiter_token_id", data.id).eq("is_active", true),
-        supabase.from("vacancy_applications").select("id", { count: "exact", head: true }).in(
-          "vacancy_id",
-          (await supabase.from("recruiter_vacancies").select("id").eq("recruiter_token_id", data.id)).data?.map((v: any) => v.id) || []
-        ),
+      // Fetch active vacancy IDs once, reuse in all sub-queries (avoids N+1)
+      const { data: activeVacRows } = await supabase
+        .from("recruiter_vacancies")
+        .select("id")
+        .eq("recruiter_token_id", data.id)
+        .eq("is_active", true)
+      const activeIds = activeVacRows?.map((v: any) => v.id) || []
+
+      const [appRes, anaRes, callRes] = await Promise.all([
+        activeIds.length
+          ? supabase.from("vacancy_applications").select("id", { count: "exact", head: true }).in("vacancy_id", activeIds)
+          : Promise.resolve({ count: 0 }),
         supabase.from("recruiter_analyses").select("id", { count: "exact", head: true }).eq("token_id", data.id),
-        supabase.from("vacancy_applications").select("id", { count: "exact", head: true }).eq("recommendation", "Llamar").in(
-          "vacancy_id",
-          (await supabase.from("recruiter_vacancies").select("id").eq("recruiter_token_id", data.id)).data?.map((v: any) => v.id) || []
-        ),
+        activeIds.length
+          ? supabase.from("vacancy_applications").select("id", { count: "exact", head: true }).eq("recommendation", "Llamar").in("vacancy_id", activeIds)
+          : Promise.resolve({ count: 0 }),
       ])
+
       return {
         statusCode: 200,
         body: JSON.stringify({
           stats: {
-            vacantesActivas: vacRes.count || 0,
+            vacantesActivas: activeIds.length,
             totalPostulantes: appRes.count || 0,
             cvsAnalizados: anaRes.count || 0,
             paraLlamar: callRes.count || 0,

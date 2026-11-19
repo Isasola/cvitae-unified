@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'wouter'
 import { supabase } from '@/lib/supabase'
+import { isProfileComplete } from '@/lib/profile'
 import { motion } from 'framer-motion'
+import { consumeApplicationReturnTo, peekApplicationReturnTo } from '@/lib/application-intent'
+import { analytics } from '@/lib/analytics'
 
 export default function AuthCallback() {
   const [, setLocation] = useLocation()
@@ -10,6 +13,30 @@ export default function AuthCallback() {
 
   useEffect(() => {
     let isMounted = true
+    let redirected = false
+
+    const redirectAfterAuth = async (token: string) => {
+      if (redirected) return
+      redirected = true
+      try {
+        const res = await fetch('/.netlify/functions/b2c-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: 'status' }),
+        })
+        const payload = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error('PROFILE_STATUS_UNAVAILABLE')
+        const returnTo = peekApplicationReturnTo()
+        if (returnTo) analytics.authCompleted({ opportunity_slug: decodeURIComponent(returnTo.split('/').pop() || ''), route_family: 'application_auth', auth_state: 'authenticated' })
+        const destination = returnTo && isProfileComplete(payload.profile) ? returnTo : (returnTo ? `/mi-carrera/perfil?returnTo=${encodeURIComponent(returnTo)}` : (isProfileComplete(payload.profile) ? '/mi-carrera' : '/mi-carrera/perfil'))
+        consumeApplicationReturnTo(returnTo)
+        if (isMounted) setTimeout(() => setLocation(destination), 700)
+      } catch {
+        const returnTo = peekApplicationReturnTo()
+        const fallback = returnTo ? `/mi-carrera/perfil?returnTo=${encodeURIComponent(returnTo)}` : '/mi-carrera/perfil'
+        if (isMounted) setTimeout(() => setLocation(fallback), 700)
+      }
+    }
 
     const processCallback = async () => {
       try {
@@ -26,7 +53,7 @@ export default function AuthCallback() {
           if (data.session) {
             setStatus('success')
             setMessage('¡Sesión iniciada correctamente!')
-            setTimeout(() => setLocation('/mi-carrera'), 900)
+            await redirectAfterAuth(data.session.access_token)
           } else {
             setStatus('error')
             setMessage('No se pudo procesar el enlace. Inténtalo nuevamente.')
@@ -47,7 +74,7 @@ export default function AuthCallback() {
       if (session && isMounted) {
         setStatus('success')
         setMessage('¡Bienvenido!')
-        setTimeout(() => setLocation('/mi-carrera'), 700)
+        redirectAfterAuth(session.access_token)
       }
     })
 

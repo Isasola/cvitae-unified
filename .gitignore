@@ -19,3 +19,38 @@ deno.lock
 start.bat
 scrapers/_test_count.py
 VITE_SUPABASE_URL=*.txt
+
+# Generated local tooling files
+__pycache__/
+*.py[cod]
+supabase/.temp/
+graphify-out/
+
+# Local test fixtures — never commit real CVs
+.local-fixtures/
+*.local-cv.*
+
+# Local visual test output
+*-server.log
+audit-redesign-*.png
+tmp/
+
+# Playwright
+artifacts/visual/
+playwright-report/
+test-results/
+.aider*
+..cvitae-release-hotfix/
+*.zip
+*-dryrun.txt
+/item49-checkpoint/
+/netlify/functions/manifest.json
+/.cvitae-state/cable-sql-test/
+/.cvitae-state/npm-cache/
+/.cvitae-state/cable-build/
+/.cvitae-state/cable-recovery-test.json
+
+# Release freeze: local state and downloaded diagnostics; preserve on disk.
+/.cvitae-state/
+/artifacts/prod-match-download/
+/artifacts/prod-match-download-v18/

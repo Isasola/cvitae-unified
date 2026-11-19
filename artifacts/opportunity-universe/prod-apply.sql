@@ -1,0 +1,4 @@
+-- STAGED RELEASE ONLY. THIS FILE IS INTENTIONALLY NON-EXECUTABLE.
+-- Apply prod-apply-schema.sql, run scripts/apply_opportunity_universe_prod.ts in bounded batches,
+-- verify Opportunity Universe, then apply prod-apply-retrieval.sql and run verify-prod.sql.
+-- No single-transaction full-inventory loop is provided.

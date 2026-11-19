@@ -1,160 +1,361 @@
-export const handler = async (event: any) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Content-Type': 'application/json',
+import { createHash } from 'node:crypto'
+import { makeSupabaseAdmin } from './_supabase'
+import { canonicalCandidateProfile } from '../../shared/candidate-profile'
+import { observeAiCall } from './lib/ai-telemetry'
+import {
+  authenticatedUser,
+  consumeRateLimit,
+  jsonResponse,
+  rateLimitHeaders,
+  rejectInvalidOrigin,
+  securityHeaders,
+} from './lib/b2c-security'
+
+const MODEL_ID = 'gemini-3.5-flash-lite'
+const ROUTE_LABELS: Record<string, string> = {
+  'empleo-local': 'conseguir empleo en empresas de Paraguay',
+  remoto: 'conseguir trabajo remoto con empresas internacionales',
+  'beca-posgrado': 'acceder a una beca o posgrado',
+  organismos: 'trabajar en organismos internacionales',
+  emprendimiento: 'lanzar o hacer crecer un emprendimiento',
+  freelance: 'conseguir proyectos freelance sostenibles',
+  'cambio-area': 'hacer una reconversión profesional',
+}
+const LEVELS = new Set(['Inicial', 'Intermedio', 'Avanzado'])
+
+const PROVIDERS = {
+  google_skills: {
+    label: 'Google Skills',
+    url: (_skill: string) => 'https://www.skills.google/catalog',
+  },
+  microsoft_learn: {
+    label: 'Microsoft Learn',
+    url: (skill: string) => `https://learn.microsoft.com/es-es/training/browse/?terms=${encodeURIComponent(skill)}`,
+  },
+  aws_skill_builder: {
+    label: 'AWS Skill Builder',
+    url: (_skill: string) => 'https://skillbuilder.aws/',
+  },
+  coursera: {
+    label: 'Coursera',
+    url: (skill: string) => `https://www.coursera.org/search?query=${encodeURIComponent(skill)}`,
+  },
+  edx: {
+    label: 'edX',
+    url: (skill: string) => `https://www.edx.org/search?q=${encodeURIComponent(skill)}`,
+  },
+  youtube: {
+    label: 'YouTube',
+    url: (skill: string) => `https://www.youtube.com/results?search_query=${encodeURIComponent(`${skill} curso español`)}`,
+  },
+} as const
+
+type ProviderKey = keyof typeof PROVIDERS
+type CorroboratedGap = {
+  skill: string
+  normalizedSkill: string
+  sources: Array<{ id: string; slug: string; title: string; organization: string | null; updated_at: string; preferred?: boolean }>
+}
+
+const COURSE_SCHEMA = {
+  type: 'ARRAY',
+  maxItems: 6,
+  items: {
+    type: 'OBJECT',
+    required: ['skill', 'providerKey', 'learningFocus', 'level'],
+    properties: {
+      skill: { type: 'STRING' },
+      providerKey: { type: 'STRING', enum: Object.keys(PROVIDERS) },
+      learningFocus: { type: 'STRING' },
+      level: { type: 'STRING', enum: [...LEVELS] },
+    },
+  },
+}
+
+function cleanText(value: unknown, maxLength = 240): string {
+  return String(value ?? '').replace(/[\u0000-\u001f]/g, ' ').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength)
+}
+
+function cleanList(value: unknown, limit: number, itemLimit = 100): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.map((item) => cleanText(item, itemLimit)).filter(Boolean))].slice(0, limit)
+}
+
+function normalize(value: unknown): string {
+  return cleanText(value, 2000).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9+#.]+/g, ' ').trim()
+}
+
+function sha(value: unknown): string {
+  return createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex')
+}
+
+function recommendedProvider(skill: string): ProviderKey {
+  const key = normalize(skill)
+  if (/power bi|excel|azure|microsoft|c#|\.net|sql server/.test(key)) return 'microsoft_learn'
+  if (/aws|amazon web services|cloud practitioner/.test(key)) return 'aws_skill_builder'
+  if (/google cloud|gemini|vertex|bigquery|looker/.test(key)) return 'google_skills'
+  if (/investigacion|research|academ|estadistica/.test(key)) return 'edx'
+  if (/canva|redaccion|comunicacion|ventas|entrevista/.test(key)) return 'youtube'
+  return 'coursera'
+}
+
+function allowedProvider(value: unknown, skill: string): ProviderKey {
+  const officialProvider = recommendedProvider(skill)
+  if (officialProvider === 'aws_skill_builder' || officialProvider === 'microsoft_learn' || officialProvider === 'google_skills') {
+    return officialProvider
   }
+  const proposed = String(value || '') as ProviderKey
+  return proposed in PROVIDERS ? proposed : officialProvider
+}
 
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: corsHeaders, body: '' }
-  if (event.httpMethod !== 'POST') return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method not allowed' }) }
+function parseGemini(value: string): unknown {
+  try { return JSON.parse(value) } catch { return [] }
+}
 
-  try {
-    const { profileSkills, missingSkills, profileTitle, profileSeniority, careerRoute } = JSON.parse(event.body || '{}')
-    if (!missingSkills?.length) return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ courses: [] }) }
-
-    const ROUTE_LABELS: Record<string, string> = {
-      'empleo-local':   'conseguir empleo en empresas locales en Paraguay',
-      'remoto':         'conseguir trabajo remoto con empresas internacionales',
-      'beca-posgrado':  'acceder a una beca de posgrado o especialización en el exterior',
-      'organismos':     'trabajar en organismos internacionales (ONU, BID, OEA, PNUD)',
-      'emprendimiento': 'lanzar un emprendimiento y acceder a capital semilla o aceleradoras',
-      'cambio-area':    'hacer un cambio de área o reconversión profesional',
-    }
-    const routeContext = careerRoute && ROUTE_LABELS[careerRoute]
-      ? `El objetivo principal del usuario es: ${ROUTE_LABELS[careerRoute]}.`
-      : 'El objetivo del usuario no está definido — recomendá habilidades de alto impacto laboral general.'
-
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) throw new Error('GEMINI_API_KEY no configurada')
-
-    const prompt = `Sos un asesor de carrera senior especializado en el mercado laboral de Paraguay y Latinoamérica, con conocimiento actualizado de tendencias 2024-2025.
-
-PERFIL DEL USUARIO:
-- Título: ${profileTitle || 'Profesional'}
-- Nivel: ${profileSeniority || 'Semi-Senior'}
-- Habilidades actuales: ${profileSkills?.join(', ') || 'No especificadas'}
-- Habilidades que le faltan según el mercado: ${missingSkills.join(', ')}
-
-OBJETIVO DE CARRERA:
-${routeContext}
-
-Tu tarea: Recomendá ${Math.min(missingSkills.length, 4)} recursos de aprendizaje (cursos, certificaciones o recursos) — uno por habilidad faltante prioritaria.
-
-Cada recomendación DEBE estar alineada con el objetivo de carrera del usuario. No recomendés cursos genéricos — explicá concretamente cómo esa habilidad lleva al usuario más cerca de su objetivo.
-
-Para cada recomendación considerá:
-1. Qué demanda el mercado objetivo HOY (local, remoto, organismos, etc. según el objetivo)
-2. Cómo esa habilidad complementa lo que el usuario YA sabe
-3. El impacto concreto en sus chances de lograr el objetivo (estimá un % de mejora realista)
-4. Que sea accesible (gratuito o económico, en español preferentemente)
-
-Respondé ÚNICAMENTE con este JSON válido, sin texto extra ni markdown:
-[
-  {
-    "skill": "nombre de la habilidad faltante",
-    "course": "nombre real y específico del curso o recurso",
-    "platform": "Udemy|Coursera|YouTube|LinkedIn Learning|Google|Microsoft",
-    "url": "URL de búsqueda real: https://www.udemy.com/courses/search/?q=TERMINO o https://www.coursera.org/search?query=TERMINO o https://www.youtube.com/results?search_query=TERMINO+curso+español",
-    "level": "Básico|Intermedio|Avanzado",
-    "duration": "estimación: ej. 8 horas, 4 semanas",
-    "impact": "Dominar [skill] puede aumentar tus chances de conseguir empleo en un X% porque [razón específica basada en el mercado paraguayo]",
-    "why": "Con tu objetivo de [objetivo de carrera] y tu experiencia en [habilidades actuales], agregar [skill] te permite [beneficio concreto y específico para ese objetivo]"
-  }
-]`
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 1500,
-          },
-        }),
-      }
-    )
-
-    if (!response.ok) {
-      const errBody = await response.text()
-      // Fallback a Haiku si Gemini falla
-      console.error(`Gemini error ${response.status}: ${errBody}`)
-      return useFallbackHaiku(profileSkills, missingSkills, profileTitle, profileSeniority, careerRoute, corsHeaders)
-    }
-
-    const data = await response.json()
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]'
-    const clean = text.replace(/```json|```/g, '').trim()
-    let courses = []
-    try {
-      courses = JSON.parse(clean)
-    } catch {
-      return useFallbackHaiku(profileSkills, missingSkills, profileTitle, profileSeniority, careerRoute, corsHeaders)
-    }
-
+export function normalizeLearningRecommendations(raw: unknown, gaps: CorroboratedGap[], context?: { goal?: string }) {
+  const rawItems = Array.isArray(raw) ? raw : []
+  const bySkill = new Map(rawItems.map((item: any) => [normalize(item?.skill), item]))
+  return gaps.slice(0, 6).map((gap, index) => {
+    const model = bySkill.get(gap.normalizedSkill) as any
+    const providerKey = allowedProvider(model?.providerKey, gap.skill)
+    const provider = PROVIDERS[providerKey]
+    const occurrence = gap.sources.length
+    const preferred = gap.sources.some((source) => source.preferred)
+    const goal = cleanText(context?.goal, 180)
+    const deterministicWhy = `Esta brecha aparece en ${occurrence} ${occurrence === 1 ? 'oportunidad verificada' : 'oportunidades verificadas'} entre tus mejores coincidencias.${preferred ? ' También aparece en una oportunidad que marcaste como interesante.' : ''}${goal ? ` La priorizamos como puente hacia tu meta: ${goal}.` : ''}`
     return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ courses }),
+      skill: gap.skill,
+      normalized_skill: gap.normalizedSkill,
+      priority: index + 1,
+      title: `Ruta práctica de ${gap.skill}`,
+      provider_key: providerKey,
+      provider_label: provider.label,
+      resource_url: provider.url(gap.skill),
+      learning_focus: cleanText(model?.learningFocus, 300) || `Fundamentos y práctica aplicada de ${gap.skill}`,
+      why: deterministicWhy,
+      level: LEVELS.has(String(model?.level)) ? String(model.level) : 'Inicial',
+      language: 'Español preferido',
+      source_snapshot: gap.sources,
+      fallback: !model,
     }
-  } catch (err: any) {
-    console.error('gemini-courses error:', err.message)
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: err.message, courses: [] }),
-    }
+  })
+}
+
+function publicFields(row: any) {
+  return {
+    id: row.id,
+    skill: row.skill,
+    priority: row.priority,
+    status: row.status,
+    course: row.title,
+    title: row.title,
+    platform: row.provider_label,
+    providerKey: row.provider_key,
+    url: row.resource_url,
+    learningFocus: row.learning_focus,
+    why: row.why,
+    level: row.level,
+    language: row.language,
+    sources: row.source_snapshot || [],
+    fallback: Boolean(row.fallback),
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
   }
 }
 
-async function useFallbackHaiku(
-  profileSkills: string[],
-  missingSkills: string[],
-  profileTitle: string,
-  profileSeniority: string,
-  careerRoute: string,
-  corsHeaders: any
-) {
+async function overview(supabase: any, userId: string) {
+  const [{ data, error }, { data: profile, error: profileError }] = await Promise.all([
+    supabase.from('learning_recommendations').select('*').eq('user_id', userId).neq('status', 'stale')
+      .order('created_at', { ascending: false }).order('priority', { ascending: true }).limit(30),
+    supabase.from('user_master_profiles').select('profile_data').eq('user_id', userId).maybeSingle(),
+  ])
+  if (error || profileError) throw error || profileError
+  const candidate = canonicalCandidateProfile(profile)
+  const rows = data || []
+  const latestSignature = rows[0]?.profile_signature || null
+  const current = latestSignature ? rows.filter((row: any) => row.profile_signature === latestSignature) : []
+  const recommendations = current.map(publicFields)
+  return {
+    recommendations,
+    courses: recommendations,
+    stats: {
+      total: current.length,
+      suggested: current.filter((row: any) => row.status === 'suggested').length,
+      inProgress: current.filter((row: any) => row.status === 'in_progress').length,
+      completed: current.filter((row: any) => row.status === 'completed').length,
+    },
+    intent: {
+      career_route: cleanText(candidate.profile_data.career_route, 80),
+      desired_role_1y: cleanText(candidate.profile_data.desired_role_1y, 300),
+      career_interests: cleanList(candidate.profile_data.career_interests, 12, 120),
+      liked_opportunity_ids: cleanList(profile?.profile_data?.liked_opportunity_ids, 50, 120),
+    },
+  }
+}
+
+async function invokeGemini(profile: any, gaps: CorroboratedGap[]) {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return []
+  const candidate = canonicalCandidateProfile(profile)
+  const careerGoal = ROUTE_LABELS[cleanText(candidate.profile_data.career_route, 50)] || 'mejorar su empleabilidad'
+  const desiredRole = cleanText(candidate.profile_data.desired_role_1y, 300) || 'No especificada'
+  const interests = cleanList(candidate.profile_data.career_interests, 12, 120)
+  const preferredSources = gaps.flatMap((gap) => gap.sources.filter((source) => source.preferred).map((source) => source.title)).slice(0, 8)
+  const prompt = `Actuá como curador de aprendizaje para una persona de Paraguay y Latinoamérica.
+
+Perfil guardado:
+- Título: ${cleanText(profile.professional_title, 120) || 'Profesional'}
+- Seniority: ${cleanText(candidate.profile_data.seniority, 50) || 'No especificado'}
+- Objetivo: ${careerGoal}
+- Meta declarada a un año: ${desiredRole}
+- Actividades o temas que disfruta: ${interests.join(', ') || 'No especificados'}
+- Habilidades confirmadas en el perfil: ${cleanList(candidate.profile_data.habilidades, 30).join(', ') || 'No especificadas'}
+- Oportunidades que marcó como interesantes: ${preferredSources.join(' | ') || 'Ninguna todavía'}
+
+Brechas corroboradas en oportunidades verificadas:
+${JSON.stringify(gaps.map((gap) => ({ skill: gap.skill, occurrences: gap.sources.length })), null, 2)}
+
+Para cada brecha elegí un proveedor del catálogo permitido y proponé un foco de aprendizaje concreto.
+No inventes un nombre de curso, URL, duración, precio, certificado, disponibilidad ni promesa de empleo.
+No agregues habilidades fuera de la lista. El servidor construirá el título y el enlace.
+El foco debe ser prudente y útil; no afirmes que completar un curso garantiza mejorar un score.
+Cuando la brecha sea de AWS, Azure/Microsoft o Google Cloud, priorizá el catálogo oficial del fabricante.`
+
+  const response = await observeAiCall({ provider: 'gemini', model: MODEL_ID, feature: 'learning_plan_recommendations', trigger: 'user_action', actor: 'user' }, () => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 1600, responseMimeType: 'application/json', responseSchema: COURSE_SCHEMA },
+    }),
+  }))
+  if (!response.ok) {
+    console.error(`Gemini learning plan failed with status ${response.status}`)
+    return []
+  }
+  const data = await response.json()
+  return parseGemini(data.candidates?.[0]?.content?.parts?.[0]?.text || '[]')
+}
+
+async function corroborateGaps(supabase: any, profile: any, requestedSkills: string[], opportunityIds: string[], preferredIds = new Set<string>()) {
+  if (!requestedSkills.length || !opportunityIds.length) return []
+  const { data, error } = await supabase.from('opportunity_final_matching_universe')
+    .select('id,slug,title,organization,description,tags,updated_at')
+    .in('id', opportunityIds)
+  if (error) throw error
+  const ownSkills = cleanList(profile.profile_data?.habilidades, 50).map(normalize)
+  const opportunities = data || []
+  const gaps: CorroboratedGap[] = []
+  for (const skill of requestedSkills) {
+    const normalizedSkill = normalize(skill)
+    if (normalizedSkill.length < 2 || ownSkills.some((own) => own === normalizedSkill)) continue
+    const sources = opportunities.filter((item: any) => {
+      const searchable = normalize([...(item.tags || []), item.description || ''].join(' '))
+      return searchable.includes(normalizedSkill)
+    }).map((item: any) => ({
+      id: item.id, slug: item.slug || item.id, title: item.title,
+      organization: item.organization, updated_at: item.updated_at,
+      preferred: preferredIds.has(String(item.id)),
+    }))
+    if (sources.length) gaps.push({ skill, normalizedSkill, sources })
+  }
+  return gaps.sort((a, b) => b.sources.length - a.sources.length).slice(0, 6)
+}
+
+export const handler = async (event: any) => {
+  const originError = rejectInvalidOrigin(event)
+  if (originError) return originError
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: securityHeaders(event), body: '' }
+  if (event.httpMethod !== 'POST') return jsonResponse(event, 405, { error: 'Método no permitido' })
+  if (!event.body || event.body.length > 80_000) return jsonResponse(event, 413, { error: 'La solicitud supera el límite permitido' })
+
   try {
-    const anthropicKey = process.env.ANTHROPIC_API_KEY
-    if (!anthropicKey) throw new Error('Sin API key de fallback')
+    const authResult = await authenticatedUser(event)
+    if (!authResult.user) return jsonResponse(event, 401, { error: authResult.error, recommendations: [], courses: [] })
+    const user = authResult.user
+    const body = JSON.parse(event.body || '{}')
+    const action = cleanText(body.action || 'recommend', 30)
+    const supabase = makeSupabaseAdmin()
 
-    const routeHint = careerRoute ? ` Su objetivo es: ${careerRoute}.` : ''
+    if (action === 'overview') return jsonResponse(event, 200, await overview(supabase, user.id))
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content: `Sos asesor de carrera para Paraguay. El usuario es ${profileTitle || 'profesional'} ${profileSeniority || ''} con skills: ${profileSkills?.join(', ')}.${routeHint} Le faltan: ${missingSkills.join(', ')}. Recomendá ${Math.min(missingSkills.length, 4)} cursos online accesibles alineados con su objetivo. Respondé SOLO con JSON array: [{"skill":"...","course":"...","platform":"Udemy|Coursera|YouTube","url":"URL de búsqueda real","level":"Básico|Intermedio","duration":"X horas","impact":"Puede mejorar tus chances un X%","why":"Con tu objetivo de... y tu experiencia en..."}]`
-        }],
-      }),
+    if (action === 'status') {
+      const recommendationId = cleanText(body.recommendationId, 80)
+      const status = cleanText(body.status, 30)
+      if (!recommendationId || !['suggested', 'in_progress', 'completed', 'dismissed'].includes(status)) {
+        return jsonResponse(event, 400, { error: 'Cambio de estado inválido' })
+      }
+      const limit = await consumeRateLimit({ scope: 'b2c-learning-actions', subject: user.id, limit: 100, windowSeconds: 60 * 60 })
+      if (!limit.allowed) return jsonResponse(event, 429, { error: 'Alcanzaste el límite temporal de cambios.' }, rateLimitHeaders(limit))
+      const { error } = await supabase.rpc('update_learning_recommendation_status', {
+        p_user_id: user.id, p_recommendation_id: recommendationId, p_status: status,
+      })
+      if (error) {
+        if (String(error.message || '').includes('not found')) return jsonResponse(event, 404, { error: 'Recomendación no encontrada' })
+        throw error
+      }
+      return jsonResponse(event, 200, await overview(supabase, user.id), rateLimitHeaders(limit))
+    }
+
+    if (action !== 'recommend') return jsonResponse(event, 400, { error: 'Acción desconocida' })
+    const requestedOpportunityIds = cleanList(body.opportunityIds, 20, 220)
+
+    const { data: profile, error: profileError } = await supabase.from('user_master_profiles')
+      .select('id,user_id,professional_title,profile_data,updated_at').eq('user_id', user.id).maybeSingle()
+    if (profileError) throw profileError
+    if (!profile) return jsonResponse(event, 404, { error: 'Completá tu perfil para crear un plan de aprendizaje', recommendations: [], courses: [] })
+
+    const likedOpportunityIds = cleanList(profile.profile_data?.liked_opportunity_ids, 50, 120)
+    const likedGapMap = profile.profile_data?.liked_opportunity_gaps && typeof profile.profile_data.liked_opportunity_gaps === 'object'
+      ? profile.profile_data.liked_opportunity_gaps
+      : {}
+    const likedSkills = likedOpportunityIds.flatMap((id) => cleanList(likedGapMap[id], 12, 100))
+    const requestedSkills = cleanList([...likedSkills, ...cleanList(body.missingSkills, 6)], 6)
+    const opportunityIds = [...new Set([...likedOpportunityIds, ...requestedOpportunityIds])].slice(0, 20)
+    if (!requestedSkills.length || !opportunityIds.length) return jsonResponse(event, 200, await overview(supabase, user.id))
+    const gaps = await corroborateGaps(supabase, profile, requestedSkills, opportunityIds, new Set(likedOpportunityIds))
+    if (!gaps.length) return jsonResponse(event, 200, { ...(await overview(supabase, user.id)), notice: 'No encontramos brechas nuevas respaldadas por oportunidades activas.' })
+    const profileSignature = sha({
+      profileUpdatedAt: profile.updated_at,
+      careerRoute: profile.profile_data?.career_route || '',
+      desiredRole1y: profile.profile_data?.desired_role_1y || '',
+      careerInterests: profile.profile_data?.career_interests || [],
+      likedOpportunityIds,
+      gaps: gaps.map((gap) => ({ skill: gap.normalizedSkill, sources: gap.sources.map((source) => `${source.id}:${source.updated_at}`) })),
     })
 
-    const data = await response.json()
-    const text = data.content?.[0]?.text || '[]'
-    const clean = text.replace(/```json|```/g, '').trim()
-    const courses = JSON.parse(clean)
-    
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ courses, fallback: true }),
+    const { data: existing, error: existingError } = await supabase.from('learning_recommendations')
+      .select('id').eq('user_id', user.id).eq('profile_signature', profileSignature).limit(1)
+    if (existingError) throw existingError
+    if (existing?.length) return jsonResponse(event, 200, { ...(await overview(supabase, user.id)), idempotent: true })
+
+    const limit = await consumeRateLimit({ scope: 'b2c-course-recommendations', subject: user.id, limit: 8, windowSeconds: 24 * 60 * 60 })
+    if (!limit.allowed) return jsonResponse(event, 429, { error: 'Alcanzaste el límite temporal de planes.', recommendations: [], courses: [] }, rateLimitHeaders(limit))
+    const raw = await invokeGemini(profile, gaps)
+    const normalizedRecommendations = normalizeLearningRecommendations(raw, gaps, { goal: profile.profile_data?.desired_role_1y })
+
+    const { error: insertError } = await supabase.from('learning_recommendations').insert(normalizedRecommendations.map((item) => ({
+      ...item,
+      user_id: user.id,
+      profile_signature: profileSignature,
+      analysis_model: MODEL_ID,
+    })))
+    if (insertError) {
+      if (insertError.code === '23505') return jsonResponse(event, 200, { ...(await overview(supabase, user.id)), idempotent: true })
+      throw insertError
     }
-  } catch {
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ courses: [] }),
-    }
+    const { error: staleError } = await supabase.from('learning_recommendations')
+      .update({ status: 'stale', updated_at: new Date().toISOString() })
+      .eq('user_id', user.id).neq('profile_signature', profileSignature).in('status', ['suggested', 'in_progress'])
+    if (staleError) throw staleError
+    return jsonResponse(event, 200, { ...(await overview(supabase, user.id)), idempotent: false }, rateLimitHeaders(limit))
+  } catch (error: any) {
+    console.error('gemini-courses error:', error?.message || error)
+    const unavailable = String(error?.message || '').startsWith('Rate limit unavailable')
+    return jsonResponse(event, unavailable ? 503 : 500, {
+      error: unavailable ? 'El servicio está temporalmente ocupado. Intentá nuevamente en unos minutos.' : 'No pudimos actualizar tu plan de aprendizaje.',
+      recommendations: [], courses: [],
+    })
   }
 }

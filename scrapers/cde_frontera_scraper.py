@@ -74,7 +74,7 @@ def scrape_empresa(key, url, org, rubro, location):
                 if not job_url:
                     job_url = f"{url}#{title[:40].replace(' ', '-').lower()}"
                 jobs.append({
-                    "titulo": title,
+                    "title": title,
                     "organization": org,
                     "location": location,
                     "rubro": rubro,
@@ -98,7 +98,7 @@ def scrape_empresa(key, url, org, rubro, location):
             if any(kw in text.lower() or kw in href.lower() for kw in LINK_KEYWORDS):
                 job_url = href if href.startswith("http") else url
                 jobs.append({
-                    "titulo": text,
+                    "title": text,
                     "organization": org,
                     "location": location,
                     "rubro": rubro,
@@ -113,7 +113,7 @@ def scrape_empresa(key, url, org, rubro, location):
     # Last resort: insert a generic entry so the org is tracked
     if not jobs:
         jobs.append({
-            "titulo": f"Ver empleos en {org}",
+            "title": f"Ver empleos en {org}",
             "organization": org,
             "location": location,
             "rubro": rubro,

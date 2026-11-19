@@ -2,46 +2,59 @@
 
 > CVitae es el primer agente de carrera con inteligencia artificial para Paraguay y Latinoamérica.
 
-CVitae centraliza oportunidades laborales de más de 20 fuentes, analiza CVs con IA, adapta el curriculum vitae a cada vacante específica y envía alertas proactivas cuando aparecen empleos perfectos para el perfil del usuario.
+## Qué puede hacer un usuario en CVitae
 
-## Qué hace CVitae
+- **Hacer su CV con IA**: el usuario sube información y CVitae genera un CV profesional usando inteligencia artificial. También puede adaptar el CV a una vacante específica con un clic.
+- **Diagnóstico ATS gratuito**: cualquier usuario puede subir su CV y recibir en segundos un score ATS (0–100), fortalezas concretas y mejoras priorizadas, sin crear cuenta.
+- **CV Vivo**: genera una versión del CV adaptada a cada vacante específica para maximizar el score ATS en esa empresa.
+- **Matching automático**: compara el perfil contra las oportunidades activas y las ordena por compatibilidad real.
+- **Línea de crecimiento personalizada**: muestra un camino de carrera concreto basado en el perfil actual — qué roles son alcanzables, en qué tiempo estimado y con qué skills.
+- **Plan de aprendizaje**: identifica la brecha entre el perfil y el rol objetivo, y recomienda qué skills aprender primero.
+- **Alertas de empleo**: notificaciones automáticas cuando aparecen oportunidades que coinciden con el perfil.
+- **Badges de verificación**: el usuario puede completar assessments para obtener badges que validan habilidades específicas en su perfil público.
 
-- **Analizador de CV gratuito**: cualquier usuario puede subir su CV y recibir un score ATS real con recomendaciones concretas, sin crear cuenta.
-- **Matching automático**: compara el perfil del candidato contra +1000 oportunidades activas y ordena por compatibilidad.
-- **CV Vivo**: genera versiones del CV adaptadas a cada vacante usando IA, maximizando el score ATS.
-- **Alertas de empleo**: notificaciones semanales cuando aparecen oportunidades que coinciden con el perfil.
-- **B2B (CVitae para Empresas)**: portal de reclutamiento con análisis masivo de candidatos, pipeline visual y exportación CSV.
+## Herramientas para empresas (B2B)
 
-## Plan gratuito
+- **Análisis masivo de CVs**: los reclutadores pueden subir hasta 30 CVs simultáneamente y recibir un ranking comparativo explicable con score ATS, fortalezas y brechas por candidato.
+- **Evaluación de candidatos por vacante**: analiza los postulantes de una vacante específica y los compara con shortlists anteriores para hacer una selección progresiva.
+- **Pipeline visual**: gestión del estado de candidatos (en revisión, finalista, descartado) con exportación.
+- **Sistema de créditos**: operaciones atómicas que garantizan que el reclutador solo paga por análisis completados.
 
-- Analizador de CV: ilimitado
-- Matches diarios: 3 por día
-- CV Vivo: 1 por día
-- Alertas: 1 por semana
+## Catálogo de oportunidades
 
-## Plan Pro
+CVitae centraliza oportunidades de empleo, becas, programas y convocatorias para Paraguay y Latinoamérica. El catálogo se actualiza desde fuentes oficiales y portales especializados, con controles de vigencia, deduplicación y verificación antes de publicar o recomendar contenido.
 
-- USD 9/mes
-- Matches ilimitados
-- CV Vivo ilimitado
-- Alertas diarias
+## Beta gratuita
+
+CVitae está en una beta gratuita para candidatos. Las funciones principales son accesibles sin costo. Los cambios se comunicarán con anticipación.
 
 ## Audiencia
 
-Profesionales paraguayos y latinoamericanos en búsqueda activa o pasiva de empleo. Estudiantes universitarios. Empresas y reclutadores en Paraguay.
+Profesionales paraguayos, peruanos y latinoamericanos en búsqueda activa o pasiva de empleo. Estudiantes universitarios. Empresas y reclutadores en Paraguay y Perú.
 
 ## URLs clave
 
-- Homepage y analizador gratuito: https://cvitae.lat
-- Oportunidades laborales: https://cvitae.lat/oportunidades
-- Sobre CVitae: https://cvitae.lat/sobre-cvitae
-- Portal empresas: https://cvitae.lat/empresas
+- Homepage y diagnóstico ATS gratuito: https://cvitae.lat
+- Empleos verificados: https://cvitae.lat/empleos
+- Oportunidades (becas, fellowships, aceleradoras, remotos): https://cvitae.lat/oportunidades
+- Oportunidades Paraguay: https://cvitae.lat/oportunidades/paraguay
+- Oportunidades Perú: https://cvitae.lat/oportunidades/peru
+- Portal empresas / reclutadores: https://cvitae.lat/empresas
 - Blog: https://cvitae.lat/blog
 
 ## Tecnología
 
-React SPA, Netlify Functions, AWS Bedrock (Claude Haiku para usuarios gratuitos, Claude Sonnet para B2B), Supabase, scrapers propios de portales laborales paraguayos.
+React SPA con pre-render estático, Netlify Functions, AWS Bedrock (Claude Sonnet 4.6 para análisis de CV y vacantes, Claude Haiku 4.5 para sugerencias y extracción), Supabase Postgres + pgvector, scrapers propios de 88 fuentes activas.
 
-## Contexto
+## Datos estructurados
 
-CVitae fue reconocida como Top 100 Moonshot Paraguay 2026. El producto está en producción desde 2024 y tiene usuarios activos en Paraguay, Argentina y Uruguay.
+Las páginas de empleos emiten JSON-LD con schema JobPosting. Las páginas de blog emiten schema Article. La página principal emite Organization, WebSite, SoftwareApplication y FAQPage.
+
+## Reconocimientos
+
+CVitae fue reconocida como Top 100 Moonshot Paraguay 2026 y se encuentra en beta pública con usuarios de Paraguay y otros países de Latinoamérica.
+
+## Descubrimiento
+
+- Sitemap: https://cvitae.lat/sitemap.xml
+- Robots: https://cvitae.lat/robots.txt

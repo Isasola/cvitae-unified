@@ -4,11 +4,24 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sparkles, Search, MapPin, Lock,
   Bell, BookOpen, ArrowRight, Target,
-  Mail, ExternalLink, ChevronRight,
+  Mail, ExternalLink, ChevronRight, RefreshCw,
+  Heart,
 } from 'lucide-react'
 import { GrowthLine, CompatibilityTrace, Connector, Eyebrow } from '@/components/cv/visuals'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
+import { SiteShell } from '@/components/cv/SiteShell'
+import { ProductGuide } from '@/components/cv/ProductGuide'
 import { auth, supabase } from '@/lib/supabase'
+import { isProfileComplete } from '@/lib/profile'
+import { B2CProgressLoader } from '@/components/cv/B2CProgressLoader'
+import { PageErrorState, PageLoadingState } from '@/components/cv/PublicState'
+import { playComplete } from '@/lib/sounds'
+import { useFoundingBeta } from '@/hooks/useFoundingBeta'
+import { FoundingBetaModal } from '@/components/cvitae/FoundingBetaModal'
+import type { MatchDecision } from '@/lib/match-decision'
+import { canonicalOpportunityPathForRow } from '@/lib/opportunity-truth'
+import { MatchingCoverageCard } from '@/components/cv/MatchingCoverageCard'
+import { matchingProfileSignature } from '@/lib/matching-profile-signature'
 
 const MATCH_BATCH_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1/match-batch'
 const WA_NUMBER = '595992954169'
@@ -20,9 +33,65 @@ interface MatchItem {
   ubicacion: string; organization: string; application_url: string
   skillsScore: number; seniorityScore: number; locationScore: number
   finalScore: number; vacancySkills: string[]
+  missingSkills?: string[]
+  confidence?: 'HIGH' | 'MEDIUM' | 'LOW'
+  professionalCompatibility?: 'COMPATIBLE' | 'ADJACENT' | 'TRANSFERABLE' | 'CONFLICT' | 'UNKNOWN'
+  eligibilitySignal?: 'ELIGIBLE' | 'INELIGIBLE' | 'UNKNOWN'
+  downstreamTrusted?: boolean
+  presentationState?: 'CONFIRMED' | 'POTENTIAL'
+  eligibilityPending?: boolean
+  opportunityKind?: string | null
+  matchDecision?: MatchDecision
 }
 interface CourseRecommendation {
-  skill: string; course: string; platform: string; url: string; why: string
+  id: string; skill: string; course: string; platform: string; url: string; why: string
+  status: 'suggested' | 'in_progress' | 'completed' | 'dismissed'
+  learningFocus: string; level: string
+  sources: Array<{ id: string; slug: string; title: string }>
+}
+
+interface DashboardCache {
+  version: 5
+  storedAt: number
+  profileSignature: string
+  matches: MatchItem[]
+  potentialMatches?: MatchItem[]
+  profileSkills: string[]
+  missingSkills: string[]
+  isSubscribed: boolean
+  alertsEnabled: boolean
+  courses: CourseRecommendation[]
+  coverage?: { status?: string; coverage_state?: string; potential?: number; potential_scoreable?: number; match?: number } | null
+}
+
+const CACHE_TTL = 30 * 60 * 1000
+const CACHE_VERSION = 5
+
+function cacheKey(userId: string) {
+  return `cvitae:dashboard:v${CACHE_VERSION}:${userId}`
+}
+
+function readCache(userId: string, signature: string): DashboardCache | null {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(cacheKey(userId)) || 'null') as DashboardCache | null
+    if (!parsed || parsed.version !== CACHE_VERSION) return null
+    if (parsed.profileSignature !== signature || Date.now() - parsed.storedAt > CACHE_TTL) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeCache(userId: string, value: Omit<DashboardCache, 'version' | 'storedAt'>) {
+  try {
+    sessionStorage.setItem(cacheKey(userId), JSON.stringify({
+      ...value,
+      version: CACHE_VERSION,
+      storedAt: Date.now(),
+    }))
+  } catch {
+    // El caché es una optimización; el dashboard sigue funcionando sin storage.
+  }
 }
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
@@ -37,10 +106,7 @@ function EmptyState() {
     if (!email.trim()) return
     setLoading(true); setError(''); setMessage('')
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: { shouldCreateUser: true, emailRedirectTo: 'https://cvitae.lat/auth/callback' },
-      })
+      const { error } = await auth.signInWithMagicLink(email.trim())
       if (error) throw error
       setMessage('Revisá tu correo y hacé clic en el enlace mágico.')
     } catch (err: any) {
@@ -51,10 +117,10 @@ function EmptyState() {
   }
 
   const pillars = [
-    { n: '01', t: 'Analiza tu CV', d: 'La IA lee tu trayectoria y te da un Score de Empleabilidad.' },
-    { n: '02', t: 'Te matchea', d: 'Con empleos, becas, diplomados y concursos reales en Paraguay.' },
-    { n: '03', t: 'Traza tu ruta', d: 'Habilidades, cursos y certificaciones puntuales para crecer.' },
-    { n: '04', t: 'Te hace visible', d: 'Las empresas que buscan talento en CVitae te encuentran.' },
+    { n: '01', t: 'Entendemos tu experiencia', d: 'Organizamos tu CV y tus habilidades con evidencia real.' },
+    { n: '02', t: 'Comparamos oportunidades', d: 'Encontrá empleos, becas y programas que encajan con tu perfil.' },
+    { n: '03', t: 'Detectamos brechas', d: 'Ves qué requisitos podés respaldar y cuáles conviene fortalecer.' },
+    { n: '04', t: 'Preparás tu postulación', d: 'Adaptá tu CV sin inventar la experiencia que te falta.' },
   ]
 
   return (
@@ -66,12 +132,12 @@ function EmptyState() {
       <GrowthLine className="absolute -top-4 left-0 right-0 h-32 opacity-60" />
       <div className="relative">
         <Eyebrow>Bienvenida a CVitae</Eyebrow>
-        <h2 className="font-display mt-2 max-w-2xl text-4xl leading-tight text-cream">
-          Tu carrera, <em>trazada</em> por una IA que conoce el mercado paraguayo.
-        </h2>
+        <h1 className="font-display mt-2 max-w-2xl text-4xl leading-tight text-cream">
+          Tu carrera, <em>mejor preparada</em> para la próxima oportunidad.
+        </h1>
         <p className="mt-4 max-w-xl text-muted-foreground">
-          Subí tu CV y CVitae lo analiza, te da un Score de Empleabilidad, te matchea con
-          empleos, becas y diplomados reales, y te traza una ruta concreta para crecer.
+          Subí tu CV y CVitae lo compara con oportunidades reales, te muestra tu encaje y te ayuda a
+          preparar mejores postulaciones con evidencia confirmada.
         </p>
         <div className="mt-7 grid gap-3 sm:grid-cols-2">
           {pillars.map((p, i) => (
@@ -96,6 +162,7 @@ function EmptyState() {
             <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="email" value={email}
+              aria-label="Email para entrar a Mi carrera"
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
               placeholder="tu@email.com" disabled={loading}
@@ -120,31 +187,7 @@ function EmptyState() {
 // ─── Loader state ─────────────────────────────────────────────────────────────
 
 function LoaderState({ steps, currentStep }: { steps: string[]; currentStep: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-      className="rounded-3xl border border-white/8 bg-[#0a0a0a] p-10"
-    >
-      <Eyebrow>Trazando tu trayecto</Eyebrow>
-      <h2 className="font-display mt-2 text-3xl text-cream">Un momento…</h2>
-      <p className="mt-1 text-muted-foreground">Estamos leyendo tu carrera, paso a paso.</p>
-      <div className="relative mt-8 h-20">
-        <GrowthLine className="absolute inset-0 h-full w-full" />
-      </div>
-      <ul className="mt-6 space-y-3">
-        {steps.map((label, i) => (
-          <li key={label} className="flex items-center gap-3 text-sm">
-            <span className={`h-1.5 w-1.5 rounded-full ${
-              i < currentStep ? 'bg-[#c9a84c]' : i === currentStep ? 'bg-[#c9a84c] animate-pulse' : 'bg-white/15'
-            }`} />
-            <span className={i <= currentStep ? 'text-cream' : 'text-muted-foreground'}>
-              {label}{i === currentStep ? '…' : ''}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </motion.div>
-  )
+  return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}><B2CProgressLoader title="Un momento" description="Estamos leyendo tu carrera, paso a paso." stages={steps.map(label => ({ label }))} activeIndex={currentStep} /></motion.div>
 }
 
 // ─── Incomplete profile ───────────────────────────────────────────────────────
@@ -244,7 +287,20 @@ function ScoreHero({ score }: { score: number }) {
 
 // ─── Opportunity card ─────────────────────────────────────────────────────────
 
-function OpportunityCard({ m, featured }: { m: MatchItem; featured?: boolean }) {
+function OpportunityCard({ m, featured, liked, onToggleLike }: { m: MatchItem; featured?: boolean; liked?: boolean; onToggleLike?: (opportunity: MatchItem) => void }) {
+  const baseExplanation = m.matchDecision?.eligibility === 'ELIGIBLE'
+    ? m.matchDecision.applicable === 'COMPATIBLE'
+      ? 'Fuerte afinidad profesional; elegibilidad confirmada.'
+      : m.matchDecision.applicable === 'ADJACENT'
+        ? 'Área profesional relacionada; elegibilidad confirmada.'
+        : 'Afinidad profesional evaluada; elegibilidad confirmada.'
+    : m.matchDecision?.unknown_reasons?.length
+      ? `Afinidad evaluada con información pendiente: ${m.matchDecision.unknown_reasons.join(', ')}.`
+      : ''
+  const pendingEvidence = m.matchDecision?.unknown_reasons?.length
+    ? ` Información pendiente: ${m.matchDecision.unknown_reasons.join(', ')}.`
+    : ''
+  const explanation = `${baseExplanation}${pendingEvidence}`
   return (
     <article
       className={`rounded-2xl border p-5 transition-all hover:border-[#c9a84c]/25 ${
@@ -264,6 +320,7 @@ function OpportunityCard({ m, featured }: { m: MatchItem; featured?: boolean }) 
             <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {m.ubicacion}</span>
             <span className="rounded-full border border-white/10 px-2 py-0.5">{m.categoria}</span>
           </div>
+          {explanation && <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{explanation}</p>}
         </div>
         <div className={featured ? 'w-full sm:w-56' : 'w-44'}>
           <CompatibilityTrace score={m.finalScore} />
@@ -280,6 +337,15 @@ function OpportunityCard({ m, featured }: { m: MatchItem; featured?: boolean }) 
             >
               Detalle
             </a>
+            <button
+              type="button"
+              onClick={() => onToggleLike?.(m)}
+              aria-label={liked ? 'Quitar de mis intereses' : 'Me interesa esta oportunidad'}
+              title={liked ? 'Quitar de mis intereses' : 'Usar en mi plan'}
+              className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1.5 transition ${liked ? 'border-rose-300/35 bg-rose-300/10 text-rose-200' : 'border-white/10 text-muted-foreground hover:text-rose-200'}`}
+            >
+              <Heart className={`h-3.5 w-3.5 ${liked ? 'fill-current' : ''}`} />
+            </button>
           </div>
         </div>
       </div>
@@ -299,38 +365,65 @@ export default function Dashboard() {
   const [user, setUser] = useState<any>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [matches, setMatches] = useState<MatchItem[]>([])
+  const [potentialMatches, setPotentialMatches] = useState<MatchItem[]>([])
+  const [matchingCoverage, setMatchingCoverage] = useState<{ status?: string; coverage_state?: string; potential?: number; match?: number } | null>(null)
   const [loadingMatches, setLoadingMatches] = useState(false)
   const [profileSkills, setProfileSkills] = useState<string[]>([])
   const [isSubscribed, setIsSubscribed] = useState(false)
+  const [alertsEnabled, setAlertsEnabled] = useState(false)
   const [dailyMatchesUsed, setDailyMatchesUsed] = useState(0)
   const [hasProfile, setHasProfile] = useState<boolean | null>(null)
   const [currentLoaderStep, setCurrentLoaderStep] = useState(0)
   const [courses, setCourses] = useState<CourseRecommendation[]>([])
   const [loadingCourses, setLoadingCourses] = useState(false)
   const [profile, setProfile] = useState<any>(null)
+  const [serverMissingSkills, setServerMissingSkills] = useState<string[]>([])
+  const [dashboardError, setDashboardError] = useState('')
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null)
+  const [likedOpportunityIds, setLikedOpportunityIds] = useState<Set<string>>(new Set())
 
-  const loaderSteps = ['Leyendo tu perfil', 'Cargando vacantes activas', 'Calculando compatibilidad', 'Ordenando recomendaciones']
+  const foundingBeta = useFoundingBeta(user?.id || null)
+
+  const loaderSteps = ['Leyendo tu perfil', 'Buscando oportunidades elegibles', 'Comparando requisitos y experiencia', 'Ordenando tus mejores coincidencias']
 
   useEffect(() => {
+    let settled = false
+    const settle = (u: any) => {
+      if (settled) return
+      settled = true
+      setUser(u)
+      setAuthLoading(false)
+    }
+
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (session) { setUser(session.user); setAuthLoading(false); return }
+      if (session) { settle(session.user); return }
       for (let i = 0; i < 4; i++) {
         await new Promise(r => setTimeout(r, 1000))
         const { data: { session: s } } = await supabase.auth.getSession()
-        if (s) { setUser(s.user); setAuthLoading(false); return }
+        if (s) { settle(s.user); return }
       }
-      setUser(null); setAuthLoading(false)
+      settle(null)
     }
+
+    // Si Supabase devuelve 504 en el refresh del token, getSession() queda
+    // colgado indefinidamente. Este failsafe garantiza que el usuario ve el
+    // formulario de login en lugar de pantalla negra.
+    const failsafe = setTimeout(() => settle(null), 8000)
+
     init()
-    const subscription = auth.onAuthStateChange((u) => { setUser(u); setAuthLoading(false) })
-    return () => { subscription?.unsubscribe() }
+    const subscription = auth.onAuthStateChange((u) => { settle(u) })
+    return () => {
+      settled = true
+      clearTimeout(failsafe)
+      subscription?.unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
     if (user) {
-      supabase.from('user_master_profiles').select('id').eq('user_id', user.id).maybeSingle()
-        .then(({ data }) => setHasProfile(!!data))
+      supabase.from('user_master_profiles').select('profile_data,full_name,professional_title').eq('user_id', user.id).maybeSingle()
+        .then(({ data }) => setHasProfile(isProfileComplete(data)))
     }
   }, [user])
 
@@ -345,69 +438,123 @@ export default function Dashboard() {
 
   useEffect(() => { if (user) loadMatches() }, [user])
 
-  const loadMatches = async () => {
-    setLoadingMatches(true)
+  const loadMatches = async (force = false, includeAi = false) => {
+    setDashboardError('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
       if (!token) throw new Error('No autorizado')
+
+      const { data: prof, error: profileError } = await supabase.from('user_master_profiles')
+        .select('professional_title, summary, cv_text, profile_data').eq('user_id', user.id).maybeSingle()
+      if (profileError) throw profileError
+      setProfile(prof)
+      setLikedOpportunityIds(new Set((prof?.profile_data?.liked_opportunity_ids || []).map(String)))
+
+        const signature = matchingProfileSignature(prof)
+      const cached = !force ? readCache(user.id, signature) : null
+      if (cached) {
+        setMatches(cached.matches)
+        setPotentialMatches(cached.potentialMatches || [])
+        setMatchingCoverage(cached.coverage || null)
+        setProfileSkills(cached.profileSkills)
+        setServerMissingSkills(cached.missingSkills)
+        setIsSubscribed(cached.isSubscribed)
+        setAlertsEnabled(cached.alertsEnabled)
+        setCourses(cached.courses)
+        setLastUpdatedAt(cached.storedAt)
+        return
+      }
+
+      setLoadingMatches(true)
       const response = await fetch(MATCH_BATCH_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Error')
-      setMatches(data.matches || [])
-      setProfileSkills(data.profileSkills || [])
+      if (!response.ok) throw new Error(data.error || 'No pudimos calcular tus matches')
+      // match-batch is MATCH-only. Defend against stale/corrupt payloads so
+      // ABSTAIN or DENY can never inflate a B2C card or count.
+      const nextMatches = (data.matches || []).filter((match: MatchItem) => match.matchDecision?.outcome === 'MATCH')
+      const nextPotentialMatches = (data.potentialMatches || []).filter((match: MatchItem) => match.presentationState === 'POTENTIAL' && match.matchDecision?.outcome === 'ABSTAIN')
+      if (data.meta?.diagnosticSnapshotId && data.meta?.diagnostics?.coverage_state && ['ELIGIBILITY_UNKNOWN', 'DATA_COVERAGE_GAP', 'LOW_RETRIEVAL_COVERAGE'].includes(data.meta.diagnostics.coverage_state) && nextMatches.length === 0) {
+        fetch('/.netlify/functions/log-user-event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ event_type: 'matching_coverage_gap', event_data: { route: 'dashboard', snapshot_id: data.meta?.diagnosticSnapshotId } }),
+        }).catch(() => {})
+      }
+      const nextSkills = data.profileSkills || []
+      const nextMissing = data.missingSkills || []
+      setMatches(nextMatches)
+      setPotentialMatches(nextPotentialMatches)
+      setMatchingCoverage({ ...(data.meta?.diagnostics || {}), status: data.meta?.diagnostics?.run_status === 'SUCCESS' ? (nextMatches.length ? 'SUCCESS_WITH_RESULTS' : 'SUCCESS_ZERO') : data.meta?.diagnostics?.run_status })
+      setProfileSkills(nextSkills)
+      setServerMissingSkills(nextMissing)
       setIsSubscribed(data.is_subscribed || false)
-      const { data: prof } = await supabase.from('user_master_profiles')
-        .select('professional_title, profile_data').eq('user_id', user.id).maybeSingle()
-      setProfile(prof)
+      setAlertsEnabled(data.match_alerts_enabled || false)
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Asuncion' })
       const usage = prof?.profile_data?.daily_usage
       const usedToday = (usage?.date === today) ? (usage?.matches_shown || 0) : 0
       setDailyMatchesUsed(usedToday)
-      if (data.profileSkills?.length > 0) loadGeminiCourses(data.profileSkills, data.matches || [], token, prof?.profile_data?.career_route || '')
-    } catch { /* silencioso */ } finally {
+      // Matching is deterministic. Course generation is an explicit user action.
+      const nextCourses = includeAi && nextMissing.length > 0
+        ? await loadGeminiCourses(nextMissing, token, nextMatches)
+        : []
+      const storedAt = Date.now()
+      setLastUpdatedAt(storedAt)
+      playComplete()
+      writeCache(user.id, {
+        profileSignature: signature,
+        matches: nextMatches,
+        potentialMatches: nextPotentialMatches,
+        coverage: { ...(data.meta?.diagnostics || {}), status: data.meta?.diagnostics?.run_status === 'SUCCESS' ? (nextMatches.length ? 'SUCCESS_WITH_RESULTS' : 'SUCCESS_ZERO') : data.meta?.diagnostics?.run_status },
+        profileSkills: nextSkills,
+        missingSkills: nextMissing,
+        isSubscribed: data.is_subscribed || false,
+        alertsEnabled: data.match_alerts_enabled || false,
+        courses: nextCourses,
+      })
+    } catch (error: any) {
+      setDashboardError(error?.message || 'No pudimos cargar tu inteligencia profesional.')
+    } finally {
       setLoadingMatches(false)
     }
   }
 
-  const loadGeminiCourses = async (skills: string[], allMatches: any[], token: string, careerRoute = '') => {
+  const loadGeminiCourses = async (missing: string[], token: string, matched: MatchItem[]) => {
+    if (missing.length === 0) {
+      setCourses([])
+      return []
+    }
     setLoadingCourses(true)
     try {
-      const allVacancySkills: string[] = []
-      allMatches.slice(0, 5).forEach((m: any) => {
-        m.vacancySkills?.forEach((s: string) => {
-          if (!skills.some((ps: string) => ps.toLowerCase() === s.toLowerCase())) allVacancySkills.push(s)
-        })
-      })
-      const freq: Record<string, number> = {}
-      allVacancySkills.forEach(s => { freq[s] = (freq[s] || 0) + 1 })
-      const missingSkills = Object.entries(freq).sort(([, a], [, b]) => b - a).slice(0, 4).map(([s]) => s)
-      if (missingSkills.length === 0) return
       const res = await fetch('/.netlify/functions/gemini-courses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
-          profileSkills: skills,
-          missingSkills,
-          profileTitle: profile?.professional_title || '',
-          profileSeniority: profile?.profile_data?.seniority || '',
-          careerRoute,
+          action: 'recommend',
+          missingSkills: missing.slice(0, 4),
+          opportunityIds: matched.slice(0, 10).map((item) => item.id),
         }),
       })
-      if (!res.ok) return
+      if (!res.ok) throw new Error('No pudimos cargar los cursos')
       const data = await res.json()
-      setCourses(data.courses || [])
-    } catch { /* silencioso */ } finally {
+      const nextCourses = data.courses || []
+      setCourses(nextCourses)
+      return nextCourses
+    } catch {
+      setCourses([])
+      return []
+    } finally {
       setLoadingCourses(false)
     }
   }
 
   const missingSkills = useMemo(() => {
+    if (serverMissingSkills.length > 0) return serverMissingSkills.slice(0, 4)
     const allVacancySkills: string[] = []
-    matches.slice(0, 5).forEach(m => {
+    matches.filter(m => m.downstreamTrusted === true).slice(0, 5).forEach(m => {
       m.vacancySkills?.forEach(s => {
         if (!profileSkills.some(ps => ps.toLowerCase() === s.toLowerCase())) allVacancySkills.push(s)
       })
@@ -415,31 +562,71 @@ export default function Dashboard() {
     const freq: Record<string, number> = {}
     allVacancySkills.forEach(s => { freq[s] = (freq[s] || 0) + 1 })
     return Object.entries(freq).sort(([, a], [, b]) => b - a).slice(0, 4).map(([s]) => s)
-  }, [matches, profileSkills])
+  }, [matches, profileSkills, serverMissingSkills])
 
   const employabilityScore = useMemo(() => deriveScore(matches), [matches])
+
+  const toggleOpportunityPreference = async (opportunity: MatchItem) => {
+    const wasLiked = likedOpportunityIds.has(opportunity.id)
+    const optimistic = new Set(likedOpportunityIds)
+    if (wasLiked) optimistic.delete(opportunity.id)
+    else optimistic.add(opportunity.id)
+    setLikedOpportunityIds(optimistic)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Sesión expirada')
+      const response = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'opportunity_preference', opportunity_id: opportunity.id, missing_skills: opportunity.downstreamTrusted ? (opportunity.missingSkills || []) : [], liked: !wasLiked }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error || 'No pudimos guardar tu preferencia')
+      setLikedOpportunityIds(new Set((payload.liked_opportunity_ids || []).map(String)))
+    } catch (error: any) {
+      setLikedOpportunityIds(new Set(likedOpportunityIds))
+      setDashboardError(error?.message || 'No pudimos guardar tu preferencia.')
+    }
+  }
 
   const nextStep = useMemo(() => {
     if (!hasProfile) return { label: 'Completar mi perfil', detail: 'Necesitamos tus habilidades para encontrarte el trabajo ideal.', href: '/mi-carrera/perfil' }
     if (missingSkills.length > 0) return { label: `Sumá ${missingSkills[0]}`, detail: `Agregar esta skill puede mejorar tu score significativamente.`, href: '/mi-carrera/perfil' }
-    if (matches.length === 0) return { label: 'Explorar oportunidades', detail: 'No encontramos matches aún. Explorá oportunidades manualmente.', href: '/oportunidades' }
+    if (matches.length === 0) return { label: 'Adaptar mi CV a una vacante', detail: 'Encontraste algo que te interesa? Pegá el texto y CVitae adapta tu CV en minutos, sin inventar nada.', href: '/mi-carrera/cv' }
     return { label: 'Generá tu CV Vivo', detail: 'Creá un CV adaptado por IA para tu mejor oportunidad actual.', href: '/mi-carrera/cv' }
   }, [hasProfile, missingSkills, matches])
+
+  const careerIntent = profile?.profile_data?.desired_role_1y || profile?.profile_data?.career_route || ''
+
+  if (!authLoading && !user) {
+    return (
+      <>
+        <Helmet>
+          <title>Mi Carrera | CVitae</title>
+          <meta name="description" content="Accedé a tu perfil profesional, matches y próximas acciones en CVitae." />
+          <meta name="robots" content="noindex" />
+        </Helmet>
+        <SiteShell>
+          <div className="mx-auto max-w-5xl px-6 py-12 sm:py-20">
+            <EmptyState />
+          </div>
+        </SiteShell>
+      </>
+    )
+  }
 
   return (
     <DashboardLayout>
       <Helmet>
         <title>Mi Carrera | CVitae</title>
-        <meta name="description" content="Tu dashboard con matching de oportunidades, score de empleabilidad y recomendaciones con IA." />
+        <meta name="description" content="Encontrá oportunidades, entendé tu encaje y prepará mejores postulaciones con tu perfil y CV." />
         <meta name="robots" content="noindex" />
       </Helmet>
 
       <div className="space-y-6">
         <AnimatePresence mode="wait">
           {authLoading ? (
-            <motion.div key="loading" className="flex items-center justify-center py-32">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#c9a84c] border-t-transparent" />
-            </motion.div>
+            <motion.div key="loading"><PageLoadingState label="Cargando tu carrera" rows={2} /></motion.div>
           ) : !user ? (
             <motion.div key="empty"><EmptyState /></motion.div>
           ) : hasProfile === false ? (
@@ -448,11 +635,29 @@ export default function Dashboard() {
             <motion.div key="loader"><LoaderState steps={loaderSteps} currentStep={currentLoaderStep} /></motion.div>
           ) : (
             <motion.div key="content" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  {lastUpdatedAt
+                    ? `Inteligencia actualizada ${new Intl.DateTimeFormat('es-PY', { hour: '2-digit', minute: '2-digit' }).format(lastUpdatedAt)}`
+                    : 'Inteligencia profesional lista'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => loadMatches(true, true)}
+                  disabled={loadingMatches}
+                  className="inline-flex h-8 items-center gap-2 rounded-full border border-white/10 px-3 text-xs text-muted-foreground transition hover:border-[#c9a84c]/35 hover:text-[#c9a84c] disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${loadingMatches ? 'animate-spin' : ''}`} />
+                  Actualizar con IA
+                </button>
+              </div>
+              {dashboardError && <PageErrorState message={dashboardError} onRetry={() => loadMatches(true)} />}
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
                 {/* Main column */}
                 <div className="space-y-5">
                   {employabilityScore > 0 && <ScoreHero score={employabilityScore} />}
                   <NextStep {...nextStep} />
+                  <MatchingCoverageCard coverage={matchingCoverage} compact />
 
                   <div className="flex items-baseline justify-between pt-2">
                     <h3 className="font-display text-2xl text-cream">
@@ -464,34 +669,82 @@ export default function Dashboard() {
                   </div>
 
                   {matches.length === 0 ? (
-                    <div className="glass-panel p-10 text-center">
-                      <Search className="mx-auto mb-4 h-10 w-10 text-muted-foreground/30" />
-                      <h3 className="font-display mb-2 text-lg text-cream">No encontramos matches aún</h3>
-                      <p className="mx-auto mb-6 max-w-xs text-sm text-muted-foreground">
-                        Completá tu perfil con más habilidades para ver oportunidades.
-                      </p>
-                      <a href="/mi-carrera/perfil" className="inline-flex h-9 items-center gap-2 rounded-full border border-white/10 px-4 text-sm text-cream transition hover:border-white/25">
-                        Mejorar perfil
-                      </a>
+                    <>
+                    <div className="glass-panel overflow-hidden">
+                      <div className="h-px w-full bg-gradient-to-r from-transparent via-[#c9a84c]/50 to-transparent" />
+                      <div className="px-8 py-10 text-center">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#c9a84c]/70 mb-4">
+                          Mientras afinamos tus recomendaciones
+                        </p>
+                        <h3 className="font-display text-2xl text-cream leading-snug mb-3">
+                          ¿Encontraste una vacante<br/>que te interesa?
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-7 max-w-[270px] mx-auto leading-relaxed">
+                          Pegá el texto de esa oferta y CVitae adapta tu CV en 3 minutos — sin inventar nada. Solo tu experiencia real, mejor presentada para ese puesto.
+                        </p>
+                        <a
+                          href="/mi-carrera/cv"
+                          className="inline-flex items-center gap-2.5 rounded-full bg-[#c9a84c] px-7 py-3.5 text-sm font-semibold text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)]"
+                        >
+                          Adaptar mi CV a esa vacante <ArrowRight className="h-4 w-4" />
+                        </a>
+                        {matchingCoverage?.coverage_state === 'ELIGIBILITY_UNKNOWN' && (
+                          <p className="mt-5 text-xs text-muted-foreground">
+                            Para mejorar tus recomendaciones,{' '}
+                            <a href="/mi-carrera/perfil" className="text-[#c9a84c] underline-offset-2 hover:underline">confirmá tu país de residencia</a>.
+                          </p>
+                        )}
+                      </div>
                     </div>
+                    {potentialMatches.length > 0 && (
+                      <div className="glass-panel mt-4 p-5">
+                        <h4 className="font-display text-lg text-cream">Oportunidades potenciales</h4>
+                        <p className="mt-1 text-xs text-muted-foreground">Elegibilidad por confirmar — no son matches confirmados.</p>
+                        <div className="mt-3 space-y-2">
+                          {potentialMatches.slice(0, 3).map((item) => (
+                            <a key={item.id} href={canonicalOpportunityPathForRow({ slug: item.slug, opportunity_type: item.opportunityKind, opportunity_kind: item.opportunityKind })} className="block rounded-xl border border-white/10 p-3 transition hover:border-[#c9a84c]/50">
+                              <p className="text-sm text-cream">{item.titulo}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">{item.organization || item.ubicacion || 'Oportunidad'} · Elegibilidad por confirmar</p>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    </>
                   ) : (
                     <>
-                      <OpportunityCard m={matches[0]} featured />
+                      <OpportunityCard m={matches[0]} featured liked={likedOpportunityIds.has(matches[0].id)} onToggleLike={toggleOpportunityPreference} />
                       <div className="space-y-3">
-                        {matches.slice(1, isSubscribed ? undefined : 1).map((m) => (
-                          <OpportunityCard key={m.id} m={m} />
+                        {matches.slice(1, isSubscribed ? undefined : 3).map((m) => (
+                          <OpportunityCard key={m.id} m={m} liked={likedOpportunityIds.has(m.id)} onToggleLike={toggleOpportunityPreference} />
                         ))}
-                        {!isSubscribed && matches.length > 1 && (
+                        {!isSubscribed && matches.length > 3 && (
                           <div className="rounded-2xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.03] p-6 text-center">
                             <Lock className="mx-auto h-5 w-5 text-[#c9a84c] mb-3" />
-                            <p className="text-cream font-display text-xl">Hay {matches.length - 1} match{matches.length - 1 !== 1 ? 'es' : ''} más hoy.</p>
-                            <p className="mt-2 text-sm text-white/50 max-w-xs mx-auto">Con CVitae Pro ves todos tus matches sin límite diario.</p>
-                            <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola! Quiero activar CVitae Pro por USD 9/mes.')}`}
-                              target="_blank" rel="noopener noreferrer"
-                              className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-6 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-[#e6cf8a] transition">
-                              Activar Pro — $9/mes
-                            </a>
-                            <p className="mt-3 text-xs text-white/30">o volvé mañana para tu próximo match gratuito</p>
+                            <p className="text-cream font-display text-xl">
+                              Hay {matches.length - 3} match{matches.length - 3 !== 1 ? 'es' : ''} más disponible{matches.length - 3 !== 1 ? 's' : ''}.
+                            </p>
+                            {foundingBeta.enrollment?.status === 'accepted' ? (
+                              <>
+                                <p className="mt-2 text-sm text-white/50 max-w-xs mx-auto">Tu solicitud Founding Beta está pendiente de aprobación. Te avisamos por email.</p>
+                              </>
+                            ) : foundingBeta.enrollment?.status === 'active' || foundingBeta.enrollment?.status === 'completed' ? null : (
+                              <>
+                                <p className="mt-2 text-sm text-white/50 max-w-xs mx-auto">
+                                  Los primeros 50 usuarios aprobados acceden a todos sus matches como <strong className="text-white/70">Founding Users</strong>.
+                                </p>
+                                {foundingBeta.available && !foundingBeta.programFull ? (
+                                  <button
+                                    onClick={foundingBeta.triggerModal}
+                                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-6 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-[#e6cf8a] transition"
+                                  >
+                                    Solicitar acceso Founding Beta
+                                  </button>
+                                ) : foundingBeta.available ? (
+                                  <p className="mt-4 text-xs text-white/40">El programa Founding Beta está completo. Próximamente disponible como Pro.</p>
+                                ) : <p className="mt-4 text-xs text-white/40">{foundingBeta.serviceError}</p>}
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
@@ -501,14 +754,20 @@ export default function Dashboard() {
 
                 {/* Sidebar */}
                 <aside className="space-y-5">
-                  {/* Visibility hint */}
+                  {/* ATS Diagnostic CTA */}
                   <div className="glass-panel p-5">
-                    <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-[#c9a84c]">
-                      Del otro lado del ecosistema
-                    </div>
-                    <p className="font-display mt-2 text-base leading-snug text-cream">
-                      Tu perfil optimizado te hace visible para empresas que buscan talento en CVitae.
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#c9a84c] mb-2">
+                      Diagnóstico ATS
                     </p>
+                    <p className="font-display text-base leading-snug text-cream mb-1">
+                      ¿Tu CV pasa los filtros automáticos?
+                    </p>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Subí tu CV y en segundos sabés qué mejorar antes de postular.
+                    </p>
+                    <a href="/mi-carrera/ats" className="inline-flex items-center gap-1.5 text-xs font-medium text-[#c9a84c] hover:text-[#e6cf8a] transition">
+                      Diagnosticar mi CV <ArrowRight className="h-3 w-3" />
+                    </a>
                   </div>
 
                   {/* Missing skills */}
@@ -517,7 +776,11 @@ export default function Dashboard() {
                     <p className="mt-0.5 text-xs text-muted-foreground">Para subir tu compatibilidad media</p>
                     <ul className="mt-4 space-y-2">
                       {missingSkills.length === 0 ? (
-                        <li className="text-xs italic text-muted-foreground">Calculando…</li>
+                        <li className="text-xs italic text-muted-foreground">
+                          {matches.length > 0
+                            ? 'No detectamos una brecha prioritaria en tus mejores oportunidades.'
+                            : 'Se mostrarán cuando encontremos oportunidades compatibles.'}
+                        </li>
                       ) : missingSkills.map((s, i) => (
                         <li key={s} className="flex items-center gap-3 text-sm text-cream">
                           <span className="w-4 font-display italic text-xs text-[#c9a84c]">0{i + 1}</span>
@@ -527,23 +790,25 @@ export default function Dashboard() {
                     </ul>
                   </div>
 
-                  {/* Courses */}
+                  {/* Learning plan */}
                   <div className="glass-panel p-5">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-display text-lg text-cream">Cursos recomendados</h4>
-                      <span className="rounded-full border border-[#c9a84c]/30 px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#c9a84c]">IA</span>
+                      <h4 className="font-display text-lg text-cream">Tu plan para acercarte a tu objetivo</h4>
+                      <a href="/mi-carrera/aprender" className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-[#c9a84c]">Ver plan <ArrowRight className="h-3 w-3" /></a>
                     </div>
-                    {profile?.profile_data?.career_route && (
+                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Usamos tu objetivo, tus matches y brechas respaldadas para priorizar qué conviene fortalecer.</p>
+                    {careerIntent && (
                       <p className="mt-1 text-[11px] text-muted-foreground">
-                        Enfocado en tu ruta: <span className="text-[#c9a84c]">
+                        Objetivo: <span className="text-[#c9a84c]">
                           {{
                             'empleo-local': '💼 Empleo en Paraguay',
                             'remoto': '💻 Trabajo remoto',
                             'beca-posgrado': '🎓 Beca / posgrado',
                             'organismos': '🌐 Organismos internacionales',
                             'emprendimiento': '🚀 Emprendimiento',
+                            'freelance': '🧩 Trabajo freelance',
                             'cambio-area': '🔄 Cambio de área',
-                          }[profile.profile_data.career_route] || profile.profile_data.career_route}
+                          }[profile?.profile_data?.career_route] || careerIntent}
                         </span>
                       </p>
                     )}
@@ -555,46 +820,58 @@ export default function Dashboard() {
                       <div className="mt-4 flex">
                         <Connector />
                         <div className="flex-1 space-y-4">
-                          {courses.map((c, i) => (
-                            <a key={i} href={c.url} target="_blank" rel="noopener noreferrer" className="group block">
+                          {courses.slice(0, 3).map((c) => (
+                            <a key={c.id} href="/mi-carrera/aprender" className="group block">
                               <div className="flex items-center gap-2">
                                 <BookOpen className="h-3.5 w-3.5 text-[#c9a84c]" />
                                 <p className="text-sm text-cream transition-colors group-hover:text-[#c9a84c]">{c.course}</p>
                               </div>
-                              <p className="pl-[22px] text-[11px] text-muted-foreground">{c.platform} · {c.why}</p>
+                              <p className="pl-[22px] text-[11px] text-muted-foreground">{c.platform} · {c.level} · respaldado por {c.sources.length} {c.sources.length === 1 ? 'oportunidad' : 'oportunidades'}</p>
+                              {c.why && <p className="mt-1 pl-[22px] text-[11px] leading-relaxed text-white/40">{c.why}</p>}
                             </a>
                           ))}
                         </div>
                       </div>
                     ) : (
-                      <p className="mt-3 text-xs italic text-muted-foreground">Completá tu perfil para ver cursos personalizados.</p>
+                      careerIntent ? <p className="mt-3 text-xs italic text-muted-foreground">Todavía no hay brechas corroboradas para recomendar un curso. Actualizá tus matches cuando quieras volver a revisar.</p> : <div className="mt-3"><p className="text-xs text-muted-foreground">Contanos qué querés lograr y CVitae usará oportunidades reales para orientar qué conviene fortalecer.</p><a href="/mi-carrera/aprender" className="mt-3 inline-flex items-center gap-1 text-xs text-[#c9a84c]">Definir mi objetivo <ArrowRight className="h-3 w-3" /></a></div>
                     )}
                   </div>
 
-                  {/* Alerts (soon) */}
-                  <div className="glass-panel p-5 opacity-60">
+                  {/* Proactive alerts */}
+                  <div className="glass-panel p-5">
                     <div className="flex items-center justify-between">
                       <h4 className="inline-flex items-center gap-2 font-display text-lg text-cream">
                         <Bell className="h-4 w-4 text-[#c9a84c]" /> Alertas proactivas
                       </h4>
-                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">Pronto</span>
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${alertsEnabled ? 'border-emerald-400/30 text-emerald-300' : 'border-white/10 text-muted-foreground'}`}>{alertsEnabled ? 'Activas' : 'Desactivadas'}</span>
                     </div>
-                    <p className="mt-2 text-xs text-muted-foreground">Te avisaremos cuando aparezcan vacantes nuevas que encajen.</p>
+                    <p className="mt-2 text-xs text-muted-foreground">Recibí un correo cuando aparezca una oportunidad verificada con match muy alto.</p>
+                    <a href="/mi-carrera/alertas" className="mt-3 inline-flex items-center gap-1.5 text-xs text-[#c9a84c]">Configurar alertas <ArrowRight className="h-3 w-3" /></a>
                   </div>
 
-                  {/* Premium */}
-                  {!isSubscribed && matches.length > 1 && (
+                  {/* Founding Beta upsell — sidebar */}
+                  {!isSubscribed && matches.length > 3 && (
                     <div className="rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.04] p-5">
                       <Lock className="h-4 w-4 text-[#c9a84c]" />
-                      <h4 className="font-display mt-2 text-xl text-cream">Hay {matches.length - 1} match{matches.length - 1 !== 1 ? 'es' : ''} más hoy.</h4>
-                      <p className="mt-1 text-xs text-muted-foreground">Con CVitae Pro ves todos tus matches sin límite.</p>
-                      <a
-                        href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola! Quiero activar CVitae Pro por USD 9/mes.')}`}
-                        target="_blank" rel="noopener noreferrer"
-                        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c9a84c] py-2 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]"
-                      >
-                        Activar Pro — $9/mes
-                      </a>
+                      <h4 className="font-display mt-2 text-xl text-cream">
+                        +{matches.length - 3} match{matches.length - 3 !== 1 ? 'es' : ''} oculto{matches.length - 3 !== 1 ? 's' : ''}
+                      </h4>
+                      {foundingBeta.enrollment?.status === 'accepted' ? (
+                        <p className="mt-1 text-xs text-muted-foreground">Tu solicitud Founding Beta está pendiente. Te avisamos por email al aprobarla.</p>
+                      ) : (
+                        <>
+                          <p className="mt-1 text-xs text-muted-foreground">Los primeros 50 usuarios aprobados acceden a todos sus matches.</p>
+                          {foundingBeta.available && !foundingBeta.programFull && (
+                            <button
+                              onClick={foundingBeta.triggerModal}
+                              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c9a84c] py-2 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]"
+                            >
+                              Solicitar acceso Founding
+                            </button>
+                          )}
+                          {!foundingBeta.available && <p className="mt-3 text-xs text-white/40">{foundingBeta.serviceError}</p>}
+                        </>
+                      )}
                     </div>
                   )}
                 </aside>
@@ -603,6 +880,25 @@ export default function Dashboard() {
           )}
         </AnimatePresence>
       </div>
+      <ProductGuide
+        storageKey="b2c_dashboard_v1"
+        label="Mi carrera"
+        steps={[
+          { title: 'Completá tu perfil', description: 'Tus habilidades, experiencia, ubicación y objetivo profesional son la base del matching. Podés corregirlos cuando cambien.' },
+          { title: 'Entendé cada match', description: 'CVitae muestra por qué una vacante encaja y qué habilidades faltan. Sólo usamos oportunidades que pasaron la verificación.' },
+          { title: 'Elegí tu próxima acción', description: 'Abrí la fuente original, adaptá tu CV o reforzá una habilidad. El score orienta, pero vos decidís dónde postular.' },
+          { title: 'Explorá tus matches', description: 'Cada oportunidad compatible aparece ordenada por compatibilidad. Actualizá tu perfil para refrescar los resultados.' },
+        ]}
+      />
+      {foundingBeta.showModal && (
+        <FoundingBetaModal
+          slotsRemaining={foundingBeta.slotsRemaining}
+          programFull={foundingBeta.programFull}
+          onAccept={foundingBeta.accept}
+          onDismiss={foundingBeta.dismiss}
+          onDecline={foundingBeta.decline}
+        />
+      )}
     </DashboardLayout>
   )
 }

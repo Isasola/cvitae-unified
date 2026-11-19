@@ -1,6 +1,7 @@
 // ⚠️ Netlify Free: límite 10s. Para migrar a Lambda: scripts/deploy-lambda.sh
 import { Handler } from "@netlify/functions"
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
+import { observeAiCall } from './lib/ai-telemetry'
 import { makeSupabaseAdmin } from "./_supabase"
 
 const MODEL_ID = "global.anthropic.claude-sonnet-4-6"
@@ -34,9 +35,21 @@ async function invokeModel(system: string | null, userPrompt: string, maxTokens:
     accept: "application/json",
     body: JSON.stringify(body),
   })
-  const response = await bedrockClient.send(command)
+  const response = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'candidate_comparison', trigger: 'user_action', actor: 'user' }, () => bedrockClient.send(command, { abortSignal: AbortSignal.timeout(25_000) }))
   const result = JSON.parse(new TextDecoder().decode(response.body))
   return result.content[0]?.text ?? ""
+}
+
+async function validateRecruiter(token: unknown) {
+  if (typeof token !== "string" || !token.trim()) return null
+  const { data } = await makeSupabaseAdmin()
+    .from("recruiter_tokens")
+    .select("id")
+    .eq("access_token", token.trim())
+    .eq("is_active", true)
+    .eq("verification_status", "verified")
+    .single()
+  return data
 }
 
 const handler: Handler = async (event) => {
@@ -49,6 +62,13 @@ const handler: Handler = async (event) => {
 
     // ── Modo batch_summary: recibe resúmenes ya procesados
     if (mode === 'batch_summary' && candidates?.length >= 2) {
+      const tokenData = await validateRecruiter(token)
+      if (!tokenData) {
+        return { statusCode: 403, body: JSON.stringify({ error: "Token de empresa inválido o inactivo" }) }
+      }
+      if (candidates.length > 30) {
+        return { statusCode: 400, body: JSON.stringify({ error: "Máximo 30 candidatos por comparación" }) }
+      }
       const candidatesText = candidates.map((c: any, i: number) =>
         `Candidato ${i + 1}: ${c.name}
   - Fit: ${c.fitScore}/100 | ATS: ${c.atsScore}/100 | Decisión: ${c.recommendation}
@@ -88,12 +108,7 @@ Respondé ÚNICAMENTE con JSON:
       const supabase = makeSupabaseAdmin()
 
       // Validate token
-      const { data: tokenData } = await supabase
-        .from("recruiter_tokens")
-        .select("id")
-        .eq("access_token", token.trim())
-        .eq("is_active", true)
-        .single()
+      const tokenData = await validateRecruiter(token)
 
       if (!tokenData) {
         return { statusCode: 403, body: JSON.stringify({ error: "Token inválido" }) }
@@ -189,12 +204,19 @@ Respondé ÚNICAMENTE con JSON válido:
     }
 
     const supabase = makeSupabaseAdmin()
+    const tokenData = await validateRecruiter(token)
+    if (!tokenData) {
+      return { statusCode: 403, body: JSON.stringify({ error: "Token de empresa inválido o inactivo" }) }
+    }
     const { data: analyses, error: dbError } = await supabase
       .from("recruiter_analyses")
       .select("raw_cv_text, candidate_name, file_name")
       .in("id", ids)
+      .eq("token_id", tokenData.id)
 
-    if (dbError || !analyses) throw new Error("Error obteniendo los CVs del historial")
+    if (dbError || !analyses || analyses.length !== ids.length) {
+      return { statusCode: 403, body: JSON.stringify({ error: "Uno o más CVs no pertenecen a esta empresa" }) }
+    }
 
     const cvsString = analyses.map((a, i) =>
       `Candidato ${i + 1} (${a.candidate_name || a.file_name}):\n${a.raw_cv_text.substring(0, 2000)}`

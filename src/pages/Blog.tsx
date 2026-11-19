@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Link, useLocation } from 'wouter'
+import { Link } from 'wouter'
 import { ArrowLeft } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { GrowthLine, Eyebrow } from '@/components/cv/visuals'
 import { supabase } from '@/lib/supabase'
+import { isCurrentPublicBlog } from '@/lib/public-blog-contract'
 
 interface BlogPost {
   id: string
@@ -12,7 +13,8 @@ interface BlogPost {
   slug: string
   cuerpo: string
   categoria: string
-  fecha_vencimiento: string
+  created_at: string
+  fecha_vencimiento?: string
   tipo: string
   imagen_url?: string
 }
@@ -20,16 +22,20 @@ interface BlogPost {
 export default function Blog() {
   const [posts, setPosts] = useState<BlogPost[]>([])
   const [loading, setLoading] = useState(true)
-  const [, setLocation] = useLocation()
+  const [error, setError] = useState('')
 
   useEffect(() => {
     supabase
       .from('content_hub')
-      .select('id, titulo, slug, cuerpo, categoria, fecha_vencimiento, tipo, imagen_url')
+      .select('id, titulo, slug, cuerpo, categoria, created_at, fecha_vencimiento, tipo, imagen_url, is_active, metadata')
       .eq('tipo', 'blog')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
-      .then(({ data }) => { setPosts(data || []); setLoading(false) })
+      .then(({ data, error: loadError }) => {
+        if (loadError) setError('No pudimos cargar los artículos. Intentá nuevamente en unos minutos.')
+        else setPosts((data || []).filter(row => isCurrentPublicBlog(row)))
+        setLoading(false)
+      })
   }, [])
 
   // Gradient palette for posts without images
@@ -43,12 +49,19 @@ export default function Blog() {
     <>
       <Helmet>
         <title>Blog | Consejos de Carrera y Mercado Laboral — CVitae</title>
-        <meta name="description" content="Ideas, guías y datos sobre carrera, IA y mercado laboral en Paraguay." />
+        <meta name="description" content="Ideas, guías y datos sobre carrera, IA y mercado laboral en Paraguay y Latinoamérica." />
         <link rel="canonical" href="https://cvitae.lat/blog" />
         <meta property="og:title" content="Blog | Consejos de Carrera — CVitae" />
-        <meta property="og:description" content="Ideas, guías y datos sobre carrera, IA y mercado laboral en Paraguay." />
+        <meta property="og:description" content="Ideas, guías y datos sobre carrera, IA y mercado laboral en Paraguay y Latinoamérica." />
         <meta property="og:url" content="https://cvitae.lat/blog" />
         <meta property="og:type" content="website" />
+        <script type="application/ld+json">{JSON.stringify({
+          '@context': 'https://schema.org', '@type': 'Blog',
+          name: 'Blog CVitae',
+          url: 'https://cvitae.lat/blog',
+          description: 'Ideas, guías y datos sobre carrera, IA y mercado laboral en Paraguay y Latinoamérica.',
+          publisher: { '@type': 'Organization', name: 'CVitae', url: 'https://cvitae.lat', logo: { '@type': 'ImageObject', url: 'https://cvitae.lat/favicon.svg' } },
+        })}</script>
       </Helmet>
       <SiteShell>
         <div className="max-w-5xl mx-auto px-6 py-16">
@@ -63,7 +76,7 @@ export default function Blog() {
               Ideas para <em>crecer</em> con intención.
             </h1>
             <p className="text-muted-foreground mt-4 max-w-xl text-base leading-relaxed">
-              Guías prácticas, análisis del mercado y conversaciones sobre carrera, IA y trabajo en Paraguay.
+              Guías prácticas, análisis del mercado y conversaciones sobre carrera, IA y trabajo en Paraguay y Latinoamérica.
             </p>
             <GrowthLine className="absolute -bottom-2 left-0 right-0 h-10 opacity-40" />
           </div>
@@ -72,14 +85,16 @@ export default function Blog() {
             <div className="mt-16 flex justify-center">
               <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin" />
             </div>
+          ) : error ? (
+            <div className="mt-16 border border-amber-300/20 bg-amber-300/[0.04] p-6 text-center text-sm text-amber-100" role="alert">{error}</div>
           ) : posts.length === 0 ? (
             <p className="mt-16 text-center text-muted-foreground">No hay artículos publicados todavía.</p>
           ) : (
             <div className="mt-14 grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {posts.map((p, i) => (
-                <div
+                <Link
                   key={p.id}
-                  onClick={() => setLocation(`/blog/${p.slug}`)}
+                  href={`/blog/${p.slug}`}
                   className="group glass-panel overflow-hidden hover:border-gold/40 transition-all duration-300 cursor-pointer rounded-2xl"
                 >
                   <div
@@ -99,7 +114,7 @@ export default function Blog() {
                       <span className="text-[10px] uppercase tracking-wider border border-gold/30 text-gold px-2.5 py-0.5 rounded-full">
                         {p.categoria}
                       </span>
-                      <span>{new Date(p.fecha_vencimiento).toLocaleDateString('es-PY', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      <span>{new Date(p.created_at).toLocaleDateString('es-PY', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                     </div>
                     <h2 className="font-display text-xl text-cream mt-3 mb-2 leading-snug group-hover:text-gold transition-colors line-clamp-2">{p.titulo}</h2>
                     <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
@@ -109,7 +124,7 @@ export default function Blog() {
                       Leer artículo <span className="ml-1">→</span>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}

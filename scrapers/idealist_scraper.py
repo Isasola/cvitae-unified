@@ -110,7 +110,7 @@ def fetch_jobs_html_fallback(country_code):
             href = link_el.get("href", "")
             full_url = f"https://www.idealist.org{href}" if href.startswith("/") else href
             jobs.append({
-                "titulo": title_el.get_text(strip=True),
+                "title": title_el.get_text(strip=True),
                 "organization": org_el.get_text(strip=True) if org_el else "ONG",
                 "location": country_code,
                 "description": "",
@@ -166,7 +166,7 @@ def parse_api_job(raw):
     tags = [str(c) for c in categories[:5]] if categories else ["ong", "impacto-social"]
 
     return {
-        "titulo": title,
+        "title": title,
         "organization": org_name,
         "location": location,
         "rubro": rubro,
@@ -199,7 +199,7 @@ def main():
                 seen_urls.add(item["url"])
                 total_found += 1
                 job = {
-                    "titulo": item["titulo"],
+                    "title": item["title"],
                     "organization": item["organization"],
                     "location": item["location"],
                     "rubro": "ONGs y Sociedad Civil",
@@ -213,7 +213,7 @@ def main():
                 status = insert_job(job)
                 if status in (200, 201, 409):
                     total_inserted += 1
-                print(f"  [fallback] {item['titulo'][:50]} -> {status}")
+                print(f"  [fallback] {item['title'][:50]} -> {status}")
             time.sleep(1)
             continue
 
@@ -227,7 +227,7 @@ def main():
             status = insert_job(job)
             if status in (200, 201, 409):
                 total_inserted += 1
-            print(f"  [{job['organization']}] {job['titulo'][:50]} -> {status}")
+            print(f"  [{job['organization']}] {job['title'][:50]} -> {status}")
 
         time.sleep(1)
 

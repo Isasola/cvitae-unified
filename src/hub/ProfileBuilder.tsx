@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { useLocation } from 'wouter'
+import { Link, useLocation } from 'wouter'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ArrowLeft, Save, Plus, X, CheckCircle, ChevronRight, ChevronLeft,
-  Upload, Loader2, Brain,
+  ArrowLeft, ArrowRight, Save, Plus, X, CheckCircle, ChevronRight, ChevronLeft,
+  Upload, Loader2, Brain, Download, FileText,
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { GrowthLine } from '@/components/cv/visuals'
 import { auth, supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { analytics } from '@/lib/analytics'
+import { consumeApplicationReturnTo } from '@/lib/application-intent'
+import { MatchingCoverageCard } from '@/components/cv/MatchingCoverageCard'
+import { COUNTRY_OPTIONS } from '../../shared/country-options'
 
 const ease = [0.22, 1, 0.36, 1] as const
 
@@ -25,6 +28,7 @@ const CAREER_ROUTES = [
   { id: 'beca-posgrado', label: 'Beca o posgrado',              icon: '🎓', desc: 'Especializarte o estudiar en el exterior' },
   { id: 'organismos',    label: 'Organismos internacionales',   icon: '🌐', desc: 'ONU, BID, OEA, PNUD y similares' },
   { id: 'emprendimiento',label: 'Emprendimiento',               icon: '🚀', desc: 'Capital semilla, aceleradoras, grants' },
+  { id: 'freelance',      label: 'Trabajo freelance',            icon: '🧩', desc: 'Proyectos por contrato para clientes locales o globales' },
   { id: 'cambio-area',   label: 'Cambio de área',               icon: '🔄', desc: 'Reconversión o pivot profesional' },
 ]
 
@@ -34,6 +38,7 @@ const ROUTE_GAPS: Record<string, { skill: string; sugerencia: string }[]> = {
   'organismos':     [{ skill: 'Inglés', sugerencia: 'Todos los organismos internacionales trabajan en inglés.' }, { skill: 'Redacción de proyectos', sugerencia: 'La postulación requiere cartas de motivación y propuestas formales.' }],
   'beca-posgrado':  [{ skill: 'Inglés', sugerencia: 'La mayoría de las becas exigen prueba de idioma (IELTS/TOEFL).' }],
   'emprendimiento': [{ skill: 'Gestión de Proyectos', sugerencia: 'Los jurados de aceleradoras evalúan ejecución y planificación.' }],
+  'freelance':      [],
   'empleo-local':   [],
   'cambio-area':    [],
 }
@@ -43,6 +48,69 @@ const SUMMARY_EXAMPLES = [
   'Profesional de Marketing Digital con foco en SEO y campañas de Google Ads. Logré aumentar el tráfico orgánico un 40% en mi último proyecto.',
   'Contador con experiencia en pymes paraguayas, manejo de impuestos SET y facturación electrónica. Busco rol en empresa en crecimiento.',
 ]
+
+async function fileToBase64(file: File | Blob): Promise<string> {
+  const reader = new FileReader()
+  return new Promise((resolve, reject) => {
+    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '')
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function convertHeicToJpeg(file: File): Promise<File> {
+  // 1st attempt: native createImageBitmap — zero download cost, works on Safari/iOS
+  try {
+    const bitmap = await createImageBitmap(file)
+    const maxDim = 3000
+    let w = bitmap.width, h = bitmap.height
+    if (w > maxDim || h > maxDim) {
+      const s = Math.min(maxDim / w, maxDim / h)
+      w = Math.round(w * s); h = Math.round(h * s)
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = w; canvas.height = h
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h)
+    return await new Promise<File>((res, rej) =>
+      canvas.toBlob(
+        blob => blob
+          ? res(new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' }))
+          : rej(new Error('canvas blob failed')),
+        'image/jpeg', 0.85,
+      )
+    )
+  } catch {
+    // 2nd attempt: lazy-load heic-to/csp (only downloaded when native fails)
+    try {
+      const { heicTo } = await import('heic-to/csp')
+      const blob = await heicTo({ blob: file, type: 'image/jpeg', quality: 0.85 })
+      return new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' })
+    } catch {
+      throw new Error('No pudimos convertir el archivo HEIC. En tu iPhone, compartí la foto como JPG e intentá de nuevo.')
+    }
+  }
+}
+
+async function compressImageForBedrock(base64: string, maxBytes = 4_000_000): Promise<string> {
+  if (base64.length <= maxBytes) return base64
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const maxDim = 2000
+      let w = img.naturalWidth, h = img.naturalHeight
+      if (w > maxDim || h > maxDim) {
+        const s = Math.min(maxDim / w, maxDim / h)
+        w = Math.round(w * s); h = Math.round(h * s)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/jpeg', 0.75).split(',')[1])
+    }
+    img.onerror = () => resolve(base64)
+    img.src = `data:image/jpeg;base64,${base64}`
+  })
+}
 
 function StepDot({ active, done }: { active: boolean; done: boolean }) {
   return (
@@ -63,94 +131,422 @@ export default function ProfileBuilder() {
   const [saved, setSaved] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [authLoading, setAuthLoading] = useState(true)
-  const [existingProfileId, setExistingProfileId] = useState<string | null>(null)
+  const [profileLoad, setProfileLoad] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [currentCV, setCurrentCV] = useState<{
+    file_name: string
+    uploaded_at?: string
+    status: 'stored' | 'reupload_required'
+  } | null>(null)
   const [formData, setFormData] = useState({
     full_name: '',
     professional_title: '',
     location: '',
-    seniority: 'Junior',
+    seniority: '',
     summary: '',
     modality: '',
     skills: [] as string[],
     cursos: [] as string[],
     career_route: '' as string,
+    desired_role_1y: '',
+    career_interests: [] as string[],
+    education: [] as any[],
+    experience: [] as any[],
+    languages: [] as any[],
+    candidate_eligibility: { residence_country: '', citizenship_countries: [] as string[], work_authorization_countries: [] as string[] },
   })
   const [newCurso, setNewCurso] = useState('')
   const [newSkill, setNewSkill] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
+  const [analyzeStatus, setAnalyzeStatus] = useState<string>('')
+  const [matchingCoverage, setMatchingCoverage] = useState<any>(null)
 
   useEffect(() => {
+    let active = true
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!active) return
       setUser(session?.user || null)
+      setAuthLoading(false)
+    }).catch(() => {
+      if (!active) return
+      setUser(null)
       setAuthLoading(false)
     })
     const subscription = auth.onAuthStateChange((user) => {
       setUser(user)
       setAuthLoading(false)
     })
-    return () => { subscription?.unsubscribe() }
+    return () => { active = false; subscription?.unsubscribe() }
   }, [])
 
   useEffect(() => {
     if (!user) return
-    supabase
-      .from('user_master_profiles').select('*').eq('user_id', user.id).maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setExistingProfileId(data.id)
+    let active = true
+    setProfileLoad('loading')
+    setLoadedUserId(null)
+    setLoadError(null)
+    setSaveError(null)
+    setSaved(false)
+    setStep(0)
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.access_token || session.user.id !== user.id) throw new Error('Tu sesión expiró. Volvé a ingresar.')
+      const response = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'status' }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(response.status === 401 ? 'Tu sesión expiró. Volvé a ingresar.' : (result.error || 'No pudimos cargar tu perfil. Intentá nuevamente.'))
+      if (!active) return
+      const data = result.profile
+      if (data) {
+          setMatchingCoverage(data.matching_coverage || null)
+          const draft = data.profile_data?.cv_import_draft || {}
           setFormData({
-            full_name: data.full_name || '',
-            professional_title: data.professional_title || '',
-            location: data.profile_data?.location || '',
-            seniority: data.profile_data?.seniority || 'Junior',
+            full_name: data.full_name || draft.full_name || '',
+            professional_title: data.professional_title || draft.professional_title || '',
+            location: data.profile_data?.location || draft.location || '',
+            seniority: data.profile_data?.seniority || draft.seniority || '',
             summary: data.summary || '',
             modality: data.profile_data?.modality || '',
-            skills: data.profile_data?.habilidades || [],
-            cursos: data.profile_data?.cursos || [],
+            skills: data.profile_data?.habilidades?.length ? data.profile_data.habilidades : (draft.skills || []),
+            cursos: data.profile_data?.cursos?.length ? data.profile_data.cursos : ((draft.education || []).map((e: any) => [e.degree, e.institution].filter(Boolean).join(' — ')).filter(Boolean)),
             career_route: data.profile_data?.career_route || '',
+            desired_role_1y: data.profile_data?.desired_role_1y || '',
+            career_interests: data.profile_data?.career_interests || [],
+            education: data.profile_data?.education?.length ? data.profile_data.education : (draft.education || []),
+            experience: data.profile_data?.experience?.length ? data.profile_data.experience : (draft.experience || []),
+            languages: data.profile_data?.languages?.length ? data.profile_data.languages : (draft.languages || []),
+            candidate_eligibility: data.profile_data?.candidate_eligibility || { residence_country: '', citizenship_countries: [], work_authorization_countries: [] },
           })
-        }
-      })
-  }, [user])
+          setCurrentCV(data.has_cv || data.cv_reupload_required ? {
+            file_name: data.cv_file_name || 'CV anterior',
+            uploaded_at: data.cv_uploaded_at,
+            status: data.has_cv ? 'stored' : 'reupload_required',
+          } : null)
+      } else {
+          setFormData({ full_name: '', professional_title: '', location: '', seniority: '', summary: '', modality: '', skills: [], cursos: [], career_route: '', desired_role_1y: '', career_interests: [], education: [], experience: [], languages: [], candidate_eligibility: { residence_country: '', citizenship_countries: [], work_authorization_countries: [] } })
+          setMatchingCoverage(null)
+          setCurrentCV(null)
+      }
+      setLoadedUserId(user.id)
+      setProfileLoad('ready')
+    }).catch((error: any) => {
+      if (!active) return
+      setLoadError(error?.message === 'Failed to fetch' ? 'No pudimos cargar tu perfil. Revisá tu conexión e intentá nuevamente.' : (error?.message || 'No pudimos cargar tu perfil. Intentá nuevamente.'))
+      setProfileLoad('error')
+    })
+    return () => { active = false }
+  }, [user?.id, loadAttempt])
 
   const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setAnalyzing(true); setAnalyzeError(null)
+    const lowerName = file.name.toLowerCase()
+
+    const isPdf   = lowerName.endsWith('.pdf')
+    const isDocx  = lowerName.endsWith('.docx')
+    const isDoc   = lowerName.endsWith('.doc') && !lowerName.endsWith('.docx')
+    const isTxt   = lowerName.endsWith('.txt')
+    const isImage = ['.jpg','.jpeg','.png','.webp'].some(ext => lowerName.endsWith(ext))
+    const isHeic  = lowerName.endsWith('.heic') || lowerName.endsWith('.heif')
+    const isSupported = isPdf || isDocx || isDoc || isTxt || isImage || isHeic
+
+    if (!isSupported) {
+      setAnalyzeError('Formato no compatible. Podés subir PDF, Word (DOCX/DOC), TXT, o una imagen (JPG, PNG, WEBP, HEIC).')
+      e.target.value = ''
+      return
+    }
+    if (!file.size) {
+      setAnalyzeError('El archivo está vacío. Elegí otro CV.')
+      e.target.value = ''
+      return
+    }
+    // Documents: hard 4 MB limit.
+    // Images: no hard rejection — auto-compressed below if needed.
+    if ((isPdf || isDocx || isDoc || isTxt) && file.size > 4 * 1024 * 1024) {
+      setAnalyzeError('El archivo no puede superar 4 MB.')
+      e.target.value = ''
+      return
+    }
+    if ((isImage || isHeic) && file.size > 20 * 1024 * 1024) {
+      setAnalyzeError('La imagen no puede superar 20 MB.')
+      e.target.value = ''
+      return
+    }
+
+    setAnalyzing(true)
+    setAnalyzeError(null)
+    setAnalyzeStatus('Guardando tu CV...')
+    let cvStored = false
+
     try {
-      let text = ''
-      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-        const reader = new FileReader()
-        const base64 = await new Promise<string>((resolve, reject) => {
-          reader.onload = () => resolve((reader.result as string).split(',')[1])
-          reader.onerror = reject
-          reader.readAsDataURL(file)
-        })
-        const res = await fetch('/.netlify/functions/extract-pdf-text', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pdfBase64: base64 }),
-        })
-        if (!res.ok) throw new Error('Error extrayendo texto del PDF')
-        const data = await res.json()
-        text = data.text || ''
-      } else if (file.name.endsWith('.docx')) {
-        const mammoth = await import('mammoth')
-        const arrayBuffer = await file.arrayBuffer()
-        const result = await mammoth.extractRawText({ arrayBuffer })
-        text = result.value
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Tu sesión expiró. Volvé a ingresar.')
+      const authenticatedHeaders = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
       }
 
-      if (!text || text.trim().length < 50) {
-        throw new Error('No pudimos leer el contenido del archivo. Intentá con otro PDF o completá manualmente.')
+      // HEIC → JPEG para análisis (original se sube tal cual)
+      let analysisFile: File = file
+      if (isHeic) {
+        setAnalyzeStatus('Convirtiendo imagen...')
+        try {
+          analysisFile = await convertHeicToJpeg(file)
+        } catch (err: any) {
+          setAnalyzeError(err?.message || 'No pudimos convertir el archivo HEIC. Intentá con una imagen JPG.')
+          return
+        }
       }
 
-      const analyzeRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvText: text, mode: 'extract' }),
+      const fileBase64 = await fileToBase64(file)
+      const analysisBase64 = analysisFile === file ? fileBase64 : await fileToBase64(analysisFile)
+
+      // Para imágenes > 4 MB: comprimir ANTES del upload (el backend rechaza > 4 MB).
+      // La compresión produce JPEG — la extensión se normaliza a .jpg para coherencia
+      // entre bytes enviados y fileName declarado (upload_cv + Bedrock ImageBlock).
+      let uploadBase64 = (isImage || isHeic) ? analysisBase64 : fileBase64
+      let uploadFileName = analysisFile.name  // HEIC→JPEG ya tiene .jpg; resto se ajusta abajo
+      if ((isImage || isHeic) && file.size > 4 * 1024 * 1024) {
+        setAnalyzeStatus('Optimizando tu imagen...')
+        // 4_700_000 base64 chars ≈ 3.5 MB decoded — margen seguro bajo el límite de 4 MB del backend
+        uploadBase64 = await compressImageForBedrock(analysisBase64, 4_700_000)
+        // La compresión siempre produce JPEG → unificar extensión
+        uploadFileName = analysisFile.name.replace(/\.[^.]+$/, '.jpg')
+      }
+
+      // PASO 1: guardar el archivo primero — el CV no se pierde aunque falle el análisis
+      const persistRes = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: authenticatedHeaders,
+        body: JSON.stringify({ action: 'upload_cv', file_name: uploadFileName, file_base64: uploadBase64 }),
       })
-      if (!analyzeRes.ok) throw new Error('Error analizando el CV')
-      const extracted = await analyzeRes.json()
+      const persisted = await persistRes.json()
+      if (!persistRes.ok) throw new Error(persisted.error || 'No pudimos guardar el CV en tu perfil')
+      setCurrentCV({
+        file_name: persisted.profile?.cv_file_name || file.name,
+        uploaded_at: persisted.profile?.cv_uploaded_at,
+        status: 'stored',
+      })
+      cvStored = true
+      setAnalyzeStatus('CV guardado ✓')
+
+      let text = ''           // texto extraído por ruta barata
+      let extracted: any = null
+      let rawText = ''        // transcripción del multimodal
+      let usedMultimodal = false
+      let processingMethod = isPdf ? 'pdf_text' : isDocx ? 'docx_text' : isTxt ? 'text_file' : isDoc ? 'bedrock_document' : isHeic ? 'heic_to_jpeg_bedrock' : 'bedrock_image'
+
+      setAnalyzeStatus('Leyendo tu CV...')
+
+      // ── PASO 2: extracción ───────────────────────────────────────────────────
+
+      if (isPdf) {
+        // Intentar extracción nativa (barata) primero
+        const extractRes = await fetch('/.netlify/functions/extract-pdf-text', {
+          method: 'POST',
+          headers: authenticatedHeaders,
+          body: JSON.stringify({ pdfBase64: fileBase64, fileName: file.name }),
+        })
+        const extractPayload = await extractRes.json().catch(() => ({}))
+
+        if (extractRes.ok) {
+          text = extractPayload.text || ''
+          processingMethod = 'pdf_text'
+        } else {
+          const code = extractPayload.code || null
+
+          if (code === 'PDF_NO_TEXT' || (extractRes.status === 422 && !code)) {
+            // PDF escaneado → multimodal automático
+            setAnalyzeStatus('Este CV parece escaneado. Lo estamos leyendo como imagen...')
+            processingMethod = 'bedrock_document'
+          } else if (code === 'PDF_PROTECTED_OR_DAMAGED') {
+            setAnalyzeError('Guardamos tu CV, pero no pudimos leer su contenido. Puede estar protegido con contraseña o dañado. Podés continuar manualmente.')
+            return
+          } else if (code === 'PDF_INVALID') {
+            setAnalyzeError('Guardamos el archivo, pero no pudimos reconocerlo como un PDF válido. Podés continuar manualmente o reemplazarlo.')
+            return
+          } else if (code === 'PDF_TOO_LARGE') {
+            setAnalyzeError(extractPayload.error || 'El archivo supera el límite de tamaño. Podés continuar manualmente.')
+            return
+          } else if (code === 'EXTRACTION_BUSY') {
+            setAnalyzeError('Tu CV quedó guardado, pero el lector está temporalmente ocupado. Podés continuar manualmente o intentar de nuevo.')
+            return
+          } else {
+            setAnalyzeError(extractPayload.error || 'No pudimos extraer el texto del PDF. Podés continuar manualmente.')
+            return
+          }
+
+          // Fallback multimodal para PDF escaneado u otros errores sin código
+          const multiRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
+            method: 'POST',
+            headers: authenticatedHeaders,
+            body: JSON.stringify({ mode: 'extract_file', fileBase64, fileName: file.name }),
+          })
+          if (!multiRes.ok) {
+            setAnalyzeError('Guardamos tu CV, pero no pudimos leerlo automáticamente. Podés reemplazarlo o continuar manualmente.')
+            return
+          }
+          const multi = await multiRes.json()
+          rawText = multi.rawText || ''
+          extracted = multi.extracted
+          usedMultimodal = true
+          if (!rawText || rawText.trim().length < 20) {
+            setAnalyzeError('Guardamos tu CV, pero no pudimos leer su contenido. Podés reemplazarlo o continuar manualmente.')
+            return
+          }
+        }
+
+      } else if (isDocx) {
+        try {
+          const mammoth = await import('mammoth')
+          const arrayBuffer = await file.arrayBuffer()
+          text = (await mammoth.extractRawText({ arrayBuffer })).value
+        } catch { text = '' }
+
+        if (!text || text.trim().length < 50) {
+          // Mammoth sin texto suficiente → Bedrock documento
+          processingMethod = 'bedrock_document'
+          const multiRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
+            method: 'POST',
+            headers: authenticatedHeaders,
+            body: JSON.stringify({ mode: 'extract_file', fileBase64, fileName: file.name }),
+          })
+          if (!multiRes.ok) {
+            setAnalyzeError('Guardamos tu CV, pero no pudimos procesarlo. Podés continuar manualmente.')
+            return
+          }
+          const multi = await multiRes.json()
+          rawText = multi.rawText || ''; extracted = multi.extracted; usedMultimodal = true; text = ''
+        } else {
+          processingMethod = 'docx_text'
+        }
+
+      } else if (isDoc) {
+        // DOC → directo a Bedrock
+        const multiRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
+          method: 'POST',
+          headers: authenticatedHeaders,
+          body: JSON.stringify({ mode: 'extract_file', fileBase64, fileName: file.name }),
+        })
+        if (!multiRes.ok) {
+          setAnalyzeError('Guardamos tu CV, pero no pudimos procesarlo. Podés continuar manualmente.')
+          return
+        }
+        const multi = await multiRes.json()
+        rawText = multi.rawText || ''; extracted = multi.extracted; usedMultimodal = true
+
+      } else if (isTxt) {
+        text = await file.text()
+        processingMethod = 'text_file'
+
+      } else if (isImage || isHeic) {
+        // Imagen → multimodal.
+        // Garantizar que base64 y fileName sean coherentes: si los bytes son JPEG, el nombre es .jpg.
+        let bedrockBase64: string
+        let bedrockFileName: string
+        if (file.size > 4 * 1024 * 1024) {
+          // Grande: ya comprimido para upload → reusar (bytes JPEG, nombre .jpg)
+          bedrockBase64 = uploadBase64
+          bedrockFileName = uploadFileName
+        } else {
+          // Pequeño: comprimir solo si necesario para el límite de Bedrock
+          const candidate = await compressImageForBedrock(analysisBase64)
+          const wasCompressed = candidate !== analysisBase64
+          bedrockBase64 = candidate
+          bedrockFileName = wasCompressed
+            ? analysisFile.name.replace(/\.[^.]+$/, '.jpg')
+            : analysisFile.name
+        }
+        const multiRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
+          method: 'POST',
+          headers: authenticatedHeaders,
+          body: JSON.stringify({ mode: 'extract_file', fileBase64: bedrockBase64, fileName: bedrockFileName }),
+        })
+        if (!multiRes.ok) {
+          setAnalyzeError('Guardamos tu CV, pero no pudimos leer la imagen. Podés continuar manualmente.')
+          return
+        }
+        const multi = await multiRes.json()
+        rawText = multi.rawText || ''; extracted = multi.extracted; usedMultimodal = true
+      }
+
+      // Texto insuficiente (solo ruta barata)
+      if (!usedMultimodal && (!text || text.trim().length < 50)) {
+        setAnalyzeError('Guardamos tu CV, pero el contenido es demasiado corto. Podés completar tus datos manualmente.')
+        return
+      }
+
+      // ── PASO 3: persistir texto ──────────────────────────────────────────────
+      const cvTextToSave = usedMultimodal ? rawText : text
+      const saveTextRes = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: authenticatedHeaders,
+        body: JSON.stringify({ action: 'save_cv_text', cv_text: cvTextToSave, processing_method: processingMethod, processing_status: 'extracted' }),
+      })
+      if (!saveTextRes.ok) {
+        setAnalyzeError('Tu CV quedó guardado, pero no pudimos registrar el texto para autocompletar. Podés continuar manualmente.')
+        return
+      }
+
+      // ── PASO 4: obtener extracted (solo si no vino del multimodal) ────────────
+      if (!usedMultimodal) {
+        const analyzeRes = await fetch('/.netlify/functions/analyze-cv-candidate', {
+          method: 'POST',
+          headers: authenticatedHeaders,
+          body: JSON.stringify({ cvText: text, mode: 'extract' }),
+        })
+        if (!analyzeRes.ok) throw new Error('AI_ANALYZE_FAILED')
+        extracted = await analyzeRes.json()
+      }
+
+      setAnalyzeStatus('Encontramos tus datos ✓')
+
+      // ── PASO 5: evidencias ───────────────────────────────────────────────────
+      const evidenceRes = await fetch('/.netlify/functions/cv-workspace', {
+        method: 'POST',
+        headers: authenticatedHeaders,
+        body: JSON.stringify({ action: 'import_extraction', extracted, sourceFileName: file.name }),
+      })
+      if (!evidenceRes.ok) throw new Error('No pudimos preparar las evidencias del CV para tu revisión')
+      const evidenceData = await evidenceRes.json().catch(() => ({}))
+
+      // ── PASO 5b: auto-confirmar evidencias para habilitar CV Vivo sin pasos extra ──
+      if (evidenceData.imported > 0) {
+        setAnalyzeStatus('Confirmando evidencias…')
+        // Cargar las evidencias recién creadas para obtener sus IDs
+        const wsOverviewRes = await fetch('/.netlify/functions/cv-workspace', {
+          method: 'POST',
+          headers: authenticatedHeaders,
+          body: JSON.stringify({ action: 'overview' }),
+        })
+        if (wsOverviewRes.ok) {
+          const wsData = await wsOverviewRes.json().catch(() => ({}))
+          const pendingIds = (wsData.evidence || [])
+            .filter((item: any) => item.status === 'pending')
+            .map((item: any) => item.id)
+          if (pendingIds.length > 0) {
+            await fetch('/.netlify/functions/cv-workspace', {
+              method: 'POST',
+              headers: authenticatedHeaders,
+              body: JSON.stringify({ action: 'review_all', evidenceIds: pendingIds }),
+            }).catch(() => null)
+          }
+        }
+      }
+
+      // ── PASO 6: draft ────────────────────────────────────────────────────────
+      const draftRes = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: authenticatedHeaders,
+        body: JSON.stringify({ action: 'save_import_draft', extracted, source_file_name: file.name }),
+      })
+      if (!draftRes.ok) throw new Error('Tu CV quedó guardado, pero no pudimos persistir el autocompletado para revisión')
 
       analytics.cvAnalyzed('profile_builder')
       setFormData(prev => ({
@@ -159,14 +555,28 @@ export default function ProfileBuilder() {
         professional_title: extracted.professional_title || prev.professional_title,
         location: extracted.location || prev.location,
         seniority: extracted.seniority || prev.seniority,
-        summary: extracted.experience?.[0]?.achievements?.join('. ') || prev.summary,
+        // Los logros extraídos se guardan como evidencia pendiente. Nunca se
+        // convierten automáticamente en el resumen del perfil.
+        summary: prev.summary,
         skills: extracted.skills?.length > 0 ? extracted.skills : prev.skills,
-        cursos: extracted.education?.map((e: any) => `${e.degree} — ${e.institution}`).filter(Boolean) || prev.cursos,
+        cursos: extracted.education?.map((e: any) => [e.degree, e.institution].filter(Boolean).join(' — ')).filter(Boolean) || prev.cursos,
+        education: Array.isArray(extracted.education) ? extracted.education : prev.education,
+        experience: Array.isArray(extracted.experience) ? extracted.experience : prev.experience,
+        languages: Array.isArray(extracted.languages) ? extracted.languages : prev.languages,
       }))
+      setStep(1)
     } catch (err: any) {
-      setAnalyzeError(err.message || 'No pudimos autocompletar. Completá manualmente.')
+      const msg = err?.message || ''
+      if (msg === 'AI_ANALYZE_FAILED') {
+        setAnalyzeError('Tu CV quedó guardado y leído, pero no pudimos autocompletar el perfil. Podés continuar manualmente.')
+      } else if (cvStored) {
+        setAnalyzeError('Tu CV quedó guardado, pero no pudimos autocompletar el perfil. Podés completarlo manualmente.')
+      } else {
+        setAnalyzeError(msg || 'No pudimos guardar el CV. Intentá de nuevo.')
+      }
     } finally {
       setAnalyzing(false)
+      setAnalyzeStatus('')
     }
   }
 
@@ -193,33 +603,43 @@ export default function ProfileBuilder() {
   }
 
   const handleSave = async () => {
-    if (!user) return
+    if (!user || profileLoad !== 'ready' || loadedUserId !== user.id || saving || saved || analyzing) return
     setSaving(true)
+    setSaveError(null)
     try {
-      const payload = {
-        user_id: user.id,
-        full_name: formData.full_name,
-        professional_title: formData.professional_title,
-        summary: formData.summary,
-        profile_data: {
-          habilidades: formData.skills,
-          cursos: formData.cursos,
-          seniority: formData.seniority,
-          location: formData.location,
-          modality: formData.modality,
-          career_route: formData.career_route,
-        },
-      }
-      const { error } = existingProfileId
-        ? await supabase.from('user_master_profiles').update(payload).eq('id', existingProfileId)
-        : await supabase.from('user_master_profiles').insert(payload)
-      if (error) throw error
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token || session.user.id !== user.id) throw new Error('Tu sesión expiró. Volvé a ingresar.')
+      const response = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'save', profile: { ...formData } }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(response.status === 401 ? 'Tu sesión expiró. Volvé a ingresar.' : (result.error || 'No pudimos guardar el perfil. Intentá nuevamente.'))
       setSaved(true)
-      setTimeout(() => setLocation('/mi-carrera'), 1500)
-    } catch {
-      alert('Error al guardar el perfil. Intentá de nuevo.')
+      const returnTo = consumeApplicationReturnTo(new URLSearchParams(window.location.search).get('returnTo'))
+      setTimeout(() => setLocation(returnTo || '/mi-carrera'), 1500)
+    } catch (error: any) {
+      setSaveError(error?.message === 'Failed to fetch' ? 'No pudimos guardar el perfil. Revisá tu conexión e intentá nuevamente.' : (error?.message || 'No pudimos guardar el perfil. Intentá nuevamente.'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const downloadCurrentCV = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Tu sesión expiró. Volvé a ingresar.')
+      const response = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'download_cv' }),
+      })
+      const result = await response.json()
+      if (!response.ok || !result.url) throw new Error(result.error || 'No pudimos preparar la descarga')
+      window.open(result.url, '_blank', 'noopener,noreferrer')
+    } catch (error: any) {
+      setAnalyzeError(error?.message || 'No pudimos descargar el CV guardado.')
     }
   }
 
@@ -244,6 +664,23 @@ export default function ProfileBuilder() {
           >
             Ir al inicio
           </button>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (profileLoad !== 'ready' || loadedUserId !== user.id) {
+    return (
+      <DashboardLayout>
+        <div className="mx-auto max-w-3xl py-12 text-center">
+          {profileLoad === 'error' ? (
+            <>
+              <p role="alert" className="mb-4 text-sm text-red-400">{loadError}</p>
+              <button onClick={() => setLoadAttempt(attempt => attempt + 1)} className="inline-flex h-10 items-center gap-2 rounded-full bg-[#c9a84c] px-5 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]">Reintentar</button>
+            </>
+          ) : (
+            <p role="status" className="flex items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Cargando tu perfil…</p>
+          )}
         </div>
       </DashboardLayout>
     )
@@ -290,6 +727,7 @@ export default function ProfileBuilder() {
           </div>
 
           <h1 className="mb-6 font-display text-2xl text-white">{STEPS[step]}</h1>
+          <div className="mb-6"><MatchingCoverageCard coverage={matchingCoverage} compact /></div>
 
           {/* CV Upload — solo en paso 0 */}
           {step === 0 && (
@@ -301,17 +739,17 @@ export default function ProfileBuilder() {
                 {analyzing ? (
                   <div className="flex flex-col items-center">
                     <Brain className="mb-3 h-8 w-8 animate-pulse text-[#c9a84c]" />
-                    <span className="font-medium text-white">Analizando tu CV con IA…</span>
+                    <span className="font-medium text-white">{analyzeStatus || 'Analizando tu CV con IA…'}</span>
                     <span className="mt-1 text-xs text-muted-foreground">Esto tarda unos segundos</span>
                   </div>
                 ) : (
                   <>
                     <Upload className="mb-3 h-8 w-8 text-[#c9a84c]" />
                     <span className="font-display text-base text-white">Subir mi CV y autocompletar</span>
-                    <span className="mt-1 text-xs text-muted-foreground">PDF o DOCX — la IA completa el formulario por vos</span>
+                    <span className="mt-1 text-xs text-muted-foreground">PDF, Word, imagen (JPG/PNG/HEIC) o TXT — la IA completa el formulario</span>
                   </>
                 )}
-                <input type="file" className="hidden" accept=".pdf,.docx" onChange={handleCVUpload} disabled={analyzing} />
+                <input type="file" className="hidden" accept=".pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.webp,.heic,.heif" onChange={handleCVUpload} disabled={analyzing} />
               </label>
               <AnimatePresence>
                 {analyzeError && (
@@ -319,6 +757,34 @@ export default function ProfileBuilder() {
                     className="mt-3 text-center text-sm text-red-400">{analyzeError}</motion.p>
                 )}
               </AnimatePresence>
+              {currentCV && !analyzing && (
+                <div className={cn(
+                  'mt-4 flex items-center justify-between gap-4 rounded-2xl border px-4 py-3',
+                  currentCV.status === 'stored'
+                    ? 'border-emerald-300/20 bg-emerald-300/[0.04]'
+                    : 'border-amber-300/25 bg-amber-300/[0.05]',
+                )}>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <FileText className={cn(
+                      'h-5 w-5 shrink-0',
+                      currentCV.status === 'stored' ? 'text-emerald-300' : 'text-amber-300',
+                    )} />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-white">{currentCV.file_name}</p>
+                      <p className="text-xs text-white/45">
+                        {currentCV.status === 'stored'
+                          ? 'Guardado en tu perfil'
+                          : 'El archivo anterior no se conservó. Volvé a subirlo para descargarlo y mejorar tus matches.'}
+                      </p>
+                    </div>
+                  </div>
+                  {currentCV.status === 'stored' && (
+                    <button type="button" onClick={downloadCurrentCV} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs text-white/65 transition hover:border-[#c9a84c]/40 hover:text-white">
+                      <Download size={14} /> Descargar
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="my-6 flex items-center gap-4">
                 <div className="h-px flex-1 bg-white/8" />
                 <span className="text-[10px] uppercase tracking-widest text-muted-foreground">o completá manualmente</span>
@@ -442,6 +908,31 @@ export default function ProfileBuilder() {
                       </div>
                     </div>
 
+                    <div className="grid gap-4 rounded-2xl border border-white/8 bg-white/[0.015] p-5">
+                      <div>
+                        <label className="mb-1 block text-sm text-white">¿Qué te gusta hacer?</label>
+                        <p className="mb-3 text-xs text-muted-foreground">Contanos actividades o temas que disfrutás, separados por coma. Son preferencias, no habilidades confirmadas.</p>
+                        <input
+                          value={formData.career_interests.join(', ')}
+                          onChange={e => setFormData(prev => ({ ...prev, career_interests: e.target.value.split(',').map(item => item.trimStart()) }))}
+                          placeholder="Ej: analizar datos, ayudar a clientes, escribir, crear productos"
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm text-white">En un año quiero ser o estar...</label>
+                        <p className="mb-3 text-xs text-muted-foreground">Definí una meta concreta. La IA va a proponer el puente desde tu CV actual, sin asumir que ya llegaste.</p>
+                        <textarea
+                          value={formData.desired_role_1y}
+                          onChange={e => setFormData(prev => ({ ...prev, desired_role_1y: e.target.value }))}
+                          maxLength={300}
+                          rows={3}
+                          placeholder="Ej: trabajando como analista de datos junior en una empresa remota"
+                          className={inputCls}
+                        />
+                      </div>
+                    </div>
+
                     {/* Brechas detectadas según ruta */}
                     {formData.career_route && (() => {
                       const gaps = (ROUTE_GAPS[formData.career_route] || []).filter(
@@ -496,6 +987,29 @@ export default function ProfileBuilder() {
                         <input value={formData.location} onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
                           placeholder="Ciudad/País de residencia" className={inputCls} />
                       </div>
+                      <section className="border-t border-white/5 pt-4 space-y-3">
+                        <div>
+                          <h3 className="text-sm font-medium text-white">Elegibilidad y ubicación</h3>
+                          <p className="mt-1 text-xs text-muted-foreground">Confirmar tu país de residencia ayuda a evaluar oportunidades con restricciones geográficas. CVitae no lo deduce de tu ubicación escrita ni de tu CV. Podés guardar el perfil sin confirmarlo; algunas oportunidades pueden aparecer como POTENTIAL / elegibilidad por confirmar.</p>
+                        </div>
+                        {!formData.candidate_eligibility.residence_country && <p className="text-xs text-amber-400">Recomendado para obtener matches confirmados. Ciudadanía y autorizaciones laborales pueden quedar vacías si no querés o no podés confirmarlas.</p>}
+                        <label className="block text-xs text-muted-foreground">País donde residís actualmente
+                          <select value={formData.candidate_eligibility.residence_country} onChange={e => setFormData(prev => ({ ...prev, candidate_eligibility: { ...prev.candidate_eligibility, residence_country: e.target.value } }))} className={inputCls}>
+                            <option value="">No confirmado</option>
+                            {COUNTRY_OPTIONS.map(country => <option key={country.code} value={country.code}>{country.name}</option>)}
+                          </select>
+                        </label>
+                        <label className="block text-xs text-muted-foreground">Nacionalidad o ciudadanías que tenés
+                          <select multiple value={formData.candidate_eligibility.citizenship_countries} onChange={e => setFormData(prev => ({ ...prev, candidate_eligibility: { ...prev.candidate_eligibility, citizenship_countries: Array.from(e.target.selectedOptions, option => option.value) } }))} className={inputCls}>
+                            {COUNTRY_OPTIONS.map(country => <option key={country.code} value={country.code}>{country.name}</option>)}
+                          </select>
+                        </label>
+                        <label className="block text-xs text-muted-foreground">Países donde ya tenés autorización legal para trabajar
+                          <select multiple value={formData.candidate_eligibility.work_authorization_countries} onChange={e => setFormData(prev => ({ ...prev, candidate_eligibility: { ...prev.candidate_eligibility, work_authorization_countries: Array.from(e.target.selectedOptions, option => option.value) } }))} className={inputCls}>
+                            {COUNTRY_OPTIONS.map(country => <option key={country.code} value={country.code}>{country.name}</option>)}
+                          </select>
+                        </label>
+                      </section>
                     </div>
                   </div>
                 )}
@@ -519,6 +1033,8 @@ export default function ProfileBuilder() {
                           Ruta: {CAREER_ROUTES.find(r => r.id === formData.career_route)?.label}
                         </div>
                       )}
+                      {formData.desired_role_1y && <p className="mb-3 text-sm text-white/55"><span className="text-white/30">Meta a un año:</span> {formData.desired_role_1y}</p>}
+                      {formData.career_interests.filter(Boolean).length > 0 && <p className="mb-5 text-sm text-white/55"><span className="text-white/30">Me interesa:</span> {formData.career_interests.filter(Boolean).join(', ')}</p>}
                       <div className="flex flex-wrap gap-2">
                         {formData.skills.map(s => (
                           <span key={s} className="rounded-full border border-white/10 bg-white/[0.02] px-2 py-0.5 text-[10px] text-white/60">{s}</span>
@@ -527,7 +1043,7 @@ export default function ProfileBuilder() {
                     </div>
                     <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
                       <CheckCircle size={16} className="text-emerald-400" />
-                      <p className="text-xs text-emerald-400">Al guardar, usaremos esta información para encontrarte las mejores oportunidades en Paraguay.</p>
+                      <p className="text-xs text-emerald-400">Al guardar, usaremos esta información para encontrarte las mejores oportunidades en LATAM.</p>
                     </div>
                   </div>
                 )}
@@ -535,6 +1051,7 @@ export default function ProfileBuilder() {
             </AnimatePresence>
 
             {/* Navigation */}
+            {saveError && <p role="alert" className="mt-6 text-sm text-red-400">{saveError}</p>}
             <div className="mt-8 flex items-center justify-between border-t border-white/5 pt-6">
               <button
                 onClick={() => setStep(prev => Math.max(0, prev - 1))}
@@ -552,7 +1069,7 @@ export default function ProfileBuilder() {
                 </button>
               ) : (
                 <button
-                  onClick={handleSave} disabled={saving || saved}
+                  onClick={handleSave} disabled={saving || saved || analyzing}
                   className="inline-flex h-10 items-center gap-2 rounded-full bg-[#c9a84c] px-5 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-60"
                 >
                   {saving
@@ -564,6 +1081,15 @@ export default function ProfileBuilder() {
                 </button>
               )}
             </div>
+            {saved && (
+              <div className="mt-6 rounded-2xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.04] p-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#c9a84c]">Siguiente paso</p>
+                <p className="mt-2 text-sm text-white/70">Tu perfil está listo. Generá tu <strong className="text-cream">CV Vivo</strong> y adaptalo a cada vacante que encuentres.</p>
+                <Link href="/mi-carrera/cv" className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-semibold text-[#0a0a0a] transition hover:bg-[#e6cf8a]">
+                  Ir a Mi CV <ArrowRight size={16} />
+                </Link>
+              </div>
+            )}
           </div>
         </motion.div>
       </div>

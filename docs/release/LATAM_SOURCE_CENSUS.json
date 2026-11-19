@@ -1,0 +1,266 @@
+{
+  "schema": "cvitae.latam-source-census.v1",
+  "captured_at_utc": "2026-10-14T16:20:32Z",
+  "as_of_date": "2026-10-14",
+  "scope": {
+    "markets": ["PY", "PE", "AR"],
+    "target_additional_unique_usable": 1000,
+    "preferred_pre_rejection_inventory": 1300,
+    "rules": [
+      "Count one native posting once even when it is eligible in multiple countries.",
+      "Remote=true does not prove candidate eligibility; require explicit target-country evidence.",
+      "Do not count existing production rows as additional opportunities.",
+      "No production writes, control changes, cron activation, push, or deploy."
+    ]
+  },
+  "business_gate": {
+    "status": "VOLUME_NOT_PROVEN",
+    "measured_location_candidate_upper_bound_before_detail_proof_and_production_dedup": 568,
+    "count_by_provider": {
+      "getonbrd": 39,
+      "greenhouse": 29,
+      "lever": 59,
+      "smartrecruiters": 441
+    },
+    "candidate_ids_and_urls_coverage": "SAMPLE_RECORDS_ONLY; full 568-row candidate export was not completed.",
+    "confirmed_additional_new_usable": 0,
+    "gap_to_1000_at_measured_upper_bound": 432,
+    "gap_to_1300_at_measured_upper_bound": 732,
+    "interpretation": "568 is an upper bound of list-level records with explicit target-market location evidence. It is before full detail checks, duplicate-by-content review, and candidate-level comparison against all production URLs. It is not an insertion estimate or a commercial result."
+  },
+  "production_baseline": {
+    "evidence_level": "READ_ONLY_PROD",
+    "method": "GET public opportunities REST endpoint using only the public client key embedded in cvitae.lat; fetched all pages of id, application_url, source, is_active.",
+    "credential_value_recorded": false,
+    "http": 200,
+    "active_rows": 6789,
+    "unique_application_urls": 6789,
+    "source_counts": {
+      "himalayas": 5477,
+      "weworkremotely": 539,
+      "opportunitydesk": 319,
+      "computrabajo": 129,
+      "unjobs": 109,
+      "oyaop": 62,
+      "eu_delegation_paraguay": 49,
+      "arbeitnow": 27,
+      "fundacion_carolina": 26,
+      "jobicy": 21,
+      "remotive": 7,
+      "clasipar": 5,
+      "mitic_opportunities": 4,
+      "santander_open_academy": 4,
+      "impactpool": 3,
+      "recruiter_b2b": 3,
+      "one_young_world_scholarships": 2,
+      "ucom_job_board": 1,
+      "snj_paraguay": 1,
+      "mic_portal_emprendedor": 1
+    },
+    "candidate_level_exact_url_or_native_id_reconciliation": "PENDING; no candidate is asserted new based on an unmatched URL alone.",
+    "119_previously_recovered_matching_records": "Not touched; their prior READY/UNKNOWN confirmation remains the supplied baseline and was not reopened."
+  },
+  "sources": {
+    "getonbrd": {
+      "evidence_level": "READ_ONLY_REAL_DATA_LIST_API",
+      "endpoints": [
+        "https://www.getonbrd.com/api/v0/categories",
+        "https://www.getonbrd.com/api/v0/categories/{category}/jobs?page={n}"
+      ],
+      "http": 200,
+      "active_categories": 18,
+      "advertised_rows_all_pages": 960,
+      "unique_native_ids": 960,
+      "duplicate_ids_across_categories": 0,
+      "pagination": {
+        "per_page": 120,
+        "programming": {"pages": 3, "rows": [120, 120, 73]},
+        "all_other_categories": "one page each"
+      },
+      "records_with_title_description_and_native_id": 960,
+      "explicit_job_country_counts": {"PY": 0, "PE": 30, "AR": 9},
+      "remote_rows": 414,
+      "remote_rows_with_target_country_in_countries_field": 0,
+      "remote_text_scan": {
+        "LATAM_mentions": 55,
+        "Latin_America_mentions": 25,
+        "South_America_mentions": 31,
+        "country_or_region_context_candidates": 33,
+        "counted_as_eligible": 0,
+        "reason": "The listing data uses countries=[Remote] and does not establish candidate eligibility in a target country. Text mentions require individual eligibility review."
+      },
+      "sample_original_records": [
+        {
+          "id": "learning-designer-middle-colectivo23-lima",
+          "title": "Learning Designer Middle | Temporal",
+          "country": "Peru",
+          "url": "https://www.getonbrd.com/jobs/learning-designer-middle-colectivo23-lima"
+        },
+        {
+          "id": "qa-manual-senior-bc-tecnologia-buenos-aires",
+          "title": "QA Manual Senior",
+          "country": "Argentina",
+          "url": "https://www.getonbrd.com/jobs/qa-manual-senior-bc-tecnologia-buenos-aires"
+        },
+        {
+          "id": "senior-ai-engineer-llms-rag-ai-agents-niuro-remote",
+          "title": "Senior AI Engineer (LLMs / RAG / AI Agents)",
+          "country_field": "Remote",
+          "eligible_market": "NOT_PROVEN",
+          "url": "https://www.getonbrd.com/jobs/senior-ai-engineer-llms-rag-ai-agents-niuro-remote"
+        }
+      ],
+      "limitations": ["No closing/expiry field was observed in the API response.", "Remote is not counted as worldwide or LATAM-eligible."]
+    },
+    "greenhouse": {
+      "evidence_level": "READ_ONLY_REAL_DATA_LIST_API",
+      "endpoint_template": "https://boards-api.greenhouse.io/v1/boards/{board}/jobs?content=true",
+      "boards": [
+        {
+          "board": "neoris",
+          "http": 404,
+          "advertised": 0,
+          "explicit_target_location_records": 0
+        },
+        {
+          "board": "cabify",
+          "http": 200,
+          "advertised": 69,
+          "explicit_target_location_records": 15,
+          "country_occurrences": {"PY": 0, "PE": 11, "AR": 4},
+          "sample": {
+            "id": "8581941002",
+            "title": "Agente de soporte operacional",
+            "location": "Lima",
+            "updated_at": "2026-10-09T13:12:18-04:00",
+            "description_chars": 5172,
+            "url": "https://job-boards.greenhouse.io/cabify/jobs/8581941002"
+          }
+        },
+        {
+          "board": "utt",
+          "http": 200,
+          "advertised": 44,
+          "explicit_target_location_native_ids": 14,
+          "country_occurrences": {"PY": 0, "PE": 8, "AR": 7},
+          "note": "One multi-location posting explicitly lists both Lima and Buenos Aires; it counts once as a native posting.",
+          "sample": {
+            "id": "4405596009",
+            "title": "Business Development Feasibility Coordinator (PST/EST/CST Timezone)",
+            "location": "Bogota, Colombia; Brasilia, Brazil; Buenos Aires, Argentina; Cairo, Egypt; Johannesburg, South Africa; Karachi, Pakistan; Lima, Peru; Mexico City. Mexico",
+            "updated_at": "2026-09-21T10:29:09-04:00",
+            "url": "https://job-boards.greenhouse.io/utt/jobs/4405596009"
+          }
+        }
+      ],
+      "candidate_records_total": 29,
+      "limitations": ["Content was returned for the list records, but same-title/cross-location clones were not all compared by content hash.", "Job location is explicit; applicant restrictions were not individually reviewed for every description."]
+    },
+    "lever": {
+      "evidence_level": "READ_ONLY_REAL_DATA_LIST_API",
+      "endpoint_template": "https://api.lever.co/v0/postings/{site}?mode=json&skip={n}&limit=100",
+      "pagination": "skip=0,100,200; EOF confirmed with a short or empty page for each site.",
+      "sites": [
+        {"site": "coderio", "http": 200, "advertised": 15, "pages": [15, 0], "explicit_location_records": 11, "sample": {"id": "cfad9fb3-046d-4118-b9ac-a3f138a4730e", "title": "Devops Engineer Ssr / Sr", "location": "Asunción", "allLocations": ["Asunción", "Paraguay"], "description_chars": 0, "url": "https://jobs.lever.co/coderio/cfad9fb3-046d-4118-b9ac-a3f138a4730e"}},
+        {"site": "aleph", "http": 200, "advertised": 103, "pages": [100, 3, 0], "explicit_location_records": 7, "sample": {"id": "a0ee5e21-a0fe-446c-947a-44900b430d97", "title": "Senior Client Solutions Manager - TikTok", "location": "Paraguay - Remote", "description_chars": 1308, "url": "https://jobs.lever.co/aleph/a0ee5e21-a0fe-446c-947a-44900b430d97"}},
+        {"site": "TalentusGlobal", "http": 200, "advertised": 16, "pages": [16, 0], "explicit_location_records": 13, "excluded_generic_application": 1, "sample": {"id": "474b4664-c844-40cd-8389-a1e11eba83a8", "title": "Artificial Intelligence Manager (AI Manager) - (LATAM CANDIDATES ONLY)", "allLocations": ["Colombia", "Uruguay", "Dominican Republic", "Paraguay", "Peru", "Argentina"], "description_chars": 3516, "url": "https://jobs.lever.co/TalentusGlobal/474b4664-c844-40cd-8389-a1e11eba83a8"}},
+        {"site": "chipping-concrete", "http": 200, "advertised": 40, "pages": [40, 0], "explicit_location_records": 28, "sample": {"id": "d24ba05a-b90b-4a9c-8552-0d518f20892e", "title": "GoHighLevel & Business Automation Specialist", "location": "Mexico", "allLocations": ["Mexico", "Argentina", "Brazil", "Colombia", "Chile", "Costa Rica", "Dominican Republic", "Ecuador", "El Salvador", "Guatemala", "Honduras", "Paraguay", "Puerto Rico", "Venezuela", "Panama"], "description_chars": 5728, "url": "https://jobs.lever.co/chipping-concrete/d24ba05a-b90b-4a9c-8552-0d518f20892e"}}
+      ],
+      "advertised_total": 174,
+      "explicit_location_candidates": 59,
+      "country_distribution": "NOT_FULLY_RECONCILED; one record may name multiple target countries, so country occurrences are not the unique-posting denominator.",
+      "limitations": ["Some API postings have empty descriptions.", "Repeated role titles across location-specific postings need content/identity deduplication before counting unique opportunities."]
+    },
+    "smartrecruiters": {
+      "evidence_level": "READ_ONLY_REAL_DATA_LIST_API_PLUS_4_DETAIL_GETS",
+      "list_endpoint_template": "https://api.smartrecruiters.com/v1/companies/{companyIdentifier}/postings?country={ar|pe|py}&limit=100&offset={n}&destination=PUBLIC",
+      "detail_endpoint_template": "https://api.smartrecruiters.com/v1/companies/{companyIdentifier}/postings/{postingId}",
+      "company_identifiers_from_live_smartrecruiters_job_urls": {
+        "nielseniq": {"PE": 1},
+        "softwaremind": {"AR": 4},
+        "GrupoMariposa1": {"PE": 128},
+        "InformaGroupPlc": {"AR": 0, "PE": 0, "PY": 0},
+        "Sandisk": {"AR": 0, "PE": 0, "PY": 0},
+        "AFRY": {"PE": 5, "PY": 1},
+        "Evolution": {"AR": 27, "PE": 1},
+        "Inetum2": {"PE": 235},
+        "Endava": {"AR": 7},
+        "Dalstrong": {"AR": 1},
+        "ApplaudoStudios": {"PE": 3},
+        "AECOM2": {"PE": 19},
+        "Playtech": {"PE": 7},
+        "Genfar": {"PE": 2}
+      },
+      "advertised_local_records": 441,
+      "country_counts_in_list_results": {"PY": 1, "PE": 401, "AR": 39},
+      "detail_samples": [
+        {"company": "GrupoMariposa1", "id": "3743990016100946", "http": 200, "active": true, "visibility": "PUBLIC", "released_at": "2026-10-13T21:37:42.661Z", "apply_url_present": true, "job_description_chars": 3208, "location": "Trujillo, Peru", "api_url": "https://api.smartrecruiters.com/v1/companies/GrupoMariposa1/postings/3743990016100946"},
+        {"company": "Inetum2", "id": "744000155558179", "http": 200, "active": true, "visibility": "PUBLIC", "released_at": "2026-10-14T15:52:03.265Z", "apply_url_present": true, "job_description_chars": 0, "location": "Lima, Peru", "api_url": "https://api.smartrecruiters.com/v1/companies/Inetum2/postings/744000155558179"},
+        {"company": "AFRY", "id": "744000029054816", "http": 200, "active": true, "visibility": "PUBLIC", "released_at": "2024-11-28T17:32:14.865Z", "apply_url_present": true, "job_description_chars": 595, "location": "Concepción, Paraguay", "api_url": "https://api.smartrecruiters.com/v1/companies/AFRY/postings/744000029054816"},
+        {"company": "Dalstrong", "id": "743999741544224", "http": 200, "active": true, "visibility": "PUBLIC", "released_at": "2021-04-05T18:27:20Z", "apply_url_present": true, "job_description_chars": 860, "location": "Buenos Aires, Argentina", "api_url": "https://api.smartrecruiters.com/v1/companies/Dalstrong/postings/743999741544224"}
+      ],
+      "detail_checked_count": 4,
+      "details_not_checked": 437,
+      "limitations": ["List totals are not treated as complete/useful records until individual details are validated.", "The API exposes active=true for the four checked examples, including old release dates; this is not evidence for the other 437 records.", "Cross-company duplicates against other product sources remain unclassified."]
+    }
+  },
+  "additional_named_sources": {
+    "jooble": {
+      "status": "NOT_QUERIED",
+      "repo_secret_names_seen": ["JOOBLE_API_KEY"],
+      "regional_key_names_seen": {"JOOBLE_PE_API_KEY": false, "JOOBLE_AR_API_KEY": false},
+      "query_calls": 0,
+      "reason": "Regional credentials were not established. No lifetime-limited API calls were consumed."
+    },
+    "unjobs": {
+      "status": "HISTORICAL_RUN_ONLY",
+      "reported_findings": 519,
+      "reported_inserted": 142,
+      "reported_failed": 99,
+      "reported_budget_skipped": 269,
+      "new_PY_PE_AR_count": "NOT_ESTABLISHED",
+      "counted_as_new_now": 0,
+      "pending": "Exact causes for the 99 failures and 269 budget skips were not reconstructed in this volume-first pass. The 142 historical insertions are not counted again."
+    },
+    "mtpe_open_data": {
+      "status": "READ_ONLY_REAL_DATA; EXCLUDED_AS_HISTORICAL",
+      "dataset_id": "315ad630-dfbe-4b36-b040-0d78e7597b34",
+      "metadata_endpoint": "https://www.datosabiertos.gob.pe/api/3/action/package_show?id=315ad630-dfbe-4b36-b040-0d78e7597b34",
+      "metadata_http": 200,
+      "license": "ODC-BY",
+      "csv_url": "https://www.datosabiertos.gob.pe/sites/default/files/Dataset_Vacantes_07.08.2025.csv",
+      "csv_http": 200,
+      "csv_last_modified": "2025-08-11T17:22:36Z",
+      "csv_bytes": 11761704,
+      "rows": 53233,
+      "unique_AVISOID": 53233,
+      "ACTIVO_values": {"ACTIVO": 50126, "EN ESPERA": 3107},
+      "maximum_FECHAFIN": "2024-12-16",
+      "rows_with_FECHAFIN_on_or_after_2026-10-14": 0,
+      "individual_application_url_column": false,
+      "usable_current_count": 0
+    },
+    "paraguayconcursa_mef": {
+      "status": "PRIOR_LOCAL_READ_ONLY_PROBE",
+      "root": "https://paraguayconcursa.mef.gov.py/",
+      "cards_seen_on_first_two_pages": 16,
+      "portal_total_reported": 224,
+      "individual_details_inspected": 1,
+      "complete_usable_candidates_confirmed": 0,
+      "reason": "The inspected record lacked explicit location and vacancy-count evidence. The remaining portal total was not treated as verified usable volume."
+    },
+    "bumeran_computrabajo": {
+      "status": "NO_AUTHORIZED_FEED_OR_ACCESS_AGREEMENT",
+      "data_calls": 0,
+      "reason": "No restrictions or anti-abuse controls were bypassed."
+    }
+  },
+  "safety": {
+    "production_writes": 0,
+    "push_executed": false,
+    "deploy_executed": false,
+    "production_controls_changed": false,
+    "cron_activated": false,
+    "jooble_calls": 0
+  }
+}

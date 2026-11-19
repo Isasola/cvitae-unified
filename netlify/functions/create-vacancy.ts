@@ -1,4 +1,3 @@
-// ⚠️ Netlify Free: límite 10s. Para migrar a Lambda: scripts/deploy-lambda.sh
 import { Handler } from "@netlify/functions"
 import { makeSupabaseAdmin } from "./_supabase"
 
@@ -6,7 +5,7 @@ function toKebab(str: string): string {
   return str
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9\s-]/g, "")
     .trim()
     .replace(/\s+/g, "-")
@@ -18,94 +17,125 @@ function randomSuffix(n = 6): string {
   return Math.random().toString(36).substring(2, 2 + n).toUpperCase()
 }
 
+function safeError(error: any) {
+  return {
+    code: error?.code || "unknown",
+    message: error?.message || "unknown error",
+    details: error?.details || null,
+    hint: error?.hint || null,
+  }
+}
+
 const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) }
   }
 
   try {
-    const { token, title, description, requirements, location, modality, salary_range, company_name, rubro, tags } = JSON.parse(event.body || "{}")
+    const {
+      token,
+      title,
+      description,
+      requirements,
+      location,
+      modality,
+      salary_range,
+      rubro,
+      tags,
+      company_name: formCompanyName,
+    } = JSON.parse(event.body || "{}")
 
-    // Validate required fields
     if (!token?.trim()) {
       return { statusCode: 400, body: JSON.stringify({ error: "Token requerido" }) }
     }
-    if (!title?.trim() || !description?.trim() || !requirements?.trim() || !location?.trim() || !company_name?.trim()) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Faltan campos requeridos: título, descripción, requisitos, ubicación, empresa" }) }
+    if (!title?.trim() || !description?.trim() || !requirements?.trim() || !location?.trim()) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Faltan campos requeridos: título, descripción, requisitos, ubicación" }),
+      }
     }
 
     const supabase = makeSupabaseAdmin()
 
-    // Validate recruiter token
+    // Keep this preflight for useful 403/409 responses. The RPC repeats the
+    // authorization check inside the transaction so it cannot become stale.
     const { data: tokenData, error: tokenError } = await supabase
       .from("recruiter_tokens")
-      .select("id, is_active, token_balance")
+      .select("id, company_name, is_active, verification_status")
       .eq("access_token", token.trim())
       .eq("is_active", true)
       .single()
 
     if (tokenError || !tokenData) {
+      console.warn("[create-vacancy][TOKEN_INVALID]", safeError(tokenError))
       return { statusCode: 403, body: JSON.stringify({ error: "Token inválido o inactivo" }) }
     }
-
-    // Generate unique slug: kebab(title) + random suffix
-    const baseSlug = toKebab(title)
-    const slug = `${baseSlug}-${randomSuffix()}`
-
-    const { data: vacancy, error: insertError } = await supabase
-      .from("recruiter_vacancies")
-      .insert({
-        title: title.trim(),
-        description: description.trim(),
-        requirements: requirements.trim(),
-        location: location.trim(),
-        modality: modality || "Presencial",
-        salary_range: salary_range?.trim() || null,
-        company: company_name.trim(),       // real column name in DB
-        slug,
-        recruiter_token_id: tokenData.id,   // real column name in DB
-        is_active: true,
-      })
-      .select("id, slug")
-      .single()
-
-    if (insertError) {
-      console.error("create-vacancy insert error:", insertError.message)
-      return { statusCode: 500, body: JSON.stringify({ error: "Error al crear la vacante: " + insertError.message }) }
+    if (tokenData.verification_status !== "verified") {
+      return {
+        statusCode: 403,
+        body: JSON.stringify({ error: "La empresa debe completar y aprobar su verificación antes de publicar vacantes" }),
+      }
+    }
+    const resolvedCompanyName = String(tokenData.company_name || "").trim() || String(formCompanyName || "").trim()
+    if (!resolvedCompanyName) {
+      return { statusCode: 409, body: JSON.stringify({ error: "Ingresá el nombre de tu empresa antes de publicar" }) }
+    }
+    // Persist the name if it was missing from the token record
+    if (!String(tokenData.company_name || "").trim() && resolvedCompanyName) {
+      await supabase.from("recruiter_tokens").update({ company_name: resolvedCompanyName }).eq("id", tokenData.id)
     }
 
-    // Mirror to opportunities table so B2C candidates can find it in matching + Alertas
-    await supabase.from("opportunities").insert({
-      titulo: title.trim(),
-      organization: company_name.trim(),
-      description: description.trim(),
-      location: location.trim(),
-      modality: modality || "Presencial",
-      type: modality || "Presencial",
-      rubro: rubro?.trim() || "General",
-      tags: tags || [],
-      application_url: `${process.env.SITE_URL || "https://cvitae.lat"}/vacante/${vacancy.slug}`,
-      recruiter_vacancy_id: vacancy.id,
-      source: "recruiter_b2b",
-      is_active: true,
-    }).then(({ error }) => {
-      if (error) console.error("mirror to opportunities failed:", error.message)
+    const slug = `${toKebab(title)}-${randomSuffix()}`
+    const vacancyUrl = `${process.env.SITE_URL || "https://cvitae.lat"}/vacante/${slug}`
+
+    // Both inserts live in one PostgreSQL transaction. An error rolls back
+    // the recruiter vacancy and the B2C opportunity mirror together.
+    const { data: vacancy, error: createError } = await supabase.rpc("create_recruiter_vacancy_atomic", {
+      p_recruiter_token_id: String(tokenData.id),
+      p_title: title.trim(),
+      p_description: description.trim(),
+      p_requirements: requirements.trim(),
+      p_location: location.trim(),
+      p_modality: modality?.trim() || "Presencial",
+      p_salary_range: salary_range?.trim() || null,
+      p_slug: slug,
+      p_rubro: rubro?.trim() || "General",
+      p_tags: Array.isArray(tags) ? tags.map(String) : [],
+      p_application_url: vacancyUrl,
     })
 
-    const vacancyUrl = `${process.env.SITE_URL || "https://cvitae.lat"}/vacante/${vacancy.slug}`
+    if (createError || !vacancy?.success || !vacancy?.id || !vacancy?.opportunity_id) {
+      const internalMessage = String(createError?.message || "")
+      const failureStage = internalMessage.includes("RECRUITER_VACANCY_INSERT_FAILED")
+        ? "INSERT_FAILED"
+        : internalMessage.includes("OPPORTUNITY_MIRROR_INSERT_FAILED")
+          ? "MIRROR_INSERT_FAILED"
+          : createError
+            ? "RPC_FAILED"
+            : "CONSISTENCY_CHECK_FAILED"
+      console.error("[create-vacancy][ATOMIC_CREATE_FAILED]", {
+        ...safeError(createError),
+        failure_stage: failureStage,
+        result_complete: Boolean(vacancy?.success && vacancy?.id && vacancy?.opportunity_id),
+      })
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: "No se pudo publicar la vacante de forma consistente. No quedó activa; intentá nuevamente.",
+        }),
+      }
+    }
 
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        slug: vacancy.slug,
-        url: vacancyUrl,
-        id: vacancy.id,
-      }),
+      body: JSON.stringify({ success: true, slug: vacancy.slug, url: vacancy.url, id: vacancy.id }),
     }
-  } catch (err: any) {
-    console.error("create-vacancy error:", err.message)
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) }
+  } catch (error: any) {
+    console.error("[create-vacancy][UNEXPECTED_ERROR]", safeError(error))
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "No se pudo procesar la publicación. Intentá nuevamente." }),
+    }
   }
 }
 

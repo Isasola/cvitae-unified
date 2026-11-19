@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import time
 import os
 import re
+from opportunity_sink import OpportunitySink
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://rbrirxbjbmdxflzaxxzp.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -61,9 +62,10 @@ def insert_job(job):
         return "error"
 
 
-def scrape_category(path, opp_type, max_pages=3):
+def scrape_category(path, opp_type, max_pages=None):
     jobs = []
     seen = set()
+    max_pages = max_pages or int(os.getenv("CVITAE_MAX_PAGES", "50"))
 
     for page in range(1, max_pages + 1):
         url = BASE_URL + path
@@ -85,7 +87,8 @@ def scrape_category(path, opp_type, max_pages=3):
             if not href or href in seen:
                 continue
             # Only include actual post URLs (not category/tag pages)
-            if not re.match(r'https://opportunitydesk\.org/\d{4}/', href):
+            if not re.match(r'https://opportunitydesk\.org/[^/]+/', href) or \
+               re.search(r'/(?:category|tag|author|page|wp-content|wp-admin|feed)/', href):
                 continue
             seen.add(href)
 
@@ -98,7 +101,7 @@ def scrape_category(path, opp_type, max_pages=3):
             description = title
 
             page_jobs.append({
-                "titulo": title,
+                "title": title,
                 "organization": "OpportunityDesk",
                 "location": "Global",
                 "rubro": "Internacional",
@@ -126,14 +129,18 @@ def main():
 
     for path, opp_type in CATEGORIES:
         print(f"\nRastreando: {path} ({opp_type})")
-        jobs = scrape_category(path, opp_type, max_pages=3)
-        total_found += len(jobs)
+        try:
+            jobs = scrape_category(path, opp_type)
+            total_found += len(jobs)
 
-        for job in jobs:
-            status = insert_job(job)
-            if status in (200, 201, 409):
-                total_inserted += 1
-            print(f"  {job['titulo'][:60]} -> {status}")
+            # Keep legacy discovery, but send every row through the common
+            # normalizer/persistence boundary.  A listing title is not promoted to
+            # a fabricated rich description; detail enrichment remains explicit.
+            summary = OpportunitySink().upsert(jobs)
+            total_inserted += summary.inserted + summary.updated + summary.unchanged
+            print(f"  normalized: valid={summary.valid} rejected={summary.rejected}")
+        except Exception as e:
+            print(f"  [error] {path}: {type(e).__name__}: {e}")
 
         time.sleep(2)
 

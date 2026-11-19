@@ -66,7 +66,7 @@ def scrape_empresa(key, url, org):
                     href = link_el.get("href", "")
                     job_url = href if href.startswith("http") else f"{url.rstrip('/')}/{href.lstrip('/')}"
                 jobs.append({
-                    "titulo": title,
+                    "title": title,
                     "organization": org,
                     "location": "Paraguay",
                     "rubro": "Seguros",
@@ -75,6 +75,7 @@ def scrape_empresa(key, url, org):
                     "application_url": job_url,
                     "source": f"seguros_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["seguros", "aseguradora", key],
                 })
             if jobs:
@@ -89,7 +90,7 @@ def scrape_empresa(key, url, org):
             if any(kw in text.lower() for kw in LINK_KEYWORDS):
                 job_url = href if href.startswith("http") else url
                 jobs.append({
-                    "titulo": text,
+                    "title": text,
                     "organization": org,
                     "location": "Paraguay",
                     "rubro": "Seguros",
@@ -98,6 +99,7 @@ def scrape_empresa(key, url, org):
                     "application_url": job_url,
                     "source": f"seguros_{key}",
                     "is_active": True,
+                    "country_code": "PY",
                     "tags": ["seguros", "aseguradora", key],
                 })
 

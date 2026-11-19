@@ -1,0 +1,84 @@
+name: CVitae - Fabrica incremental de oportunidades
+
+on:
+  schedule:
+    # Drain bounded pending structural work hourly; observations/factory state
+    # remain durable resume state and every run is capped at 250 rows.
+    - cron: '0 * * * *'
+  workflow_run:
+    workflows: ['CVitae Scrapers']
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Presupuesto estructural máximo por ejecución (1-250)'
+        required: false
+        default: '250'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cvitae-opportunity-pipeline-maintenance
+  cancel-in-progress: false
+
+jobs:
+  seal-and-embed:
+    if: (github.event_name == 'workflow_dispatch' || vars.CVITAE_PROD_RELEASE_VALIDATED == 'true') && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      FACTORY_STRUCTURAL_LIMIT: ${{ github.event.inputs.limit || '250' }}
+      FACTORY_EMBEDDING_LIMIT: '20'
+      HF_HOME: ~/.cache/huggingface
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: scripts/requirements-opportunity-factory.txt
+
+      - name: Consultar cola pendiente
+        id: queue
+        run: python scripts/check_opportunity_factory_queue.py
+
+      - name: Restaurar modelo local
+        if: steps.queue.outputs.pending == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: cvitae-gte-small-${{ runner.os }}-${{ hashFiles('scripts/requirements-opportunity-factory.txt') }}
+          restore-keys: |
+            cvitae-gte-small-${{ runner.os }}-
+
+      - name: Instalar fabrica local
+        if: steps.queue.outputs.pending == 'true'
+        run: pip install --requirement scripts/requirements-opportunity-factory.txt
+
+      - name: Validar limite
+        if: steps.queue.outputs.pending == 'true'
+        shell: bash
+        run: |
+          if ! [[ "$FACTORY_STRUCTURAL_LIMIT" =~ ^[0-9]+$ ]] || (( FACTORY_STRUCTURAL_LIMIT < 1 || FACTORY_STRUCTURAL_LIMIT > 250 )); then
+            echo "::error::structural limit debe estar entre 1 y 250"
+            exit 1
+          fi
+          if ! [[ "$FACTORY_EMBEDDING_LIMIT" =~ ^[0-9]+$ ]] || (( FACTORY_EMBEDDING_LIMIT < 0 || FACTORY_EMBEDDING_LIMIT > 50 )); then
+            echo "::error::embedding limit debe estar entre 0 y 50"
+            exit 1
+          fi
+
+      - name: Sellar y generar embeddings locales pendientes
+        if: steps.queue.outputs.pending == 'true'
+        run: python scripts/opportunity_factory.py --structural-limit "$FACTORY_STRUCTURAL_LIMIT" --embedding-limit "$FACTORY_EMBEDDING_LIMIT"
+
+      - name: Cola al dia
+        if: steps.queue.outputs.pending != 'true'
+        run: echo "No hay oportunidades nuevas o modificadas; no se carga el modelo."

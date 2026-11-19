@@ -1,0 +1,544 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
+import http from 'node:http'
+import { spawn } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { chromium } from '@playwright/test'
+import { createPublicOpportunitiesHandler } from '../netlify/functions/public-opportunities.ts'
+import { createPublicDetailHandler, parsePublicDetailPath } from '../netlify/functions/public-opportunity-detail.ts'
+import { DETAIL_FALLBACK_RULES } from './generate-opportunity-redirects.mjs'
+import { canonicalOpportunityPathForRow } from '../src/lib/opportunity-truth.ts'
+import { evaluateOpportunityDistribution } from '../src/lib/effective-source-policy.ts'
+import { buildSeoInventoryFromUniverse } from '../src/lib/seo-inventory.ts'
+import { publicDetailDescription } from '../src/lib/public-detail-head.js'
+
+// Local PostgreSQL only. Use the existing SQL-test installation, never credentials.
+const { PGlite } = await import('../.cvitae-state/cable-sql-test/node_modules/@electric-sql/pglite/dist/index.js')
+const db = new PGlite()
+const read = (file: string) => fs.readFileSync(file, 'utf8')
+const columns = read('netlify/functions/public-opportunities.ts').match(/const COLUMNS = '([^']+)'/)![1].split(',')
+const booleans = new Set(['remote', 'fully_funded', 'is_active', 'catalog_eligible', 'match_eligible', 'alerts_eligible', 'seo_eligible'])
+const arrays = new Set(['tags', 'eligible_countries', 'eligible_regions'])
+const json = new Set(['requirements', 'responsibilities', 'benefits'])
+const timestamps = new Set(['created_at', 'updated_at', 'deleted_at', 'archived_at', 'published_at'])
+await db.exec(`create schema extensions;
+  create table opportunities(${columns.map(c => `${c} ${booleans.has(c) ? 'boolean' : arrays.has(c) ? 'text[]' : json.has(c) ? 'jsonb' : timestamps.has(c) ? 'timestamptz' : 'text'}`).join(',')}, private_note text, primary key(id), unique(slug));
+  create table opportunity_universe_state(opportunity_id text primary key, lifecycle_state text, catalog_state text, seo_state text);
+  create table opportunity_source_identity_aliases(emitted_source text primary key,canonical_source text);
+  create table opportunity_sources(source text primary key,policy jsonb);
+  create function canonical_opportunity_source_policy(s text) returns jsonb language sql stable as $$select policy from opportunity_sources where source=s$$;`)
+const baseline = read('supabase/migrations/202609280001_opportunity_universe.sql')
+await db.exec(baseline.match(/create or replace function public.opportunity_deadline_state[\s\S]*?end \$\$;/i)![0])
+const wiring = read('supabase/migrations/202610040001_source_switch_wiring.sql')
+await db.exec(wiring.match(/create or replace view public.opportunity_catalog_universe[\s\S]*?;/i)![0])
+// Executes the real deployed SEO read-path definition in an isolated in-memory DB.
+await db.exec(read('supabase/migrations/202610080001_seo_universe_read_path.sql'))
+const coverage = read('supabase/migrations/202610040002_public_catalog_coverage.sql')
+await db.exec(coverage.match(/create or replace function public.catalog_search_text[\s\S]*?\$\$;/i)![0])
+await db.exec(coverage.match(/create or replace function public.search_public_opportunities[\s\S]*?end \$\$;/i)![0])
+const policies = ['himalayas', 'jobicy', 'future_source_fixture', 'killed_source', 'consumer_killed'].map(source => ({
+  source, canonical_source: source, is_enabled: source !== 'killed_source',
+  catalog_enabled: source !== 'consumer_killed', seo_enabled: source !== 'consumer_killed',
+}))
+for (const policy of policies) await db.query('insert into opportunity_sources values($1,$2)', [policy.source, policy])
+await db.exec("insert into opportunity_source_identity_aliases values('himalayas','himalayas')")
+const facts = {
+  title: 'Programme Officer', organization: 'Fixture Organization', description: 'Coordinate programme delivery, monitoring, reporting and stakeholder communications. '.repeat(3),
+  source: 'himalayas', opportunity_type: 'job', opportunity_kind: 'empleo', deadline: null,
+  location: 'Remote', remote_scope: 'WORLDWIDE', tags: ['programme'], requirements: ['Programme coordination experience'],
+  application_url: 'https://example.org/apply', source_url: 'https://example.org/job',
+  created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-08T00:00:00Z',
+  is_active: true, verification_status: 'verified', catalog_eligible: true, seo_eligible: true,
+  match_eligible: true, alerts_eligible: true, private_note: 'must_not_be_public',
+}
+async function seed(id: string, extra: Record<string, any> = {}, catalog = 'READY', seo = 'READY', lifecycle = 'ACTIVE_VALID') {
+  const row = { ...facts, id, slug: id, ...extra }
+  await db.query('insert into opportunities select (jsonb_populate_record(null::opportunities,$1::jsonb)).*', [JSON.stringify(row)])
+  await db.query('insert into opportunity_universe_state values($1,$2,$3,$4)', [id, lifecycle, catalog, seo])
+  return row
+}
+// Canary A's actual states are unknown. This controlled SEO-only fixture reproduces
+// the demonstrated publication/detail split without inventing its PROD row facts.
+const a = await seed('canary-a', { slug: 'legal-counsel-locally-recruited-texcoco-mexico-fe96fc8b', title: 'Legal Counsel (locally recruited), Texcoco, Mexico' }, 'NOT_READY')
+const b = await seed('canary-b', { slug: 'executive-assistant-recruitment-specialist-permanent-dayshift-remote-au--66b4d43d', title: 'Executive Assistant / Recruitment Specialist' }, 'READY', 'NOT_READY')
+const future = await seed('future-public-role', { source: 'future_source_fixture', title: 'Future source role' })
+const other = await seed('other-source-role', { source: 'jobicy', title: 'Other source role' })
+const alias = await seed('alias-role', { source: ' HIMALAYAS ', title: 'Alias source role' })
+const scholarship = await seed('scholarship-role', { opportunity_type: 'scholarship', opportunity_kind: 'beca', title: 'Scholarship role' })
+await seed('canonical-not-legacy', { verification_status: 'pending' })
+await seed('expired-role', { deadline: '2000-01-01' }) // live deadline veto, even if derived state was stale
+await seed('invalid-deadline', { deadline: 'not-a-date' })
+for (const [id, extra] of Object.entries({ 'deleted-role': { deleted_at: facts.updated_at }, 'archived-role': { archived_at: facts.updated_at }, 'inactive-role': { is_active: false }, 'unknown-role': {} })) {
+  await seed(id, extra, 'NOT_READY', 'NOT_READY', id === 'unknown-role' ? 'LIFECYCLE_UNKNOWN' : 'HARD_DEAD')
+}
+await seed('source-kill', { source: 'killed_source' })
+await seed('consumer-kill', { source: 'consumer_killed' })
+for (let n = 0; n < 105; n++) await seed(`paged-${String(n).padStart(4, '0')}`, {}, 'READY', 'NOT_READY')
+for (let n = 0; n < 2501; n++) await seed(`seo-page-${String(n).padStart(4, '0')}`, {}, 'NOT_READY', 'READY')
+// Existing database identity contract prevents two rows owning the same slug.
+await assert.rejects(() => seed('duplicate-id', { slug: a.slug }), /unique|duplicate/i)
+
+const query = async (sql: string, args: any[] = []) => JSON.parse(JSON.stringify((await db.query(sql, args)).rows))
+const reads: { relation: string; scope: string; returned: number }[] = []
+const transport = {
+  rpc: async (name: string, args: any) => ({ data: name === 'get_source_distribution_policy' ? policies
+    : await query('select * from search_public_opportunities($1,$2,$3,$4,$5,$6,$7)', [args.p_query, args.p_area, args.p_types, args.p_mode, args.p_after_updated_at, args.p_after_id, args.p_limit]), error: null }),
+  from: (relation: string) => {
+    assert.ok(['opportunity_catalog_universe', 'opportunity_seo_universe'].includes(relation), 'no raw opportunity fallback')
+    let select = '*', slug: string | null = null, ids: string[] | null = null
+    const builder = {
+      select(c: string) { select = c; return builder },
+      eq(field: string, value: string) { assert.equal(field, 'slug'); slug = value; return builder },
+      order() { return builder },
+      async limit(n: number) {
+        assert.equal(n, 1); assert.ok(slug)
+        const rows = await query(`select ${select} from ${relation} where slug=$1 order by updated_at desc nulls last,id asc limit 1`, [slug])
+        reads.push({ relation, scope: 'exact_slug', returned: rows.length })
+        return { data: rows, error: null }
+      },
+      async in(field: string, values: string[]) {
+        assert.equal(field, 'id'); assert.ok(values.length <= 100)
+        ids = values
+        const rows = await query(`select ${select} from ${relation} where id=any($1::text[])`, [ids])
+        reads.push({ relation, scope: 'page_ids', returned: rows.length })
+        return { data: rows, error: null }
+      },
+    }
+    return builder
+  },
+}
+const api = createPublicOpportunitiesHandler(() => transport as any)
+const event = (params: Record<string, string>) => ({ queryStringParameters: params }) as any
+const invoke = async (params: Record<string, string>) => await api(event(params), {} as any, () => {}) as any
+const template = '<html><head><title>Home</title><meta name="description" content="Home description"><meta property="og:url" content="https://cvitae.lat"><meta property="og:title" content="Home"><meta property="og:description" content="Home description"><meta property="og:type" content="website"><meta name="twitter:title" content="Home"><meta name="robots" content="index,follow"><link rel="canonical" href="https://cvitae.lat"><script type="module" src="/assets/app.js"></script></head><body><div id="root">Home snapshot</div></body></html>'
+const htmlHandler = createPublicDetailHandler(api, () => template)
+// Model the production rewrite: original event.path, no injected query.
+const requestEvent = (pathname: string, rawQuery = '') => ({
+  path: pathname, rawQuery, rawUrl: `http://localhost${pathname}${rawQuery ? '?' + rawQuery : ''}`,
+  httpMethod: 'GET', headers: {}, multiValueHeaders: {},
+  queryStringParameters: Object.fromEntries(new URLSearchParams(rawQuery)),
+  multiValueQueryStringParameters: null, body: null, isBase64Encoded: false,
+})
+const detailRequest = (slug: string, family = 'empleos') => requestEvent('/.netlify/functions/public-opportunity-detail', new URLSearchParams({ slug, family }).toString())
+const html = async (slug: string, family = 'empleos') => {
+  const response = await htmlHandler(detailRequest(slug, family))
+  return { ...response, headers: response.headers || {}, body: response.body || '' }
+}
+assert.doesNotMatch(read('netlify.toml'), /from = "\/(empleos|oportunidades)\/:slug\/?"/)
+const detailSource = read('netlify/functions/public-opportunity-detail.ts')
+assert.doesNotMatch(detailSource, /export const config|preferStatic|context\.params|export default/)
+assert.match(detailSource, /export const handler = createPublicDetailHandler\(\)/)
+assert.match(detailSource, /parsePublicDetailPath\(event\.path\)/)
+assert.doesNotMatch(detailSource, /\.from\(|slug ===|source ===/)
+for (const query of ['slug=unsafe%2Fslug&family=empleos', 'slug=valid&family=wrong', 'slug=valid&slug=other&family=empleos', 'slug=valid&family=empleos&family=empleos', 'slug=valid']) {
+  assert.equal((await htmlHandler(requestEvent('/.netlify/functions/public-opportunity-detail', query))).statusCode, 404, 'invalid or ambiguous direct-query identity is rejected')
+}
+for (const pathname of ['/empleos/', '/empleos/a/b', '/empleos/%2e%2e', '/empleos/%2F', '/empleos/a%5Cb', '/empleos/%ZZ', '/empleos//valid', '/other/valid', '/empleos/valid//']) {
+  assert.equal(parsePublicDetailPath(pathname), null, `invalid original path: ${pathname}`)
+  assert.equal((await htmlHandler(requestEvent(pathname, new URLSearchParams({ slug: a.slug, family: 'empleos' }).toString()))).statusCode, 404, 'query cannot rescue an invalid public path')
+}
+for (const row of [a, b, scholarship]) {
+  const canonical = canonicalOpportunityPathForRow(row)
+  for (const slash of ['', '/']) {
+    const result = await htmlHandler(requestEvent(canonical + slash))
+    assert.equal(result.statusCode, 200); assert.ok(result.body!.includes(row.title))
+  }
+  const spoof = await htmlHandler(requestEvent(canonical, 'slug=missing&family=oportunidades'))
+  assert.equal(spoof.statusCode, 200); assert.ok(spoof.body!.includes(row.title), 'original path wins over hostile query')
+}
+assert.deepEqual(parsePublicDetailPath('/empleos/encoded%2Dslug/'), { family: 'empleos', slug: 'encoded-slug' })
+assert.equal((await htmlHandler({ ...detailRequest(a.slug), httpMethod: 'POST' })).statusCode, 405)
+let cursor = '', pages = 0
+const listed = new Map<string, any>()
+do {
+  const result = await invoke({ mode: 'all', ...(cursor ? { cursor } : {}) })
+  assert.equal(result.statusCode, 200)
+  const rows = JSON.parse(result.body)
+  assert.ok(rows.length <= 100)
+  for (const row of rows) {
+    assert.ok(!listed.has(row.id)); listed.set(row.id, row)
+    const detail = await invoke({ mode: 'all', slug: row.slug })
+    assert.equal(detail.statusCode, 200); assert.equal(JSON.parse(detail.body).id, row.id)
+    assert.equal('private_note' in row, false)
+  }
+  cursor = result.headers['X-Next-Cursor'] || ''; pages++
+} while (cursor)
+assert.ok(pages > 1); assert.ok(listed.has('paged-0104'))
+assert.ok(!listed.has(a.id), 'SEO door does not force admission into Catalog')
+for (const row of [a, b, future, other, alias, scholarship]) {
+  const result = await invoke({ mode: 'all', slug: row.slug })
+  assert.equal(result.statusCode, 200); assert.equal(JSON.parse(result.body).id, row.id)
+  const canonical = canonicalOpportunityPathForRow(row)
+  const response = await html(row.slug, canonical.split('/')[1])
+  assert.equal(response.statusCode, 200); assert.ok(response.body.includes(row.title))
+  assert.ok(response.body.includes(`https://cvitae.lat${canonical}`)); assert.doesNotMatch(response.body, /Home snapshot/)
+  assert.equal((response.body.match(/rel="canonical"/g) || []).length, 1)
+  assert.match(response.body, /type="module"/)
+}
+assert.equal(JSON.parse((await invoke({ slug: alias.slug })).body).distribution.canonicalSource, 'himalayas')
+assert.equal(evaluateOpportunityDistribution({ ...facts, source: 'future_source_fixture' }, policies).catalog.allowed, false, 'old Registry gate would drop future canonical rows')
+assert.equal(JSON.parse((await invoke({ slug: future.slug })).body).distribution.seo.allowed, true)
+assert.equal(JSON.parse((await invoke({ slug: b.slug })).body).distribution.seo.allowed, false, 'Catalog-only rows remain noindex')
+assert.match((await html(b.slug)).body, /noindex,follow/)
+for (const slug of ['expired-role', 'invalid-deadline', 'deleted-role', 'archived-role', 'inactive-role', 'unknown-role', 'source-kill', 'consumer-kill', 'missing-local-role', '__missing_local__']) {
+  assert.equal((await invoke({ slug })).statusCode, 404)
+  const response = await html(slug)
+  assert.equal(response.statusCode, 404); assert.match(response.body, /noindex,follow/)
+  assert.doesNotMatch(response.body, /application\/ld\+json|JobPosting|rel="canonical"|property="og:url"/)
+  assert.ok(![...listed.values()].some(row => row.slug === slug))
+}
+const redirect = await html(a.slug, 'oportunidades')
+assert.equal(redirect.statusCode, 301); assert.equal(redirect.headers.Location, canonicalOpportunityPathForRow(a))
+const deduped = buildSeoInventoryFromUniverse([{ ...a, id: 'old', updated_at: '2026-10-01T00:00:00Z' }, { ...a, id: 'new' }])
+assert.equal(deduped.length, 1); assert.equal(deduped[0].id, 'new')
+const failedApi = createPublicOpportunitiesHandler(() => ({ ...transport,
+  from: () => ({ select: () => ({ eq: () => ({ order: () => ({ order: () => ({ limit: async () => ({ data: null, error: { code: '57014' } }) }) }) }) }) }),
+}) as any)
+const originalError = console.error
+try {
+  console.error = () => {}
+  assert.equal((await failedApi(event({ slug: a.slug }), {} as any, () => {}) as any).statusCode, 503)
+  const unavailable = await createPublicDetailHandler(failedApi, () => template)(detailRequest(a.slug))
+  assert.equal(unavailable.statusCode, 503, 'database errors remain unavailable, not false 404')
+} finally { console.error = originalError }
+const seoRows = await query('select * from opportunity_seo_universe order by id')
+assert.ok(seoRows.length > 2501); assert.ok(seoRows.some(row => row.slug === 'seo-page-2500'))
+assert.ok(seoRows.some(row => row.source === 'future_source_fixture'))
+if (process.argv.includes('--prepare-fixture') || process.argv.includes('--build')) {
+  fs.mkdirSync('.cvitae-state/cable-build', { recursive: true })
+  fs.writeFileSync('.cvitae-state/cable-build/public-detail-fixture.json', JSON.stringify({ fromUniverse: true, opportunities: seoRows, policies }))
+}
+console.log(`PUBLIC_LIST_DETAIL_SQL=PASS catalog_rows=${listed.size} pages=${pages} seo_rows=${seoRows.length} exact_bounded_reads=${reads.length}`)
+
+if (process.argv.includes('--build')) {
+  // Keep every server/build read local, including the unrelated public blog and
+  // recruiter sitemap reads. Never inherit Supabase production credentials.
+  const mock = http.createServer((request, response) => {
+    assert.equal(request.method, 'GET')
+    response.writeHead(200, { 'Content-Type': 'application/json' }); response.end('[]')
+  })
+  await new Promise<void>(resolve => mock.listen(0, '127.0.0.1', resolve))
+  const env = { ...process.env }
+  for (const name of Object.keys(env)) if (/SUPABASE|CVITAE_DB_URL/.test(name)) delete env[name]
+  env.VITE_SUPABASE_URL = `http://127.0.0.1:${(mock.address() as any).port}`
+  env.VITE_SUPABASE_ANON_KEY = 'local-fixture-public-key'
+  env.SEO_INVENTORY_FIXTURE = path.resolve('.cvitae-state/cable-build/public-detail-fixture.json')
+  env.PRERENDER_PUBLIC_FIXTURE = path.resolve('scripts/fixtures/prerender-public-fixture.json')
+  const derived = ['generated/public-seo-inventory.json', 'generated/source-distribution-policy-snapshot.json']
+    .map(file => [file, fs.readFileSync(file)] as const)
+  const run = (command: string) => new Promise<void>((resolve, reject) => {
+    const child = spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', command], { env, stdio: 'inherit' })
+    child.on('error', reject)
+    child.on('exit', code => code === 0 ? resolve() : reject(new Error(`${command}: exit ${code}`)))
+  })
+  try {
+    await run('pnpm.cmd build')
+    await run('pnpm.cmd exec tsx scripts/verify-seo-build-parity.ts')
+    console.log('FIXTURE_BUILD=PASS production_credentials=REMOVED sitemap_reads=LOCAL_FIXTURE')
+  } finally {
+    try {
+      for (const [file, bytes] of derived) {
+        const deadline = Date.now() + 5000
+        while (true) {
+          try { fs.writeFileSync(file, bytes); break } catch (error: any) {
+            if (!['EBUSY', 'EPERM', 'EACCES', 'UNKNOWN'].includes(error.code) || Date.now() >= deadline) throw error
+            await new Promise(resolve => setTimeout(resolve, 100))
+          }
+        }
+      }
+    } finally { await new Promise<void>(resolve => mock.close(() => resolve())) }
+  }
+}
+
+if (process.argv.includes('--browser')) {
+  assert.ok(fs.existsSync('dist/index.html'), 'run the fixture build first')
+  const redirectLines = read('dist/_redirects').trim().split(/\r?\n/)
+  const seoAliases = redirectLines.filter(line => line.endsWith(' 301!'))
+  assert.deepEqual(redirectLines, [...seoAliases, ...DETAIL_FALLBACK_RULES], 'final deployed artifact: SEO aliases, forced live blog routes, then static-aware opportunity detail rules')
+  assert.doesNotMatch(redirectLines.join('\n'), /\/index\.html|^\/\* /m)
+  console.log(`SEO_ALIAS_RULES=${seoAliases.length} DETAIL_FALLBACK_RULES=${DETAIL_FALLBACK_RULES.length} LAST_SEO_ALIAS_INDEX=${seoAliases.length - 1} FIRST_DETAIL_FALLBACK_INDEX=${seoAliases.length} ORDER=PASS`)
+  let reproduceOldFailure = false
+  // Fixture transport only. Netlify Dev itself decides static/function/SPA routing.
+  const server = http.createServer(async (request, response) => {
+    try {
+      assert.equal(request.method, 'GET', 'browser test forbids writes')
+      const url = new URL(request.url!, 'http://localhost')
+      let result: any
+      if (url.pathname === '/api') {
+        const params = Object.fromEntries(url.searchParams)
+        result = reproduceOldFailure && params.slug === a.slug
+          ? { statusCode: 404, body: '{"error":"not_found"}', headers: { 'Content-Type': 'application/json' } }
+          : await invoke(params)
+      } else if (/^\/sitemap[^/]*\.xml$/.test(url.pathname)) {
+        result = { statusCode: 200, headers: { 'Content-Type': 'application/xml' }, body: fs.readFileSync(path.join('dist', url.pathname.slice(1))) }
+      } else result = { statusCode: 404, body: 'Not found' }
+      response.writeHead(result.statusCode, result.headers || {}); response.end(result.body)
+    } catch (error) { response.writeHead(500); response.end(String(error)) }
+  })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  const fixtureOrigin = `http://127.0.0.1:${(server.address() as any).port}`
+  const freePort = async () => {
+    const probe = http.createServer()
+    await new Promise<void>(resolve => probe.listen(0, '127.0.0.1', resolve))
+    const port = (probe.address() as any).port
+    await new Promise<void>(resolve => probe.close(() => resolve()))
+    return port
+  }
+  const port = await freePort(), functionsPort = await freePort()
+  const origin = `http://localhost:${port}`
+  const fixtureFunctions = '.cvitae-state/generated-detail-functions'
+  fs.mkdirSync(fixtureFunctions, { recursive: true })
+  // Bundle the unchanged production factory for the local harness. Netlify Dev
+  // otherwise tries Windows package symlinks requiring developer/admin mode.
+  const require = createRequire(import.meta.url)
+  const esbuild = createRequire(require.resolve('vite'))('esbuild')
+  await esbuild.build({
+    stdin: { contents: "export { createPublicDetailHandler, parsePublicDetailPath } from './netlify/functions/public-opportunity-detail.ts'", resolveDir: process.cwd(), loader: 'ts' },
+    bundle: true, platform: 'node', format: 'esm', tsconfigRaw: {},
+    // Bundled CommonJS dependencies (ws) need Node require in the ESM harness.
+    banner: { js: "import { createRequire as createNodeRequire } from 'node:module'; const require = createNodeRequire(import.meta.url);" },
+    outfile: '.cvitae-state/generated-detail-runtime.mjs',
+  })
+  // Explicit ESM for the legacy fixture wrapper, like the sibling functions.
+  // Remove only the old wrapper created by this verifier, never user files.
+  const oldWrapper = `${fixtureFunctions}/public-opportunity-detail.ts`
+  if (fs.existsSync(oldWrapper)) fs.unlinkSync(oldWrapper)
+  // No custom path config: only the built _redirects may reach this endpoint.
+  fs.writeFileSync(`${fixtureFunctions}/public-opportunity-detail.mjs`, `
+import { createPublicDetailHandler, parsePublicDetailPath } from '../generated-detail-runtime.mjs'
+const readPublic = async (event) => {
+  const response = await fetch(${JSON.stringify(fixtureOrigin)} + '/api?' + new URLSearchParams(event.queryStringParameters))
+  return { statusCode: response.status, headers: Object.fromEntries(response.headers), body: await response.text() }
+}
+const detail = createPublicDetailHandler(readPublic)
+export const handler = async (event) => {
+  const response = await detail(event)
+  const identity = parsePublicDetailPath(event.path)
+  return { ...response, headers: { ...response.headers,
+    'X-Local-Detail-Function': 'generated-redirect',
+    'X-Local-Original-Path': event.path,
+    'X-Local-Detail-Identity': identity ? identity.family + '/' + identity.slug : '',
+    'X-Local-Detail-Query': event.rawQuery || '',
+  } }
+}
+`)
+  fs.writeFileSync(`${fixtureFunctions}/public-opportunities.mjs`, `
+export const handler = async event => {
+  const response = await fetch(${JSON.stringify(fixtureOrigin)} + '/api?' + new URLSearchParams(event.queryStringParameters))
+  return { statusCode: response.status, headers: Object.fromEntries(response.headers), body: await response.text() }
+}
+`)
+  fs.writeFileSync(`${fixtureFunctions}/sitemap.mjs`, `
+export const handler = async event => {
+  const response = await fetch(${JSON.stringify(fixtureOrigin)} + new URL(event.rawUrl).pathname)
+  return { statusCode: response.status, headers: Object.fromEntries(response.headers), body: await response.text() }
+}
+`)
+  const devEnv = { ...process.env }
+  for (const name of Object.keys(devEnv)) if (/SUPABASE|CVITAE_DB_URL|NETLIFY_AUTH_TOKEN|NETLIFY_SITE_ID/.test(name)) delete devEnv[name]
+  devEnv.CVITAE_PROD_RELEASE_VALIDATED = 'false'
+  const dev = spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c',
+    `netlify.cmd dev --offline --skip-gitignore --geo mock --no-open --framework #static --dir dist --functions ${fixtureFunctions} --port ${port} --functions-port ${functionsPort}`],
+    { env: devEnv, stdio: ['ignore', 'pipe', 'pipe'] })
+  let devOutput = '', devExited = false
+  dev.stdout.on('data', chunk => { devOutput = (devOutput + chunk).slice(-16000) })
+  dev.stderr.on('data', chunk => { devOutput = (devOutput + chunk).slice(-16000) })
+  dev.on('exit', () => { devExited = true })
+  const stopDev = async () => {
+    if (devExited) return
+    await new Promise<void>((resolve, reject) => {
+      const executable = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'taskkill.exe')
+      const stop = spawn(executable, ['/PID', String(dev.pid), '/T', '/F'], { stdio: 'ignore' })
+      stop.on('error', reject)
+      stop.on('exit', code => code === 0 || code === 128 ? resolve() : reject(new Error(`Netlify Dev cleanup: exit ${code}`)))
+    })
+  }
+  try {
+    const deadline = Date.now() + 300000
+    while (true) {
+      if (devExited || Date.now() > deadline) throw new Error(`Netlify Dev failed to start: ${devOutput}`)
+      try {
+        const ready = await fetch(`${origin}/.netlify/functions/public-opportunity-detail?${new URLSearchParams({ slug: b.slug, family: 'empleos' })}`, { signal: AbortSignal.timeout(1000) })
+        if (ready.status >= 500) throw new Error(`Netlify fixture function error: ${await ready.text()}`)
+        if (ready.status === 200 && ready.headers.get('x-local-detail-function') === 'generated-redirect') break
+      } catch (error: any) {
+        if (error.message?.startsWith('Netlify fixture function error:')) throw new Error(`${error.message}\n${devOutput}`)
+      }
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+    console.log('NETLIFY_DEV=READY offline=true fixture_functions=true')
+  } catch (error) {
+    await stopDev(); await new Promise<void>(resolve => server.close(() => resolve())); throw error
+  }
+  const browser = await chromium.launch({ headless: true })
+  const context = await browser.newContext()
+  await context.route('**/*', route => {
+    const request = route.request()
+    if (new URL(request.url()).origin !== origin || request.method() !== 'GET') return route.abort()
+    return route.continue()
+  })
+  const page = await context.newPage()
+  const parser = await context.newPage()
+  // Inert HTML parsing measures the response before any JS can hydrate it.
+  const headSnapshot = (target: any, html: string | null = null) => target.evaluate((source: string | null) => {
+    const doc = source === null ? document : new DOMParser().parseFromString(source, 'text/html')
+    const selectors = {
+      title: 'title', canonical: 'link[rel="canonical"]', description: 'meta[name="description"]', robots: 'meta[name="robots"]',
+      ogUrl: 'meta[property="og:url"]', ogTitle: 'meta[property="og:title"]', ogDescription: 'meta[property="og:description"]',
+      ogType: 'meta[property="og:type"]', ogImage: 'meta[property="og:image"]',
+      twitterTitle: 'meta[name="twitter:title"]', twitterDescription: 'meta[name="twitter:description"]',
+      twitterUrl: 'meta[name="twitter:url"]', twitterCard: 'meta[name="twitter:card"]', twitterImage: 'meta[name="twitter:image"]',
+    }
+    return {
+      values: Object.fromEntries(Object.entries(selectors).map(([key, selector]) => [key, [...doc.head.querySelectorAll(selector)].map(tag =>
+        tag.tagName === 'TITLE' ? tag.textContent : tag.getAttribute(tag.tagName === 'LINK' ? 'href' : 'content'))])),
+      initialOwned: doc.head.querySelectorAll('[data-rh="true"]').length,
+      jobPosting: [...doc.querySelectorAll('script[type="application/ld+json"]')].filter(tag => /JobPosting/.test(tag.textContent || '')).length,
+    }
+  }, html)
+  const assertDetailHead = (snapshot: any, row: any, hydrated: boolean) => {
+    const expected = `https://cvitae.lat${canonicalOpportunityPathForRow(row)}`
+    const values = snapshot.values
+    assert.deepEqual(values.title, [`${row.title} | CVitae`])
+    assert.deepEqual(values.canonical, [expected], 'exactly one canonical, including after hydration')
+    assert.deepEqual(values.description, [publicDetailDescription(row.description || row.title)])
+    assert.deepEqual(values.ogUrl, [expected])
+    assert.deepEqual(values.ogTitle, values.title)
+    assert.deepEqual(values.ogDescription, values.description)
+    assert.deepEqual(values.ogType, ['article'])
+    assert.deepEqual(values.ogImage, ['https://cvitae.lat/og-image.jpg'])
+    const seo = seoRows.some(item => item.id === row.id)
+    assert.ok(values.robots.length <= 1, 'robots singleton; no index/noindex contradiction')
+    if (!seo) assert.deepEqual(values.robots, ['noindex,follow'])
+    else assert.ok(values.robots.every((value: string) => value === 'index,follow'))
+    for (const key of Object.keys(values).filter(key => key.startsWith('twitter'))) assert.deepEqual(values[key], [], 'Home Twitter metadata must not leak into detail')
+    if (hydrated) assert.equal(snapshot.initialOwned, 0, 'initial HEAD handed off after live HEAD commits')
+    else assert.ok(snapshot.initialOwned > 0, 'initial detail HEAD explicitly owned')
+  }
+  const assertMissingHead = (snapshot: any, hydrated: boolean) => {
+    assert.deepEqual(snapshot.values.title, ['P\u00e1gina no encontrada | CVitae'])
+    assert.deepEqual(snapshot.values.description, ['Esta oportunidad no est\u00e1 disponible.'])
+    assert.deepEqual(snapshot.values.robots, ['noindex,follow'])
+    assert.deepEqual(snapshot.values.canonical, [])
+    assert.deepEqual(snapshot.values.ogUrl, [])
+    assert.equal(snapshot.jobPosting, 0)
+    for (const [key, values] of Object.entries(snapshot.values)) assert.ok((values as any[]).length <= 1, `missing singleton: ${key}`)
+    if (hydrated) assert.equal(snapshot.initialOwned, 0)
+  }
+  const fatal: string[] = []
+  page.on('pageerror', error => fatal.push(error.message))
+  try {
+    for (const row of [a, b, future, other, scholarship, listed.get('paged-0104')]) {
+      const canonical = canonicalOpportunityPathForRow(row)
+      const initial = await fetch(`${origin}${canonical}/`)
+      assert.equal(initial.status, 200)
+      assertDetailHead(await headSnapshot(parser, await initial.text()), row, false)
+      const apiResponse = page.waitForResponse(response => response.url().includes('/.netlify/functions/public-opportunities?') && new URL(response.url()).searchParams.get('slug') === row.slug).catch(() => null)
+      const document = await page.goto(`${origin}${canonical}/`)
+      if (document!.status() !== 200) console.log(`DETAIL_ROUTE_FAILURE=${canonical} status=${document!.status()} function=${document!.headers()['x-local-detail-function']} query=${document!.headers()['x-local-detail-query']}`)
+      assert.equal(document!.status(), 200)
+      const hasStatic = fs.existsSync(path.join('dist', canonical, 'index.html'))
+      assert.equal(document!.headers()['x-local-detail-function'], hasStatic ? undefined : 'generated-redirect', 'static prerender wins; missing static uses generated rewrite to default endpoint')
+      if (!hasStatic) {
+        assert.equal(document!.headers()['x-local-original-path'], canonical + '/')
+        assert.equal(document!.headers()['x-local-detail-identity'], canonical.slice(1))
+        assert.equal(document!.headers()['x-local-detail-query'], '', 'rewrite does not inject query identity')
+        console.log(`ORIGINAL_PATH=${document!.headers()['x-local-original-path']} IDENTITY=${document!.headers()['x-local-detail-identity']}`)
+      }
+      assert.equal((await apiResponse)?.status(), 200)
+      await page.getByRole('heading', { name: row.title, exact: true }).waitFor()
+      // Wait for the live component, not the pre-hydration snapshot.
+      await page.getByText('Volver a empleos', { exact: true }).first().waitFor().catch(async () => {
+        await page.getByText('Volver a oportunidades', { exact: true }).first().waitFor()
+      })
+      assert.equal(await page.getByText(/ya no est[áa] activ[oa] o no existe/).count(), 0)
+      assertDetailHead(await headSnapshot(page), row, true)
+      for (const text of await page.locator('script[type="application/ld+json"]').allTextContents()) JSON.parse(text)
+      if (row.id === b.id) assert.match(await page.locator('meta[name="robots"]').last().getAttribute('content') || '', /noindex/)
+    }
+    for (const row of [b, listed.get('paged-0104')]) for (const slash of ['', '/']) {
+      const response = await fetch(`${origin}${canonicalOpportunityPathForRow(row)}${slash}`)
+      assert.equal(response.status, 200)
+      assert.equal(response.headers.get('x-local-detail-function'), 'generated-redirect')
+      const body = await response.text()
+      assert.equal(response.headers.get('x-local-original-path'), canonicalOpportunityPathForRow(row) + slash)
+      assert.ok(body.includes(row.title)); assert.match(body, /noindex,follow/)
+      assert.equal((body.match(/rel="canonical"/g) || []).length, 1)
+      assert.ok(body.includes(`https://cvitae.lat${canonicalOpportunityPathForRow(row)}`))
+      assert.doesNotMatch(body, /<title>CVitae \| Empleos, oportunidades/)
+    }
+    const endpoint = await fetch(`${origin}/.netlify/functions/public-opportunity-detail?${new URLSearchParams({ slug: b.slug, family: 'empleos' })}`)
+    assert.equal(endpoint.status, 200); assert.ok((await endpoint.text()).includes(b.title))
+    const directMissing = await fetch(`${origin}/.netlify/functions/public-opportunity-detail?family=empleos&slug=missing-local`)
+    assert.equal(directMissing.status, 404)
+    const spoofed = await fetch(`${origin}${canonicalOpportunityPathForRow(b)}?slug=missing&family=oportunidades`)
+    assert.equal(spoofed.status, 200); assert.ok((await spoofed.text()).includes(b.title))
+    assert.equal(spoofed.headers.get('x-local-detail-identity'), canonicalOpportunityPathForRow(b).slice(1))
+    const spoofApi = page.waitForResponse(response => response.url().includes('/.netlify/functions/public-opportunities?') && new URL(response.url()).searchParams.get('slug') === b.slug)
+    await page.goto(`${origin}${canonicalOpportunityPathForRow(b)}?slug=missing&family=oportunidades`)
+    assert.equal((await spoofApi).status(), 200)
+    await page.getByRole('heading', { name: b.title, exact: true }).waitFor()
+    await page.getByText('Volver a empleos', { exact: true }).first().waitFor()
+    assertDetailHead(await headSnapshot(page), b, true)
+    console.log('ORIGINAL_PATH_QUERY_SPOOF=PASS direct_valid=200 direct_missing=404 metadata_identity=PASS')
+    for (const slash of ['', '/']) {
+      const response = await fetch(`${origin}/empleos/__missing_final_route_test__${slash}`)
+      assert.equal(response.status, 404)
+      assert.equal(response.headers.get('x-local-detail-function'), 'generated-redirect')
+      const body = await response.text()
+      assertMissingHead(await headSnapshot(parser, body), false)
+      assert.match(body, /noindex,follow/); assert.doesNotMatch(body, /application\/ld\+json|JobPosting|Home snapshot|<title>CVitae \| Empleos, oportunidades|rel="canonical"|property="og:url"/)
+      assert.equal(response.headers.get('x-local-original-path'), `/empleos/__missing_final_route_test__${slash}`)
+    }
+    const validMissing = await fetch(`${origin}/empleos/missing-local-role/`)
+    assert.equal(validMissing.status, 404)
+    assert.equal(validMissing.headers.get('x-local-detail-identity'), 'empleos/missing-local-role')
+    assert.doesNotMatch(await validMissing.text(), /rel="canonical"|JobPosting/)
+    const missingApi = page.waitForResponse(response => response.url().includes('slug=__missing_final_route_test__'))
+    const missing = await page.goto(`${origin}/empleos/__missing_final_route_test__/`)
+    assert.equal(missing!.status(), 404); assert.equal((await missingApi).status(), 404)
+    await page.getByText('Este empleo ya no está activo o no existe.').waitFor()
+    assertMissingHead(await headSnapshot(page), true)
+    assert.equal(await page.locator('script[type="application/ld+json"]').count(), 0)
+    assert.equal(missing!.headers()['x-local-detail-function'], 'generated-redirect')
+    const siblingInitial = await fetch(`${origin}/oportunidades/__missing_head_sibling__/`)
+    assert.equal(siblingInitial.status, 404)
+    assertMissingHead(await headSnapshot(parser, await siblingInitial.text()), false)
+    const siblingApi = page.waitForResponse(response => response.url().includes('slug=__missing_head_sibling__'))
+    await page.goto(`${origin}/oportunidades/__missing_head_sibling__/`)
+    assert.equal((await siblingApi).status(), 404)
+    await page.getByText('Esta oportunidad ya no est\u00e1 activa o no existe.').waitFor()
+    assertMissingHead(await headSnapshot(page), true)
+    // Exercise actual deployed output/config, including unrelated route priority.
+    for (const route of ['/empleos/', '/dashboard', '/auth/callback']) {
+      const response = await fetch(origin + route)
+      assert.equal(response.status, 200, route)
+      assert.match(await response.text(), /<html/i)
+      assert.equal(response.headers.get('x-local-detail-function'), null)
+    }
+    const rootXml = await fetch(origin + '/sitemap.xml')
+    assert.equal(rootXml.status, 200); assert.match(await rootXml.text(), /<sitemapindex/)
+    const childXml = await fetch(origin + '/sitemap-static.xml')
+    assert.equal(childXml.status, 200); assert.match(await childXml.text(), /<urlset/)
+    const asset = read('dist/index.html').match(/src="(\/assets\/[^" ]+\.js)"/)![1]
+    const assetResponse = await fetch(origin + asset)
+    assert.equal(assetResponse.status, 200); assert.equal(assetResponse.headers.get('x-local-detail-function'), null)
+    // Negative control: the same prerendered 200 with the old Catalog-only 404
+    // destroys its content during hydration. This test detects the PROD defect.
+    reproduceOldFailure = true
+    const oldApi = page.waitForResponse(response => response.url().includes(`slug=${a.slug}`))
+    const oldDocument = await page.goto(`${origin}${canonicalOpportunityPathForRow(a)}/`)
+    assert.equal(oldDocument!.status(), 200); assert.equal((await oldApi).status(), 404)
+    await page.getByText('Este empleo ya no está activo o no existe.').waitFor()
+    assert.equal(await page.getByRole('heading', { name: a.title, exact: true }).count(), 0)
+    assertMissingHead(await headSnapshot(page), true)
+    assert.deepEqual(fatal, [], 'no fatal browser errors')
+    console.log('GENERATED_REDIRECT_ROUTING=PASS custom_path=ABSENT static_precedence=PASS catalog_first=PASS catalog_page_2=PASS no_slash=PASS trailing_slash=PASS original_path=PASS query_spoof=PASS default_endpoint=PASS missing_canonical=ABSENT missing_404=PASS missing_home_spa=FALSE list=PASS spa=PASS sitemap=PASS auth=PASS assets=PASS')
+    console.log('PUBLIC_DETAIL_HEAD_SINGLETONS=PASS seo_initial=PASS seo_hydrated=PASS catalog_initial=PASS catalog_hydrated=PASS page_2=PASS missing_both_families=PASS stale_static_missing=PASS query_spoof=PASS title=PASS canonical=PASS description=PASS robots=PASS og=PASS twitter_home_removed=PASS')
+    console.log('PRERENDER_HYDRATION=PASS canary_a=PASS canary_b=PASS future_source=PASS page_2=PASS missing_404=PASS old_contract_negative_control=REPRODUCED')
+  } finally {
+    await browser.close(); await stopDev(); await new Promise<void>(resolve => server.close(() => resolve()))
+  }
+}
+await db.close()

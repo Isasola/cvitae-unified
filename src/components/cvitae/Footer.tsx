@@ -13,6 +13,7 @@ export function Footer() {
         { label: 'Oportunidades', href: '/oportunidades' },
         { label: 'Analizador CV', href: '/#cv-analyzer' },
         { label: 'Blog', href: '/blog' },
+        { label: 'Contacto', href: '/contacto' },
       ],
     },
     {
@@ -30,7 +31,7 @@ export function Footer() {
         { label: 'Privacidad', href: '/privacy' },
         { label: 'Términos', href: '/terminos' },
         { label: 'Cookies', href: '/cookies' },
-        { label: 'Sobre nosotros', href: '/about' },
+        { label: 'Sobre nosotros', href: '/sobre-cvitae' },
       ],
     },
   ]
@@ -87,6 +88,10 @@ export function Footer() {
               className="text-white/60 hover:text-gold transition-colors">
               WhatsApp
             </a>
+            <span className="hidden md:block">•</span>
+            <button type="button" onClick={() => window.dispatchEvent(new Event('cvitae:open-cookie-settings'))} className="text-white/60 hover:text-gold transition-colors">
+              Preferencias de cookies
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

@@ -8,8 +8,8 @@ import {
   CheckCircle, AlertCircle, Mail,
 } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
-import { GrowthLine, CompatibilityTrace, Eyebrow } from '@/components/cv/visuals'
-import { supabase } from '@/lib/supabase'
+import { AmbientSignalLines, CompatibilityTrace, Eyebrow } from '@/components/cv/visuals'
+import { auth } from '@/lib/supabase'
 import { analytics } from '@/lib/analytics'
 
 const ease = [0.22, 1, 0.36, 1] as const
@@ -19,33 +19,55 @@ const ease = [0.22, 1, 0.36, 1] as const
 function Hero() {
   return (
     <section className="relative overflow-hidden">
-      <div className="mx-auto max-w-6xl px-6 pb-10 pt-16 sm:pb-16 sm:pt-24">
+      <AmbientSignalLines className="pointer-events-none absolute inset-y-0 left-[52%] right-0 hidden h-full w-[52%] opacity-75 lg:block" />
+      <div className="relative mx-auto max-w-6xl px-6 pb-10 pt-16 sm:pb-16 sm:pt-24">
         <Eyebrow>Gratis · Paraguay &amp; LATAM</Eyebrow>
         <h1 className="font-display mt-3 max-w-3xl text-4xl leading-[1.05] text-cream sm:text-6xl">
-          Analizá tu CV gratis.
-          <br />Después, encontrá el trabajo
-          <br />que te <em>corresponde</em>.
+          Tu carrera, con IA. <em>Sin inventar nada.</em>
         </h1>
         <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-          Subí tu CV y recibí en segundos un score ATS real, fortalezas y mejoras
-          concretas. Sin crear cuenta. Sin límites en el análisis.
+          CVitae analiza tu CV, encuentra oportunidades que encajan con tu perfil y te genera una versión adaptada para cada postulación — con tu experiencia real, sin frases vacías que no puedas defender.
         </p>
-        <div className="relative mt-10 max-w-2xl">
-          <GrowthLine className="absolute -top-6 left-0 right-0 h-20 opacity-50" />
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { icon: '📄', label: 'Diagnóstico ATS', desc: 'Qué tan legible es tu CV para los sistemas de filtro' },
+            { icon: '🔍', label: 'Oportunidades', desc: 'Empleos, becas y puestos en Paraguay y LATAM' },
+            { icon: '✦', label: 'CV Vivo', desc: 'CV adaptado a cada vacante, sin inventar experiencia' },
+            { icon: '⚡', label: 'Matching', desc: 'Qué tan bien encajás con cada oportunidad' },
+          ].map((item) => (
+            <div key={item.label} className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+              <span className="text-lg">{item.icon}</span>
+              <p className="mt-2 text-xs font-semibold text-cream">{item.label}</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-white/40">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+        <div className="relative mt-8 max-w-3xl border-y border-white/[0.12] py-5">
+          <div className="absolute left-[12.5%] right-[12.5%] top-1/2 hidden h-px -translate-y-1/2 bg-gold/20 sm:block" aria-hidden="true" />
+          <ol className="relative grid grid-cols-2 gap-4 sm:grid-cols-4" aria-label="Recorrido de CVitae">
+            {['Subís tu CV', 'Encontrás oportunidades', 'CVitae adapta', 'Postulás con confianza'].map((step, index) => (
+              <li key={step} className="flex items-center gap-3 text-[11px] uppercase tracking-[0.12em] text-cream">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-gold/70 bg-[#0a0a0a] text-gold shadow-[0_0_12px_rgba(201,168,76,0.4)]">
+                  <span className="font-display text-base font-bold leading-none">{index + 1}</span>
+                </span>
+                {step}
+              </li>
+            ))}
+          </ol>
         </div>
         <div className="mt-10 flex flex-wrap gap-3">
           <a
-            href="#analizador"
+            href="#registro"
             className="inline-flex h-11 items-center gap-2 rounded-full bg-[#c9a84c] px-6 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)]"
           >
-            <Upload className="h-4 w-4" /> Analizar mi CV gratis
+            <Upload className="h-4 w-4" /> Probalo gratis
           </a>
-          <a
-            href="#registro"
+          <Link
+            href="/empresas"
             className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 px-6 text-sm text-cream transition hover:border-white/25"
           >
-            Crear mi perfil <ArrowRight className="h-4 w-4" />
-          </a>
+            Para empresas <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
     </section>
@@ -75,7 +97,7 @@ function Analizador() {
   const loading = step === 'extracting' || step === 'analyzing'
 
   const handleFile = (f: File) => {
-    if (f.size > 10 * 1024 * 1024) { setErrorMsg('El archivo no puede superar 10 MB.'); return }
+    if (f.size > 4 * 1024 * 1024) { setErrorMsg('El archivo no puede superar 4 MB.'); return }
     setCv(f); setErrorMsg(''); setStep('idle'); setResult(null); setCtaSent(false)
   }
 
@@ -122,10 +144,8 @@ function Analizador() {
   const handleCtaSignup = async () => {
     if (!ctaEmail.trim()) return
     try {
-      await supabase.auth.signInWithOtp({
-        email: ctaEmail.trim(),
-        options: { shouldCreateUser: true, emailRedirectTo: 'https://cvitae.lat/auth/callback' },
-      })
+      const { error } = await auth.signInWithMagicLink(ctaEmail.trim())
+      if (error) throw error
       setCtaSent(true)
     } catch {}
   }
@@ -135,8 +155,8 @@ function Analizador() {
     : ''
 
   return (
-    <section id="analizador" className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
-      <Eyebrow>Analizador gratuito — sin límites</Eyebrow>
+    <section id="analizador" className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
+      <Eyebrow>Diagnóstico inicial gratuito</Eyebrow>
       <h2 className="font-display mt-2 max-w-2xl text-3xl text-cream sm:text-4xl">
         Tu score ATS <em>real</em>. En segundos.
       </h2>
@@ -185,7 +205,7 @@ function Analizador() {
               : <><Sparkles className="h-4 w-4" /> Analizar ahora</>}
           </button>
           <p className="text-center text-[11px] text-muted-foreground">
-            Sin cuenta. Sin guardar tu archivo. Análisis ilimitados.
+            Sin cuenta. Sin guardar tu archivo. El análisis inicial es gratis.
           </p>
         </div>
 
@@ -311,34 +331,14 @@ function Analizador() {
 
 function RegistroBlock() {
   const [email, setEmail] = useState('')
-  const [file, setFile] = useState<File | null>(null)
   const [step, setStep] = useState<'idle' | 'loading' | 'sent' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  const handleFile = (f: File) => {
-    if (f.size > 5 * 1024 * 1024) { setErrorMsg('El archivo no puede superar 5 MB.'); return }
-    setFile(f); setErrorMsg('')
-  }
-
   const handleSubmit = async () => {
-    if (!email.trim() || !file) return
+    if (!email.trim()) return
     setStep('loading'); setErrorMsg('')
     try {
-      const { error: authError } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: { shouldCreateUser: true, emailRedirectTo: 'https://cvitae.lat/auth/callback' },
-      })
+      const { error: authError } = await auth.signInWithMagicLink(email.trim())
       if (authError) throw authError
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const base64 = (e.target?.result as string)?.split(',')[1]
-        if (base64) {
-          sessionStorage.setItem('pending_cv', JSON.stringify({ name: file!.name, type: file!.type, base64 }))
-        }
-      }
-      reader.readAsDataURL(file)
-      analytics.cvAnalyzed('hero_onboarding')
       setStep('sent')
     } catch (err: any) {
       setErrorMsg(err.message || 'Ocurrió un error. Intentá de nuevo.')
@@ -359,7 +359,7 @@ function RegistroBlock() {
           <h2 className="font-display mt-6 text-2xl text-cream">¡Revisá tu correo!</h2>
           <p className="mt-3 text-sm text-muted-foreground">
             Te enviamos un enlace mágico a <strong className="text-white">{email}</strong>.
-            Tu CV queda guardado para cuando ingreses.
+            Abrí el enlace para ingresar. Después te llevamos a cargar tu CV de forma privada y persistente.
           </p>
         </motion.div>
       </section>
@@ -370,17 +370,16 @@ function RegistroBlock() {
     <section id="registro" className="mx-auto max-w-6xl px-6 py-16">
       <div className="relative overflow-hidden rounded-3xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.03] p-8 sm:p-12">
         <div className="absolute -inset-2 -z-10 bg-gradient-to-br from-[#c9a84c]/10 via-transparent to-transparent blur-3xl" />
-        <GrowthLine className="absolute -top-2 left-0 right-0 h-24 opacity-60" />
         <div className="relative grid items-center gap-10 lg:grid-cols-[1.2fr_1fr]">
           <div>
             <Eyebrow>Registro en un solo paso</Eyebrow>
             <h2 className="font-display mt-2 text-3xl leading-tight text-cream sm:text-4xl">
-              Subís tu CV y tu correo.
-              <br />La IA <em>arma tu perfil</em> al instante.
+              Entrás con tu correo.
+              <br />Después <em>cargás tu CV una sola vez</em>.
             </h2>
             <p className="mt-4 max-w-md text-muted-foreground">
-              Sin formularios de 5 pasos. La IA lee tu PDF, extrae nombre, título,
-              habilidades, experiencia y cursos, y deja tu perfil listo para recibir matches.
+              Primero protegemos tu sesión. Ya dentro de CVitae, subís tu PDF o DOCX: la IA extrae
+              nombre, título, habilidades, experiencia y estudios para que los revises antes de usarlos.
             </p>
             <ul className="mt-6 space-y-2 text-sm text-cream/90">
               {['Extracción automática del CV', 'Score de empleabilidad inicial', 'Primeros matches en menos de 1 minuto'].map((item) => (
@@ -391,28 +390,15 @@ function RegistroBlock() {
             </ul>
           </div>
           <div className="space-y-3">
-            <label
-              className="glass-card block cursor-pointer rounded-2xl p-6 text-center transition hover:border-[#c9a84c]/40"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
-            >
-              {file ? (
-                <>
-                  <FileText className="mx-auto h-6 w-6 text-[#c9a84c]" />
-                  <p className="font-display mt-3 truncate text-base text-cream">{file.name}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB · listo</p>
-                  <button onClick={(e) => { e.preventDefault(); setFile(null) }} className="mt-1 text-xs text-muted-foreground underline hover:text-cream">cambiar</button>
-                </>
-              ) : (
-                <>
-                  <Upload className="mx-auto h-6 w-6 text-[#c9a84c]" />
-                  <p className="font-display mt-3 text-lg text-cream">Arrastrá tu CV aquí</p>
-                  <p className="mt-1 text-xs text-muted-foreground">PDF · hasta 5 MB</p>
-                </>
-              )}
-              <input ref={fileRef} type="file" accept="application/pdf,.docx,.txt" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
-            </label>
+            <div className="glass-card rounded-2xl p-5">
+              <div className="flex items-start gap-3">
+                <Upload className="mt-0.5 h-5 w-5 shrink-0 text-[#c9a84c]" />
+                <div>
+                  <p className="font-display text-base text-cream">Tu CV se carga después de ingresar</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Así el archivo original queda asociado a tu cuenta y puede recuperarse en tu próxima sesión.</p>
+                </div>
+              </div>
+            </div>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -424,12 +410,12 @@ function RegistroBlock() {
             {errorMsg && <p className="text-xs text-red-400">{errorMsg}</p>}
             <button
               onClick={handleSubmit}
-              disabled={!email.trim() || !file || step === 'loading'}
+              disabled={!email.trim() || step === 'loading'}
               className="inline-flex w-full h-11 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
             >
               {step === 'loading'
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</>
-                : <>Crear mi perfil con IA <ArrowRight className="h-4 w-4" /></>}
+                : <>Ingresar y crear mi perfil <ArrowRight className="h-4 w-4" /></>}
             </button>
             <p className="text-center text-[11px] text-muted-foreground">Sin contraseña. Te enviamos un enlace mágico.</p>
           </div>
@@ -455,21 +441,32 @@ function ComoFunciona() {
         Cuatro pasos. <em>Cero ruido.</em>
       </h2>
       <div className="relative mt-12">
-        <GrowthLine className="absolute -top-6 left-0 right-0 hidden h-16 opacity-40 md:block" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map((s, i) => (
             <motion.div
               key={s.n}
-              initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: i * 0.07, ease }}
-              className="glass-panel p-6"
+              className="glass-panel relative overflow-hidden p-6"
             >
-              <span className="font-display italic text-[#c9a84c]">{s.n}</span>
+              {/* Número decorativo de fondo */}
+              <span className="font-display pointer-events-none absolute right-4 top-2 select-none text-8xl font-bold text-[#c9a84c]/15" aria-hidden="true">{s.n}</span>
+              {/* Número legible */}
+              <span className="font-mono text-xs font-bold uppercase tracking-widest text-[#c9a84c]">{s.n}</span>
               <h3 className="font-display mt-2 text-xl text-cream">{s.t}</h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.d}</p>
             </motion.div>
           ))}
         </div>
+      </div>
+      <div className="mt-12 text-center">
+        <a
+          href="#registro"
+          className="inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-7 py-3.5 text-sm font-semibold text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)]"
+        >
+          Adaptá tu primer CV gratis <ArrowRight className="h-4 w-4" />
+        </a>
       </div>
     </section>
   )
@@ -484,7 +481,7 @@ function IATech() {
     { Icon: FileText, t: 'Optimización dinámica del perfil', d: 'Tu CV se adapta a cada vacante para pasar filtros ATS sin perder tu voz.' },
   ]
   return (
-    <section className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
+    <section className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
       <Eyebrow>IA que entiende tu carrera</Eyebrow>
       <h2 className="font-display mt-2 max-w-2xl text-3xl text-cream sm:text-4xl">
         No es <em>palabra clave</em>. Es contexto.
@@ -497,7 +494,7 @@ function IATech() {
         {items.map(({ Icon, t, d }, i) => (
           <motion.div
             key={t}
-            initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+            initial={false}
             transition={{ duration: 0.6, delay: i * 0.08, ease }}
             className="editorial-panel p-6"
           >
@@ -506,6 +503,14 @@ function IATech() {
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{d}</p>
           </motion.div>
         ))}
+      </div>
+      <div className="mt-10">
+        <a
+          href="#analizador"
+          className="inline-flex items-center gap-2 rounded-full border border-[#c9a84c]/40 px-7 py-3.5 text-sm font-medium text-[#c9a84c] transition hover:border-[#c9a84c] hover:bg-[#c9a84c]/10"
+        >
+          Analizar mi CV ahora <ArrowRight className="h-4 w-4" />
+        </a>
       </div>
     </section>
   )
@@ -521,13 +526,13 @@ const STATS = [
 
 function StatsBar() {
   return (
-    <section className="border-y border-white/8 bg-white/[0.015] py-8">
+    <section className="border-y border-white/[0.12] bg-white/[0.015] py-8">
       <div className="mx-auto max-w-6xl px-6">
-        <div className="grid grid-cols-3 divide-x divide-white/8">
+        <div className="grid grid-cols-3 divide-x divide-white/[0.12]">
           {STATS.map(({ value, label }, i) => (
             <motion.div
               key={value}
-              initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+              initial={false}
               transition={{ duration: 0.5, delay: i * 0.08, ease }}
               className="flex flex-col items-center px-4 text-center"
             >
@@ -546,39 +551,42 @@ function StatsBar() {
 function Pricing() {
   const tiers = [
     {
-      name: 'Free', price: 'Gs. 0', per: 'para siempre',
+      name: 'Founding Beta · 50 cupos', price: 'Gs. 0', per: '12 meses tras aprobación',
       features: [
-        'Analizador de CV ilimitado',
-        '3 matches por día',
-        '1 CV Vivo adaptado por día',
-        '1 alerta semanal',
-        'Volvé mañana para tus próximos matches',
+        'Analizador de CV con uso generoso',
+        'Matching diario de oportunidades',
+        'CV Vivo adaptado a vacantes',
+        'Alertas y recomendaciones personalizadas',
+        'Acceso anticipado a nuevas funciones',
       ],
-      cta: 'Empezar gratis', featured: false,
+      cta: 'Solicitar acceso Founding Beta', featured: true,
     },
     {
-      name: 'Pro', price: 'USD 9', per: '/ mes',
+      name: 'Después de la beta', price: 'A definir', per: 'según uso y capacidad',
       features: [
-        'Matches ilimitados',
-        'CV Vivo ilimitado para cada vacante',
+        'Límites transparentes según capacidad',
+        'Más adaptaciones de CV según el plan',
         'Análisis de vacante con IA',
         'Alertas diarias personalizadas',
         'Recomendación de cursos',
       ],
-      cta: 'Probar Pro', featured: true,
+      cta: 'Conocer el futuro plan', featured: false,
     },
   ]
   return (
-    <section className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
+    <section className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
       <Eyebrow>Para candidatos</Eyebrow>
       <h2 className="font-display mt-2 text-3xl text-cream sm:text-4xl">
-        Empezá <em>gratis</em>. Subí cuando lo necesites.
+        Empezá con un análisis de CV <em>gratuito</em>.
       </h2>
+      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        El análisis inicial no requiere cuenta ni tarjeta. Founding Beta es un beneficio limitado para 50 personas: se solicita desde Mi Carrera y se activa sólo después de aprobación. Si la demanda afecta la disponibilidad o el costo del servicio, podremos ajustar temporalmente algunos límites y lo comunicaremos con anticipación.
+      </p>
       <div className="mt-10 grid max-w-3xl gap-4 md:grid-cols-2">
         {tiers.map((t, i) => (
           <motion.div
             key={t.name}
-            initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+            initial={false}
             transition={{ duration: 0.6, delay: i * 0.08, ease }}
             className={t.featured ? 'rounded-3xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.04] p-8' : 'glass-panel rounded-3xl p-8'}
           >
@@ -621,24 +629,23 @@ function Pricing() {
 
 function ParaEmpresas() {
   return (
-    <section className="mx-auto max-w-6xl border-t border-white/8 px-6 py-20">
+    <section className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
       <div className="grid gap-10 lg:grid-cols-[1.1fr_1fr]">
         <div>
           <Eyebrow>Para empresas</Eyebrow>
           <h2 className="font-display mt-2 max-w-xl text-3xl text-cream sm:text-4xl">
-            Subí un <em>lote de CVs</em>. Recibí el Top 3 listo para entrevistar.
+            Publicá vacantes y encontrá <em>candidatos que encajan</em>.
           </h2>
           <p className="mt-4 max-w-lg text-muted-foreground">
-            La IA lee, clasifica con criterio ATS, compara entre sí y te entrega
-            un ranking con justificación. Cero horas filtrando PDFs.
+            CVitae tiene dos lados. Para candidatos: CV, diagnóstico y matching. Para empresas: publicación de vacantes, análisis masivo de CVs y ranking explicable de candidatos. Todo en un solo lugar.
           </p>
           <ul className="mt-6 space-y-2 text-sm text-cream/90">
             {[
-              'Análisis masivo de CVs',
-              'Ranking comparativo con score y matches clave',
+              'Publicá tu vacante con un link de postulación propio',
+              'Análisis masivo de CVs recibidos',
+              'Ranking comparativo con score y justificación',
               'Pipeline de candidatos visual',
               'Exportación CSV del banco de talento',
-              'Link de postulación propio para tu empresa',
             ].map((f) => (
               <li key={f} className="flex items-start gap-2">
                 <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#c9a84c]" /> {f}
@@ -666,7 +673,7 @@ function ParaEmpresas() {
               <Users className="h-4 w-4" /> Acceder al portal de empresas
             </Link>
             <Link
-              href="/empresas"
+              href="/demo"
               className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full border border-white/10 text-sm text-cream transition hover:border-white/25"
             >
               Ver demo del panel <ChevronRight className="h-4 w-4" />
@@ -685,21 +692,21 @@ export default function LandingPage() {
   return (
     <>
       <Helmet>
-        <title>CVitae — Analizá tu CV gratis con IA | Paraguay &amp; LATAM</title>
-        <meta name="description" content="Analizá tu CV gratis con IA y conocé tu score ATS real. El primer agente de carrera para Paraguay y Latinoamérica: matching automático con +4500 oportunidades, CV Vivo adaptado y alertas proactivas." />
+        <title>CVitae | Empleos, oportunidades y CV en Paraguay y LATAM</title>
+        <meta name="description" content="Encontrá empleos, becas y otras oportunidades en Paraguay y LATAM. CVitae las compara con tu experiencia y te ayuda a adaptar tu CV sin inventar experiencia." />
         <link rel="canonical" href="https://cvitae.lat" />
-        <meta property="og:title" content="CVitae — Analizá tu CV gratis con IA" />
-        <meta property="og:description" content="Score ATS real en segundos, sin crear cuenta. Después encontrá el trabajo que te corresponde: matching con +4500 oportunidades en Paraguay y Latinoamérica." />
+        <meta property="og:title" content="CVitae | Empleos, oportunidades y CV en Paraguay y LATAM" />
+        <meta property="og:description" content="Encontrá oportunidades, comparalas con tu experiencia y adaptá tu CV sin inventar experiencia." />
         <meta property="og:url" content="https://cvitae.lat" />
         <meta property="og:type" content="website" />
       </Helmet>
       <SiteShell>
         <Hero />
-        <RegistroBlock />
+        <Analizador />
         <ComoFunciona />
+        <RegistroBlock />
         <IATech />
         <StatsBar />
-        <Analizador />
         <Pricing />
         <ParaEmpresas />
       </SiteShell>

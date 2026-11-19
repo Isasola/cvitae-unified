@@ -1,3 +1,4 @@
+import { Helmet } from 'react-helmet-async'
 import { motion } from 'framer-motion'
 import { Navbar } from '@/components/cvitae/Navbar'
 import { Footer } from '@/components/cvitae/Footer'
@@ -8,6 +9,11 @@ import { Link } from 'wouter'
 export default function Terms() {
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>Términos de Uso | CVitae</title>
+        <meta name="description" content="Leé los términos y condiciones de uso de CVitae: qué podés hacer con la plataforma, privacidad de tus datos, propiedad intelectual y condiciones de servicio." />
+        <link rel="canonical" href="https://cvitae.lat/terminos" />
+      </Helmet>
       <Navbar />
       <div className="pt-32 pb-20 px-4 max-w-4xl mx-auto">
         <div className="mb-8">
@@ -71,7 +77,7 @@ export default function Terms() {
                   <h2 className="text-xl font-bold m-0">5. Suscripciones y Pagos</h2>
                 </div>
                 <p>
-                  CVitae ofrece un modelo gratuito y planes "Pro". Las suscripciones pagas permiten acceso ilimitado a matches, alertas proactivas y análisis avanzado. 
+                  CVitae puede ofrecer etapas gratuitas, betas con cupos y futuros planes pagos. Los límites, precios y funciones vigentes se informarán antes de cualquier contratación.
                   Los pagos se procesan de forma segura y pueden cancelarse en cualquier momento desde tu perfil.
                 </p>
               </section>

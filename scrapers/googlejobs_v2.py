@@ -20,7 +20,7 @@ SEARCH_URL = "https://www.google.com/search?q=trabajos+paraguay&udm=8&hl=es"
 
 def insert_job(title, url, company, location):
     payload = {
-        "titulo": title,
+        "title": title,
         "organization": company,
         "location": location or "Paraguay",
         "rubro": "General",

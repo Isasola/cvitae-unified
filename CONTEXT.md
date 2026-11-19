@@ -1,6 +1,8 @@
 # Contexto completo del proyecto CVitae
 
-> Última actualización: 2026-06-25 · Rama activa: `feature/aws-migration`
+> Última actualización: 2026-08-14 · Rama activa: `feature/aws-migration`
+
+> Estado post-deploy: consultar `docs/POST-DEPLOY-HANDOFF-2026-08-14.md`. El QA P13-P19 fue completado y desplegado. Produccion tiene 133 oportunidades verificadas y 556 en revision inactivas; la activacion editorial, variables privadas, smoke test y migracion de scrapers legacy siguen pendientes.
 
 ---
 

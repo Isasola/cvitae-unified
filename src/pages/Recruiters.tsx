@@ -2,6 +2,10 @@ import { useState, useRef, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link } from 'wouter'
 import { motion, AnimatePresence } from 'framer-motion'
+import { ProductGuide } from '@/components/cv/ProductGuide'
+import { B2BInfoPopover } from '@/components/cv/B2BInfoPopover'
+import { clearPendingOperation, pendingOperationId } from '@/lib/pendingOperation'
+import { FeedbackReporter } from '@/components/cv/FeedbackReporter'
 import {
   Building2, Key, AlertCircle, ChevronRight,
   Coins, LogOut, Loader2, History, Sparkles,
@@ -9,7 +13,7 @@ import {
   Star, Brain, Users, Trophy, ArrowLeft, Share2, Database,
   FileText, Upload, RotateCcw, X, Link2, Plus, Copy, Check as CheckIcon,
   UserCheck, Mail, Calendar, ChevronLeft, Download, Search,
-  BarChart2, TrendingUp, List, Trello, GripVertical,
+  BarChart2, TrendingUp,
 } from 'lucide-react'
 
 const ease = [0.22, 1, 0.36, 1] as const
@@ -98,7 +102,13 @@ function Ambient() {
 
 // ─── Panel header (when authenticated) ───────────────────────────────────────
 
-function PanelHeader({ session, balance, onLogout }: { session: RecruiterSession; balance: number; onLogout: () => void }) {
+function PanelHeader({ session, balance, onLogout, onRequestCredits, creditRequestSent }: {
+  session: RecruiterSession
+  balance: number
+  onLogout: () => void
+  onRequestCredits?: () => void
+  creditRequestSent?: boolean
+}) {
   return (
     <header className="border-b border-white/5 px-6 py-5">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-6">
@@ -112,11 +122,33 @@ function PanelHeader({ session, balance, onLogout }: { session: RecruiterSession
             </div>
             <span className="font-light">{session.company_name}</span>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] px-3.5 py-1.5">
-            <Coins strokeWidth={1.5} className="h-4 w-4 text-[#c9a84c]" />
-            <span className="text-xs font-medium tracking-wide text-white/80">
-              <span className="text-[#c9a84c]">{balance}</span> créditos
-            </span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-full border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] px-3.5 py-1.5">
+              <Coins strokeWidth={1.5} className="h-4 w-4 text-[#c9a84c]" />
+              <span className="text-xs font-medium tracking-wide text-white/80">
+                <span className={balance <= 3 ? 'text-amber-400' : 'text-[#c9a84c]'}>{balance}</span> créditos
+              </span>
+            </div>
+            {onRequestCredits && (
+              creditRequestSent ? (
+                <span className="text-[11px] text-emerald-400/80 flex items-center gap-1">
+                  <CheckCircle2 strokeWidth={1.5} className="h-3.5 w-3.5" /> Solicitud enviada
+                </span>
+              ) : (
+                <button
+                  onClick={onRequestCredits}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/20 px-3 py-1.5 text-[11px] text-[#c9a84c]/70 transition hover:border-[#c9a84c]/50 hover:text-[#c9a84c]"
+                >
+                  + Solicitar créditos
+                </button>
+              )
+            )}
+            <B2BInfoPopover
+              label="Cómo funcionan los créditos"
+              title="Créditos y control humano"
+              description="Cada análisis de CV con IA consume un crédito. La IA ordena y explica evidencia; no contrata, rechaza ni contacta a nadie por su cuenta."
+              points={['Las postulaciones recibidas no consumen créditos.', 'Los reanálisis se cobran nuevamente y siempre son explícitos.', 'Si un análisis falla, el crédito se devuelve cuando es posible.']}
+            />
           </div>
           <button
             onClick={onLogout}
@@ -237,6 +269,7 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
 }) {
   const [history, setHistory] = useState<AnalysisRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [search, setSearch] = useState('')
@@ -245,13 +278,17 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
   useEffect(() => { loadHistory() }, [])
 
   const loadHistory = async () => {
+    setLoading(true)
+    setLoadError('')
     try {
       const res = await fetch('/.netlify/functions/validate-recruiter-token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, action: 'get_history' }),
       })
-      setHistory((await res.json()).history || [])
-    } catch { /* silencioso */ }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'No pudimos cargar el historial')
+      setHistory(data.history || [])
+    } catch (error: any) { setLoadError(error?.message || 'No pudimos cargar el historial') }
     finally { setLoading(false) }
   }
 
@@ -294,6 +331,14 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
   if (loading) return (
     <div className="flex justify-center py-20">
       <Loader2 className="animate-spin text-[#c9a84c]" />
+    </div>
+  )
+
+  if (loadError) return (
+    <div className="glass-card rounded-3xl py-16 text-center" role="alert">
+      <AlertCircle strokeWidth={1.25} className="mx-auto mb-4 h-9 w-9 text-amber-300" />
+      <p className="text-sm text-white/65">{loadError}</p>
+      <button type="button" onClick={loadHistory} className="mt-4 rounded-full border border-white/15 px-4 py-2 text-xs text-white/65 transition hover:border-white/30 hover:text-white">Reintentar</button>
     </div>
   )
 
@@ -492,6 +537,9 @@ interface Applicant {
   name: string
   email: string
   cv_file_name: string | null
+  cv_download_url: string | null
+  cv_reupload_required: boolean
+  cv_parse_status: 'parsed' | 'manual_review' | 'missing'
   cv_text: string | null
   cover_letter: string | null
   ats_score: number | null
@@ -506,6 +554,23 @@ interface Applicant {
   recruiter_notes: string | null
   badges: string[]
   applied_at: string
+  review_status: 'pending' | 'processing' | 'analyzed' | 'manual_review' | 'failed'
+  review_batch_number: number | null
+  batch_selected: boolean
+  progressive_shortlist: boolean
+  progressive_rank: number | null
+  triage_tier: 'strong' | 'priority' | 'reviewed' | null
+  selection_reason: string | null
+}
+
+interface VacancyReviewState {
+  total: number
+  analyzed: number
+  pending: number
+  manual_review: number
+  strong: number
+  shortlist: number
+  batches_completed: number
 }
 
 interface AISummary {
@@ -519,7 +584,11 @@ interface AISummary {
 function recColor(r: string | null) {
   if (r === 'Llamar') return 'text-emerald-400 border-emerald-500/30 bg-emerald-500/[0.06]'
   if (r === 'Considerar') return 'text-[#c9a84c] border-[#c9a84c]/30 bg-[#c9a84c]/[0.06]'
-  return 'text-red-400 border-red-500/30 bg-red-500/[0.06]'
+  return 'text-sky-300 border-sky-500/25 bg-sky-500/[0.05]'
+}
+
+function recommendationLabel(recommendation: string | null) {
+  return recommendation === 'No llamar' ? 'Revisado' : recommendation
 }
 function fitColor(s: number) {
   if (s >= 75) return 'oklch(0.75 0.18 145)'
@@ -543,416 +612,11 @@ const ACTION_LABELS: Record<string, string> = {
   rejected: 'Descartado',
 }
 
-const PIPELINE_STAGES = ['pending', 'contacted', 'interviewing', 'hired', 'rejected'] as const
-
-function CalendarScheduler({ applicant, onClose }: { applicant: Applicant; onClose: () => void }) {
-  const [date, setDate] = useState('')
-  const [time, setTime] = useState('10:00')
-  const [duration, setDuration] = useState('60')
-  const [notes, setNotes] = useState('')
-
-  const generateCalendarLink = (provider: 'google' | 'outlook') => {
-    if (!date) {
-      alert('Seleccioná una fecha para la entrevista')
-      return
-    }
-
-    const startDateTime = new Date(`${date}T${time}:00`)
-    const endDateTime = new Date(startDateTime.getTime() + parseInt(duration) * 60000)
-
-    const title = `Entrevista: ${applicant.name}`
-    const description = `Entrevista con ${applicant.name} (${applicant.email})${notes ? `\n\nNotas:\n${notes}` : ''}`
-
-    if (provider === 'google') {
-      const startStr = startDateTime.toISOString().replace(/-|:|\.\d+/g, '')
-      const endStr = endDateTime.toISOString().replace(/-|:|\.\d+/g, '')
-      const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startStr}/${endStr}&details=${encodeURIComponent(description)}&add=${encodeURIComponent(applicant.email)}`
-      window.open(url, '_blank')
-    } else {
-      const startStr = startDateTime.toISOString()
-      const endStr = endDateTime.toISOString()
-      const url = `https://outlook.live.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(title)}&startdt=${startStr}&enddt=${endStr}&body=${encodeURIComponent(description)}&to=${encodeURIComponent(applicant.email)}`
-      window.open(url, '_blank')
-    }
-
-    onClose()
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.2 }}
-        className="glass-card rounded-3xl p-7 w-full max-w-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-lg font-display text-white">Agendar entrevista</h3>
-            <p className="text-sm text-white/50 mt-1">{applicant.name}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="h-8 w-8 flex items-center justify-center rounded-full border border-white/10 text-white/40 hover:border-white/25 hover:text-white/70 transition-colors"
-          >
-            <X strokeWidth={1.5} className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Fecha</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none focus:ring-2 focus:ring-[#c9a84c]/20"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Hora</label>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none focus:ring-2 focus:ring-[#c9a84c]/20"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Duración</label>
-            <select
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white focus:border-[#c9a84c]/50 focus:outline-none focus:ring-2 focus:ring-[#c9a84c]/20"
-            >
-              <option value="30">30 minutos</option>
-              <option value="60">1 hora</option>
-              <option value="90">1.5 horas</option>
-              <option value="120">2 horas</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Notas (opcional)</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              placeholder="Temas a tratar, enlaces de reunión virtual, etc."
-              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none focus:ring-2 focus:ring-[#c9a84c]/20"
-            />
-          </div>
-        </div>
-
-        <div className="mt-6 flex items-center gap-3">
-          <button
-            onClick={() => generateCalendarLink('google')}
-            className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/15"
-          >
-            <Calendar strokeWidth={1.5} className="h-4 w-4" />
-            Google Calendar
-          </button>
-          <button
-            onClick={() => generateCalendarLink('outlook')}
-            className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/15"
-          >
-            <Calendar strokeWidth={1.5} className="h-4 w-4" />
-            Outlook
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
-  )
-}
-
-function PipelineBoard({ applicants, onMoveCandidate, onExpandCard, expandedId, updatingAction, onAnalyzeSingle, onScheduleApplicant, commentingOn, setCommentingOn, newComment, setNewComment, savingComment, handleSaveComment }: {
-  applicants: Applicant[]
-  onMoveCandidate: (appId: string, newStatus: string) => void
-  onExpandCard: (id: string) => void
-  expandedId: string | null
-  updatingAction: string | null
-  onAnalyzeSingle: (cvText: string, name: string) => void
-  onScheduleApplicant: (applicant: Applicant) => void
-  commentingOn: string | null
-  setCommentingOn: (id: string | null) => void
-  newComment: string
-  setNewComment: (text: string) => void
-  savingComment: boolean
-  handleSaveComment: (appId: string) => void
-}) {
-  const [draggedId, setDraggedId] = useState<string | null>(null)
-  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
-
-  const groupedApplicants = PIPELINE_STAGES.reduce((acc, stage) => {
-    acc[stage] = applicants.filter(a => (a.recruiter_action || 'pending') === stage)
-    return acc
-  }, {} as Record<string, Applicant[]>)
-
-  const handleDragStart = (e: React.DragEvent, id: string) => {
-    setDraggedId(id)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-
-  const handleDragEnd = () => {
-    setDraggedId(null)
-    setDragOverColumn(null)
-  }
-
-  const handleDragOver = (e: React.DragEvent, stage: string) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    setDragOverColumn(stage)
-  }
-
-  const handleDragLeave = () => {
-    setDragOverColumn(null)
-  }
-
-  const handleDrop = (e: React.DragEvent, stage: string) => {
-    e.preventDefault()
-    if (draggedId) {
-      onMoveCandidate(draggedId, stage)
-    }
-    setDraggedId(null)
-    setDragOverColumn(null)
-  }
-
-  const stageColors: Record<string, { bg: string; border: string; text: string; count: string }> = {
-    pending: { bg: 'bg-white/[0.02]', border: 'border-white/10', text: 'text-white/40', count: 'text-white/60' },
-    contacted: { bg: 'bg-sky-500/[0.03]', border: 'border-sky-500/20', text: 'text-sky-400/60', count: 'text-sky-400' },
-    interviewing: { bg: 'bg-[#c9a84c]/[0.03]', border: 'border-[#c9a84c]/20', text: 'text-[#c9a84c]/60', count: 'text-[#c9a84c]' },
-    hired: { bg: 'bg-emerald-500/[0.03]', border: 'border-emerald-500/20', text: 'text-emerald-400/60', count: 'text-emerald-400' },
-    rejected: { bg: 'bg-red-500/[0.03]', border: 'border-red-500/20', text: 'text-red-400/60', count: 'text-red-400' },
-  }
-
-  return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
-      {PIPELINE_STAGES.map(stage => {
-        const colors = stageColors[stage]
-        const count = groupedApplicants[stage].length
-        const isOver = dragOverColumn === stage
-
-        return (
-          <div
-            key={stage}
-            className="flex-shrink-0 w-80"
-            onDragOver={(e) => handleDragOver(e, stage)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, stage)}
-          >
-            {/* Column header */}
-            <div className={`rounded-xl border ${colors.border} ${colors.bg} px-4 py-3 mb-3`}>
-              <div className="flex items-center justify-between">
-                <p className={`text-xs uppercase tracking-[0.15em] font-medium ${colors.text}`}>
-                  {PIPELINE_LABELS[stage as keyof typeof PIPELINE_LABELS]}
-                </p>
-                <span className={`font-display text-lg ${colors.count}`}>{count}</span>
-              </div>
-            </div>
-
-            {/* Drop zone */}
-            <div
-              className={`min-h-[500px] rounded-xl border-2 border-dashed p-2 space-y-2 transition-colors ${
-                isOver
-                  ? `${colors.border} ${colors.bg}`
-                  : 'border-white/5 bg-transparent'
-              }`}
-            >
-              {groupedApplicants[stage].map(applicant => (
-                <motion.div
-                  key={applicant.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e as any, applicant.id)}
-                  onDragEnd={handleDragEnd}
-                  layout
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: draggedId === applicant.id ? 0.5 : 1, scale: 1 }}
-                  transition={{ duration: 0.2 }}
-                  className={`rounded-xl border border-white/10 bg-white/[0.02] p-3 cursor-move hover:border-white/20 transition-all ${
-                    updatingAction === applicant.id ? 'opacity-50' : ''
-                  }`}
-                >
-                  {/* Card content */}
-                  <div className="flex items-start gap-2 mb-2">
-                    <GripVertical strokeWidth={1.5} className="h-4 w-4 text-white/20 shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white font-medium truncate">{applicant.name}</p>
-                      <p className="text-[11px] text-white/35 truncate">{applicant.email}</p>
-                    </div>
-                  </div>
-
-                  {applicant.fit_score !== null && (
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{
-                            width: `${applicant.fit_score}%`,
-                            backgroundColor: fitColor(applicant.fit_score),
-                          }}
-                        />
-                      </div>
-                      <span className="text-xs font-display tabular-nums" style={{ color: fitColor(applicant.fit_score) }}>
-                        {applicant.fit_score}
-                      </span>
-                    </div>
-                  )}
-
-                  {applicant.recommendation && (
-                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] ${recColor(applicant.recommendation)}`}>
-                      {applicant.recommendation}
-                    </span>
-                  )}
-
-                  {applicant.ai_summary && (
-                    <p className="mt-2 text-[10px] font-light text-white/40 leading-relaxed line-clamp-2">
-                      {applicant.ai_summary}
-                    </p>
-                  )}
-
-                  {/* Expandable details */}
-                  <button
-                    onClick={() => onExpandCard(applicant.id)}
-                    className="w-full mt-2 flex items-center justify-center gap-1 text-[10px] text-white/30 hover:text-white/50 transition-colors"
-                  >
-                    {expandedId === applicant.id ? (
-                      <><ChevronUp strokeWidth={1.5} className="h-3 w-3" /> Ocultar</>
-                    ) : (
-                      <><ChevronDown strokeWidth={1.5} className="h-3 w-3" /> Ver más</>
-                    )}
-                  </button>
-
-                  <AnimatePresence>
-                    {expandedId === applicant.id && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="mt-3 pt-3 border-t border-white/5 space-y-2"
-                      >
-                        {applicant.strengths?.length > 0 && (
-                          <div>
-                            <p className="text-[9px] uppercase tracking-[0.15em] text-emerald-400/60 mb-1">Fortalezas</p>
-                            <ul className="space-y-0.5">
-                              {applicant.strengths.map((s, i) => (
-                                <li key={i} className="flex items-start gap-1.5 text-[10px] text-white/50">
-                                  <CheckCircle2 strokeWidth={1.5} className="h-3 w-3 text-emerald-400/60 shrink-0 mt-0.5" />
-                                  <span>{s}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {applicant.key_gaps?.length > 0 && (
-                          <div>
-                            <p className="text-[9px] uppercase tracking-[0.15em] text-red-400/60 mb-1">Brechas</p>
-                            <ul className="space-y-0.5">
-                              {applicant.key_gaps.map((g, i) => (
-                                <li key={i} className="flex items-start gap-1.5 text-[10px] text-white/50">
-                                  <XCircle strokeWidth={1.5} className="h-3 w-3 text-red-400/60 shrink-0 mt-0.5" />
-                                  <span>{g}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {/* Notas compactas */}
-                        {applicant.recruiter_notes && commentingOn !== applicant.id && (
-                          <div className="text-[9px] text-white/40 bg-white/[0.01] border border-white/5 rounded px-2 py-1.5">
-                            <span className="font-medium">Notas:</span> {applicant.recruiter_notes.split('\n\n').length} comentario(s)
-                          </div>
-                        )}
-
-                        {commentingOn === applicant.id && (
-                          <div className="space-y-1.5">
-                            <textarea
-                              value={newComment}
-                              onChange={(e) => setNewComment(e.target.value)}
-                              placeholder="Nota..."
-                              rows={2}
-                              className="w-full rounded border border-white/10 bg-white/[0.02] px-2 py-1.5 text-[10px] text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none"
-                            />
-                            <div className="flex gap-1.5">
-                              <button
-                                onClick={() => handleSaveComment(applicant.id)}
-                                disabled={savingComment || !newComment.trim()}
-                                className="flex-1 text-[9px] bg-[#c9a84c] text-[#0a0a0a] px-2 py-1 rounded uppercase tracking-wider disabled:opacity-50"
-                              >
-                                {savingComment ? 'Guardando...' : 'Guardar'}
-                              </button>
-                              <button
-                                onClick={() => { setCommentingOn(null); setNewComment('') }}
-                                className="text-[9px] text-white/40 px-2"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="space-y-1.5">
-                          <button
-                            onClick={() => setCommentingOn(commentingOn === applicant.id ? null : applicant.id)}
-                            className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] px-2 py-1.5 text-[9px] uppercase tracking-[0.12em] text-white/60 transition hover:border-white/25"
-                          >
-                            <FileText strokeWidth={1.5} className="h-3 w-3" /> {commentingOn === applicant.id ? 'Cerrar' : 'Notas'}
-                          </button>
-
-                          <div className="grid grid-cols-2 gap-1.5">
-                            <button
-                              onClick={() => onScheduleApplicant(applicant)}
-                              className="inline-flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.02] px-2 py-1.5 text-[9px] uppercase tracking-[0.12em] text-white/70 transition hover:border-white/25"
-                            >
-                              <Calendar strokeWidth={1.5} className="h-3 w-3" /> Agendar
-                            </button>
-                            {applicant.cv_text && (
-                              <button
-                                onClick={() => onAnalyzeSingle(applicant.cv_text!, applicant.name)}
-                                className="inline-flex items-center justify-center gap-1 rounded-lg border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-2 py-1.5 text-[9px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
-                              >
-                                <Brain strokeWidth={1.5} className="h-3 w-3" /> Analizar
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              ))}
-
-              {count === 0 && !isOver && (
-                <div className="flex items-center justify-center h-32 text-white/15 text-xs">
-                  Sin candidatos
-                </div>
-              )}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSingle }: {
+function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, onAnalyzeSingle }: {
   token: string
   vacancyId: string
   vacancyTitle: string
+  vacancySlug?: string
   onBack: () => void
   onAnalyzeSingle: (cvText: string, name: string) => void
 }) {
@@ -962,83 +626,79 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
   const [rankProgress, setRankProgress] = useState('')
   const [aiSummary, setAiSummary] = useState<AISummary | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [filter, setFilter] = useState<'all' | 'Llamar' | 'Considerar' | 'No llamar'>('all')
+  const [filter, setFilter] = useState<'all' | 'Llamar' | 'Considerar' | 'Revisado'>('all')
   const [rankError, setRankError] = useState('')
   const [updatingAction, setUpdatingAction] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'list' | 'pipeline'>('list')
-  const [schedulingApplicant, setSchedulingApplicant] = useState<Applicant | null>(null)
-  const [commentingOn, setCommentingOn] = useState<string | null>(null)
-  const [newComment, setNewComment] = useState('')
-  const [savingComment, setSavingComment] = useState(false)
+  const [review, setReview] = useState<VacancyReviewState | null>(null)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadError, setLoadError] = useState('')
 
   const handleActionUpdate = async (applicationId: string, action: string, notes?: string) => {
     setUpdatingAction(applicationId)
+    setRankError('')
     try {
-      await fetch('/.netlify/functions/validate-recruiter-token', {
+      const response = await fetch('/.netlify/functions/validate-recruiter-token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, action: 'update_application_status', application_id: applicationId, recruiter_action: action, recruiter_notes: notes }),
       })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'No pudimos guardar el estado del candidato')
       setApplicants(prev => prev.map(a => a.id === applicationId ? { ...a, recruiter_action: action } : a))
-    } catch { /* silencioso */ }
+    } catch (error: any) { setRankError(error?.message || 'No pudimos guardar el estado del candidato') }
     finally { setUpdatingAction(null) }
   }
 
-  const handleSaveComment = async (applicationId: string) => {
-    if (!newComment.trim()) return
-
-    setSavingComment(true)
+  const loadApplicants = async (requestedPage = 0, append = false) => {
+    if (append) setLoadingMore(true)
+    else setLoading(true)
+    setLoadError('')
     try {
-      const currentApplicant = applicants.find(a => a.id === applicationId)
-      const existingNotes = currentApplicant?.recruiter_notes || ''
-      const timestamp = new Date().toLocaleString('es-PY', { dateStyle: 'short', timeStyle: 'short' })
-      const updatedNotes = existingNotes
-        ? `${existingNotes}\n\n[${timestamp}]\n${newComment.trim()}`
-        : `[${timestamp}]\n${newComment.trim()}`
-
-      await fetch('/.netlify/functions/validate-recruiter-token', {
+      const response = await fetch('/.netlify/functions/validate-recruiter-token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          action: 'update_application_status',
-          application_id: applicationId,
-          recruiter_action: currentApplicant?.recruiter_action || 'pending',
-          recruiter_notes: updatedNotes
-        }),
+        body: JSON.stringify({ token, action: 'get_applicants', vacancy_id: vacancyId, page: requestedPage, page_size: 60 }),
       })
-
-      setApplicants(prev => prev.map(a => a.id === applicationId ? { ...a, recruiter_notes: updatedNotes } : a))
-      setNewComment('')
-      setCommentingOn(null)
-    } catch { /* silencioso */ }
-    finally { setSavingComment(false) }
-  }
-
-  const loadApplicants = () => {
-    setLoading(true)
-    fetch('/.netlify/functions/validate-recruiter-token', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, action: 'get_applicants', vacancy_id: vacancyId }),
-    })
-      .then(r => r.json())
-      .then(d => setApplicants(d.applicants || []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'No pudimos cargar los candidatos')
+      const nextApplicants = data.applicants || []
+      setApplicants(previous => append
+        ? [...previous, ...nextApplicants.filter((candidate: Applicant) => !previous.some(existing => existing.id === candidate.id))]
+        : nextApplicants)
+      setReview(data.review || null)
+      setPage(requestedPage)
+      setHasMore(data.pagination?.has_more === true)
+    } catch (error: any) { setLoadError(error?.message || 'No pudimos cargar los candidatos') }
+    finally {
+      setLoading(false)
+      setLoadingMore(false)
+    }
   }
 
   useEffect(() => { loadApplicants() }, [vacancyId])
 
   const handleRankAll = async () => {
-    setRanking(true); setRankError(''); setRankProgress('Analizando CVs en paralelo…')
+    setRanking(true); setRankError('')
+    setRankProgress('Revisando la siguiente tanda y comparando sus mejores perfiles…')
+    const operationId = pendingOperationId('batch', `vacancy-progressive:${vacancyId}:pending:${review?.pending ?? 'unknown'}:batches:${review?.batches_completed ?? 0}`)
     try {
       const res = await fetch('/.netlify/functions/analyze-vacancy-applicants', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, vacancy_id: vacancyId }),
+        body: JSON.stringify({ token, vacancy_id: vacancyId, operation_id: operationId }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error en el análisis')
+      if (!res.ok) {
+        if (data.retryable) clearPendingOperation(operationId)
+        throw new Error(data.error || 'Error en el análisis')
+      }
+      clearPendingOperation(operationId)
 
-      setRankProgress(`${data.analyzed} CVs analizados${data.failed > 0 ? ` (${data.failed} sin texto)` : ''}`)
+      setRankProgress(data.complete
+        ? 'La revisión está al día.'
+        : `Tanda ${data.batchNumber || ''}: ${data.analyzed} CVs analizados${data.failed > 0 ? ` · ${data.failed} se reintentará` : ''}`)
       if (data.summary) setAiSummary(data.summary)
+      if (data.review) setReview(data.review)
 
       // Merge results into applicants list
       if (data.results?.length) {
@@ -1058,6 +718,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
           }
         }).sort((a, b) => (b.fit_score ?? -1) - (a.fit_score ?? -1)))
       }
+      await loadApplicants(0, false)
     } catch (err: any) {
       setRankError(err.message)
     } finally {
@@ -1067,11 +728,13 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
 
   const analyzed = applicants.filter(a => a.analyzed_at)
   const withCv = applicants.filter(a => a.cv_text)
-  const filtered = filter === 'all' ? applicants : applicants.filter(a => a.recommendation === filter)
+  const filtered = filter === 'all' ? applicants : applicants.filter(a => filter === 'Revisado'
+    ? a.recommendation === 'Revisado' || a.recommendation === 'No llamar'
+    : a.recommendation === filter)
   const counts = {
     Llamar: applicants.filter(a => a.recommendation === 'Llamar').length,
     Considerar: applicants.filter(a => a.recommendation === 'Considerar').length,
-    'No llamar': applicants.filter(a => a.recommendation === 'No llamar').length,
+    Revisado: applicants.filter(a => a.recommendation === 'Revisado' || a.recommendation === 'No llamar').length,
   }
 
   return (
@@ -1085,34 +748,78 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
         <span className="text-sm text-white/60 truncate max-w-xs">{vacancyTitle}</span>
       </div>
 
+      {/* Vacancy link — prominent */}
+      {vacancySlug && (
+        <div className="rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.05] p-4">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[#c9a84c] mb-2">Link de postulación</p>
+          <div className="flex items-center gap-3">
+            <code className="flex-1 min-w-0 truncate text-sm text-white/85 font-mono">
+              https://cvitae.lat/vacante/{vacancySlug}
+            </code>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(`https://cvitae.lat/vacante/${vacancySlug}`).then(() => {
+                  setLinkCopied(true)
+                  setTimeout(() => setLinkCopied(false), 2000)
+                }).catch(() => setRankError('No pudimos copiar el link. Seleccionalo y copialo manualmente.'))
+              }}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.08] px-3 py-1.5 text-xs text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.18]"
+            >
+              {linkCopied ? <CheckIcon strokeWidth={2} className="h-3.5 w-3.5" /> : <Copy strokeWidth={1.5} className="h-3.5 w-3.5" />}
+              {linkCopied ? 'Copiado' : 'Copiar'}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] font-light text-white/45">
+            Compartí este link con candidatos — cada postulación queda registrada automáticamente
+          </p>
+        </div>
+      )}
+
+      {loadError && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4 text-sm text-amber-100" role="alert">
+          <span>{loadError}</span>
+          <button type="button" onClick={() => loadApplicants(0, false)} className="rounded-full border border-amber-200/25 px-3 py-1.5 text-xs">Reintentar</button>
+        </div>
+      )}
+
       {/* Stats + CTA */}
       <div className="glass-card rounded-2xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-6 flex-wrap">
             <div>
               <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Total</p>
-              <p className="font-display text-3xl text-white">{applicants.length}</p>
+              <p className="font-display text-3xl text-white">{review?.total ?? applicants.length}</p>
             </div>
-            {analyzed.length > 0 && (
+            {(review?.analyzed || analyzed.length) > 0 && (
               <>
                 <div className="h-8 w-px bg-white/8" />
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Llamar</p>
-                  <p className="font-display text-3xl text-emerald-400">{counts['Llamar']}</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Ajuste fuerte</p>
+                  <p className="font-display text-3xl text-emerald-400">{review?.strong ?? counts['Llamar']}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Considerar</p>
-                  <p className="font-display text-3xl text-[#c9a84c]">{counts['Considerar']}</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Destacados</p>
+                  <p className="font-display text-3xl text-[#c9a84c]">{review?.shortlist ?? 0}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">No llamar</p>
-                  <p className="font-display text-3xl text-red-400">{counts['No llamar']}</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Pendientes</p>
+                  <p className="font-display text-3xl text-sky-300">{review?.pending ?? 0}</p>
                 </div>
               </>
             )}
           </div>
           <div className="flex flex-col items-end gap-2">
-            {withCv.length > 0 && (
+            <div className="flex items-center gap-2 text-[11px] text-white/35">
+              <span>El score orienta; la decisión es tuya.</span>
+              <B2BInfoPopover
+                label="Cómo leer el ranking"
+                title="Ranking con contexto"
+                description="El ranking combina ajuste al puesto, evidencia del CV y la descripción que cargaste. Es una ayuda para priorizar conversaciones, no una decisión automática de contratación."
+                points={['Abrí cada candidato para ver fortalezas y brechas.', 'La IA puede equivocarse o pasar por alto contexto: verificá la evidencia en el CV.', 'Un score bajo no elimina ni notifica al candidato.', 'Podés cambiar el estado y dejar notas como responsable del proceso.']}
+              />
+            </div>
+            {(review?.pending ?? withCv.filter(candidate => !candidate.analyzed_at).length) > 0 && (
               <button
                 onClick={handleRankAll}
                 disabled={ranking}
@@ -1120,9 +827,14 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
               >
                 {ranking
                   ? <><Loader2 strokeWidth={1.5} className="h-4 w-4 animate-spin" /> Analizando…</>
-                  : <><Sparkles strokeWidth={1.5} className="h-4 w-4" /> {analyzed.length > 0 ? 'Re-analizar todos' : `Analizar ${withCv.length} CVs con IA`}</>
+                  : <><Sparkles strokeWidth={1.5} className="h-4 w-4" /> Analizar siguiente tanda</>
                 }
               </button>
+            )}
+            {review && review.batches_completed > 0 && (
+              <p className="text-[11px] text-white/35">
+                {review.batches_completed} {review.batches_completed === 1 ? 'tanda revisada' : 'tandas revisadas'} · los perfiles fuertes se conservan
+              </p>
             )}
             {rankProgress && !ranking && (
               <p className="text-[11px] text-white/40">{rankProgress}</p>
@@ -1142,7 +854,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
             className="relative rounded-2xl p-7 overflow-hidden border border-white/5 bg-[#0d0d0d]"
           >
             <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/40 mb-5">
-              <span className="h-px w-8 bg-[#c9a84c]/40" /> Decisión de la IA
+              <span className="h-px w-8 bg-[#c9a84c]/40" /> Síntesis asistida para entrevistas
             </div>
 
             <p className="font-display text-xl text-white leading-snug mb-4">{aiSummary.topPick}</p>
@@ -1150,7 +862,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
 
             {aiSummary.callList?.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
-                <span className="text-[10px] uppercase tracking-[0.18em] text-white/35 self-center mr-1">Llamar a:</span>
+                <span className="text-[10px] uppercase tracking-[0.18em] text-white/35 self-center mr-1">Priorizar entrevista:</span>
                 {aiSummary.callList.map(name => (
                   <span key={name} className="rounded-full border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-1 text-xs text-emerald-400">
                     {name}
@@ -1184,58 +896,27 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
         </div>
       ) : (
         <>
-          {/* View toggle + Filter tabs */}
-          <div className="flex flex-wrap items-center gap-3">
-            {/* View mode toggle */}
-            <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.02] p-1">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                  viewMode === 'list'
-                    ? 'bg-white/10 text-white'
-                    : 'text-white/40 hover:text-white/70'
-                }`}
-              >
-                <List strokeWidth={1.5} className="h-3.5 w-3.5" /> Lista
-              </button>
-              <button
-                onClick={() => setViewMode('pipeline')}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                  viewMode === 'pipeline'
-                    ? 'bg-white/10 text-white'
-                    : 'text-white/40 hover:text-white/70'
-                }`}
-              >
-                <Trello strokeWidth={1.5} className="h-3.5 w-3.5" /> Pipeline
-              </button>
+          {/* Filter tabs — only when analyzed */}
+          {(review?.analyzed || analyzed.length) > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {(['all', 'Llamar', 'Considerar', 'Revisado'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                    filter === f
+                      ? 'bg-white/10 text-white'
+                      : 'border border-white/10 text-white/40 hover:border-white/25 hover:text-white/70'
+                  }`}
+                >
+                  {f === 'all' ? `Cargados (${applicants.length})` : `${f} (${counts[f]})`}
+                </button>
+              ))}
             </div>
+          )}
 
-            {/* Filter tabs — only in list view when analyzed */}
-            {viewMode === 'list' && analyzed.length > 0 && (
-              <>
-                <div className="h-6 w-px bg-white/10" />
-                <div className="flex flex-wrap gap-2">
-                  {(['all', 'Llamar', 'Considerar', 'No llamar'] as const).map(f => (
-                    <button
-                      key={f}
-                      onClick={() => setFilter(f)}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
-                        filter === f
-                          ? 'bg-white/10 text-white'
-                          : 'border border-white/10 text-white/40 hover:border-white/25 hover:text-white/70'
-                      }`}
-                    >
-                      {f === 'all' ? `Todos (${applicants.length})` : `${f} (${counts[f]})`}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* ListView */}
-          {viewMode === 'list' && (
-            <ol className="space-y-3">
+          {/* Candidate list */}
+          <ol className="space-y-3">
             {filtered.map((a, i) => (
               <motion.li
                 key={a.id}
@@ -1245,8 +926,8 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                 className={`rounded-2xl overflow-hidden transition-colors border border-white/8 bg-white/[0.02] border-l-[3px] ${
                   a.recommendation === 'Llamar'
                     ? 'border-l-emerald-500/60'
-                    : a.recommendation === 'No llamar'
-                    ? 'border-l-red-500/40'
+                    : a.progressive_shortlist
+                    ? 'border-l-[#c9a84c]/60'
                     : a.analyzed_at
                     ? 'border-l-sky-500/30'
                     : 'border-l-white/10'
@@ -1255,6 +936,16 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                 <div
                   className="flex items-center gap-4 px-5 py-4 cursor-pointer"
                   onClick={() => setExpandedId(expandedId === a.id ? null : a.id)}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={expandedId === a.id}
+                  aria-controls={`applicant-${a.id}`}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setExpandedId(expandedId === a.id ? null : a.id)
+                    }
+                  }}
                 >
                   {/* Rank number */}
                   <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-display ${
@@ -1262,7 +953,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                       ? 'border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-400'
                       : 'border-white/10 bg-white/[0.03] text-white/40'
                   }`}>
-                    {String(i + 1).padStart(2, '0')}
+                    {a.progressive_rank ? String(a.progressive_rank).padStart(2, '0') : '—'}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -1270,7 +961,17 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                       <p className="text-sm text-white font-medium">{a.name}</p>
                       {a.recommendation && (
                         <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${recColor(a.recommendation)}`}>
-                          {a.recommendation}
+                          {recommendationLabel(a.recommendation)}
+                        </span>
+                      )}
+                      {a.triage_tier === 'strong' && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/[0.05] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-emerald-300">
+                          <Star strokeWidth={1.5} className="h-3 w-3" /> Ajuste fuerte
+                        </span>
+                      )}
+                      {a.triage_tier === 'priority' && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-[#c9a84c]/25 bg-[#c9a84c]/[0.05] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#c9a84c]">
+                          <Trophy strokeWidth={1.5} className="h-3 w-3" /> Destacado entre tandas
                         </span>
                       )}
                     </div>
@@ -1280,6 +981,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                         <Calendar strokeWidth={1.5} className="h-3 w-3" />
                         {new Date(a.applied_at).toLocaleDateString('es-PY')}
                       </span>
+                      {a.review_batch_number && <span>Tanda {a.review_batch_number}</span>}
                     </div>
                     {a.ai_summary && (
                       <p className="mt-1.5 text-xs font-light text-white/50 leading-relaxed line-clamp-2">{a.ai_summary}</p>
@@ -1303,12 +1005,19 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                 <AnimatePresence>
                   {expandedId === a.id && (
                     <motion.div
+                      id={`applicant-${a.id}`}
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
                       className="border-t border-white/5"
                     >
                       <div className="px-5 pb-5 pt-4 space-y-4">
+                        {a.selection_reason && (
+                          <div className="flex items-start gap-2 rounded-xl border border-white/8 bg-white/[0.02] p-3">
+                            <CheckCircle2 strokeWidth={1.5} className="mt-0.5 h-4 w-4 shrink-0 text-[#c9a84c]" />
+                            <p className="text-xs font-light leading-relaxed text-white/55">{a.selection_reason}. La decisión se confirma con revisión del CV y entrevistas.</p>
+                          </div>
+                        )}
                         {/* Scores row */}
                         {(a.ats_score !== null || a.fit_score !== null) && (
                           <div className="flex gap-4 flex-wrap">
@@ -1389,75 +1098,6 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                           </div>
                         )}
 
-                        {/* Comentarios / Notas */}
-                        <div className="border-t border-white/5 pt-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-[10px] uppercase tracking-[0.18em] text-white/30">Notas internas</p>
-                            {commentingOn !== a.id && (
-                              <button
-                                onClick={() => setCommentingOn(a.id)}
-                                className="text-[10px] text-[#c9a84c]/70 hover:text-[#c9a84c] transition-colors uppercase tracking-[0.15em]"
-                              >
-                                + Agregar nota
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Existing notes */}
-                          {a.recruiter_notes && (
-                            <div className="space-y-2 mb-3">
-                              {a.recruiter_notes.split('\n\n').map((note, idx) => {
-                                const timestampMatch = note.match(/^\[(.*?)\]/)
-                                const timestamp = timestampMatch ? timestampMatch[1] : null
-                                const content = timestamp ? note.replace(/^\[.*?\]\n/, '') : note
-
-                                return (
-                                  <div key={idx} className="rounded-lg border border-white/8 bg-white/[0.01] p-2.5">
-                                    {timestamp && (
-                                      <p className="text-[9px] text-white/25 mb-1">{timestamp}</p>
-                                    )}
-                                    <p className="text-xs font-light text-white/60 leading-relaxed whitespace-pre-wrap">{content}</p>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
-
-                          {/* Add new comment */}
-                          {commentingOn === a.id && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="space-y-2"
-                            >
-                              <textarea
-                                value={newComment}
-                                onChange={(e) => setNewComment(e.target.value)}
-                                placeholder="Escribe una nota sobre este candidato..."
-                                rows={3}
-                                className="w-full rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none focus:ring-2 focus:ring-[#c9a84c]/20"
-                                autoFocus
-                              />
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => handleSaveComment(a.id)}
-                                  disabled={savingComment || !newComment.trim()}
-                                  className="inline-flex items-center gap-1.5 rounded-full bg-[#c9a84c] px-4 py-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#0a0a0a] transition hover:shadow-[0_0_20px_-4px_rgba(201,168,76,0.6)] disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {savingComment ? <><Loader2 strokeWidth={1.5} className="h-3 w-3 animate-spin" /> Guardando...</> : 'Guardar nota'}
-                                </button>
-                                <button
-                                  onClick={() => { setCommentingOn(null); setNewComment('') }}
-                                  className="text-[10px] text-white/40 hover:text-white/70 transition-colors uppercase tracking-[0.15em]"
-                                >
-                                  Cancelar
-                                </button>
-                              </div>
-                            </motion.div>
-                          )}
-                        </div>
-
                         {/* Estado y acciones del reclutador */}
                         <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-white/5 mt-2">
                           <span className="text-[10px] uppercase tracking-[0.15em] text-white/30">Estado</span>
@@ -1477,22 +1117,32 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                               </button>
                             ))}
                           </div>
-                          <div className="flex items-center gap-2 ml-auto">
+                          {a.cv_text && (
                             <button
-                              onClick={() => setSchedulingApplicant(a)}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.02] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-white/70 transition hover:border-white/25 hover:bg-white/[0.05]"
+                              onClick={() => onAnalyzeSingle(a.cv_text!, a.name)}
+                              className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
                             >
-                              <Calendar strokeWidth={1.5} className="h-3.5 w-3.5" /> Agendar
+                              <Brain strokeWidth={1.5} className="h-3.5 w-3.5" /> Análisis individual
                             </button>
-                            {a.cv_text && (
-                              <button
-                                onClick={() => onAnalyzeSingle(a.cv_text!, a.name)}
-                                className="inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
-                              >
-                                <Brain strokeWidth={1.5} className="h-3.5 w-3.5" /> Análisis
-                              </button>
-                            )}
-                          </div>
+                          )}
+                          {a.cv_download_url && (
+                            <a
+                              href={a.cv_download_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-white/55 transition hover:border-white/25 hover:text-white"
+                            >
+                              <Download strokeWidth={1.5} className="h-3.5 w-3.5" /> Ver CV original
+                            </a>
+                          )}
+                          {a.cv_reupload_required && (
+                            <p className="text-xs text-amber-200/70">
+                              El CV histórico no conserva el archivo original. Pedile al candidato que vuelva a subirlo.
+                            </p>
+                          )}
+                          {!a.cv_text && (
+                            <p className="text-xs text-amber-200/60 italic">Revisión manual: no se pudo extraer texto</p>
+                          )}
                         </div>
                       </div>
                     </motion.div>
@@ -1501,38 +1151,21 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
               </motion.li>
             ))}
           </ol>
-          )}
-
-          {/* Pipeline View */}
-          {viewMode === 'pipeline' && (
-            <PipelineBoard
-              applicants={applicants}
-              onMoveCandidate={(appId, newStatus) => handleActionUpdate(appId, newStatus)}
-              onExpandCard={(id) => setExpandedId(expandedId === id ? null : id)}
-              expandedId={expandedId}
-              updatingAction={updatingAction}
-              onAnalyzeSingle={onAnalyzeSingle}
-              onScheduleApplicant={(applicant) => setSchedulingApplicant(applicant)}
-              commentingOn={commentingOn}
-              setCommentingOn={setCommentingOn}
-              newComment={newComment}
-              setNewComment={setNewComment}
-              savingComment={savingComment}
-              handleSaveComment={handleSaveComment}
-            />
+          {hasMore && (
+            <div className="flex justify-center pt-3">
+              <button
+                type="button"
+                onClick={() => loadApplicants(page + 1, true)}
+                disabled={loadingMore}
+                className="inline-flex items-center gap-2 rounded-full border border-white/12 px-5 py-2.5 text-xs uppercase tracking-[0.14em] text-white/55 transition hover:border-white/25 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loadingMore && <Loader2 strokeWidth={1.5} className="h-4 w-4 animate-spin" />}
+                Cargar más candidatos
+              </button>
+            </div>
           )}
         </>
       )}
-
-      {/* Calendar Scheduler Modal */}
-      <AnimatePresence>
-        {schedulingApplicant && (
-          <CalendarScheduler
-            applicant={schedulingApplicant}
-            onClose={() => setSchedulingApplicant(null)}
-          />
-        )}
-      </AnimatePresence>
     </div>
   )
 }
@@ -1545,6 +1178,7 @@ interface VacancyRecord {
   slug: string
   location: string
   modality: string
+  is_active: boolean
   created_at: string
   vacancy_applications: { count: number }[]
 }
@@ -1561,24 +1195,45 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
   const [createdUrl, setCreatedUrl] = useState('')
   const [vacancies, setVacancies] = useState<VacancyRecord[]>([])
   const [loadingList, setLoadingList] = useState(true)
+  const [listError, setListError] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
   const [selectedVacancy, setSelectedVacancy] = useState<VacancyRecord | null>(null)
+  const [closingVacancy, setClosingVacancy] = useState<string | null>(null)
+  const [closingInProgress, setClosingInProgress] = useState(false)
 
   useEffect(() => { loadVacancies() }, [])
 
   const loadVacancies = async () => {
+    setLoadingList(true)
+    setListError('')
     try {
       const res = await fetch('/.netlify/functions/validate-recruiter-token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, action: 'get_vacancies' }),
       })
-      setVacancies((await res.json()).vacancies || [])
-    } catch { /* silencioso */ }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'No pudimos cargar las vacantes')
+      setVacancies(data.vacancies || [])
+    } catch (error: any) { setListError(error?.message || 'No pudimos cargar las vacantes') }
     finally { setLoadingList(false) }
   }
 
   const copyToClipboard = async (text: string, id: string) => {
     try { await navigator.clipboard.writeText(text); setCopied(id); setTimeout(() => setCopied(null), 2000) } catch { /* silencioso */ }
+  }
+
+  const closeVacancy = async (id: string) => {
+    setClosingInProgress(true)
+    try {
+      await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action: 'close_vacancy', vacancy_id: id }),
+      })
+      setVacancies(vs => vs.map(v => v.id === id ? { ...v, is_active: false } : v))
+    } finally {
+      setClosingInProgress(false)
+      setClosingVacancy(null)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1592,7 +1247,7 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error al crear la vacante')
       setCreatedUrl(data.url)
-      setForm({ title: '', description: '', requirements: '', location: '', modality: 'Presencial', salary_range: '', company_name: '', rubro: '' })
+      setForm({ title: '', description: '', requirements: '', location: '', modality: 'Presencial', salary_range: '', company_name: companyName, rubro: '' })
       loadVacancies()
     } catch (err: any) {
       setSaveError(err.message)
@@ -1604,12 +1259,15 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
+  const isCompanyNameLocked = Boolean(companyName)
+
   if (selectedVacancy) {
     return (
       <ApplicantsPanel
         token={token}
         vacancyId={selectedVacancy.id}
         vacancyTitle={selectedVacancy.title}
+        vacancySlug={selectedVacancy.slug}
         onBack={() => setSelectedVacancy(null)}
         onAnalyzeSingle={(cvText, name) => onAnalyzeApplicant(cvText, name)}
       />
@@ -1618,6 +1276,31 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
 
   return (
     <div className="space-y-8">
+      {listError && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4 text-sm text-amber-100" role="alert">
+          <span>{listError}</span>
+          <button type="button" onClick={loadVacancies} className="rounded-full border border-amber-200/25 px-3 py-1.5 text-xs">Reintentar</button>
+        </div>
+      )}
+      {/* First-vacancy banner — only when list is loaded and empty */}
+      {!loadingList && vacancies.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease }}
+          className="rounded-2xl border border-[#c9a84c]/30 bg-[#c9a84c]/[0.05] px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4"
+        >
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-[#c9a84c]">Creá tu primera vacante</p>
+            <p className="mt-0.5 text-xs font-light text-white/55">
+              Obtené un link de postulación propio listo para compartir — cada CV recibido queda registrado automáticamente.
+            </p>
+          </div>
+          <span className="shrink-0 text-xs font-light text-white/35 flex items-center gap-1.5">
+            <ChevronDown strokeWidth={1.5} className="h-4 w-4" /> Completá el formulario abajo
+          </span>
+        </motion.div>
+      )}
+
       {/* Form */}
       <motion.form
         onSubmit={handleSubmit}
@@ -1625,7 +1308,15 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
         transition={{ duration: 0.6, ease }}
         className="glass-card rounded-3xl p-7"
       >
-        <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">Nueva vacante</p>
+        <div className="flex items-center gap-3">
+          <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">Nueva vacante</p>
+          <B2BInfoPopover
+            label="Qué verá el candidato"
+            title="Un proceso claro para postular"
+            description="El candidato verá el puesto, la empresa verificada, los requisitos y el límite del archivo antes de enviar su CV."
+            points={['El CV se guarda en un espacio privado.', 'La postulación se envía sólo a esta empresa.', 'Crear un perfil general es opcional y requiere consentimiento separado.']}
+          />
+        </div>
         <p className="mt-1 text-sm font-light text-white/40">Generá un link de postulación único para compartir con candidatos.</p>
 
         <div className="mt-7 grid gap-5 md:grid-cols-2">
@@ -1637,8 +1328,17 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
 
           <div>
             <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Empresa *</label>
-            <input required value={form.company_name} onChange={set('company_name')} placeholder="Nombre de tu empresa"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition" />
+            <input
+              readOnly={isCompanyNameLocked}
+              value={form.company_name}
+              onChange={isCompanyNameLocked ? undefined : set('company_name')}
+              placeholder="Nombre de tu empresa"
+              aria-describedby="verified-company-help"
+              className={`w-full rounded-xl border px-4 py-3 text-sm text-white outline-none transition ${isCompanyNameLocked ? 'cursor-not-allowed border-emerald-400/15 bg-emerald-400/[0.03] text-white/75' : 'border-[#c9a84c]/40 bg-white/[0.02] placeholder:text-white/25 focus:border-[#c9a84c]/70'}`}
+            />
+            <p id="verified-company-help" className="mt-1.5 text-xs text-white/35">
+              {isCompanyNameLocked ? 'Identidad verificada por CVitae. Contactanos si necesitás corregirla.' : 'Ingresá el nombre de tu empresa para publicar vacantes.'}
+            </p>
           </div>
 
           <div>
@@ -1724,9 +1424,21 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
         {loadingList ? (
           <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#c9a84c]" /></div>
         ) : vacancies.length === 0 ? (
-          <div className="glass-card rounded-2xl py-14 text-center">
-            <Link2 strokeWidth={1.25} className="mx-auto mb-4 h-8 w-8 text-white/20" />
-            <p className="text-sm font-light text-white/40">Todavía no creaste ninguna vacante.</p>
+          <div className="glass-card rounded-3xl py-12 px-8 text-center border border-[#c9a84c]/15 bg-[#c9a84c]/[0.02]">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.08]">
+              <Link2 strokeWidth={1.25} className="h-7 w-7 text-[#c9a84c]" />
+            </div>
+            <h3 className="font-display text-xl text-white">Creá tu primera vacante</h3>
+            <p className="mt-2 text-sm font-light text-white/50 max-w-xs mx-auto">
+              Obtené un link de postulación propio listo para compartir — cada CV recibido queda registrado automáticamente.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-6 py-2.5 text-sm font-medium text-[#0a0a0a] transition hover:shadow-[0_0_30px_-4px_rgba(201,168,76,0.5)]"
+            >
+              <Plus strokeWidth={2} className="h-4 w-4" /> Crear vacante →
+            </button>
           </div>
         ) : (
           <div className="rounded-xl overflow-hidden border border-white/8">
@@ -1744,30 +1456,59 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
                 {vacancies.map((v) => {
                   const url = `https://cvitae.lat/vacante/${v.slug}`
                   const count = v.vacancy_applications?.[0]?.count ?? 0
+                  const closed = v.is_active === false
                   return (
-                    <tr key={v.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors">
+                    <tr key={v.id} className={`border-b border-white/5 last:border-0 transition-colors ${closed ? 'opacity-50' : 'hover:bg-white/[0.02]'}`}>
                       <td className="px-4 py-3">
-                        <p className="text-sm text-white font-medium truncate max-w-[180px]">{v.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className={`text-sm font-medium truncate max-w-[160px] ${closed ? 'text-white/40 line-through' : 'text-white'}`}>{v.title}</p>
+                          {closed && <span className="shrink-0 rounded-full border border-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.14em] text-white/30">Cerrada</span>}
+                        </div>
                         <p className="text-[10px] text-white/30 mt-0.5">{new Date(v.created_at).toLocaleDateString('es-PY')}</p>
                       </td>
                       <td className="px-4 py-3 text-xs text-white/50 hidden sm:table-cell">{v.location}</td>
                       <td className="px-4 py-3 text-xs text-white/50 hidden md:table-cell">{v.modality}</td>
                       <td className="px-4 py-3 text-right">
-                        <span className={`font-display text-lg ${count > 0 ? 'text-[#c9a84c]' : 'text-white/20'}`}>{count}</span>
+                        <span className={`font-display text-lg ${count > 0 && !closed ? 'text-[#c9a84c]' : 'text-white/20'}`}>{count}</span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => setSelectedVacancy(v)}
-                            className="inline-flex items-center gap-1 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-2.5 py-1 text-[11px] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
-                          >
-                            <UserCheck strokeWidth={1.5} className="h-3 w-3" /> Ver →
-                          </button>
-                          <button onClick={() => copyToClipboard(url, v.id)}
-                            className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/40 transition hover:border-[#c9a84c]/40 hover:text-[#c9a84c]">
-                            {copied === v.id ? <CheckIcon strokeWidth={2} className="h-3 w-3" /> : <Copy strokeWidth={1.5} className="h-3 w-3" />}
-                          </button>
-                        </div>
+                        {closingVacancy === v.id ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="text-[11px] text-white/50">¿Confirmar?</span>
+                            <button
+                              onClick={() => closeVacancy(v.id)}
+                              disabled={closingInProgress}
+                              className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/[0.08] px-2.5 py-1 text-[11px] text-red-400 transition hover:bg-red-500/[0.18] disabled:opacity-50"
+                            >
+                              {closingInProgress ? <Loader2 strokeWidth={1.5} className="h-3 w-3 animate-spin" /> : 'Sí'}
+                            </button>
+                            <button onClick={() => setClosingVacancy(null)} className="text-[11px] text-white/30 hover:text-white/60">No</button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setSelectedVacancy(v)}
+                              className="inline-flex items-center gap-1 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-2.5 py-1 text-[11px] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                            >
+                              <UserCheck strokeWidth={1.5} className="h-3 w-3" /> Ver →
+                            </button>
+                            {!closed && (
+                              <button onClick={() => copyToClipboard(url, v.id)}
+                                className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/40 transition hover:border-[#c9a84c]/40 hover:text-[#c9a84c]">
+                                {copied === v.id ? <CheckIcon strokeWidth={2} className="h-3 w-3" /> : <Copy strokeWidth={1.5} className="h-3 w-3" />}
+                              </button>
+                            )}
+                            {!closed && (
+                              <button
+                                onClick={() => setClosingVacancy(v.id)}
+                                className="inline-flex items-center rounded-full border border-white/8 px-2.5 py-1 text-[11px] text-white/25 transition hover:border-red-500/30 hover:text-red-400"
+                                title="Cerrar vacante"
+                              >
+                                <X strokeWidth={1.5} className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   )
@@ -1776,113 +1517,6 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
             </table>
           </div>
         )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Analytics Panel ──────────────────────────────────────────────────────────
-
-function AnalyticsPanel({ token, stats }: { token: string; stats: DashboardStats | null }) {
-  const [analyticsData, setAnalyticsData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetch('/.netlify/functions/validate-recruiter-token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, action: 'get_analytics' }),
-    })
-      .then(r => r.json())
-      .then(d => {
-        if (d.analytics) setAnalyticsData(d.analytics)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [token])
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 strokeWidth={1.5} className="h-6 w-6 animate-spin text-[#c9a84c]" />
-      </div>
-    )
-  }
-
-  const data = analyticsData || {}
-  const conversionRate = stats && stats.totalPostulantes > 0
-    ? ((stats.paraLlamar / stats.totalPostulantes) * 100).toFixed(1)
-    : 0
-
-  return (
-    <div className="space-y-6">
-      {/* Conversion funnel */}
-      <div className="glass-card rounded-2xl p-6">
-        <p className="text-xs uppercase tracking-[0.2em] text-white/40 mb-6">Embudo de conversión</p>
-        <div className="space-y-4">
-          {[
-            { label: 'Postulantes recibidos', value: stats?.totalPostulantes || 0, width: 100, color: 'bg-sky-400' },
-            { label: 'CVs analizados', value: stats?.cvsAnalizados || 0, width: stats ? (stats.cvsAnalizados / Math.max(stats.totalPostulantes, 1)) * 100 : 0, color: 'bg-purple-400' },
-            { label: 'Para llamar', value: stats?.paraLlamar || 0, width: stats ? (stats.paraLlamar / Math.max(stats.totalPostulantes, 1)) * 100 : 0, color: 'bg-emerald-400' },
-          ].map(({ label, value, width, color }) => (
-            <div key={label}>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-white/60">{label}</p>
-                <p className="font-display text-lg text-white">{value}</p>
-              </div>
-              <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${width}%` }}
-                  transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
-                  className={`h-full ${color} rounded-full`}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-6 pt-6 border-t border-white/5">
-          <p className="text-xs text-white/40">Tasa de conversión</p>
-          <p className="font-display text-3xl text-[#c9a84c] mt-1">{conversionRate}%</p>
-        </div>
-      </div>
-
-      {/* Time series placeholder */}
-      <div className="glass-card rounded-2xl p-6">
-        <p className="text-xs uppercase tracking-[0.2em] text-white/40 mb-4">Actividad últimos 30 días</p>
-        <div className="h-48 flex items-end gap-1">
-          {Array.from({ length: 30 }).map((_, i) => {
-            const height = 20 + Math.random() * 80
-            return (
-              <motion.div
-                key={i}
-                initial={{ height: 0 }}
-                animate={{ height: `${height}%` }}
-                transition={{ duration: 0.5, delay: i * 0.02 }}
-                className="flex-1 bg-gradient-to-t from-[#c9a84c]/60 to-[#c9a84c]/20 rounded-t"
-                title={`Día ${i + 1}`}
-              />
-            )
-          })}
-        </div>
-        <p className="text-xs text-white/30 mt-4 text-center">Gráfico de actividad diaria</p>
-      </div>
-
-      {/* Top sources */}
-      <div className="glass-card rounded-2xl p-6">
-        <p className="text-xs uppercase tracking-[0.2em] text-white/40 mb-4">Fuentes de candidatos</p>
-        <div className="space-y-3">
-          {[
-            { source: 'Postulación directa', count: data.directApplications || 0, color: 'bg-[#c9a84c]' },
-            { source: 'Link de vacante', count: data.vacancyLinks || 0, color: 'bg-sky-400' },
-            { source: 'Upload manual', count: data.manualUploads || 0, color: 'bg-purple-400' },
-          ].map(({ source, count }) => (
-            <div key={source} className="flex items-center justify-between">
-              <p className="text-sm text-white/70">{source}</p>
-              <p className="font-display text-xl text-white">{count}</p>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   )
@@ -1905,13 +1539,16 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   const [result, setResult] = useState<ATSResult | null>(null)
   const [error, setError] = useState('')
   const [balance, setBalance] = useState(session.balance)
-  const [activeTab, setActiveTab] = useState<'analyze' | 'history' | 'vacancies' | 'analytics'>('analyze')
+  const [activeTab, setActiveTab] = useState<'analyze' | 'history' | 'vacancies'>('analyze')
   const [historyKey, setHistoryKey] = useState(0)
   const [comparison, setComparison] = useState<ComparisonResult | null>(null)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const operationIdRef = useRef<string | null>(null)
   const [injectCvText, setInjectCvText] = useState<string | null>(null)
   const [injectCandidateName, setInjectCandidateName] = useState<string>('')
+  const [compareError, setCompareError] = useState('')
+  const [creditRequestSent, setCreditRequestSent] = useState(false)
 
   useEffect(() => {
     fetch('/.netlify/functions/validate-recruiter-token', {
@@ -1920,10 +1557,22 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
     }).then(r => r.json()).then(d => { if (d.stats) setStats(d.stats) }).catch(() => {})
   }, [])
 
+  const requestCredits = async () => {
+    try {
+      await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: session.token, action: 'request_credits', amount: 50 }),
+      })
+    } finally {
+      setCreditRequestSent(true)
+    }
+  }
+
   const handleFile = (f: File) => {
     const ok = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']
     if (!ok.includes(f.type)) { setError('Formato no soportado. Usá PDF, DOCX o TXT.'); return }
-    if (f.size > 5 * 1024 * 1024) { setError('El archivo no puede superar 5 MB.'); return }
+    if (f.size > 4 * 1024 * 1024) { setError('El archivo supera 4 MB. Comprimilo o generá una versión optimizada desde Mi Carrera en CVitae.'); return }
+    operationIdRef.current = null
     setFile(f); setResult(null); setError('')
   }
 
@@ -1932,30 +1581,29 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
     try {
       if (!cvText || cvText.trim().length < 50) throw new Error('No se pudo extraer texto del CV. Asegurate de que no sea una imagen escaneada.')
 
+      operationIdRef.current ||= pendingOperationId(
+        'single',
+        `${fileName}:${cvText.length}:${cvText.slice(0, 80)}:${cvText.slice(-80)}`,
+      )
       const res = await fetch('/.netlify/functions/analyze-cv-candidate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvText, mode: 'analyze', recruiterToken: session.token }),
-      })
-      if (!res.ok) throw new Error((await res.json()).error || 'Error en el análisis')
-      const data: ATSResult = await res.json()
-
-      const saveRes = await fetch('/.netlify/functions/validate-recruiter-token', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          token: session.token, action: 'save_analysis',
-          analysisData: {
-            candidate_name: candidateName || cvText.split('\n').find(l => l.trim().length > 2)?.trim() || null,
-            file_name: fileName,
-            ats_score: data.atsScore,
-            strengths: data.strengths,
-            critical_improvements: data.criticalImprovements,
-            vacancy_label: vacancyLabel.trim() || null,
-            raw_cv_text: cvText.substring(0, 3000),
-          },
+          cvText,
+          mode: 'analyze',
+          recruiterToken: session.token,
+          operationId: operationIdRef.current,
+          fileName,
+          jobTitle: vacancyLabel.trim() || null,
         }),
       })
-      const saveData = await saveRes.json()
-      if (saveData.new_balance !== undefined) setBalance(saveData.new_balance)
+      const data: ATSResult & { saved?: boolean; new_balance?: number; error?: string; retryable?: boolean } = await res.json()
+      if (!res.ok) {
+        if (data.retryable && operationIdRef.current) clearPendingOperation(operationIdRef.current)
+        throw new Error(data.error || 'Error en el análisis')
+      }
+      if (!data.saved) throw new Error('El análisis terminó, pero no pudo guardarse')
+      if (operationIdRef.current) clearPendingOperation(operationIdRef.current)
+      if (data.new_balance !== undefined) setBalance(data.new_balance)
       setResult(data); setHistoryKey(k => k + 1)
     } catch (err: any) {
       setError(err.message || 'Error inesperado')
@@ -1971,6 +1619,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   }
 
   const handleAnalyzeApplicant = (cvText: string, name: string) => {
+    operationIdRef.current = null
     setActiveTab('analyze')
     setInjectCvText(cvText)
     setInjectCandidateName(name)
@@ -1979,6 +1628,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   }
 
   const handleCompare = async (ids: string[]) => {
+    setCompareError('')
     try {
       const res = await fetch('/.netlify/functions/compare-candidates', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1987,10 +1637,10 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setComparison(data)
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { setCompareError(err.message || 'Error al comparar candidatos') }
   }
 
-  const handleReset = () => { setFile(null); setResult(null); setError(''); setVacancyLabel(''); setInjectCvText(null); setInjectCandidateName('') }
+  const handleReset = () => { operationIdRef.current = null; setFile(null); setResult(null); setError(''); setVacancyLabel(''); setInjectCvText(null); setInjectCandidateName('') }
 
   // When inject mode is active and user clicks Analizar, run directly on injected text
   const handleAnalyzeOrInject = async () => {
@@ -2002,13 +1652,13 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
+    <main className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
       <Helmet>
         <title>Panel Empresas | CVitae</title>
         <meta name="robots" content="noindex" />
       </Helmet>
 
-      <PanelHeader session={session} balance={balance} onLogout={onLogout} />
+      <PanelHeader session={session} balance={balance} onLogout={onLogout} onRequestCredits={requestCredits} creditRequestSent={creditRequestSent} />
 
       <section className="relative mx-auto max-w-7xl px-6 pt-16 pb-24 md:px-10 md:pt-20">
         {/* Page heading */}
@@ -2019,7 +1669,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
           {session.company_name} — <em className="italic font-normal">análisis de candidatos</em>.
         </h1>
         <p className="mt-4 max-w-xl text-sm font-light leading-relaxed text-white/55">
-          Analizá un CV individual o usá el modo masivo para rankear hasta 30 en una corrida.
+          Analizá un CV individual o usá el modo masivo para rankear tu pool completo.
         </p>
 
         {/* KPI row */}
@@ -2047,7 +1697,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
             className="group inline-flex items-center gap-3 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-5 py-2.5 text-xs font-medium uppercase tracking-[0.18em] text-[#c9a84c] transition-all hover:border-[#c9a84c]/60 hover:bg-[#c9a84c]/[0.1]"
           >
             <Share2 strokeWidth={1.5} className="h-4 w-4" />
-            Análisis masivo (hasta 30 CVs)
+            Análisis masivo
           </Link>
         </div>
 
@@ -2066,7 +1716,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
 
         {/* Tabs */}
         <div className="mt-12 flex flex-wrap gap-2">
-          {([['analyze', 'Analizar CV', Brain], ['history', 'Historial', History], ['vacancies', 'Mis Vacantes', Link2], ['analytics', 'Reportes', BarChart2]] as const).map(([tab, label, Icon]) => (
+          {([['analyze', 'Analizar CV', Brain], ['history', 'Historial', History], ['vacancies', 'Mis Vacantes', Link2]] as const).map(([tab, label, Icon]) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -2123,7 +1773,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                     >
                       <div className="flex items-center justify-between">
                         <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">02 · El CV</p>
-                        <span className="text-xs font-light text-white/30">PDF, DOCX, TXT · máx 5 MB</span>
+                        <span className="text-xs font-light text-white/30">PDF, DOCX, TXT · máx 4 MB</span>
                       </div>
 
                       {injectCvText && (
@@ -2210,19 +1860,20 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
             ) : activeTab === 'history' ? (
               <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <HistoryPanel key={historyKey} token={session.token} onToggleStar={() => setHistoryKey(k => k + 1)} onCompare={handleCompare} />
+                {compareError && (
+                  <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-4 text-sm text-red-400">
+                    <AlertCircle strokeWidth={1.5} className="h-4 w-4 shrink-0" /> {compareError}
+                  </div>
+                )}
                 {comparison && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-8">
-                    <ComparisonResultComponent result={comparison} onClose={() => setComparison(null)} />
+                    <ComparisonResultComponent result={comparison} onClose={() => { setComparison(null); setCompareError('') }} />
                   </motion.div>
                 )}
               </motion.div>
-            ) : activeTab === 'vacancies' ? (
+            ) : (
               <motion.div key="vacancies" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <VacancyPanel token={session.token} companyName={session.company_name} onAnalyzeApplicant={handleAnalyzeApplicant} />
-              </motion.div>
-            ) : (
-              <motion.div key="analytics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <AnalyticsPanel token={session.token} stats={stats} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -2235,7 +1886,16 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
           <span>Panel · sesión segura</span>
         </div>
       </footer>
-    </div>
+      <ProductGuide
+        storageKey="b2b_panel_v1"
+        label="Panel de empresa"
+        steps={[
+          { title: 'Publicá una vacante', description: 'Completá cargo, requisitos y ubicación. Si tu empresa está verificada, CVitae genera un enlace de postulación y habilita el matching.' },
+          { title: 'Revisá candidatos', description: 'Cada análisis explica fortalezas, brechas y ajuste al puesto. El score ordena; la decisión siempre sigue siendo humana.' },
+          { title: 'Construí tu shortlist', description: 'Marcá a quién contactar, entrevistar o descartar y agregá notas. El historial queda disponible para tu equipo.' },
+        ]}
+      />
+    </main>
   )
 }
 
@@ -2248,6 +1908,33 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showVerification, setShowVerification] = useState(false)
+  const [requestSent, setRequestSent] = useState(false)
+  const [requestEmailSent, setRequestEmailSent] = useState(false)
+  const [verificationForm, setVerificationForm] = useState({
+    name: '', email: '', company: '', legalName: '', ruc: '', website: '', contactRole: '', phone: '', hiringNeed: '',
+  })
+
+  const submitVerification = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/.netlify/functions/submit-b2b-lead', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: verificationForm.name,
+          email: verificationForm.email,
+          company: verificationForm.company,
+          message: verificationForm.hiringNeed || '',
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'No pudimos enviar la solicitud')
+      setRequestEmailSent(true)
+      setRequestSent(true)
+    } catch (requestError: any) { setError(requestError.message) }
+    finally { setLoading(false) }
+  }
 
   const handleValidate = async () => {
     if (!token.trim()) return
@@ -2265,21 +1952,21 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
   }
 
   const features = [
-    'Analizá un CV o un lote de hasta 30 en una corrida',
-    'Ranking comparativo con score, fortalezas y red flags',
-    'Banco de talento histórico, acumulado por tu empresa',
-    'Link de postulación propio que alimenta tu base',
+    'Ranking IA por ajuste al puesto — no por intuición',
+    'Cada CV viene con fortalezas, brechas y evidencia explicable',
+    'Banco de talento histórico: nunca perdés un candidato fuerte',
+    'Link de postulación propio, tu base de datos crece sola',
   ]
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
+    <main className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
       <Ambient />
       <Helmet>
         <title>Para Empresas | CVitae — Análisis de CVs con IA</title>
-        <meta name="description" content="Acceso al panel de empresas. Analizá CVs con IA y encontrá al candidato ideal en segundos." />
+        <meta name="description" content="Acceso al panel de empresas. Priorizá CVs con evidencia explicable y mantené la decisión de contratación en manos de tu equipo." />
         <link rel="canonical" href="https://cvitae.lat/empresas" />
         <meta property="og:title" content="Para Empresas | CVitae — Análisis de CVs con IA" />
-        <meta property="og:description" content="Analizá lotes de CVs, obtené un ranking comparativo y encontrá al candidato ideal." />
+        <meta property="og:description" content="Revisá lotes de CVs con evidencia comparable y construí una shortlist con control humano." />
         <meta property="og:url" content="https://cvitae.lat/empresas" />
         <meta property="og:type" content="website" />
       </Helmet>
@@ -2302,23 +1989,23 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
               <span className="h-px w-8 bg-white/20" /> Para empresas
             </div>
             <h1 className="mt-6 font-display text-4xl leading-[1.05] tracking-[-0.01em] text-white md:text-6xl">
-              Encontrá al candidato ideal en <em className="italic font-normal">segundos</em>.
+              ¿Perdés horas revisando CVs <em className="italic font-normal">a mano?</em>
             </h1>
             <p className="mt-5 max-w-md text-sm font-light leading-relaxed text-white/55 md:text-base">
-              CVitae lee los CVs por vos, los compara con criterio ATS y te entrega un ranking listo para entrevistar. Cero horas filtrando PDFs.
+              Revisás 50 CVs manualmente para cada vacante. Perdés 3 horas, tomás decisiones subjetivas y el mejor candidato queda enterrado en el stack. CVitae analiza todos en 2 minutos: ranking, brechas y justificación por candidato. IA que no se cansa ni sesga.
+            </p>
+            <p className="mt-3 max-w-md text-xs font-light leading-relaxed text-white/35">
+              Diseñado con estándares de selección de organismos internacionales (BID, ONU) — ese mismo nivel de evidencia lo aplicamos a tu proceso.
             </p>
 
-            {/* Organic line */}
-            <svg viewBox="0 0 800 60" preserveAspectRatio="none" className="mt-6 h-8 w-full max-w-md opacity-40" aria-hidden="true">
-              <defs>
-                <linearGradient id="gl-login" x1="0" x2="1" y1="0" y2="0">
-                  <stop offset="0%" stopColor="#c9a84c" stopOpacity="0" />
-                  <stop offset="50%" stopColor="#c9a84c" stopOpacity="0.7" />
-                  <stop offset="100%" stopColor="#e6cf8a" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path d="M 8 52 C 70 48, 110 30, 150 35 S 250 55, 310 20 S 420 5, 480 15 S 580 40, 640 8 S 760 4, 792 10" fill="none" stroke="url(#gl-login)" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
+            <ol className="mt-7 grid max-w-xl grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Flujo de evaluación">
+              {['CVs recibidos', 'Ranking con justificación', 'Shortlist en 2 min'].map((step, index) => (
+                <li key={step} className="flex items-center gap-2 border-y border-white/8 py-3 text-[10px] uppercase tracking-[0.12em] text-white/60">
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-[#c9a84c]/40 text-[#c9a84c]">{index + 1}</span>
+                  {step}
+                </li>
+              ))}
+            </ol>
 
             <ul className="mt-10 space-y-4">
               {features.map((f) => (
@@ -2327,6 +2014,15 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
                 </li>
               ))}
             </ul>
+
+            <div className="mt-8 rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] px-5 py-4">
+              <p className="text-sm font-medium text-[#c9a84c]">
+                5 CVs gratis para que lo pruebes
+              </p>
+              <p className="mt-1 text-xs font-light text-white/55">
+                Sin tarjeta. Sin contrato. Si querés más capacidad, hablamos.
+              </p>
+            </div>
           </div>
 
           {/* Right — login form */}
@@ -2339,7 +2035,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
               <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/10">
                 <Building2 strokeWidth={1.25} className="h-4 w-4 text-[#c9a84c]" />
               </div>
-              <p className="text-[11px] uppercase tracking-[0.22em] text-white/40">Acceso con token</p>
+              <p className="text-[11px] uppercase tracking-[0.22em] text-white/40">Ya tengo acceso</p>
             </div>
 
             <h2 className="mt-4 font-display text-2xl text-white">Ingresá tu token de empresa.</h2>
@@ -2350,6 +2046,7 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
                 <Key strokeWidth={1.25} className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
                 <input
                   type="text"
+                  aria-label="Token de empresa"
                   value={token}
                   onChange={e => setToken(e.target.value.toUpperCase())}
                   onKeyDown={e => e.key === 'Enter' && handleValidate()}
@@ -2381,14 +2078,50 @@ function TokenLogin({ onSuccess }: { onSuccess: (s: RecruiterSession) => void })
 
             <div className="mt-8 border-t border-white/8 pt-6 text-center">
               <p className="text-xs font-light text-white/35">¿Todavía no tenés token?</p>
-              <a href="mailto:contacto@cvitae.lat" className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-[#c9a84c] transition hover:text-[#e6cf8a]">
-                Contactar a CVitae <ChevronRight strokeWidth={1.5} className="h-3.5 w-3.5" />
-              </a>
+              <button onClick={() => setShowVerification(value => !value)} className="mt-1.5 inline-flex min-h-11 items-center gap-1.5 px-2 text-sm text-[#c9a84c] transition hover:text-[#e6cf8a]">
+                Quiero probarlo gratis <ChevronRight strokeWidth={1.5} className={`h-3.5 w-3.5 transition ${showVerification ? 'rotate-90' : ''}`} />
+              </button>
             </div>
+
+            <AnimatePresence>
+              {showVerification && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                  {requestSent ? (
+                    <div className="mt-6 border-t border-white/8 pt-6 text-center">
+                      <CheckCircle2 className="mx-auto h-6 w-6 text-emerald-400" />
+                      <p className="mt-3 text-sm text-white">¡Perfecto! Te contactamos en menos de 24hs.</p>
+                      <p className="mt-1 text-xs leading-relaxed text-white/40">Vas a recibir un token de prueba con 5 análisis gratis para evaluar la herramienta. Si después de probarlo querés más capacidad, hablamos.</p>
+                      <p className={`mt-3 text-xs leading-relaxed ${requestEmailSent ? 'text-emerald-300/80' : 'text-amber-200/80'}`}>
+                        {requestEmailSent
+                          ? `Confirmación enviada a ${verificationForm.email}.`
+                          : 'Si no recibís novedades en 24hs, escribinos a contacto@cvitae.lat.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <form onSubmit={submitVerification} className="mt-6 space-y-3 border-t border-white/8 pt-6 text-left">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-white/35">Probalo gratis — 5 CVs sin costo</p>
+                        <p className="mt-1 text-xs leading-relaxed text-white/40">Te enviamos un token de prueba en menos de 24hs. Sin contrato ni tarjeta.</p>
+                      </div>
+                      {[
+                        ['name', 'Tu nombre', 'text', true],
+                        ['email', 'Email de trabajo', 'email', true],
+                        ['company', 'Empresa', 'text', true],
+                      ].map(([key, placeholder, type, required]) => (
+                        <input key={String(key)} required={Boolean(required)} type={String(type)} value={verificationForm[key as keyof typeof verificationForm]} onChange={event => setVerificationForm(current => ({ ...current, [String(key)]: event.target.value }))} placeholder={String(placeholder)} className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none" />
+                      ))}
+                      <textarea value={verificationForm.hiringNeed} onChange={event => setVerificationForm(current => ({ ...current, hiringNeed: event.target.value }))} rows={2} placeholder="¿Cuántos CVs revisás por proceso? (opcional)" className="w-full resize-none rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none" />
+                      {error && <p className="text-sm text-red-400">{error}</p>}
+                      <button disabled={loading} className="w-full rounded-full bg-[#c9a84c] px-5 py-3 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-40">{loading ? 'Enviando…' : 'Quiero probarlo gratis →'}</button>
+                    </form>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         </div>
       </section>
-    </div>
+    </main>
   )
 }
 
@@ -2414,6 +2147,6 @@ export default function Recruiters() {
     setSession(null)
   }
 
-  if (!session) return <TokenLogin onSuccess={handleLogin} />
-  return <RecruiterPanel session={session} onLogout={handleLogout} />
+  if (!session) return <><TokenLogin onSuccess={handleLogin} /><FeedbackReporter audience="b2b" feature="Acceso empresarial" className="bottom-5 left-5" /></>
+  return <><RecruiterPanel session={session} onLogout={handleLogout} /><FeedbackReporter audience="b2b" className="bottom-5 left-5" /></>
 }

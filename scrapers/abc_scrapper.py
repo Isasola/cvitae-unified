@@ -53,7 +53,7 @@ def main():
 
     for link in soup.find_all("a", href=True):
         href = link["href"]
-        if "/ofertas/" not in href:
+        if not any(p in href for p in ["/ofertas/", "/oferta/", "/empleo/", "/trabajo/", "/vacante/"]):
             continue
 
         full_url = href if href.startswith("http") else BASE_URL + href
@@ -80,9 +80,10 @@ def main():
             location = location_el.get_text(strip=True) if location_el else ""
 
         jobs.append({
-            "titulo": title,
+            "title": title,
             "organization": company,
             "location": location or "Paraguay",
+            "country_code": "PY",
             "rubro": "General",
             "type": "Tiempo completo",
             "description": "",
@@ -97,7 +98,7 @@ def main():
         status = insert_job(job)
         if status in (200, 201, 409):
             total += 1
-        print(f"[ABC] {job['titulo'][:60]} -> {status}")
+        print(f"[ABC] {job['title'][:60]} -> {status}")
 
     print(f"\nTotal ABC insertadas/actualizadas: {total}/{len(jobs)}")
 

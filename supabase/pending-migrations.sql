@@ -4,9 +4,12 @@
 -- Todas idempotentes — se puede correr múltiples veces sin error
 -- ============================================================
 
--- 1. Toggle de alertas por email en perfiles B2C
+-- 1. Entitlement Pro y consentimiento independiente para alertas B2C
 ALTER TABLE public.user_master_profiles
   ADD COLUMN IF NOT EXISTS is_subscribed boolean DEFAULT false;
+
+ALTER TABLE public.user_master_profiles
+  ADD COLUMN IF NOT EXISTS match_alerts_enabled boolean DEFAULT false;
 
 -- 2. Columnas nuevas en opportunities
 ALTER TABLE public.opportunities

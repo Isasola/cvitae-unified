@@ -5,15 +5,74 @@ import ReactMarkdown from 'react-markdown'
 import {
   Download, Copy, RefreshCw, Briefcase, FileText, CheckCircle,
   Sun, Moon, Edit3, Eye, Sparkles, AlertCircle, Loader2, ChevronRight, Lock,
+  History, ShieldCheck, XCircle, Save, RotateCcw, GitBranch, Upload,
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
-import { GrowthLine } from '@/components/cv/visuals'
+import { ProductGuide } from '@/components/cv/ProductGuide'
 import { auth, supabase } from '@/lib/supabase'
+import { CVLoader } from '@/components/cv/CVLoader'
+import { playComplete } from '@/lib/sounds'
 import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
 
 const MATCH_BATCH_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1/match-batch'
 const ease = [0.22, 1, 0.36, 1] as const
+
+const COLOR_THEMES = [
+  { id: 'navy' as const, label: 'Azul marino', hex: '#1e3a5f', rgb: [30, 58, 95] as [number, number, number] },
+  { id: 'emerald' as const, label: 'Verde esmeralda', hex: '#155843', rgb: [21, 88, 67] as [number, number, number] },
+  { id: 'slate' as const, label: 'Gris pizarra', hex: '#2c3e50', rgb: [44, 62, 80] as [number, number, number] },
+]
+type ColorThemeId = typeof COLOR_THEMES[number]['id']
+type Language = 'es' | 'en' | 'pt'
+
+type EvidenceItem = {
+  id: string
+  category: string
+  claim: string
+  confirmed_value: string | null
+  context: string | null
+  source_kind: string
+  source_label: string | null
+  status: 'pending' | 'confirmed' | 'rejected'
+}
+
+type CvVersion = {
+  id: string
+  vacancy_id: string
+  version_number: number
+  parent_version_id: string | null
+  label: string
+  generation_kind: string
+  cv_markdown: string
+  evidence_snapshot: any[]
+  vacancy_snapshot: Record<string, any>
+  user_attested: boolean
+  created_at: string
+}
+
+const EVIDENCE_LABELS: Record<string, string> = {
+  identity: 'Identidad', title: 'Título', summary: 'Resumen', skill: 'Habilidad',
+  course: 'Curso', experience: 'Experiencia', achievement: 'Logro',
+  education: 'Educación', language: 'Idioma', contact: 'Contacto', other: 'Dato',
+}
+
+const WS_TTL_MS = 24 * 60 * 60 * 1000
+const wsKey = (uid: string) => `cvvivo_ws_v1_${uid}`
+function readWsCache(uid: string) {
+  try {
+    const raw = localStorage.getItem(wsKey(uid))
+    if (!raw) return null
+    const { v, ts } = JSON.parse(raw)
+    if (Date.now() - ts > WS_TTL_MS) { localStorage.removeItem(wsKey(uid)); return null }
+    return v
+  } catch { return null }
+}
+function writeWsCache(uid: string, data: unknown) {
+  try { localStorage.setItem(wsKey(uid), JSON.stringify({ v: data, ts: Date.now() })) } catch {}
+}
+function clearWsCache(uid: string) {
+  try { localStorage.removeItem(wsKey(uid)) } catch {}
+}
 
 export default function CVVivo() {
   const [user, setUser] = useState<any>(null)
@@ -32,7 +91,35 @@ export default function CVVivo() {
   const [darkMode, setDarkMode] = useState(true)
   const [editMode, setEditMode] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [evidence, setEvidence] = useState<EvidenceItem[]>([])
+  const [versions, setVersions] = useState<CvVersion[]>([])
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
+  const [evidenceEdits, setEvidenceEdits] = useState<Record<string, string>>({})
+  const [reviewingEvidence, setReviewingEvidence] = useState<string | null>(null)
+  const [workspaceError, setWorkspaceError] = useState('')
+  const [savingVersion, setSavingVersion] = useState(false)
+  const [manualAttested, setManualAttested] = useState(false)
+  const [showEvidence, setShowEvidence] = useState(true)
+  const [language, setLanguage] = useState<Language>('es')
+  const [colorTheme, setColorTheme] = useState<ColorThemeId>('navy')
   const cvRef = useRef<HTMLDivElement>(null)
+
+  const pendingEvidence = evidence.filter((item) => item.status === 'pending')
+  const confirmedEvidence = evidence.filter((item) => item.status === 'confirmed')
+  const selectedVersion = versions.find((version) => version.id === selectedVersionId) || null
+  const canExportSelectedVersion = Boolean(selectedVersion?.user_attested && !editMode)
+  const readinessChecks = [
+    { label: 'Nombre', ok: Boolean(profile?.full_name || confirmedEvidence.some((item) => item.category === 'identity')) },
+    { label: 'Título profesional', ok: Boolean(profile?.professional_title || confirmedEvidence.some((item) => item.category === 'title')) },
+    { label: 'Experiencia', ok: confirmedEvidence.some((item) => item.category === 'experience') || Boolean(profile?.profile_data?.experience?.length) },
+    { label: 'Educación', ok: confirmedEvidence.some((item) => item.category === 'education') || Boolean(profile?.profile_data?.education?.length) },
+    { label: 'Skills', ok: confirmedEvidence.filter((item) => item.category === 'skill').length >= 5 || (profile?.profile_data?.habilidades?.length || 0) >= 5 },
+    { label: 'Idiomas', ok: confirmedEvidence.some((item) => item.category === 'language') || Boolean(profile?.profile_data?.languages?.length) },
+    { label: 'Logros medibles', ok: confirmedEvidence.some((item) => item.category === 'achievement') },
+    { label: 'LinkedIn', ok: Boolean(profile?.profile_data?.linkedin) },
+  ]
+  const readinessScore = Math.round((readinessChecks.filter((item) => item.ok).length / readinessChecks.length) * 100)
+  const readinessMissing = readinessChecks.filter((item) => !item.ok)
 
   useEffect(() => {
     auth.getUser().then(setUser)
@@ -44,9 +131,11 @@ export default function CVVivo() {
 
   const loadData = async () => {
     setLoading(true)
+    setWorkspaceError('')
     try {
-      const { data: prof } = await supabase
+      const { data: prof, error: profileError } = await supabase
         .from('user_master_profiles').select('*').eq('user_id', user.id).maybeSingle()
+      if (profileError) throw profileError
       setProfile(prof)
       const isProUser = prof?.is_subscribed || false
       setIsSubscribed(isProUser)
@@ -56,51 +145,135 @@ export default function CVVivo() {
       setCvVivoUsedToday(cvVivoToday >= 1 && !isProUser)
 
       const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(MATCH_BATCH_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-      })
-      const data = await res.json()
-      setVacancies(data.matches || [])
-
-      if (prof) {
-        const baseRes = await fetch('/.netlify/functions/generate-cv-vivo', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ profile: { ...prof, user_id: user.id }, vacancy: null }),
-        })
-        const baseData = await baseRes.json()
-        if (baseData.cv) {
-          setGeneratedCV(baseData.cv)
-          setEditableCV(baseData.cv)
-          setFromCache(baseData.fromCache || false)
-        }
+      if (!session?.access_token) throw new Error('Tu sesión expiró. Volvé a ingresar.')
+      const authenticatedHeaders = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
       }
-    } catch { /* silencioso */ } finally {
+      const cached = readWsCache(user.id)
+      let matchesData: any
+      let workspaceData: any
+      if (cached) {
+        matchesData = cached.matchesData
+        workspaceData = cached.workspaceData
+      } else {
+        const [matchesRes, workspaceRes] = await Promise.all([
+          fetch(MATCH_BATCH_URL, { method: 'POST', headers: authenticatedHeaders }).catch(() => null),
+          fetch('/.netlify/functions/cv-workspace', {
+            method: 'POST',
+            headers: authenticatedHeaders,
+            body: JSON.stringify({ action: 'overview' }),
+          }),
+        ])
+        matchesData = matchesRes?.ok ? await matchesRes.json().catch(() => ({})) : {}
+        workspaceData = await workspaceRes.json()
+        if (!workspaceRes.ok) throw new Error(workspaceData.error || 'No pudimos cargar tu espacio de CV')
+        writeWsCache(user.id, { matchesData, workspaceData })
+      }
+      // The custom pasted-vacancy flow is separate. CVitae suggestions must
+      // originate only from a visible MatchDecision.
+      setVacancies((matchesData.matches || []).filter((match: any) => match.matchDecision?.outcome === 'MATCH'))
+      const nextEvidence = workspaceData.evidence || []
+      const nextVersions = workspaceData.versions || []
+      setEvidence(nextEvidence)
+      setEvidenceEdits(Object.fromEntries(nextEvidence.map((item: EvidenceItem) => [item.id, item.confirmed_value || item.claim])))
+      setVersions(nextVersions)
+      if (nextVersions[0]) {
+        setSelectedVersionId(nextVersions[0].id)
+        setGeneratedCV(nextVersions[0].cv_markdown)
+        setEditableCV(nextVersions[0].cv_markdown)
+        setFromCache(true)
+      }
+    } catch (error: any) {
+      setWorkspaceError(error?.message || 'No pudimos cargar tu espacio de CV.')
+    } finally {
       setLoading(false)
     }
   }
 
-  const handleAdaptCV = async () => {
+  const applyVersion = (version: CvVersion) => {
+    setSelectedVersionId(version.id)
+    setGeneratedCV(version.cv_markdown)
+    setEditableCV(version.cv_markdown)
+    setEditMode(false)
+    setManualAttested(false)
+  }
+
+  const workspaceMutation = async (body: Record<string, any>) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) throw new Error('Tu sesión expiró. Volvé a ingresar.')
+    const response = await fetch('/.netlify/functions/cv-workspace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify(body),
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || 'No pudimos actualizar tu CV')
+    if (user?.id) clearWsCache(user.id)
+    return data
+  }
+
+  const reviewEvidence = async (item: EvidenceItem, decision: 'confirmed' | 'rejected') => {
+    setReviewingEvidence(item.id)
+    setWorkspaceError('')
+    try {
+      const data = await workspaceMutation({
+        action: 'review_evidence',
+        evidenceId: item.id,
+        decision,
+        confirmedValue: evidenceEdits[item.id] || item.claim,
+      })
+      setEvidence((current) => current.map((entry) => entry.id === item.id
+        ? { ...entry, status: data.evidence.status, confirmed_value: data.evidence.confirmed_value }
+        : entry))
+    } catch (error: any) {
+      setWorkspaceError(error?.message || 'No pudimos guardar la revisión.')
+    } finally {
+      setReviewingEvidence(null)
+    }
+  }
+
+  const confirmAllEvidence = async () => {
+    const ids = pendingEvidence.map((item) => item.id)
+    if (!ids.length) return
+    setReviewingEvidence('all')
+    setWorkspaceError('')
+    try {
+      await workspaceMutation({ action: 'review_all', evidenceIds: ids })
+      setEvidence((current) => current.map((item) => ids.includes(item.id) ? { ...item, status: 'confirmed' } : item))
+    } catch (error: any) {
+      setWorkspaceError(error?.message || 'No pudimos confirmar las evidencias.')
+    } finally {
+      setReviewingEvidence(null)
+    }
+  }
+
+  const generateVersion = async (vacancyToUse: any) => {
     if (!profile) return
-    if (cvVivoUsedToday && !isSubscribed) {
-      alert('Ya usaste tu CV Vivo del día. Con Pro podés adaptarlo para cada vacante sin límite.\n\nEscribinos por WhatsApp: wa.me/595992954169')
+    if (pendingEvidence.length > 0) {
+      setShowEvidence(true)
+      setWorkspaceError('Revisá y confirmá tus evidencias antes de adaptar tu CV.')
       return
     }
-    const vacancyToUse = mode === 'match' ? selectedVacancy : { titulo: 'Vacante Personalizada', cuerpo: customVacancy, id: 'custom' }
-    if (!vacancyToUse) return
-
     setAdapting(true)
+    setWorkspaceError('')
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Sesión requerida')
       const res = await fetch('/.netlify/functions/generate-cv-vivo', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile: { ...profile, user_id: user.id }, vacancy: vacancyToUse }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ vacancy: vacancyToUse, force: true, parentVersionId: selectedVersionId, language }),
       })
       const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'No pudimos adaptar el CV')
       if (data.cv) {
-        setGeneratedCV(data.cv)
-        setEditableCV(data.cv)
+        const version = data.version as CvVersion
+        setVersions((current) => [version, ...current.filter((item) => item.id !== version.id)])
+        applyVersion(version)
+        playComplete()
         setFromCache(data.fromCache || false)
-        setEditMode(false)
+        if (user?.id) clearWsCache(user.id)
         if (!isSubscribed) {
           const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Asuncion' })
           const currentUsage = profile?.profile_data?.daily_usage
@@ -115,39 +288,242 @@ export default function CVVivo() {
         }
       }
     } catch {
-      alert('Error al adaptar el CV. Intentá de nuevo.')
+      setWorkspaceError('Error al adaptar el CV. Intentá de nuevo.')
     } finally {
       setAdapting(false)
     }
   }
 
-  const downloadPDF = async () => {
-    if (!cvRef.current) return
-    const el = cvRef.current
-    const prevMaxHeight = el.style.maxHeight
-    el.style.maxHeight = 'none'
-    await new Promise(r => setTimeout(r, 150))
-    const canvas = await html2canvas(el, {
-      scale: 2,
-      backgroundColor: darkMode ? '#111111' : '#ffffff',
-      useCORS: true, logging: false,
-      windowWidth: el.scrollWidth, windowHeight: el.scrollHeight,
-    })
-    el.style.maxHeight = prevMaxHeight
-    const imgData = canvas.toDataURL('image/png')
-    const pdf = new jsPDF('p', 'mm', 'a4')
-    const pdfW = pdf.internal.pageSize.getWidth()
-    const pdfH = pdf.internal.pageSize.getHeight()
-    const ratio = canvas.width / pdfW
-    const totalH = canvas.height / ratio
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfW, totalH)
-    let remaining = totalH - pdfH, page = 1
-    while (remaining > 0) {
-      pdf.addPage()
-      pdf.addImage(imgData, 'PNG', 0, -(pdfH * page), pdfW, totalH)
-      remaining -= pdfH; page++
+  const handleAdaptCV = async () => {
+    const vacancyToUse = mode === 'match'
+      ? selectedVacancy
+      : { titulo: 'Vacante Personalizada', cuerpo: customVacancy, id: 'custom' }
+    if (!vacancyToUse) return
+    await generateVersion(vacancyToUse)
+  }
+
+  const handleGenerateBase = async () => generateVersion(null)
+
+  const saveManualVersion = async () => {
+    if (!manualAttested || !editableCV.trim()) return
+    setSavingVersion(true)
+    setWorkspaceError('')
+    try {
+      const data = await workspaceMutation({
+        action: 'save_manual_version',
+        cvMarkdown: editableCV,
+        vacancyId: selectedVersion?.vacancy_id || 'base_cv',
+        parentVersionId: selectedVersionId,
+        vacancySnapshot: selectedVersion?.vacancy_snapshot || {},
+        label: selectedVersion ? `Edición de ${selectedVersion.label}` : 'Edición confirmada',
+        attested: true,
+      })
+      const version = data.version as CvVersion
+      setVersions((current) => [version, ...current])
+      applyVersion(version)
+    } catch (error: any) {
+      setWorkspaceError(error?.message || 'No pudimos guardar la versión.')
+    } finally {
+      setSavingVersion(false)
     }
-    pdf.save(`CVitae_${profile?.full_name || 'Candidato'}_${new Date().toISOString().split('T')[0]}.pdf`)
+  }
+
+  const restoreVersion = async (version: CvVersion) => {
+    setSavingVersion(true)
+    setWorkspaceError('')
+    try {
+      const data = await workspaceMutation({ action: 'restore_version', versionId: version.id })
+      const restored = data.version as CvVersion
+      setVersions((current) => [restored, ...current])
+      applyVersion(restored)
+    } catch (error: any) {
+      setWorkspaceError(error?.message || 'No pudimos restaurar la versión.')
+    } finally {
+      setSavingVersion(false)
+    }
+  }
+
+  const downloadPDF = () => {
+    const source = (editMode ? editableCV : generatedCV).trim()
+    if (!source || !canExportSelectedVersion) {
+      setWorkspaceError('Revisá y confirmá esta versión antes de descargar el PDF.')
+      return
+    }
+
+    const theme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0]
+    const [cr, cg, cb] = theme.rgb
+
+    const pdf = new jsPDF('p', 'mm', 'a4')
+    const pageW = pdf.internal.pageSize.getWidth()
+    const pageH = pdf.internal.pageSize.getHeight()
+    const ml = 16
+    const mr = 16
+    const bodyW = pageW - ml - mr
+    const footerY = pageH - 7
+
+    // ── Parse header block ──────────────────────────────────────────────────
+    const allLines = source.split(/\r?\n/)
+    let nameText = ''
+    let subtitleText = ''
+    let contactText = ''
+    let secondContactText = ''
+    let bodyStart = 0
+
+    for (let i = 0; i < Math.min(allLines.length, 12); i++) {
+      const l = allLines[i].trim()
+      if (!l) { bodyStart = i + 1; continue }
+      if (l.startsWith('# ')) {
+        nameText = l.slice(2).replace(/\*\*/g, '')
+        bodyStart = i + 1
+        continue
+      }
+      if (!nameText) continue
+      const hasContact = l.includes('@') || /\+?\d[\d\s\-().]{6,}/.test(l) || l.includes('·') || l.includes('|')
+      if (!subtitleText && !hasContact && !l.startsWith('#')) {
+        subtitleText = l.replace(/\*\*/g, '')
+        bodyStart = i + 1
+        continue
+      }
+      if (hasContact) {
+        if (!contactText) { contactText = l.replace(/\*\*/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); bodyStart = i + 1; continue }
+        if (!secondContactText) { secondContactText = l.replace(/\*\*/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); bodyStart = i + 1; continue }
+      }
+      if (nameText && contactText) break
+    }
+
+    // ── Draw header block ───────────────────────────────────────────────────
+    const headerH = 40
+    pdf.setFillColor(cr, cg, cb)
+    pdf.rect(0, 0, pageW, headerH, 'F')
+
+    let hy = 15
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(19)
+    pdf.setTextColor(255, 255, 255)
+    const nameWrapped = pdf.splitTextToSize(nameText || 'Candidato', bodyW) as string[]
+    for (const nl of nameWrapped) { pdf.text(nl, ml, hy); hy += 7.5 }
+
+    if (subtitleText) {
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(9.5)
+      pdf.setTextColor(200, 220, 245)
+      pdf.text(subtitleText.slice(0, 120), ml, hy)
+      hy += 5.5
+    }
+    if (contactText) {
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(8.5)
+      pdf.setTextColor(170, 198, 228)
+      pdf.text(contactText.slice(0, 150), ml, hy)
+      hy += 4.5
+    }
+    if (secondContactText) {
+      pdf.setFontSize(8.5)
+      pdf.setTextColor(170, 198, 228)
+      pdf.text(secondContactText.slice(0, 150), ml, hy)
+    }
+
+    // ── Body ────────────────────────────────────────────────────────────────
+    let y = headerH + 9
+    pdf.setTextColor(40, 40, 40)
+
+    const checkPage = (needed = 7) => {
+      if (y + needed > footerY) { pdf.addPage(); y = 12 }
+    }
+
+    const renderWrapped = (text: string, size: number, bold: boolean, color: [number, number, number], indent = 0, spacing = 5) => {
+      pdf.setFont('helvetica', bold ? 'bold' : 'normal')
+      pdf.setFontSize(size)
+      pdf.setTextColor(...color)
+      const wrapped = pdf.splitTextToSize(text, bodyW - indent) as string[]
+      for (const l of wrapped) { checkPage(); pdf.text(l, ml + indent, y); y += spacing }
+    }
+
+    for (let i = bodyStart; i < allLines.length; i++) {
+      const line = allLines[i].trim()
+      if (!line) { y += 2; continue }
+
+      if (line.startsWith('# ')) continue
+
+      if (line.startsWith('## ')) {
+        y += 6
+        checkPage(14)
+        const heading = line.slice(3).replace(/\*\*/g, '').toUpperCase()
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(8.5)
+        pdf.setTextColor(cr, cg, cb)
+        pdf.text(heading, ml, y)
+        y += 2.2
+        pdf.setDrawColor(cr, cg, cb)
+        pdf.setLineWidth(0.35)
+        pdf.line(ml, y, pageW - mr, y)
+        y += 5.5
+        continue
+      }
+
+      if (line.startsWith('### ')) {
+        checkPage(9)
+        y += 1.5
+        renderWrapped(line.slice(4).replace(/\*\*/g, ''), 10.5, true, [20, 20, 20], 0, 5.8)
+        continue
+      }
+
+      if (/^[-*]\s+/.test(line)) {
+        const bt = line.replace(/^[-*]\s+/, '').replace(/\*\*/g, '')
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(9.5)
+        pdf.setTextColor(60, 60, 60)
+        const wrapped = pdf.splitTextToSize(bt, bodyW - 5.5) as string[]
+        for (let j = 0; j < wrapped.length; j++) {
+          checkPage()
+          if (j === 0) pdf.text('•', ml, y)
+          pdf.text(wrapped[j], ml + 4.5, y)
+          y += 4.9
+        }
+        continue
+      }
+
+      // Regular line — detect meta (dates, company, location) vs paragraph
+      const clean = line.replace(/\*\*/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      const isMeta = /\d{4}/.test(clean) || clean.includes('·') || clean.includes('|') || (clean.length < 90 && /^[A-ZÁÉÍÓÚÑ]/.test(clean) && !clean.endsWith('.') && !clean.endsWith(','))
+      if (isMeta) {
+        renderWrapped(clean, 9, false, [110, 110, 110], 0, 4.8)
+      } else {
+        renderWrapped(clean, 10, false, [55, 55, 55], 0, 5)
+      }
+    }
+
+    // ── Footer on every page ────────────────────────────────────────────────
+    const totalPages = (pdf.internal as any).getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) {
+      pdf.setPage(p)
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(7)
+      pdf.setTextColor(170, 170, 170)
+      pdf.text(profile?.full_name || 'Candidato', ml, pageH - 4)
+      pdf.text(`${p} / ${totalPages}`, pageW / 2, pageH - 4, { align: 'center' })
+      pdf.text('cvitae.lat', pageW - mr, pageH - 4, { align: 'right' })
+    }
+
+    const safeName = (profile?.full_name || 'Candidato').replace(/\s+/g, '_')
+    pdf.save(`CVitae_${safeName}_${new Date().toISOString().split('T')[0]}.pdf`)
+  }
+
+  const downloadOriginalCV = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Tu sesión expiró. Volvé a ingresar.')
+      const response = await fetch('/.netlify/functions/b2c-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'download_cv' }),
+      })
+      const data = await response.json()
+      if (!response.ok || !data.url) throw new Error(data.error || 'No pudimos preparar la descarga')
+      window.open(data.url, '_blank', 'noopener,noreferrer')
+    } catch (error: any) {
+      setWorkspaceError(error?.message || 'No pudimos descargar tu CV original.')
+    }
   }
 
   const handleCopy = () => {
@@ -160,10 +536,7 @@ export default function CVVivo() {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center gap-6 py-32">
-          <div className="relative h-20 w-full max-w-sm">
-            <GrowthLine className="absolute inset-0 h-full w-full" />
-          </div>
-          <p className="text-sm text-muted-foreground">Generando tu CV base…</p>
+          <CVLoader size={80} label="Preparando tu espacio de CV…" />
         </div>
       </DashboardLayout>
     )
@@ -173,6 +546,7 @@ export default function CVVivo() {
 
   return (
     <DashboardLayout>
+      {adapting && <CVLoader variant="overlay" label="Generando tu CV Vivo..." />}
       <Helmet>
         <title>CV Vivo | CVitae</title>
         <meta name="description" content="Generá un CV adaptado por IA a cada vacante que te interesa. Descargalo en PDF en segundos." />
@@ -183,17 +557,16 @@ export default function CVVivo() {
         <div className="flex flex-col justify-between gap-6 md:flex-row md:items-start">
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="font-display text-3xl text-white">CV Vivo</h1>
+              <h1 className="font-display text-3xl text-white">Mi CV</h1>
               <span className="rounded-full border border-[#c9a84c]/30 px-2.5 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[#c9a84c]">Híbrido ATS</span>
             </div>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              La IA mejora el <strong className="text-white">contenido y las palabras</strong> para pasar filtros ATS.
-              Elegí una vacante de CVitae o pegá una descripción externa.
+              Tu información, CV general, adaptaciones y versiones en un solo lugar. La IA puede mejorar el <strong className="text-white">orden y la redacción</strong> sin inventar hechos.
             </p>
             {fromCache && (
               <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] px-3 py-1">
                 <Sparkles className="h-3.5 w-3.5 text-[#c9a84c]" />
-                <span className="text-xs text-[#c9a84c]">Cargado al instante desde caché</span>
+                <span className="text-xs text-[#c9a84c]">Versión guardada · historial disponible</span>
               </div>
             )}
           </div>
@@ -210,7 +583,21 @@ export default function CVVivo() {
               ))}
             </div>
 
-            {mode === 'match' ? (
+            <div className="flex items-center gap-2">
+            <span className="shrink-0 text-xs text-white/35">Idioma:</span>
+            <div className="flex flex-1 rounded-xl border border-white/10 bg-white/[0.02] p-0.5">
+              {(['es', 'en', 'pt'] as const).map((lang) => (
+                <button key={lang} onClick={() => setLanguage(lang)}
+                  className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-all ${
+                    language === lang ? 'bg-[#c9a84c] text-[#0a0a0a]' : 'text-muted-foreground hover:text-white'
+                  }`}>
+                  {lang === 'es' ? 'Español' : lang === 'en' ? 'English' : 'Português'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mode === 'match' ? (
               <select
                 className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-4 py-2.5 text-sm text-white outline-none focus:border-[#c9a84c]/50 transition"
                 onChange={e => setSelectedVacancy(vacancies.find(v => v.id === e.target.value) || null)}
@@ -231,39 +618,247 @@ export default function CVVivo() {
               />
             )}
 
-            {cvVivoUsedToday && !isSubscribed ? (
-              <div className="space-y-2">
+            {confirmedEvidence.length === 0 && pendingEvidence.length > 0 && (
+              <div className="rounded-xl border border-amber-400/25 bg-amber-400/[0.06] px-4 py-3 text-xs text-amber-200/80">
+                <p className="font-medium text-amber-200">Un paso antes de adaptar</p>
+                <p className="mt-1">Encontramos evidencias en tu CV. Confirmá que son correctas para habilitar la adaptación.</p>
                 <button
-                  disabled
-                  className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full bg-white/10 text-sm font-medium text-white/40 cursor-not-allowed"
+                  type="button"
+                  onClick={confirmAllEvidence}
+                  disabled={reviewingEvidence !== null}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-400/30 disabled:opacity-40"
                 >
-                  <Lock size={16} /> Límite diario alcanzado
+                  <CheckCircle size={12} /> Confirmar todas y continuar
                 </button>
-                <p className="text-center text-xs text-white/40">
-                  <a href={`https://wa.me/595992954169?text=${encodeURIComponent('Hola! Quiero activar CVitae Pro por USD 9/mes.')}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="text-[#c9a84c] hover:underline">Pro</a> para adaptaciones ilimitadas
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                <button
-                  onClick={handleAdaptCV} disabled={!canAdapt || adapting}
-                  className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {adapting ? <><RefreshCw className="animate-spin" size={16} /> Adaptando…</> : <><Briefcase size={16} /> Adaptar CV</>}
-                </button>
-                {!isSubscribed && (
-                  <p className="text-center text-xs text-white/40">1 gratis hoy · <a href={`https://wa.me/595992954169?text=${encodeURIComponent('Hola! Quiero activar CVitae Pro por USD 9/mes.')}`} target="_blank" rel="noopener noreferrer" className="text-[#c9a84c] hover:underline">Pro</a> para más</p>
-                )}
               </div>
             )}
+            <div className="space-y-1">
+                <button
+                  onClick={handleAdaptCV} disabled={!canAdapt || adapting || pendingEvidence.length > 0 || confirmedEvidence.length === 0}
+                  className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {adapting
+                    ? <><RefreshCw className="animate-spin" size={16} /> Adaptando…</>
+                    : pendingEvidence.length > 0
+                      ? <><ShieldCheck size={16} /> Revisá evidencias primero</>
+                      : confirmedEvidence.length === 0
+                        ? <><Upload size={16} /> Subí tu CV en Mi Perfil primero</>
+                        : <><Briefcase size={16} /> Crear versión adaptada</>}
+                </button>
+                {!isSubscribed && <p className="text-center text-xs text-white/40">Durante esta beta, el uso no tiene límite diario.</p>}
+            </div>
           </div>
         </div>
+
+        {workspaceError && (
+          <div className="flex items-start gap-3 rounded-2xl border border-red-400/20 bg-red-500/[0.06] px-4 py-3 text-sm text-red-200">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{workspaceError}</span>
+          </div>
+        )}
+
+        <section className="rounded-3xl border border-white/10 bg-white/[0.02] p-5 sm:p-6">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[#c9a84c]">Preparación del CV</p>
+              <div className="mt-2 flex items-end gap-3">
+                <span className="font-display text-3xl text-white">{readinessScore}%</span>
+                <span className="pb-1 text-xs text-white/45">listo con datos verificables</span>
+              </div>
+              <p className="mt-2 max-w-2xl text-xs leading-relaxed text-white/45">
+                {readinessMissing.length
+                  ? `Podemos trabajar con tu información actual, pero tu CV quedará más fuerte si completás ${readinessMissing.length === 1 ? 'este dato' : `estos ${readinessMissing.length} datos`}.`
+                  : 'Tu información base está suficientemente completa para generar y adaptar versiones.'}
+              </p>
+            </div>
+            <a href="/mi-carrera/perfil" className="inline-flex h-9 shrink-0 items-center justify-center rounded-full border border-white/10 px-4 text-xs text-white/70 transition hover:border-[#c9a84c]/30 hover:text-[#e6cf8a]">
+              Completar / editar información
+            </a>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {readinessChecks.map((item) => (
+              <span key={item.label} className={`rounded-full border px-2.5 py-1 text-[11px] ${item.ok ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200' : 'border-amber-300/20 bg-amber-300/[0.05] text-amber-200'}`}>
+                {item.ok ? '✓' : '!'} {item.label}
+              </span>
+            ))}
+          </div>
+        </section>
+
+        <section className={`overflow-hidden rounded-3xl border transition-colors ${
+          pendingEvidence.length
+            ? 'border-[#c9a84c]/25 bg-gradient-to-br from-[#c9a84c]/[0.08] to-white/[0.015]'
+            : 'border-emerald-400/20 bg-emerald-500/[0.045]'
+        }`}>
+          <button
+            type="button"
+            onClick={() => setShowEvidence((value) => !value)}
+            className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left sm:px-6"
+          >
+            <span className="flex items-center gap-3">
+              <span className={`flex h-10 w-10 items-center justify-center rounded-2xl border ${pendingEvidence.length ? 'border-[#c9a84c]/25 bg-[#c9a84c]/10 text-[#c9a84c]' : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'}`}>
+                <ShieldCheck className="h-5 w-5" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-white">Evidencias que puede usar tu CV</span>
+                <span className="mt-0.5 block text-xs text-white/45">
+                  {pendingEvidence.length
+                    ? `${pendingEvidence.length} por revisar · ninguna entra al CV sin tu confirmación`
+                    : `${confirmedEvidence.length} confirmadas · datos pendientes y rechazados quedan fuera`}
+                </span>
+              </span>
+            </span>
+            <ChevronRight className={`h-4 w-4 text-white/35 transition-transform ${showEvidence ? 'rotate-90' : ''}`} />
+          </button>
+
+          {showEvidence && (
+            <div className="border-t border-white/8 px-5 py-5 sm:px-6">
+              {pendingEvidence.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                    <p className="max-w-2xl text-xs leading-relaxed text-white/50">
+                      Corregí el texto si hace falta. Confirmar significa que el dato es real y puede aparecer en versiones futuras; “No usar” lo excluye.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={confirmAllEvidence}
+                      disabled={reviewingEvidence !== null}
+                      className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-full border border-[#c9a84c]/30 px-4 text-xs font-medium text-[#e6cf8a] transition hover:bg-[#c9a84c]/10 disabled:opacity-40"
+                    >
+                      {reviewingEvidence === 'all' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                      Confirmar todos tal como están
+                    </button>
+                  </div>
+                  <div className="max-h-[430px] space-y-2 overflow-y-auto pr-1">
+                    {pendingEvidence.map((item) => (
+                      <div key={item.id} className="rounded-2xl border border-white/8 bg-black/20 p-4">
+                        <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.12em]">
+                          <span className="text-[#c9a84c]">{EVIDENCE_LABELS[item.category] || 'Dato'}</span>
+                          <span className="text-white/20">/</span>
+                          <span className="normal-case tracking-normal text-white/35">{item.source_label || 'Mi perfil'}</span>
+                          {item.context && <span className="normal-case tracking-normal text-white/35">· {item.context}</span>}
+                        </div>
+                        <input
+                          value={evidenceEdits[item.id] ?? item.claim}
+                          onChange={(event) => setEvidenceEdits((current) => ({ ...current, [item.id]: event.target.value }))}
+                          maxLength={2000}
+                          className="w-full rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#c9a84c]/40"
+                        />
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => reviewEvidence(item, 'confirmed')}
+                            disabled={reviewingEvidence !== null || !(evidenceEdits[item.id] ?? item.claim).trim()}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#c9a84c] px-3 text-xs font-medium text-[#0a0a0a] disabled:opacity-40"
+                          >
+                            {reviewingEvidence === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                            Confirmar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => reviewEvidence(item, 'rejected')}
+                            disabled={reviewingEvidence !== null}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/10 px-3 text-xs text-white/55 transition hover:border-red-300/25 hover:text-red-200 disabled:opacity-40"
+                          >
+                            <XCircle className="h-3.5 w-3.5" /> No usar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                  <div>
+                    <p className="text-sm font-medium text-emerald-200">Control de evidencia completo</p>
+                    <p className="mt-1 text-xs text-white/45">La IA puede ordenar y redactar mejor, pero no agregar hechos fuera de estas confirmaciones.</p>
+                  </div>
+                  {!generatedCV && confirmedEvidence.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleGenerateBase}
+                      disabled={adapting}
+                      className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-[#c9a84c] px-5 text-sm font-medium text-[#0a0a0a] disabled:opacity-40"
+                    >
+                      {adapting ? <CVLoader variant="button" size={20} /> : <Sparkles className="h-4 w-4" />}
+                      Crear primera versión
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
 
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Left panel */}
           <div className="space-y-4 lg:col-span-1">
+            <div className="glass-card rounded-3xl p-5">
+              <h3 className="font-display text-base text-white">Mi información</h3>
+              <div className="mt-4 space-y-3 text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-white/45">CV original</span>
+                  <span className="max-w-[170px] truncate text-white/75">{profile?.cv_file_name || 'No cargado'}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-white/45">Perfil</span>
+                  <span className="text-white/75">{profile?.profile_data?.onboarding_status === 'completed' ? 'Confirmado' : 'En revisión'}</span>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <a href="/mi-carrera/perfil" className="inline-flex h-9 items-center justify-center rounded-full border border-white/10 text-xs text-white/65 transition hover:border-[#c9a84c]/30 hover:text-[#e6cf8a]">
+                  Editar / reemplazar
+                </a>
+                <button type="button" onClick={downloadOriginalCV} disabled={!profile?.cv_file_name} className="inline-flex h-9 items-center justify-center rounded-full border border-white/10 text-xs text-white/65 transition hover:border-[#c9a84c]/30 hover:text-[#e6cf8a] disabled:cursor-not-allowed disabled:opacity-35">
+                  Descargar original
+                </button>
+              </div>
+            </div>
+            <div className="glass-card rounded-3xl p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="flex items-center gap-2 font-display text-base text-white">
+                  <History size={16} className="text-[#c9a84c]" /> Historial
+                </h3>
+                <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/40">{versions.length} versiones</span>
+              </div>
+              {versions.length ? (
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                  {versions.map((version) => {
+                    const active = version.id === selectedVersionId
+                    return (
+                      <div key={version.id} className={`rounded-2xl border p-3 transition ${active ? 'border-[#c9a84c]/35 bg-[#c9a84c]/[0.07]' : 'border-white/7 bg-white/[0.015]'}`}>
+                        <button type="button" onClick={() => applyVersion(version)} className="w-full text-left">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="text-xs font-medium text-white">{version.label}</span>
+                            <span className="shrink-0 text-[10px] text-[#c9a84c]">v{version.version_number}</span>
+                          </div>
+                          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-white/35">
+                            <GitBranch className="h-3 w-3" />
+                            <span>{version.generation_kind === 'manual' ? 'Edición confirmada' : version.generation_kind === 'restored' ? 'Restaurada' : version.generation_kind === 'adapted' ? 'Adaptada' : 'General'}</span>
+                            <span>·</span>
+                            <time>{new Intl.DateTimeFormat('es-PY', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(version.created_at))}</time>
+                          </div>
+                        </button>
+                        {active && versions[0]?.id !== version.id && (
+                          <button
+                            type="button"
+                            onClick={() => restoreVersion(version)}
+                            disabled={savingVersion}
+                            className="mt-3 inline-flex h-7 items-center gap-1.5 rounded-full border border-white/10 px-2.5 text-[10px] text-white/55 transition hover:border-[#c9a84c]/30 hover:text-[#e6cf8a] disabled:opacity-40"
+                          >
+                            <RotateCcw className="h-3 w-3" /> Restaurar como versión nueva
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="rounded-2xl border border-dashed border-white/10 px-3 py-5 text-center text-xs leading-relaxed text-white/35">
+                  Tu primera versión aparecerá después de revisar las evidencias.
+                </p>
+              )}
+            </div>
+
             <div className="glass-card rounded-3xl p-6">
               <h3 className="mb-4 flex items-center gap-2 font-display text-base text-white">
                 <CheckCircle size={16} className="text-[#c9a84c]" /> Ventajas del CV Vivo
@@ -271,9 +866,9 @@ export default function CVVivo() {
               <ul className="space-y-3">
                 {[
                   { t: 'ATS-Friendly', d: 'Estructura legible por cualquier software de reclutamiento.' },
-                  { t: 'Palabras clave exactas', d: 'La IA usa los términos de la vacante que elegiste.' },
+                  { t: 'Sin hechos inventados', d: 'Solo utiliza evidencias que vos confirmaste.' },
                   { t: 'Formato Híbrido', d: 'Equilibrio entre diseño premium y funcionalidad.' },
-                  { t: 'Editable', d: 'Modificá el texto antes de descargar.' },
+                  { t: 'Versionado', d: 'Cada edición se guarda sin sobrescribir las anteriores.' },
                 ].map((item, i) => (
                   <li key={i} className="flex gap-3">
                     <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#c9a84c]" />
@@ -294,14 +889,58 @@ export default function CVVivo() {
                     {darkMode ? <Sun size={14} /> : <Moon size={14} />}
                     {darkMode ? 'Modo claro' : 'Modo oscuro'}
                   </button>
-                  <button onClick={() => { if (!editMode) setEditableCV(generatedCV); setEditMode(!editMode) }}
+                  <button onClick={() => { if (!editMode) { setEditableCV(generatedCV); setManualAttested(false) } setEditMode(!editMode) }}
                     className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.02] py-2.5 text-xs font-medium text-white transition hover:bg-white/[0.05]">
                     {editMode ? <Eye size={14} /> : <Edit3 size={14} />}
                     {editMode ? 'Vista previa' : 'Editar'}
                   </button>
                 </div>
-                <button onClick={downloadPDF}
-                  className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]">
+                {editMode && (
+                  <div className="rounded-2xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.05] p-3">
+                    <label className="flex cursor-pointer items-start gap-2.5 text-xs leading-relaxed text-white/55">
+                      <input
+                        type="checkbox"
+                        checked={manualAttested}
+                        onChange={(event) => setManualAttested(event.target.checked)}
+                        className="mt-0.5 h-4 w-4 accent-[#c9a84c]"
+                      />
+                      Confirmo que mis cambios son reales y no agregan métricas, cargos ni experiencia que no pueda respaldar.
+                    </label>
+                    <button
+                      type="button"
+                      onClick={saveManualVersion}
+                      disabled={!manualAttested || savingVersion || !editableCV.trim()}
+                      className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-xs font-medium text-[#0a0a0a] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {savingVersion ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                      Guardar como versión nueva
+                    </button>
+                  </div>
+                )}
+                {selectedVersion && !selectedVersion.user_attested && (
+                  <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2.5 text-xs leading-relaxed text-amber-100/75">
+                    Borrador generado por IA. Revisalo y guardalo con tu confirmación antes de exportar.
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-white/35">Color PDF:</span>
+                  <div className="flex gap-2">
+                    {COLOR_THEMES.map((theme) => (
+                      <button key={theme.id} onClick={() => setColorTheme(theme.id)}
+                        title={theme.label}
+                        className={`h-5 w-5 rounded-full transition-all ${colorTheme === theme.id ? 'ring-2 ring-white/50 ring-offset-2 ring-offset-[#0a0a0a]' : 'opacity-60 hover:opacity-100'}`}
+                        style={{ backgroundColor: theme.hex }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={downloadPDF}
+                  disabled={!canExportSelectedVersion}
+                  title={!canExportSelectedVersion ? 'Confirmá una versión guardada antes de descargar' : undefined}
+                  className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:cursor-not-allowed disabled:opacity-40"
+                >
                   <Download size={16} /> Descargar PDF
                 </button>
                 <button onClick={handleCopy}
@@ -314,11 +953,26 @@ export default function CVVivo() {
 
           {/* CV Preview */}
           <div className="lg:col-span-2">
+            {selectedVersion && (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
+                <div className="flex items-center gap-2 text-xs text-white/55">
+                  <GitBranch className="h-3.5 w-3.5 text-[#c9a84c]" />
+                  <span className="font-medium text-white">{selectedVersion.label}</span>
+                  <span>· v{selectedVersion.version_number}</span>
+                </div>
+                <span className={`inline-flex items-center gap-1.5 text-[10px] ${selectedVersion.user_attested ? 'text-emerald-300/80' : 'text-amber-200/80'}`}>
+                  {selectedVersion.user_attested ? <ShieldCheck className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                  {selectedVersion.user_attested
+                    ? `${(selectedVersion.evidence_snapshot || []).length} evidencias registradas · confirmada`
+                    : `${(selectedVersion.evidence_snapshot || []).length} evidencias registradas · revisión pendiente`}
+                </span>
+              </div>
+            )}
             <div className={`overflow-hidden rounded-2xl border shadow-2xl transition-colors ${darkMode ? 'border-white/5 bg-[#111111]' : 'border-gray-200 bg-white'}`}>
               {editMode ? (
                 <textarea
                   value={editableCV}
-                  onChange={e => { setEditableCV(e.target.value); setGeneratedCV(e.target.value) }}
+                  onChange={e => { setEditableCV(e.target.value); setManualAttested(false) }}
                   className={`min-h-[800px] w-full resize-none p-8 font-mono text-sm focus:outline-none ${darkMode ? 'bg-[#111111] text-white' : 'bg-white text-gray-900'}`}
                   placeholder="Editá el markdown de tu CV acá…"
                 />
@@ -327,26 +981,77 @@ export default function CVVivo() {
                   {generatedCV ? (
                     <ReactMarkdown
                       components={{
-                        h1: ({...props}) => <h1 className={`-mx-10 mb-2 border-b pb-6 pt-8 px-10 text-3xl font-black ${darkMode ? 'border-[#c9a84c]/30 bg-[#0a0a0a] text-white' : 'border-gray-300 bg-gray-50 text-gray-900'}`} {...props} />,
+                        h1: ({...props}) => {
+                          const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0]
+                          return <h1 className="-mx-10 mb-2 pb-6 pt-8 px-10 text-3xl font-black text-white" style={{ backgroundColor: activeTheme.hex }} {...props} />
+                        },
                         h2: ({...props}) => <h2 className={`mb-4 mt-10 border-l-2 border-[#c9a84c] pl-4 text-xs font-bold uppercase tracking-[0.2em] ${darkMode ? 'text-[#c9a84c]' : 'text-[#8a6a1f]'}`} {...props} />,
                         h3: ({...props}) => <h3 className={`mb-1 mt-6 text-base font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`} {...props} />,
                         p: ({...props}) => {
-                          const isContact = typeof props.children === 'string' && String(props.children).includes('|')
+                          const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0]
+                          const childText = Array.isArray(props.children)
+                            ? props.children.map((c: any) => typeof c === 'string' ? c : '').join('')
+                            : String(props.children ?? '')
+                          const isContact = childText.includes('|')
                           return isContact
-                            ? <p className={`-mx-10 -mt-2 mb-8 px-10 pb-4 text-xs font-medium tracking-wide ${darkMode ? 'bg-[#0a0a0a] text-muted-foreground' : 'bg-gray-50 text-gray-500'}`} {...props} />
+                            ? <p className="-mx-10 -mt-2 mb-8 px-10 pb-4 text-xs font-medium tracking-wide text-white/70" style={{ backgroundColor: activeTheme.hex }} {...props} />
                             : <p className={`mb-3 text-sm leading-relaxed ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`} {...props} />
                         },
                         li: ({...props}) => <li className={`relative mb-2 list-none pl-5 text-sm before:absolute before:left-0 before:top-[0.55em] before:h-1.5 before:w-1.5 before:rounded-full before:bg-[#c9a84c] before:content-[''] ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`} {...props} />,
                         strong: ({...props}) => <strong className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`} {...props} />,
+                        em: ({...props}) => <em className={`not-italic text-xs font-normal ${darkMode ? 'text-white/40' : 'text-gray-400'}`} {...props} />,
+                        hr: ({...props}) => <hr className="my-4 border-[#c9a84c]/20" {...props} />,
                       }}
                     >
                       {generatedCV}
                     </ReactMarkdown>
                   ) : (
-                    <div className="flex h-full flex-col items-center justify-center py-20 text-center opacity-30">
-                      <FileText size={64} className="mb-6" />
-                      <h3 className={`mb-2 text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Tu CV aparecerá acá</h3>
-                      <p className="max-w-xs text-sm">Seleccioná una vacante o pegá una descripción y hacé click en "Adaptar CV"</p>
+                    <div className="py-10 px-2">
+                      {profile ? (
+                        <>
+                          <div className="mb-6 rounded-xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.04] px-5 py-4 text-sm">
+                            <p className="font-medium text-[#c9a84c]">Vista previa con tus datos actuales</p>
+                            <p className="mt-1 text-xs text-white/50">Adaptá a una vacante para generar una versión real y descargable. Los datos de abajo son los que tenemos de tu perfil.</p>
+                            {confirmedEvidence.length === 0 && pendingEvidence.length === 0 && (
+                              <a href="/mi-carrera/perfil" className="mt-2 inline-flex items-center gap-1 text-xs text-[#c9a84c] underline">Completar mi perfil →</a>
+                            )}
+                          </div>
+                          <div className={`space-y-4 text-sm ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {profile.full_name && <h1 className="text-2xl font-bold">{profile.full_name}</h1>}
+                            {profile.professional_title && <p className={darkMode ? 'text-[#c9a84c]' : 'text-[#8a6a1f]'}>{profile.professional_title}</p>}
+                            {confirmedEvidence.filter((item: any) => item.category === 'summary').slice(0, 1).map((item: any) => (
+                              <p key={item.id} className={`text-sm leading-relaxed ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`}>{item.confirmed_value || item.claim}</p>
+                            ))}
+                            {confirmedEvidence.filter((item: any) => item.category === 'experience').length > 0 && (
+                              <div>
+                                <p className="mb-2 text-xs font-bold uppercase tracking-widest text-[#c9a84c]">Experiencia</p>
+                                {confirmedEvidence.filter((item: any) => item.category === 'experience').slice(0, 3).map((item: any) => (
+                                  <p key={item.id} className={`mb-1 text-sm ${darkMode ? 'text-[#aaaaaa]' : 'text-gray-700'}`}>• {item.confirmed_value || item.claim}</p>
+                                ))}
+                              </div>
+                            )}
+                            {confirmedEvidence.filter((item: any) => item.category === 'skill').length > 0 && (
+                              <div>
+                                <p className="mb-2 text-xs font-bold uppercase tracking-widest text-[#c9a84c]">Habilidades</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {confirmedEvidence.filter((item: any) => item.category === 'skill').slice(0, 8).map((item: any) => (
+                                    <span key={item.id} className="rounded border border-white/10 px-2 py-0.5 text-xs text-white/60">{item.confirmed_value || item.claim}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {confirmedEvidence.length === 0 && (
+                              <p className={`text-center text-sm ${darkMode ? 'text-white/30' : 'text-gray-400'}`}>Subí tu CV en Mi Perfil para ver una vista previa aquí.</p>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex h-full flex-col items-center justify-center py-20 text-center opacity-30">
+                          <FileText size={64} className="mb-6" />
+                          <h3 className={`mb-2 text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Tu CV aparecerá acá</h3>
+                          <p className="max-w-xs text-sm">Completá tu perfil y adaptá el CV a una vacante.</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -355,6 +1060,15 @@ export default function CVVivo() {
           </div>
         </div>
       </div>
+      <ProductGuide
+        storageKey="b2c_cv_vivo_v1"
+        label="CV Vivo"
+        steps={[
+          { title: 'Confirmá tus evidencias', description: 'Revisá cada dato que la IA extrajo de tu perfil. Solo se incluirá en el CV lo que vos confirmés.' },
+          { title: 'Elegí una vacante o pegá una', description: 'Seleccioná un empleo de tu lista de matches o pegá cualquier descripción externa para adaptar el CV.' },
+          { title: 'Descargalo en PDF', description: 'El CV generado es tuyo. Podés editarlo, guardar versiones y descargarlo cuando quieras.' },
+        ]}
+      />
     </DashboardLayout>
   )
 }

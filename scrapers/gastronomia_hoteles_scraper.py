@@ -79,7 +79,7 @@ def scrape_empresa(key, url, org, rubro):
                     href = link_el.get("href", "")
                     job_url = href if href.startswith("http") else f"{url.rstrip('/')}/{href.lstrip('/')}"
                 jobs.append({
-                    "titulo": title,
+                    "title": title,
                     "organization": org,
                     "location": "Paraguay",
                     "rubro": rubro,
@@ -103,7 +103,7 @@ def scrape_empresa(key, url, org, rubro):
             if any(kw in text.lower() or kw in href.lower() for kw in LINK_KEYWORDS):
                 job_url = href if href.startswith("http") else url
                 jobs.append({
-                    "titulo": text,
+                    "title": text,
                     "organization": org,
                     "location": "Paraguay",
                     "rubro": rubro,
@@ -130,7 +130,7 @@ def scrape_empresa(key, url, org, rubro):
 
 def _generic_entry(key, url, org, rubro):
     return {
-        "titulo": f"Vacantes abiertas en {org}",
+        "title": f"Vacantes abiertas en {org}",
         "organization": org,
         "location": "Paraguay",
         "rubro": rubro,
@@ -144,6 +144,9 @@ def _generic_entry(key, url, org, rubro):
 
 
 def insert_job(payload):
+    if str(payload.get("title", "")).casefold().startswith(("vacantes abiertas en", "empleos en", "empleo en")):
+        print("  NO_CONCRETE_VACANCY")
+        return "skipped"
     try:
         r = requests.post(
             TABLE_URL + "?on_conflict=application_url",

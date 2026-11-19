@@ -1,14 +1,15 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'wouter'
-import { Linkedin, Facebook, Instagram, MessageCircle } from 'lucide-react'
-import { Logo, GrowthLine } from './visuals'
+import { Linkedin, Facebook, Instagram, MessageCircle, Menu, X } from 'lucide-react'
+import { Logo } from './visuals'
 
 const navLinks = [
-  { href: '/oportunidades', label: 'Oportunidades' },
+  { href: '/empleos', label: 'Empleos' },
+  { href: '/oportunidades', label: 'Becas y programas' },
   { href: '/mi-carrera', label: 'Mi carrera' },
-  { href: '/demo', label: 'Demo' },
   { href: '/blog', label: 'Blog' },
   { href: '/empresas', label: 'Para empresas' },
+  { href: '/demo', label: 'Demo' },
 ]
 
 const footerCols = [
@@ -16,7 +17,8 @@ const footerCols = [
     title: 'Producto',
     items: [
       { label: 'Mi Carrera', href: '/mi-carrera' },
-      { label: 'Oportunidades', href: '/oportunidades' },
+      { label: 'Empleos', href: '/empleos' },
+      { label: 'Becas y programas', href: '/oportunidades' },
       { label: 'Analizador CV', href: '/#registro' },
       { label: 'Blog', href: '/blog' },
     ],
@@ -37,6 +39,7 @@ const footerCols = [
       { label: 'Contacto', href: 'mailto:contacto@cvitae.lat' },
       { label: 'Privacidad', href: '/privacy' },
       { label: 'Términos', href: '/terminos' },
+      { label: 'Cookies', href: '/cookies' },
     ],
   },
 ]
@@ -50,18 +53,19 @@ const socials = [
 
 function Navbar() {
   const [location] = useLocation()
+  const [mobileOpen, setMobileOpen] = useState(false)
   return (
-    <header className="border-b border-border/60 backdrop-blur-md sticky top-0 z-30 bg-background/60">
+    <header className="border-b border-border/60 backdrop-blur-xl sticky top-0 z-30 bg-background/90">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center">
+        <Link href="/" className="flex min-h-11 items-center">
           <Logo className="text-2xl" />
         </Link>
         <nav className="hidden md:flex items-center gap-7 text-sm text-muted-foreground">
-          {navLinks.map((l) => (
+          {navLinks.map((l, index) => (
             <Link
               key={l.href}
               href={l.href}
-              className={`hover:text-cream transition-colors ${location === l.href ? 'text-cream' : ''}`}
+              className={`hover:text-cream transition-colors ${index === 2 ? 'md:border-l md:border-white/10 md:pl-5' : ''} ${location === l.href ? 'text-cream' : ''}`}
             >
               {l.label}
             </Link>
@@ -70,12 +74,35 @@ function Navbar() {
         <div className="flex items-center gap-3">
           <Link
             href="/mi-carrera"
-            className="text-xs px-3 py-1.5 rounded-md bg-gold text-ink hover:bg-gold-soft transition-colors font-medium"
+            className="inline-flex min-h-11 items-center text-xs px-3 py-1.5 rounded-md bg-gold text-ink hover:bg-gold-soft transition-colors font-medium"
           >
             Entrar
           </Link>
+          <button
+            type="button"
+            className="md:hidden h-11 w-11 grid place-items-center rounded-md border border-white/10 text-cream"
+            aria-label={mobileOpen ? 'Cerrar menú' : 'Abrir menú'}
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen(v => !v)}
+          >
+            {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </button>
         </div>
       </div>
+      {mobileOpen && (
+        <nav className="md:hidden border-t border-white/8 bg-[#0b0b0b] px-6 py-3" aria-label="Navegación móvil">
+          {navLinks.map(l => (
+            <Link
+              key={l.href}
+              href={l.href}
+              onClick={() => setMobileOpen(false)}
+              className={`flex min-h-11 items-center justify-between border-b border-white/5 text-sm ${location === l.href ? 'text-gold' : 'text-cream'}`}
+            >
+              {l.label}<span aria-hidden="true">→</span>
+            </Link>
+          ))}
+        </nav>
+      )}
     </header>
   )
 }
@@ -108,6 +135,7 @@ function NewsletterForm() {
     <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
       <input
         type="email"
+        aria-label="Email para el newsletter"
         required
         value={email}
         onChange={e => setEmail(e.target.value)}
@@ -128,8 +156,7 @@ function NewsletterForm() {
 function Footer() {
   return (
     <footer className="border-t border-border/40 mt-24 bg-background relative overflow-hidden">
-      {/* GrowthLine decorative separator */}
-      <GrowthLine className="absolute top-0 left-0 w-full h-[50px] opacity-30" />
+      <div className="absolute top-0 left-0 w-full border-t border-gold/20" />
 
       <div className="max-w-6xl mx-auto px-6 pt-16 pb-10">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-10 mb-12">
@@ -149,7 +176,7 @@ function Footer() {
                   aria-label={label}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="h-9 w-9 grid place-items-center rounded-full border border-border/60 text-muted-foreground hover:text-gold hover:border-gold/50 transition-colors"
+                  className="h-11 w-11 grid place-items-center rounded-full border border-border/60 text-muted-foreground hover:text-gold hover:border-gold/50 transition-colors"
                 >
                   <Icon className="h-4 w-4" />
                 </a>
@@ -187,6 +214,7 @@ function Footer() {
             <span>Asunción, Paraguay</span>
             <a href="mailto:contacto@cvitae.lat" className="hover:text-cream transition-colors">contacto@cvitae.lat</a>
             <a href="https://wa.me/595992954169" target="_blank" rel="noopener noreferrer" className="hover:text-cream transition-colors">WhatsApp</a>
+            <button type="button" onClick={() => window.dispatchEvent(new Event('cvitae:open-cookie-settings'))} className="hover:text-cream transition-colors">Preferencias de cookies</button>
           </div>
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
