@@ -677,7 +677,7 @@ function CalendarScheduler({ applicant, onClose }: { applicant: Applicant; onClo
   )
 }
 
-function PipelineBoard({ applicants, onMoveCandidate, onExpandCard, expandedId, updatingAction, onAnalyzeSingle, onScheduleApplicant }: {
+function PipelineBoard({ applicants, onMoveCandidate, onExpandCard, expandedId, updatingAction, onAnalyzeSingle, onScheduleApplicant, commentingOn, setCommentingOn, newComment, setNewComment, savingComment, handleSaveComment }: {
   applicants: Applicant[]
   onMoveCandidate: (appId: string, newStatus: string) => void
   onExpandCard: (id: string) => void
@@ -685,6 +685,12 @@ function PipelineBoard({ applicants, onMoveCandidate, onExpandCard, expandedId, 
   updatingAction: string | null
   onAnalyzeSingle: (cvText: string, name: string) => void
   onScheduleApplicant: (applicant: Applicant) => void
+  commentingOn: string | null
+  setCommentingOn: (id: string | null) => void
+  newComment: string
+  setNewComment: (text: string) => void
+  savingComment: boolean
+  handleSaveComment: (appId: string) => void
 }) {
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
@@ -865,21 +871,64 @@ function PipelineBoard({ applicants, onMoveCandidate, onExpandCard, expandedId, 
                           </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-2">
+                        {/* Notas compactas */}
+                        {applicant.recruiter_notes && commentingOn !== applicant.id && (
+                          <div className="text-[9px] text-white/40 bg-white/[0.01] border border-white/5 rounded px-2 py-1.5">
+                            <span className="font-medium">Notas:</span> {applicant.recruiter_notes.split('\n\n').length} comentario(s)
+                          </div>
+                        )}
+
+                        {commentingOn === applicant.id && (
+                          <div className="space-y-1.5">
+                            <textarea
+                              value={newComment}
+                              onChange={(e) => setNewComment(e.target.value)}
+                              placeholder="Nota..."
+                              rows={2}
+                              className="w-full rounded border border-white/10 bg-white/[0.02] px-2 py-1.5 text-[10px] text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none"
+                            />
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => handleSaveComment(applicant.id)}
+                                disabled={savingComment || !newComment.trim()}
+                                className="flex-1 text-[9px] bg-[#c9a84c] text-[#0a0a0a] px-2 py-1 rounded uppercase tracking-wider disabled:opacity-50"
+                              >
+                                {savingComment ? 'Guardando...' : 'Guardar'}
+                              </button>
+                              <button
+                                onClick={() => { setCommentingOn(null); setNewComment('') }}
+                                className="text-[9px] text-white/40 px-2"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-1.5">
                           <button
-                            onClick={() => onScheduleApplicant(applicant)}
-                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-white/70 transition hover:border-white/25"
+                            onClick={() => setCommentingOn(commentingOn === applicant.id ? null : applicant.id)}
+                            className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] px-2 py-1.5 text-[9px] uppercase tracking-[0.12em] text-white/60 transition hover:border-white/25"
                           >
-                            <Calendar strokeWidth={1.5} className="h-3 w-3" /> Agendar
+                            <FileText strokeWidth={1.5} className="h-3 w-3" /> {commentingOn === applicant.id ? 'Cerrar' : 'Notas'}
                           </button>
-                          {applicant.cv_text && (
+
+                          <div className="grid grid-cols-2 gap-1.5">
                             <button
-                              onClick={() => onAnalyzeSingle(applicant.cv_text!, applicant.name)}
-                              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                              onClick={() => onScheduleApplicant(applicant)}
+                              className="inline-flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.02] px-2 py-1.5 text-[9px] uppercase tracking-[0.12em] text-white/70 transition hover:border-white/25"
                             >
-                              <Brain strokeWidth={1.5} className="h-3 w-3" /> Analizar
+                              <Calendar strokeWidth={1.5} className="h-3 w-3" /> Agendar
                             </button>
-                          )}
+                            {applicant.cv_text && (
+                              <button
+                                onClick={() => onAnalyzeSingle(applicant.cv_text!, applicant.name)}
+                                className="inline-flex items-center justify-center gap-1 rounded-lg border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-2 py-1.5 text-[9px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                              >
+                                <Brain strokeWidth={1.5} className="h-3 w-3" /> Analizar
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </motion.div>
                     )}
@@ -918,6 +967,9 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
   const [updatingAction, setUpdatingAction] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'pipeline'>('list')
   const [schedulingApplicant, setSchedulingApplicant] = useState<Applicant | null>(null)
+  const [commentingOn, setCommentingOn] = useState<string | null>(null)
+  const [newComment, setNewComment] = useState('')
+  const [savingComment, setSavingComment] = useState(false)
 
   const handleActionUpdate = async (applicationId: string, action: string, notes?: string) => {
     setUpdatingAction(applicationId)
@@ -929,6 +981,36 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
       setApplicants(prev => prev.map(a => a.id === applicationId ? { ...a, recruiter_action: action } : a))
     } catch { /* silencioso */ }
     finally { setUpdatingAction(null) }
+  }
+
+  const handleSaveComment = async (applicationId: string) => {
+    if (!newComment.trim()) return
+
+    setSavingComment(true)
+    try {
+      const currentApplicant = applicants.find(a => a.id === applicationId)
+      const existingNotes = currentApplicant?.recruiter_notes || ''
+      const timestamp = new Date().toLocaleString('es-PY', { dateStyle: 'short', timeStyle: 'short' })
+      const updatedNotes = existingNotes
+        ? `${existingNotes}\n\n[${timestamp}]\n${newComment.trim()}`
+        : `[${timestamp}]\n${newComment.trim()}`
+
+      await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          action: 'update_application_status',
+          application_id: applicationId,
+          recruiter_action: currentApplicant?.recruiter_action || 'pending',
+          recruiter_notes: updatedNotes
+        }),
+      })
+
+      setApplicants(prev => prev.map(a => a.id === applicationId ? { ...a, recruiter_notes: updatedNotes } : a))
+      setNewComment('')
+      setCommentingOn(null)
+    } catch { /* silencioso */ }
+    finally { setSavingComment(false) }
   }
 
   const loadApplicants = () => {
@@ -1307,6 +1389,75 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                           </div>
                         )}
 
+                        {/* Comentarios / Notas */}
+                        <div className="border-t border-white/5 pt-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] uppercase tracking-[0.18em] text-white/30">Notas internas</p>
+                            {commentingOn !== a.id && (
+                              <button
+                                onClick={() => setCommentingOn(a.id)}
+                                className="text-[10px] text-[#c9a84c]/70 hover:text-[#c9a84c] transition-colors uppercase tracking-[0.15em]"
+                              >
+                                + Agregar nota
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Existing notes */}
+                          {a.recruiter_notes && (
+                            <div className="space-y-2 mb-3">
+                              {a.recruiter_notes.split('\n\n').map((note, idx) => {
+                                const timestampMatch = note.match(/^\[(.*?)\]/)
+                                const timestamp = timestampMatch ? timestampMatch[1] : null
+                                const content = timestamp ? note.replace(/^\[.*?\]\n/, '') : note
+
+                                return (
+                                  <div key={idx} className="rounded-lg border border-white/8 bg-white/[0.01] p-2.5">
+                                    {timestamp && (
+                                      <p className="text-[9px] text-white/25 mb-1">{timestamp}</p>
+                                    )}
+                                    <p className="text-xs font-light text-white/60 leading-relaxed whitespace-pre-wrap">{content}</p>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {/* Add new comment */}
+                          {commentingOn === a.id && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="space-y-2"
+                            >
+                              <textarea
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                placeholder="Escribe una nota sobre este candidato..."
+                                rows={3}
+                                className="w-full rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none focus:ring-2 focus:ring-[#c9a84c]/20"
+                                autoFocus
+                              />
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleSaveComment(a.id)}
+                                  disabled={savingComment || !newComment.trim()}
+                                  className="inline-flex items-center gap-1.5 rounded-full bg-[#c9a84c] px-4 py-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#0a0a0a] transition hover:shadow-[0_0_20px_-4px_rgba(201,168,76,0.6)] disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {savingComment ? <><Loader2 strokeWidth={1.5} className="h-3 w-3 animate-spin" /> Guardando...</> : 'Guardar nota'}
+                                </button>
+                                <button
+                                  onClick={() => { setCommentingOn(null); setNewComment('') }}
+                                  className="text-[10px] text-white/40 hover:text-white/70 transition-colors uppercase tracking-[0.15em]"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+
                         {/* Estado y acciones del reclutador */}
                         <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-white/5 mt-2">
                           <span className="text-[10px] uppercase tracking-[0.15em] text-white/30">Estado</span>
@@ -1362,6 +1513,12 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
               updatingAction={updatingAction}
               onAnalyzeSingle={onAnalyzeSingle}
               onScheduleApplicant={(applicant) => setSchedulingApplicant(applicant)}
+              commentingOn={commentingOn}
+              setCommentingOn={setCommentingOn}
+              newComment={newComment}
+              setNewComment={setNewComment}
+              savingComment={savingComment}
+              handleSaveComment={handleSaveComment}
             />
           )}
         </>
