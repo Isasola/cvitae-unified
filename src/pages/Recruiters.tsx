@@ -545,13 +545,146 @@ const ACTION_LABELS: Record<string, string> = {
 
 const PIPELINE_STAGES = ['pending', 'contacted', 'interviewing', 'hired', 'rejected'] as const
 
-function PipelineBoard({ applicants, onMoveCandidate, onExpandCard, expandedId, updatingAction, onAnalyzeSingle }: {
+function CalendarScheduler({ applicant, onClose }: { applicant: Applicant; onClose: () => void }) {
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('10:00')
+  const [duration, setDuration] = useState('60')
+  const [notes, setNotes] = useState('')
+
+  const generateCalendarLink = (provider: 'google' | 'outlook') => {
+    if (!date) {
+      alert('Seleccioná una fecha para la entrevista')
+      return
+    }
+
+    const startDateTime = new Date(`${date}T${time}:00`)
+    const endDateTime = new Date(startDateTime.getTime() + parseInt(duration) * 60000)
+
+    const title = `Entrevista: ${applicant.name}`
+    const description = `Entrevista con ${applicant.name} (${applicant.email})${notes ? `\n\nNotas:\n${notes}` : ''}`
+
+    if (provider === 'google') {
+      const startStr = startDateTime.toISOString().replace(/-|:|\.\d+/g, '')
+      const endStr = endDateTime.toISOString().replace(/-|:|\.\d+/g, '')
+      const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startStr}/${endStr}&details=${encodeURIComponent(description)}&add=${encodeURIComponent(applicant.email)}`
+      window.open(url, '_blank')
+    } else {
+      const startStr = startDateTime.toISOString()
+      const endStr = endDateTime.toISOString()
+      const url = `https://outlook.live.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(title)}&startdt=${startStr}&enddt=${endStr}&body=${encodeURIComponent(description)}&to=${encodeURIComponent(applicant.email)}`
+      window.open(url, '_blank')
+    }
+
+    onClose()
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.2 }}
+        className="glass-card rounded-3xl p-7 w-full max-w-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-display text-white">Agendar entrevista</h3>
+            <p className="text-sm text-white/50 mt-1">{applicant.name}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="h-8 w-8 flex items-center justify-center rounded-full border border-white/10 text-white/40 hover:border-white/25 hover:text-white/70 transition-colors"
+          >
+            <X strokeWidth={1.5} className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Fecha</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none focus:ring-2 focus:ring-[#c9a84c]/20"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Hora</label>
+              <input
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none focus:ring-2 focus:ring-[#c9a84c]/20"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Duración</label>
+            <select
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white focus:border-[#c9a84c]/50 focus:outline-none focus:ring-2 focus:ring-[#c9a84c]/20"
+            >
+              <option value="30">30 minutos</option>
+              <option value="60">1 hora</option>
+              <option value="90">1.5 horas</option>
+              <option value="120">2 horas</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Notas (opcional)</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              placeholder="Temas a tratar, enlaces de reunión virtual, etc."
+              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none focus:ring-2 focus:ring-[#c9a84c]/20"
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 flex items-center gap-3">
+          <button
+            onClick={() => generateCalendarLink('google')}
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/15"
+          >
+            <Calendar strokeWidth={1.5} className="h-4 w-4" />
+            Google Calendar
+          </button>
+          <button
+            onClick={() => generateCalendarLink('outlook')}
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/15"
+          >
+            <Calendar strokeWidth={1.5} className="h-4 w-4" />
+            Outlook
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+function PipelineBoard({ applicants, onMoveCandidate, onExpandCard, expandedId, updatingAction, onAnalyzeSingle, onScheduleApplicant }: {
   applicants: Applicant[]
   onMoveCandidate: (appId: string, newStatus: string) => void
   onExpandCard: (id: string) => void
   expandedId: string | null
   updatingAction: string | null
   onAnalyzeSingle: (cvText: string, name: string) => void
+  onScheduleApplicant: (applicant: Applicant) => void
 }) {
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
@@ -732,14 +865,22 @@ function PipelineBoard({ applicants, onMoveCandidate, onExpandCard, expandedId, 
                           </div>
                         )}
 
-                        {applicant.cv_text && (
+                        <div className="grid grid-cols-2 gap-2">
                           <button
-                            onClick={() => onAnalyzeSingle(applicant.cv_text!, applicant.name)}
-                            className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                            onClick={() => onScheduleApplicant(applicant)}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-white/70 transition hover:border-white/25"
                           >
-                            <Brain strokeWidth={1.5} className="h-3 w-3" /> Analizar
+                            <Calendar strokeWidth={1.5} className="h-3 w-3" /> Agendar
                           </button>
-                        )}
+                          {applicant.cv_text && (
+                            <button
+                              onClick={() => onAnalyzeSingle(applicant.cv_text!, applicant.name)}
+                              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                            >
+                              <Brain strokeWidth={1.5} className="h-3 w-3" /> Analizar
+                            </button>
+                          )}
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -776,6 +917,7 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
   const [rankError, setRankError] = useState('')
   const [updatingAction, setUpdatingAction] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'pipeline'>('list')
+  const [schedulingApplicant, setSchedulingApplicant] = useState<Applicant | null>(null)
 
   const handleActionUpdate = async (applicationId: string, action: string, notes?: string) => {
     setUpdatingAction(applicationId)
@@ -1184,17 +1326,22 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
                               </button>
                             ))}
                           </div>
-                          {a.cv_text && (
+                          <div className="flex items-center gap-2 ml-auto">
                             <button
-                              onClick={() => onAnalyzeSingle(a.cv_text!, a.name)}
-                              className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                              onClick={() => setSchedulingApplicant(a)}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.02] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-white/70 transition hover:border-white/25 hover:bg-white/[0.05]"
                             >
-                              <Brain strokeWidth={1.5} className="h-3.5 w-3.5" /> Análisis individual
+                              <Calendar strokeWidth={1.5} className="h-3.5 w-3.5" /> Agendar
                             </button>
-                          )}
-                          {!a.cv_text && (
-                            <p className="text-xs text-white/25 italic ml-auto">Sin texto extraíble</p>
-                          )}
+                            {a.cv_text && (
+                              <button
+                                onClick={() => onAnalyzeSingle(a.cv_text!, a.name)}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
+                              >
+                                <Brain strokeWidth={1.5} className="h-3.5 w-3.5" /> Análisis
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </motion.div>
@@ -1214,10 +1361,21 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, onBack, onAnalyzeSing
               expandedId={expandedId}
               updatingAction={updatingAction}
               onAnalyzeSingle={onAnalyzeSingle}
+              onScheduleApplicant={(applicant) => setSchedulingApplicant(applicant)}
             />
           )}
         </>
       )}
+
+      {/* Calendar Scheduler Modal */}
+      <AnimatePresence>
+        {schedulingApplicant && (
+          <CalendarScheduler
+            applicant={schedulingApplicant}
+            onClose={() => setSchedulingApplicant(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
