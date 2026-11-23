@@ -254,7 +254,7 @@ export default function VacantePage() {
   const pageTitle = vacancy?.title || (slug ? slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'Vacante')
   const canonical = `https://cvitae.lat/vacante/${slug}`
   const metaDescription = vacancy
-    ? `${vacancy.title} en ${vacancy.company} — ${vacancy.location}. Postulá directamente desde CVitae.`
+    ? `${vacancy.title} en ${vacancy.company} — ${vacancy.location}. Postulá directamente desde CVitae con tu CV.`
     : `Postulá a ${pageTitle}. Tu perfil queda guardado en CVitae para futuras búsquedas.`
   // Direct application is not authorization for indexing or JobPosting. The
   // independent canonical B2C route is controlled by Opportunity Universe.
@@ -263,7 +263,6 @@ export default function VacantePage() {
     <main className="relative min-h-screen overflow-hidden bg-[#0a0a0a] text-white antialiased">
       <Ambient />
       <Helmet>
-        <meta name="robots" content="noindex,nofollow" />
         <title>{pageTitle} · CVitae</title>
         <meta name="description" content={metaDescription} />
         <link rel="canonical" href={canonical} />
@@ -271,6 +270,29 @@ export default function VacantePage() {
         <meta property="og:description" content={metaDescription} />
         <meta property="og:url" content={canonical} />
         <meta property="og:type" content="article" />
+        {vacancy && (
+          <script type="application/ld+json">{JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "JobPosting",
+            "title": vacancy.title,
+            "description": [vacancy.description, vacancy.requirements].filter(Boolean).join("\n\n"),
+            "hiringOrganization": {
+              "@type": "Organization",
+              "name": vacancy.company,
+            },
+            "jobLocation": {
+              "@type": "Place",
+              "address": {
+                "@type": "PostalAddress",
+                "addressLocality": vacancy.location,
+                "addressCountry": "PY",
+              },
+            },
+            "employmentType": vacancy.modality === "presencial" ? "FULL_TIME" : vacancy.modality === "remoto" ? "TELECOMMUTE" : "OTHER",
+            "url": canonical,
+            "directApply": true,
+          })}</script>
+        )}
       </Helmet>
 
       {/* Top bar */}

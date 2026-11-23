@@ -13,7 +13,7 @@ import {
   Star, Brain, Users, Trophy, ArrowLeft, Share2, Database,
   FileText, Upload, RotateCcw, X, Link2, Plus, Copy, Check as CheckIcon,
   UserCheck, Mail, Calendar, ChevronLeft, Download, Search,
-  BarChart2, TrendingUp,
+  BarChart2, TrendingUp, FolderOpen,
 } from 'lucide-react'
 
 const ease = [0.22, 1, 0.36, 1] as const
@@ -51,6 +51,18 @@ interface AnalysisRecord {
 interface ComparisonResult {
   top3: Array<{ name: string; score: number; strengths: string[]; reason: string }>
   finalRecommendation: string
+}
+
+interface EmployeeFile {
+  id: string
+  employee_name: string
+  employee_email: string | null
+  employee_phone: string | null
+  position: string | null
+  hire_date: string | null
+  status: string
+  notes: string | null
+  created_at: string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1531,6 +1543,259 @@ interface DashboardStats {
   paraLlamar: number
 }
 
+// ─── Banco de Candidatos ──────────────────────────────────────────────────────
+
+function BancoPanel({ token }: { token: string }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<AnalysisRecord[]>([])
+  const [loading, setLoading] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState('')
+
+  const loadAll = async () => {
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action: 'get_candidate_bank' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error cargando banco')
+      setResults(data.data || [])
+      setLoaded(true)
+    } catch (e: any) { setError(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const search = async () => {
+    if (!query.trim()) return loadAll()
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action: 'search_candidate_bank', query: query.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error en búsqueda')
+      setResults(data.data || [])
+      setLoaded(true)
+    } catch (e: any) { setError(e.message) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { loadAll() }, [])
+
+  return (
+    <div>
+      <div className="mb-6 flex gap-3">
+        <div className="relative flex-1">
+          <Search strokeWidth={1.5} className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && search()}
+            placeholder="Buscá por nombre, puesto o habilidad en todos tus procesos..."
+            className="w-full rounded-xl border border-white/10 bg-white/[0.025] py-3 pl-10 pr-4 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40"
+          />
+        </div>
+        <button
+          onClick={search}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-xl border border-[#c9a84c]/30 bg-[#c9a84c]/[0.08] px-5 py-3 text-sm text-[#c9a84c] transition hover:border-[#c9a84c]/60 disabled:opacity-50"
+        >
+          {loading ? <Loader2 strokeWidth={2} className="h-4 w-4 animate-spin" /> : <Search strokeWidth={1.5} className="h-4 w-4" />}
+          Buscar
+        </button>
+      </div>
+
+      {error && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-sm text-red-400">
+          <AlertCircle strokeWidth={1.5} className="h-4 w-4 shrink-0" /> {error}
+        </div>
+      )}
+
+      {loaded && results.length === 0 && (
+        <div className="rounded-2xl border border-white/8 bg-white/[0.015] p-10 text-center">
+          <Database strokeWidth={1.25} className="mx-auto h-8 w-8 text-white/20" />
+          <p className="mt-3 text-sm text-white/40">No se encontraron candidatos con ese criterio.</p>
+        </div>
+      )}
+
+      {results.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs text-white/35">{results.length} candidato{results.length !== 1 ? 's' : ''}</p>
+          {results.map((r) => (
+            <div key={r.id} className="rounded-2xl border border-white/8 bg-white/[0.015] p-5 flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
+                <FileText strokeWidth={1.25} className="h-4 w-4 text-[#c9a84c]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-medium text-sm text-white">{r.candidate_name || r.file_name || 'Candidato'}</p>
+                  {r.is_starred && <Star strokeWidth={1.5} className="h-3.5 w-3.5 text-[#c9a84c]" />}
+                  {r.vacancy_label && (
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/40">
+                      {r.vacancy_label}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-white/40">
+                  Score: <span className="text-white/70">{r.ats_score}/100</span>
+                  {r.created_at && ` · ${new Date(r.created_at).toLocaleDateString('es-PY')}`}
+                </p>
+                {r.strengths?.length > 0 && (
+                  <p className="mt-1.5 text-xs text-white/50 line-clamp-2">
+                    {r.strengths.slice(0, 2).join(' · ')}
+                  </p>
+                )}
+              </div>
+              <p className="font-display text-xl shrink-0" style={{ color: scoreColor(r.ats_score) }}>
+                {r.ats_score}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Legajos ──────────────────────────────────────────────────────────────────
+
+function LegajosPanel({ token }: { token: string }) {
+  const [files, setFiles] = useState<EmployeeFile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
+  const [form, setForm] = useState({ employee_name: '', employee_email: '', employee_phone: '', position: '', hire_date: '' })
+  const [creating, setCreating] = useState(false)
+
+  const loadFiles = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action: 'get_employee_files' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error cargando legajos')
+      setFiles(data.data || [])
+    } catch (e: any) { setError(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const createFile = async () => {
+    if (!form.employee_name.trim()) return
+    setCreating(true)
+    try {
+      const res = await fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action: 'create_employee_file', ...form }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error creando legajo')
+      setShowCreate(false)
+      setForm({ employee_name: '', employee_email: '', employee_phone: '', position: '', hire_date: '' })
+      await loadFiles()
+    } catch (e: any) { setError(e.message) }
+    finally { setCreating(false) }
+  }
+
+  useEffect(() => { loadFiles() }, [])
+
+  if (loading) return (
+    <div className="flex items-center gap-3 py-16 text-white/40">
+      <Loader2 strokeWidth={1.5} className="h-5 w-5 animate-spin" />
+      <span className="text-sm">Cargando legajos...</span>
+    </div>
+  )
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <p className="text-xs text-white/40 uppercase tracking-[0.18em]">{files.length} legajo{files.length !== 1 ? 's' : ''}</p>
+        <button
+          onClick={() => setShowCreate(v => !v)}
+          className="inline-flex items-center gap-2 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-4 py-2 text-xs text-[#c9a84c] transition hover:border-[#c9a84c]/60"
+        >
+          <Plus strokeWidth={2} className="h-3.5 w-3.5" /> Nuevo legajo
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {showCreate && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            className="mb-6 rounded-2xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.03] p-6"
+          >
+            <p className="mb-4 text-[11px] uppercase tracking-[0.18em] text-[#c9a84c]">Nuevo legajo</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <input value={form.employee_name} onChange={e => setForm(p => ({ ...p, employee_name: e.target.value }))} placeholder="Nombre del empleado *" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40" />
+              <input value={form.position} onChange={e => setForm(p => ({ ...p, position: e.target.value }))} placeholder="Puesto / cargo" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40" />
+              <input value={form.employee_email} onChange={e => setForm(p => ({ ...p, employee_email: e.target.value }))} placeholder="Email" type="email" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40" />
+              <input value={form.employee_phone} onChange={e => setForm(p => ({ ...p, employee_phone: e.target.value }))} placeholder="Teléfono / WhatsApp" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40" />
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-white/40">Fecha de ingreso</span>
+                <input value={form.hire_date} onChange={e => setForm(p => ({ ...p, hire_date: e.target.value }))} type="date" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white outline-none focus:border-[#c9a84c]/40" />
+              </label>
+            </div>
+            <div className="mt-4 flex gap-3">
+              <button onClick={createFile} disabled={creating || !form.employee_name.trim()} className="inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-50">
+                {creating ? <Loader2 strokeWidth={2} className="h-4 w-4 animate-spin" /> : <CheckCircle2 strokeWidth={1.5} className="h-4 w-4" />}
+                Crear legajo
+              </button>
+              <button onClick={() => setShowCreate(false)} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/50 transition hover:text-white">
+                Cancelar
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {error && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-sm text-red-400">
+          <AlertCircle strokeWidth={1.5} className="h-4 w-4 shrink-0" /> {error}
+        </div>
+      )}
+
+      {files.length === 0 && !loading && (
+        <div className="rounded-2xl border border-white/8 bg-white/[0.015] p-10 text-center">
+          <FolderOpen strokeWidth={1.25} className="mx-auto h-8 w-8 text-white/20" />
+          <p className="mt-3 text-sm text-white/40">No hay legajos aún. Creá el primero con el botón de arriba.</p>
+          <p className="mt-2 text-xs text-white/25">También podés crear un legajo desde la postulación de un candidato contratado.</p>
+        </div>
+      )}
+
+      {files.length > 0 && (
+        <div className="space-y-3">
+          {files.map((f) => (
+            <div key={f.id} className="rounded-2xl border border-white/8 bg-white/[0.015] p-5">
+              <div className="flex items-start gap-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
+                  <UserCheck strokeWidth={1.25} className="h-4 w-4 text-[#c9a84c]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-sm text-white">{f.employee_name}</p>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${f.status === 'active' ? 'border border-emerald-500/30 text-emerald-400' : 'border border-white/10 text-white/30'}`}>
+                      {f.status === 'active' ? 'Activo' : f.status}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-white/50">
+                    {[f.position, f.employee_email, f.hire_date ? `Ingreso: ${new Date(f.hire_date).toLocaleDateString('es-PY')}` : null].filter(Boolean).join(' · ')}
+                  </p>
+                  {f.notes && <p className="mt-1.5 text-xs text-white/35 line-clamp-1">{f.notes}</p>}
+                </div>
+                <p className="text-[10px] text-white/25 shrink-0">{new Date(f.created_at).toLocaleDateString('es-PY')}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLogout: () => void }) {
   const [file, setFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -1539,7 +1804,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   const [result, setResult] = useState<ATSResult | null>(null)
   const [error, setError] = useState('')
   const [balance, setBalance] = useState(session.balance)
-  const [activeTab, setActiveTab] = useState<'analyze' | 'history' | 'vacancies'>('analyze')
+  const [activeTab, setActiveTab] = useState<'analyze' | 'history' | 'vacancies' | 'banco' | 'legajos'>('analyze')
   const [historyKey, setHistoryKey] = useState(0)
   const [comparison, setComparison] = useState<ComparisonResult | null>(null)
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -1672,63 +1937,60 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
           Analizá un CV individual o usá el modo masivo para rankear tu pool completo.
         </p>
 
-        {/* KPI row */}
+        {/* KPI row — clickeables */}
         {stats && (
           <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              { label: 'Vacantes activas', value: stats.vacantesActivas, Icon: Link2, color: 'text-[#c9a84c]' },
-              { label: 'Postulantes', value: stats.totalPostulantes, Icon: Users, color: 'text-sky-400' },
-              { label: 'CVs analizados', value: stats.cvsAnalizados, Icon: BarChart2, color: 'text-purple-400' },
-              { label: 'Para llamar', value: stats.paraLlamar, Icon: TrendingUp, color: 'text-emerald-400' },
-            ].map(({ label, value, Icon, color }) => (
-              <div key={label} className="glass-card rounded-2xl p-4">
+            {([
+              { label: 'Vacantes activas', value: stats.vacantesActivas, Icon: Link2, color: 'text-[#c9a84c]', tab: 'vacancies' as const },
+              { label: 'Postulantes', value: stats.totalPostulantes, Icon: Users, color: 'text-sky-400', tab: 'vacancies' as const },
+              { label: 'CVs analizados', value: stats.cvsAnalizados, Icon: BarChart2, color: 'text-purple-400', tab: 'banco' as const },
+              { label: 'Para llamar', value: stats.paraLlamar, Icon: TrendingUp, color: 'text-emerald-400', tab: 'history' as const },
+            ] as const).map(({ label, value, Icon, color, tab }) => (
+              <button key={label} onClick={() => setActiveTab(tab)} className="glass-card rounded-2xl p-4 text-left transition hover:border-white/20 active:scale-[0.98]">
                 <Icon strokeWidth={1.5} className={`h-4 w-4 ${color} mb-2`} />
                 <p className={`font-display text-3xl ${color}`}>{value}</p>
                 <p className="text-[10px] uppercase tracking-[0.15em] text-white/35 mt-1">{label}</p>
-              </div>
+              </button>
             ))}
           </div>
         )}
 
         {/* Quick links */}
         <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            href="/empresas/masivo"
-            className="group inline-flex items-center gap-3 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-5 py-2.5 text-xs font-medium uppercase tracking-[0.18em] text-[#c9a84c] transition-all hover:border-[#c9a84c]/60 hover:bg-[#c9a84c]/[0.1]"
-          >
-            <Share2 strokeWidth={1.5} className="h-4 w-4" />
-            Análisis masivo
+          <Link href="/empresas/masivo" className="group inline-flex items-center gap-3 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-5 py-2.5 text-xs font-medium uppercase tracking-[0.18em] text-[#c9a84c] transition-all hover:border-[#c9a84c]/60 hover:bg-[#c9a84c]/[0.1]">
+            <Share2 strokeWidth={1.5} className="h-4 w-4" /> Análisis masivo
           </Link>
+          <button onClick={() => setActiveTab('banco')} className="inline-flex items-center gap-3 rounded-full border border-white/10 px-5 py-2.5 text-xs font-medium uppercase tracking-[0.18em] text-white/50 transition-all hover:border-white/25 hover:text-white">
+            <Database strokeWidth={1.5} className="h-4 w-4" /> Banco de candidatos
+          </button>
+          <button onClick={() => setActiveTab('legajos')} className="inline-flex items-center gap-3 rounded-full border border-white/10 px-5 py-2.5 text-xs font-medium uppercase tracking-[0.18em] text-white/50 transition-all hover:border-white/25 hover:text-white">
+            <FolderOpen strokeWidth={1.5} className="h-4 w-4" /> Legajos
+          </button>
         </div>
 
-        {/* Talent bank stat */}
-        <div className="mt-8 flex items-center gap-4 rounded-2xl border border-white/8 bg-white/[0.02] p-4 w-fit">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03]">
-            <Database strokeWidth={1.25} className="h-4 w-4 text-[#c9a84c]" />
+        {/* Tabs — scrollable en mobile */}
+        <div className="mt-12 -mx-6 overflow-x-auto px-6 md:mx-0 md:px-0">
+          <div className="flex gap-2 pb-1 w-max md:w-auto md:flex-wrap">
+            {([
+              ['analyze', 'Analizar CV', Brain],
+              ['history', 'Historial', History],
+              ['vacancies', 'Vacantes', Link2],
+              ['banco', 'Banco', Database],
+              ['legajos', 'Legajos', FolderOpen],
+            ] as const).map(([tab, label, Icon]) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-xs font-medium uppercase tracking-[0.15em] transition-all whitespace-nowrap ${
+                  activeTab === tab
+                    ? 'bg-[#c9a84c] text-[#0a0a0a]'
+                    : 'border border-white/10 text-white/50 hover:border-white/25 hover:text-white'
+                }`}
+              >
+                <Icon strokeWidth={1.5} className="h-3.5 w-3.5" />{label}
+              </button>
+            ))}
           </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Banco de talento</p>
-            <p className="mt-0.5 text-sm font-light text-white/80">
-              Todos los CVs analizados quedan guardados para búsquedas futuras.
-            </p>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="mt-12 flex flex-wrap gap-2">
-          {([['analyze', 'Analizar CV', Brain], ['history', 'Historial', History], ['vacancies', 'Mis Vacantes', Link2]] as const).map(([tab, label, Icon]) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-xs font-medium uppercase tracking-[0.15em] transition-all ${
-                activeTab === tab
-                  ? 'bg-[#c9a84c] text-[#0a0a0a]'
-                  : 'border border-white/10 text-white/50 hover:border-white/25 hover:text-white'
-              }`}
-            >
-              <Icon strokeWidth={1.5} className="h-3.5 w-3.5" />{label}
-            </button>
-          ))}
         </div>
 
         {/* Tab content */}
@@ -1871,9 +2133,17 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                   </motion.div>
                 )}
               </motion.div>
-            ) : (
+            ) : activeTab === 'vacancies' ? (
               <motion.div key="vacancies" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <VacancyPanel token={session.token} companyName={session.company_name} onAnalyzeApplicant={handleAnalyzeApplicant} />
+              </motion.div>
+            ) : activeTab === 'banco' ? (
+              <motion.div key="banco" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <BancoPanel token={session.token} />
+              </motion.div>
+            ) : (
+              <motion.div key="legajos" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <LegajosPanel token={session.token} />
               </motion.div>
             )}
           </AnimatePresence>

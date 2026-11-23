@@ -711,9 +711,55 @@ const handler: Handler = async (event) => {
     }
 
     if (action === "list_tokens") {
-      const { data, error } = await supabase.from("recruiter_tokens").select("*").order("created_at", { ascending: false })
+      const { data, error } = await supabase
+        .from("recruiter_tokens")
+        .select("id,email,company_name,access_token,token_balance,plan_type,plan,plan_expires_at,is_active,verification_status,ruc,contact_name,contact_phone,beta_discount,notes,last_used_at,created_at")
+        .order("created_at", { ascending: false })
       if (error) throw error
-      return { statusCode: 200, body: JSON.stringify({ data: data || [] }) }
+      const now = new Date()
+      const enriched = (data || []).map((t: any) => {
+        const alerts: string[] = []
+        if ((t.token_balance ?? 0) <= 3) alerts.push("creditos_bajos")
+        if (t.plan_expires_at) {
+          const daysLeft = Math.ceil((new Date(t.plan_expires_at).getTime() - now.getTime()) / 86400000)
+          if (daysLeft <= 7 && daysLeft >= 0) alerts.push("plan_por_vencer")
+          if (daysLeft < 0) alerts.push("plan_vencido")
+        }
+        return { ...t, _alerts: alerts }
+      })
+      return { statusCode: 200, body: JSON.stringify({ data: enriched }) }
+    }
+
+    if (action === "recharge_credits") {
+      const { token_id, amount } = payload || {}
+      if (!token_id || !amount || typeof amount !== "number" || amount < 1) {
+        return { statusCode: 400, body: JSON.stringify({ error: "token_id y amount (>0) requeridos" }) }
+      }
+      const { data: existing, error: fetchErr } = await supabase
+        .from("recruiter_tokens").select("token_balance").eq("id", token_id).single()
+      if (fetchErr || !existing) return { statusCode: 404, body: JSON.stringify({ error: "Token no encontrado" }) }
+      const { error: updateErr } = await supabase
+        .from("recruiter_tokens")
+        .update({ token_balance: (existing.token_balance || 0) + amount })
+        .eq("id", token_id)
+      if (updateErr) throw updateErr
+      return { statusCode: 200, body: JSON.stringify({ ok: true, new_balance: (existing.token_balance || 0) + amount }) }
+    }
+
+    if (action === "update_token") {
+      const { token_id, ...fields } = payload || {}
+      if (!token_id) return { statusCode: 400, body: JSON.stringify({ error: "token_id requerido" }) }
+      const allowed = ["company_name","ruc","contact_name","contact_phone","plan","plan_expires_at","beta_discount","notes","is_active","token_balance","plan_type"]
+      const update: Record<string, any> = {}
+      for (const key of allowed) {
+        if (key in fields) update[key] = fields[key]
+      }
+      if (Object.keys(update).length === 0) {
+        return { statusCode: 400, body: JSON.stringify({ error: "No hay campos válidos para actualizar" }) }
+      }
+      const { error: updateErr } = await supabase.from("recruiter_tokens").update(update).eq("id", token_id)
+      if (updateErr) throw updateErr
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
     if (action === "metrics") {

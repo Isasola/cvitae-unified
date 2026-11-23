@@ -106,7 +106,18 @@ export default function BatchAnalysis() {
   const [summary, setSummary] = useState<BatchSummary | null>(null)
   const [error, setError] = useState('')
   const [isDragging, setIsDragging] = useState(false)
+  const [folderMode, setFolderMode] = useState(false)
+  const [showBancoHint, setShowBancoHint] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!fileInputRef.current) return
+    if (folderMode) {
+      fileInputRef.current.setAttribute('webkitdirectory', '')
+    } else {
+      fileInputRef.current.removeAttribute('webkitdirectory')
+    }
+  }, [folderMode])
 
   useEffect(() => {
     const s = sessionStorage.getItem(RECRUITER_SESSION_KEY)
@@ -381,9 +392,21 @@ export default function BatchAnalysis() {
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03]">
                       <Upload strokeWidth={1.25} className="h-5 w-5 text-[#c9a84c]" />
                     </div>
-                    <p className="mt-3 font-display text-xl text-white/90">Arrastrá los CVs aquí</p>
+                    <p className="mt-3 font-display text-xl text-white/90">
+                      {folderMode ? 'Seleccioná una carpeta' : 'Arrastrá los CVs aquí'}
+                    </p>
                     <p className="mt-1 text-xs font-light text-white/45">PDF, DOCX o TXT · máximo 4 MB por archivo</p>
                     <Link href="/mi-carrera/cv" onClick={event => event.stopPropagation()} className="mt-2 text-xs text-[#c9a84c] underline decoration-[#c9a84c]/30 underline-offset-4">Crear un CV optimizado en CVitae</Link>
+                  </div>
+                  <div className="mt-3 flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => { setFolderMode(v => !v); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                      className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] transition-all ${folderMode ? 'border-[#c9a84c]/40 bg-[#c9a84c]/10 text-[#c9a84c]' : 'border-white/10 text-white/35 hover:border-white/20 hover:text-white/55'}`}
+                    >
+                      <FileText strokeWidth={1.5} className="h-3 w-3" />
+                      {folderMode ? 'Modo carpeta activo' : 'Subir carpeta'}
+                    </button>
                   </div>
 
                   {/* File list */}
@@ -560,13 +583,18 @@ export default function BatchAnalysis() {
                 </ol>
               </div>
 
-              {/* Círculo virtuoso */}
-              <div className="flex items-start gap-4 rounded-2xl border border-white/8 bg-white/[0.02] p-5">
+              {/* Banner banco de candidatos */}
+              <div className="flex items-start gap-4 rounded-2xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.04] p-5">
                 <Users strokeWidth={1.25} className="h-5 w-5 shrink-0 text-[#c9a84c] mt-0.5" />
-                <p className="text-sm font-light text-white/55">
-                  Cada CV recibido por tu link de vacante también se suma al banco general de CVitae,
-                  ayudando a que más empresas y candidatos del ecosistema se encuentren.
-                </p>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-white/90">Estos CVs ya están en tu banco</p>
+                  <p className="mt-1 text-xs font-light text-white/55">
+                    Podés buscarlos en cualquier futuro proceso usando el <strong className="text-white/80">Banco de Candidatos</strong> en tu panel principal. No necesitás que vuelvan a postularse.
+                  </p>
+                  <Link href="/empresas" className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 px-3 py-1.5 text-xs text-[#c9a84c] transition hover:border-[#c9a84c]/60">
+                    Ir al banco →
+                  </Link>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-3">

@@ -44,9 +44,6 @@
   timeout = 30
   included_files = ["node_modules/pdfjs-dist/**", "node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/**"]
 
-[functions."submit-lead"]
-  included_files = ["node_modules/pdfjs-dist/**", "node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/**"]
-
 
 [functions."sitemap"]
   timeout = 30

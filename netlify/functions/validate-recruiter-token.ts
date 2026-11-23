@@ -33,7 +33,7 @@ const handler: Handler = async (event) => {
     // Buscar token
     const { data, error } = await supabase
       .from("recruiter_tokens")
-      .select("id, email, company_name, access_token, token_balance, plan_type, is_active, verification_status, created_at")
+      .select("id, email, company_name, access_token, token_balance, plan_type, plan, plan_expires_at, is_active, verification_status, created_at")
       .eq("access_token", token.trim())
       .eq("is_active", true)
       .eq("verification_status", "verified")
@@ -372,6 +372,144 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
+    // ─── Banco de candidatos: búsqueda cross-llamado (solo SQL, sin Bedrock) ───
+    if (action === "get_candidate_bank") {
+      const { vacancy_id } = body
+      let query = supabase
+        .from("recruiter_analyses")
+        .select("id,candidate_name,file_name,ats_score,strengths,critical_improvements,vacancy_label,is_starred,created_at")
+        .eq("token_id", data.id)
+        .order("created_at", { ascending: false })
+        .limit(200)
+      if (vacancy_id) query = query.eq("vacancy_id", vacancy_id)
+      const { data: bank, error: bankErr } = await query
+      if (bankErr) throw bankErr
+      return { statusCode: 200, body: JSON.stringify({ data: bank || [] }) }
+    }
+
+    if (action === "search_candidate_bank") {
+      const { query: q } = body
+      if (!q || String(q).trim().length < 2) {
+        return { statusCode: 400, body: JSON.stringify({ error: "query requerido (mín 2 caracteres)" }) }
+      }
+      const kw = `%${String(q).trim()}%`
+      const { data: results, error: srchErr } = await supabase
+        .from("recruiter_analyses")
+        .select("id,candidate_name,file_name,ats_score,strengths,critical_improvements,vacancy_label,is_starred,created_at")
+        .eq("token_id", data.id)
+        .or(`candidate_name.ilike.${kw},vacancy_label.ilike.${kw},strengths.ilike.${kw},critical_improvements.ilike.${kw}`)
+        .order("ats_score", { ascending: false })
+        .limit(50)
+      if (srchErr) throw srchErr
+      return { statusCode: 200, body: JSON.stringify({ data: results || [] }) }
+    }
+
+    // ─── Legajos ───
+    if (action === "create_employee_file") {
+      const { employee_name, employee_email, employee_phone, position, hire_date, application_id, notes: empNotes } = body
+      if (!employee_name) return { statusCode: 400, body: JSON.stringify({ error: "employee_name requerido" }) }
+      const { data: ef, error: efErr } = await supabase.from("employee_files").insert([{
+        token_id: data.id,
+        employee_name: String(employee_name).trim(),
+        employee_email: employee_email ? String(employee_email).trim() : null,
+        employee_phone: employee_phone ? String(employee_phone).trim() : null,
+        position: position ? String(position).trim() : null,
+        hire_date: hire_date || null,
+        application_id: application_id || null,
+        notes: empNotes ? String(empNotes).trim() : null,
+        status: "active",
+      }]).select().single()
+      if (efErr) throw efErr
+      return { statusCode: 200, body: JSON.stringify({ data: ef }) }
+    }
+
+    if (action === "get_employee_files") {
+      const { data: files, error: filesErr } = await supabase
+        .from("employee_files")
+        .select("id,employee_name,employee_email,employee_phone,position,hire_date,status,notes,application_id,created_at,updated_at")
+        .eq("token_id", data.id)
+        .order("employee_name", { ascending: true })
+      if (filesErr) throw filesErr
+      return { statusCode: 200, body: JSON.stringify({ data: files || [] }) }
+    }
+
+    if (action === "update_employee_file") {
+      const { file_id, ...fields } = body
+      if (!file_id) return { statusCode: 400, body: JSON.stringify({ error: "file_id requerido" }) }
+      const allowed = ["employee_name","employee_email","employee_phone","position","hire_date","status","notes"]
+      const update: Record<string, any> = { updated_at: new Date().toISOString() }
+      for (const k of allowed) { if (k in fields) update[k] = fields[k] }
+      const { error: upErr } = await supabase.from("employee_files").update(update).eq("id", file_id).eq("token_id", data.id)
+      if (upErr) throw upErr
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
+    if (action === "add_employee_document") {
+      const { file_id, doc_type, custom_label, file_name, file_url, file_size_kb, notes: docNotes } = body
+      if (!file_id || !file_url) return { statusCode: 400, body: JSON.stringify({ error: "file_id y file_url requeridos" }) }
+      // verify ownership
+      const { data: ef } = await supabase.from("employee_files").select("id").eq("id", file_id).eq("token_id", data.id).single()
+      if (!ef) return { statusCode: 403, body: JSON.stringify({ error: "No autorizado" }) }
+      const { data: doc, error: docErr } = await supabase.from("employee_documents").insert([{
+        employee_file_id: file_id,
+        doc_type: doc_type || "otro",
+        custom_label: custom_label ? String(custom_label).trim() : null,
+        file_name: file_name ? String(file_name).trim() : null,
+        file_url: String(file_url).trim(),
+        file_size_kb: file_size_kb || null,
+        notes: docNotes ? String(docNotes).trim() : null,
+      }]).select().single()
+      if (docErr) throw docErr
+      return { statusCode: 200, body: JSON.stringify({ data: doc }) }
+    }
+
+    if (action === "get_employee_documents") {
+      const { file_id } = body
+      if (!file_id) return { statusCode: 400, body: JSON.stringify({ error: "file_id requerido" }) }
+      const { data: ef } = await supabase.from("employee_files").select("id").eq("id", file_id).eq("token_id", data.id).single()
+      if (!ef) return { statusCode: 403, body: JSON.stringify({ error: "No autorizado" }) }
+      const { data: docs, error: docsErr } = await supabase
+        .from("employee_documents").select("*").eq("employee_file_id", file_id).order("uploaded_at", { ascending: false })
+      if (docsErr) throw docsErr
+      return { statusCode: 200, body: JSON.stringify({ data: docs || [] }) }
+    }
+
+    if (action === "add_employee_alert") {
+      const { file_id, alert_date, title, notes: alertNotes } = body
+      if (!file_id || !alert_date || !title) return { statusCode: 400, body: JSON.stringify({ error: "file_id, alert_date y title requeridos" }) }
+      const { data: ef } = await supabase.from("employee_files").select("id").eq("id", file_id).eq("token_id", data.id).single()
+      if (!ef) return { statusCode: 403, body: JSON.stringify({ error: "No autorizado" }) }
+      const { data: alert, error: aErr } = await supabase.from("employee_alerts").insert([{
+        employee_file_id: file_id,
+        alert_date,
+        title: String(title).trim(),
+        notes: alertNotes ? String(alertNotes).trim() : null,
+        is_done: false,
+      }]).select().single()
+      if (aErr) throw aErr
+      return { statusCode: 200, body: JSON.stringify({ data: alert }) }
+    }
+
+    if (action === "get_employee_alerts") {
+      const { file_id, upcoming_only } = body
+      if (!file_id) return { statusCode: 400, body: JSON.stringify({ error: "file_id requerido" }) }
+      const { data: ef } = await supabase.from("employee_files").select("id").eq("id", file_id).eq("token_id", data.id).single()
+      if (!ef) return { statusCode: 403, body: JSON.stringify({ error: "No autorizado" }) }
+      let query = supabase.from("employee_alerts").select("*").eq("employee_file_id", file_id).order("alert_date", { ascending: true })
+      if (upcoming_only) query = query.eq("is_done", false).gte("alert_date", new Date().toISOString().split("T")[0])
+      const { data: alerts, error: alErr } = await query
+      if (alErr) throw alErr
+      return { statusCode: 200, body: JSON.stringify({ data: alerts || [] }) }
+    }
+
+    if (action === "mark_alert_done") {
+      const { alert_id } = body
+      if (!alert_id) return { statusCode: 400, body: JSON.stringify({ error: "alert_id requerido" }) }
+      const { error: doneErr } = await supabase.from("employee_alerts").update({ is_done: true }).eq("id", alert_id)
+      if (doneErr) throw doneErr
+      return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    }
+
     // ─── Validación simple / inicio de sesión ───
     // Auto-activate prospect if was invited
     supabase.from("b2b_prospects").update({ status: "activated", activated_at: new Date().toISOString() }).eq("status", "invited").ilike("email", data.email).then(() => {})
@@ -383,6 +521,8 @@ const handler: Handler = async (event) => {
         balance: data.token_balance,
         company_name: data.company_name || "Sin nombre",
         token_id: data.id,
+        plan: data.plan || data.plan_type || "trial",
+        plan_expires_at: data.plan_expires_at || null,
       }),
     }
   } catch (err: any) {

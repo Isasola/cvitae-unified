@@ -1,6 +1,34 @@
 # CVitae — Session Handoff
 
-## Current State
+## Current State (2026-11-23)
+**Branch**: `feature/aws-migration` — LOCAL CHANGES NOT PUSHED YET (pending user authorization)
+
+**B2B Reingeniería completa** — 1 push pendiente con 10+ archivos:
+- `netlify.toml` — fix: removed submit-lead section
+- `scrapers/opportunitydesk_scraper.py` — fix: outer try/except
+- `netlify/functions/submit-lead.ts` — DELETED
+- `netlify/functions/submit-b2b-lead.ts` — updated: phone, country, processes_per_month, new email template
+- `netlify/functions/generate-token.ts` — updated: ruc, contact_name, contact_phone, plan, plan_expires_at, beta_discount, notes
+- `netlify/functions/admin-data.ts` — updated: recharge_credits, update_token, list_tokens with alerts
+- `netlify/functions/validate-recruiter-token.ts` — updated: 10 new actions (banco + legajos)
+- `src/pages/VacantePage.tsx` — updated: JobPosting JSON-LD, noindex removed
+- `src/pages/BatchAnalysis.tsx` — updated: folder upload toggle, banco banner post-análisis
+- `src/pages/LandingPage.tsx` — REDESIGNED: B2B-first, 4 plans, contact form inline
+- `src/pages/Recruiters.tsx` — updated: Banco tab, Legajos tab, clickable KPIs, mobile scroll tabs
+- `docs/ai/B2B_SYSTEM.md` — NEW: manual completo del sistema B2B
+
+**SQL aplicado manualmente por usuario** (confirmado OK):
+- ALTER TABLE recruiter_tokens — 7 columnas nuevas
+- CREATE TABLE employee_files
+- CREATE TABLE employee_documents
+- CREATE TABLE employee_alerts
+- Supabase Storage bucket `employee-documents` (Private) — creado
+
+**Próximo paso**: el usuario debe hacer el push cuando esté listo.
+
+---
+
+## Previous State
 Production commit: `f11309f4` on `feature/aws-migration` — HEALTHY
 Last deploy: 2026-08-18. Post-deploy smoke test: PASS. Last QA: P13-P19 closed.
 

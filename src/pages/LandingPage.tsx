@@ -1,11 +1,11 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, type ChangeEvent, type FormEvent } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { Link } from 'wouter'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Upload, Sparkles, Brain, Building2, Check, ArrowRight,
   FileText, Loader2, Users, ChevronRight, AlertTriangle,
-  CheckCircle, AlertCircle, Mail,
+  CheckCircle, AlertCircle, Mail, Search, FolderOpen, Bell, Star, Zap,
 } from 'lucide-react'
 import { SiteShell } from '@/components/cv/SiteShell'
 import { AmbientSignalLines, CompatibilityTrace, Eyebrow } from '@/components/cv/visuals'
@@ -14,26 +14,28 @@ import { analytics } from '@/lib/analytics'
 
 const ease = [0.22, 1, 0.36, 1] as const
 
-// ─── Hero ─────────────────────────────────────────────────────────────────────
+// ─── Hero B2B ─────────────────────────────────────────────────────────────────
 
 function Hero() {
   return (
     <section className="relative overflow-hidden">
       <AmbientSignalLines className="pointer-events-none absolute inset-y-0 left-[52%] right-0 hidden h-full w-[52%] opacity-75 lg:block" />
       <div className="relative mx-auto max-w-6xl px-6 pb-10 pt-16 sm:pb-16 sm:pt-24">
-        <Eyebrow>Gratis · Paraguay &amp; LATAM</Eyebrow>
+        <Eyebrow>Software de RRHH · Paraguay &amp; LATAM</Eyebrow>
         <h1 className="font-display mt-3 max-w-3xl text-4xl leading-[1.05] text-cream sm:text-6xl">
-          Tu carrera, con IA. <em>Sin inventar nada.</em>
+          Contratá mejor. <em>Más rápido. Con IA.</em>
         </h1>
         <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-          CVitae analiza tu CV, encuentra oportunidades que encajan con tu perfil y te genera una versión adaptada para cada postulación — con tu experiencia real, sin frases vacías que no puedas defender.
+          CVitae es la plataforma de RRHH para empresas en Paraguay y LATAM: publicá vacantes con SEO, filtrá CVs con IA en minutos, administrá tu banco de candidatos y llevá el legajo digital de tu equipo — todo desde un solo panel.
         </p>
-        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {[
-            { icon: '📄', label: 'Diagnóstico ATS', desc: 'Qué tan legible es tu CV para los sistemas de filtro' },
-            { icon: '🔍', label: 'Oportunidades', desc: 'Empleos, becas y puestos en Paraguay y LATAM' },
-            { icon: '✦', label: 'CV Vivo', desc: 'CV adaptado a cada vacante, sin inventar experiencia' },
-            { icon: '⚡', label: 'Matching', desc: 'Qué tan bien encajás con cada oportunidad' },
+            { icon: '📋', label: 'Vacantes con SEO', desc: 'Link propio, indexado en Google, candidatos llegan solos' },
+            { icon: '🤖', label: 'Análisis masivo', desc: 'Score, fortalezas y brechas por candidato en minutos' },
+            { icon: '🗂️', label: 'Banco reutilizable', desc: 'Buscá CVs de procesos anteriores por keyword o puesto' },
+            { icon: '📁', label: 'Legajo digital', desc: 'Documentos + recordatorios IPS/MTESS por empleado' },
+            { icon: '⚡', label: 'Matching pre-vacante', desc: 'Buscá en tu banco antes de publicar — ya podés tener al candidato' },
+            { icon: '🏆', label: 'Comparación final', desc: 'IA compara hasta 5 finalistas en un análisis único' },
           ].map((item) => (
             <div key={item.label} className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
               <span className="text-lg">{item.icon}</span>
@@ -42,32 +44,355 @@ function Hero() {
             </div>
           ))}
         </div>
-        <div className="relative mt-8 max-w-3xl border-y border-white/[0.12] py-5">
-          <div className="absolute left-[12.5%] right-[12.5%] top-1/2 hidden h-px -translate-y-1/2 bg-gold/20 sm:block" aria-hidden="true" />
-          <ol className="relative grid grid-cols-2 gap-4 sm:grid-cols-4" aria-label="Recorrido de CVitae">
-            {['Subís tu CV', 'Encontrás oportunidades', 'CVitae adapta', 'Postulás con confianza'].map((step, index) => (
-              <li key={step} className="flex items-center gap-3 text-[11px] uppercase tracking-[0.12em] text-cream">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-gold/70 bg-[#0a0a0a] text-gold shadow-[0_0_12px_rgba(201,168,76,0.4)]">
-                  <span className="font-display text-base font-bold leading-none">{index + 1}</span>
-                </span>
-                {step}
-              </li>
-            ))}
-          </ol>
-        </div>
         <div className="mt-10 flex flex-wrap gap-3">
           <a
-            href="#registro"
+            href="#empresas-contacto"
             className="inline-flex h-11 items-center gap-2 rounded-full bg-[#c9a84c] px-6 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)]"
           >
-            <Upload className="h-4 w-4" /> Probalo gratis
+            <Building2 className="h-4 w-4" /> Solicitar acceso para mi empresa
           </a>
           <Link
             href="/empresas"
             className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 px-6 text-sm text-cream transition hover:border-white/25"
           >
-            Para empresas <ArrowRight className="h-4 w-4" />
+            Acceder con token <ArrowRight className="h-4 w-4" />
           </Link>
+        </div>
+        <p className="mt-4 text-xs text-white/35">
+          ¿Sos candidato buscando empleo?{' '}
+          <a href="#candidatos" className="text-[#c9a84c] underline decoration-[#c9a84c]/30 underline-offset-4">
+            Bajá para ver las herramientas gratuitas de CV ↓
+          </a>
+        </p>
+      </div>
+    </section>
+  )
+}
+
+// ─── B2B Features ─────────────────────────────────────────────────────────────
+
+function B2BFeatures() {
+  const features = [
+    {
+      Icon: Zap,
+      title: 'Vacantes públicas con SEO',
+      desc: 'Cada vacante tiene su URL única en cvitae.lat, con schema JobPosting para que Google la indexe. Los candidatos llegan sin que pagues publicidad.',
+    },
+    {
+      Icon: Brain,
+      title: 'Filtro IA masivo',
+      desc: 'Subí hasta 30 CVs de una vez. Cada candidato recibe score 0–100, listado de fortalezas y brechas respecto al puesto — en minutos, no días.',
+    },
+    {
+      Icon: Search,
+      title: 'Banco de candidatos',
+      desc: 'Todos los CVs analizados quedan en tu banco privado. Buscá por keyword o descripción de puesto en procesos anteriores — sin que el candidato vuelva a postularse.',
+    },
+    {
+      Icon: Star,
+      title: 'Comparación de finalistas',
+      desc: 'Marcá los mejores y pedí un análisis comparativo. La IA contrasta fortalezas, brechas y fit cultural de hasta 5 candidatos en una sola pantalla.',
+    },
+    {
+      Icon: FolderOpen,
+      title: 'Legajo digital',
+      desc: 'Guardá documentos del empleado (contrato, cédula, IPS), agregá recordatorios de vencimiento y llevá el historial en un solo lugar.',
+    },
+    {
+      Icon: Bell,
+      title: 'Recordatorios de compliance',
+      desc: 'Alertas de IPS REI (3 días hábiles), MTESS REOP (30 días hábiles) y vencimientos de documentos por empleado — para no perder plazos legales.',
+    },
+  ]
+  return (
+    <section className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
+      <Eyebrow>Para empresas</Eyebrow>
+      <h2 className="font-display mt-2 max-w-2xl text-3xl text-cream sm:text-4xl">
+        Todo el ciclo de RRHH, <em>sin cambiar de herramienta</em>.
+      </h2>
+      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        Desde la publicación de la vacante hasta el legajo del empleado contratado — CVitae cubre el flujo completo sin integraciones ni exportaciones.
+      </p>
+      <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {features.map(({ Icon, title, desc }, i) => (
+          <motion.div
+            key={title}
+            initial={false}
+            transition={{ duration: 0.6, delay: i * 0.07, ease }}
+            className="glass-panel rounded-2xl p-6"
+          >
+            <Icon strokeWidth={1.25} className="h-5 w-5 text-[#c9a84c]" />
+            <h3 className="font-display mt-3 text-lg text-cream">{title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{desc}</p>
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// ─── B2B Pricing ──────────────────────────────────────────────────────────────
+
+function B2BPricing() {
+  const plans = [
+    {
+      name: 'Trial',
+      price: 'Gratis',
+      per: '20 créditos incluidos',
+      featured: false,
+      features: [
+        '20 créditos (1 crédito = 1 CV analizado)',
+        '1 vacante activa con link propio',
+        'Banco de candidatos básico',
+        'Sin tarjeta requerida',
+      ],
+      cta: 'Solicitar acceso →',
+    },
+    {
+      name: 'Starter',
+      price: 'USD 39',
+      per: '/ mes',
+      featured: false,
+      features: [
+        '100 créditos / mes',
+        '5 vacantes activas',
+        'Banco de candidatos completo',
+        'Búsqueda cross-llamado',
+        'Soporte por email',
+      ],
+      cta: 'Solicitar acceso →',
+    },
+    {
+      name: 'Pro',
+      price: 'USD 79',
+      per: '/ mes',
+      featured: true,
+      features: [
+        '300 créditos / mes',
+        '15 vacantes activas',
+        'Todo Starter +',
+        'Legajos digitales',
+        'Comparación de finalistas',
+        'Alertas de compliance (IPS/MTESS)',
+        'Matching pre-vacante',
+      ],
+      cta: 'Solicitar acceso →',
+    },
+    {
+      name: 'Scale',
+      price: 'USD 149',
+      per: '/ mes',
+      featured: false,
+      features: [
+        '800 créditos / mes',
+        'Vacantes ilimitadas',
+        'Todo Pro +',
+        'Soporte prioritario',
+        'Créditos adicionales a pedido',
+      ],
+      cta: 'Solicitar acceso →',
+    },
+  ]
+  return (
+    <section className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
+      <Eyebrow>Planes para empresas</Eyebrow>
+      <h2 className="font-display mt-2 max-w-2xl text-3xl text-cream sm:text-4xl">
+        Sin sorpresas. <em>Pagás por lo que usás.</em>
+      </h2>
+      <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
+        1 crédito = 1 CV analizado. Los créditos no vencen dentro del período mensual. Período de acceso beta con descuentos disponible — consultá al solicitar.
+      </p>
+      <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {plans.map((plan, i) => (
+          <motion.div
+            key={plan.name}
+            initial={false}
+            transition={{ duration: 0.6, delay: i * 0.07, ease }}
+            className={plan.featured
+              ? 'relative rounded-3xl border border-[#c9a84c]/30 bg-[#c9a84c]/[0.05] p-7'
+              : 'glass-panel rounded-3xl p-7'}
+          >
+            {plan.featured && (
+              <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full border border-[#c9a84c]/40 bg-[#0a0a0a] px-3 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-[#c9a84c]">
+                Más popular
+              </span>
+            )}
+            <h3 className="font-display text-xl text-cream">{plan.name}</h3>
+            <p className="font-display mt-3 text-3xl text-cream">
+              {plan.price}
+              {plan.per && <span className="ml-1 text-sm font-normal text-muted-foreground">{plan.per}</span>}
+            </p>
+            <ul className="mt-5 space-y-2 text-sm">
+              {plan.features.map((f) => (
+                <li key={f} className="flex items-start gap-2 text-cream/85">
+                  <Check strokeWidth={2} className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#c9a84c]" /> {f}
+                </li>
+              ))}
+            </ul>
+            <a
+              href="#empresas-contacto"
+              className={`mt-7 inline-flex h-10 w-full items-center justify-center rounded-full text-sm font-medium transition ${
+                plan.featured
+                  ? 'bg-[#c9a84c] text-[#0a0a0a] hover:bg-[#e6cf8a]'
+                  : 'border border-white/10 text-cream hover:border-white/25'
+              }`}
+            >
+              {plan.cta}
+            </a>
+          </motion.div>
+        ))}
+      </div>
+      <p className="mt-6 text-center text-xs text-white/35">
+        Los planes se activan manualmente durante el beta. Escribinos y te configuramos el acceso.
+      </p>
+    </section>
+  )
+}
+
+// ─── B2B Contact Form ─────────────────────────────────────────────────────────
+
+function B2BContactForm() {
+  const [form, setForm] = useState({ name: '', email: '', company: '', phone: '', country: 'Paraguay', processes_per_month: '', message: '' })
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
+  const [errMsg, setErrMsg] = useState('')
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
+  }
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setStatus('loading')
+    setErrMsg('')
+    try {
+      const res = await fetch('/.netlify/functions/submit-b2b-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json()
+      if (!res.ok) { setErrMsg(data.error || 'Error al enviar'); setStatus('error'); return }
+      setStatus('ok')
+    } catch {
+      setErrMsg('Error de conexión. Intentá de nuevo.')
+      setStatus('error')
+    }
+  }
+
+  return (
+    <section id="empresas-contacto" className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
+      <div className="grid gap-12 lg:grid-cols-[1fr_1.1fr]">
+        <div>
+          <Eyebrow>Acceso beta</Eyebrow>
+          <h2 className="font-display mt-2 max-w-xl text-3xl text-cream sm:text-4xl">
+            Probalo con tu equipo. <em>Sin costo inicial.</em>
+          </h2>
+          <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">
+            Durante el beta, activamos los accesos manualmente. Completá el formulario y te enviamos tu token de acceso — generalmente en menos de 24 horas.
+          </p>
+          <ul className="mt-6 space-y-2 text-sm text-cream/80">
+            {[
+              'Sin tarjeta ni contrato',
+              'Token personal con descuento beta',
+              'Soporte directo por WhatsApp',
+              'Podés pedir créditos adicionales en cualquier momento',
+            ].map((f) => (
+              <li key={f} className="flex items-center gap-2">
+                <Check strokeWidth={2} className="h-3.5 w-3.5 shrink-0 text-[#c9a84c]" /> {f}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="glass-card rounded-3xl p-8">
+          {status === 'ok' ? (
+            <div className="flex flex-col items-center py-10 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#c9a84c]/40 bg-[#c9a84c]/10">
+                <CheckCircle strokeWidth={1.5} className="h-7 w-7 text-[#c9a84c]" />
+              </div>
+              <h3 className="font-display mt-5 text-2xl text-cream">Recibido</h3>
+              <p className="mt-3 max-w-xs text-sm text-muted-foreground">Te contactamos en menos de 24 horas con tu token de acceso.</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] uppercase tracking-[0.18em] text-white/45">Empresa</span>
+                  <input
+                    name="company" value={form.company} onChange={handleChange} required
+                    placeholder="Nombre de la empresa"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-cream placeholder-white/25 outline-none transition focus:border-[#c9a84c]/40"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] uppercase tracking-[0.18em] text-white/45">Tu nombre</span>
+                  <input
+                    name="name" value={form.name} onChange={handleChange} required
+                    placeholder="Nombre y apellido"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-cream placeholder-white/25 outline-none transition focus:border-[#c9a84c]/40"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] uppercase tracking-[0.18em] text-white/45">Email laboral</span>
+                  <input
+                    name="email" type="email" value={form.email} onChange={handleChange} required
+                    placeholder="tu@empresa.com"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-cream placeholder-white/25 outline-none transition focus:border-[#c9a84c]/40"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] uppercase tracking-[0.18em] text-white/45">Teléfono / WhatsApp</span>
+                  <input
+                    name="phone" value={form.phone} onChange={handleChange}
+                    placeholder="+595 981 000000"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-cream placeholder-white/25 outline-none transition focus:border-[#c9a84c]/40"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] uppercase tracking-[0.18em] text-white/45">País</span>
+                  <select
+                    name="country" value={form.country} onChange={handleChange}
+                    className="w-full rounded-xl border border-white/10 bg-[#111] px-4 py-3 text-sm text-cream outline-none transition focus:border-[#c9a84c]/40"
+                  >
+                    {['Paraguay','Argentina','Uruguay','Bolivia','Chile','Peru','Colombia','Ecuador','Mexico','Otro'].map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] uppercase tracking-[0.18em] text-white/45">Procesos de selección / mes</span>
+                  <select
+                    name="processes_per_month" value={form.processes_per_month} onChange={handleChange}
+                    className="w-full rounded-xl border border-white/10 bg-[#111] px-4 py-3 text-sm text-cream outline-none transition focus:border-[#c9a84c]/40"
+                  >
+                    <option value="">Seleccioná</option>
+                    {['1–2','3–5','6–10','11–20','Más de 20'].map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </label>
+              </div>
+              <label className="block">
+                <span className="mb-1.5 block text-[11px] uppercase tracking-[0.18em] text-white/45">Contanos tu contexto (opcional)</span>
+                <textarea
+                  name="message" value={form.message} onChange={handleChange} rows={3}
+                  placeholder="Sector, cantidad de empleados, desafíos actuales de RRHH..."
+                  className="w-full resize-none rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-cream placeholder-white/25 outline-none transition focus:border-[#c9a84c]/40"
+                />
+              </label>
+              {errMsg && (
+                <div className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-sm text-red-400">
+                  <AlertCircle strokeWidth={1.5} className="h-4 w-4 shrink-0" /> {errMsg}
+                </div>
+              )}
+              <button
+                type="submit" disabled={status === 'loading'}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] disabled:opacity-60"
+              >
+                {status === 'loading' ? <Loader2 strokeWidth={2} className="h-4 w-4 animate-spin" /> : <Building2 className="h-4 w-4" />}
+                {status === 'loading' ? 'Enviando...' : 'Solicitar acceso beta'}
+              </button>
+              <p className="text-center text-[11px] text-white/30">Sin tarjeta. Sin compromiso. Acceso activado en &lt;24 hs.</p>
+            </form>
+          )}
         </div>
       </div>
     </section>
@@ -625,61 +950,25 @@ function Pricing() {
   )
 }
 
-// ─── Para Empresas ────────────────────────────────────────────────────────────
 
-function ParaEmpresas() {
+// ─── Separador candidatos ─────────────────────────────────────────────────────
+
+function CandidatosDivider() {
   return (
-    <section className="mx-auto max-w-6xl border-t border-white/[0.12] px-6 py-20">
-      <div className="grid gap-10 lg:grid-cols-[1.1fr_1fr]">
-        <div>
-          <Eyebrow>Para empresas</Eyebrow>
-          <h2 className="font-display mt-2 max-w-xl text-3xl text-cream sm:text-4xl">
-            Publicá vacantes y encontrá <em>candidatos que encajan</em>.
-          </h2>
-          <p className="mt-4 max-w-lg text-muted-foreground">
-            CVitae tiene dos lados. Para candidatos: CV, diagnóstico y matching. Para empresas: publicación de vacantes, análisis masivo de CVs y ranking explicable de candidatos. Todo en un solo lugar.
-          </p>
-          <ul className="mt-6 space-y-2 text-sm text-cream/90">
-            {[
-              'Publicá tu vacante con un link de postulación propio',
-              'Análisis masivo de CVs recibidos',
-              'Ranking comparativo con score y justificación',
-              'Pipeline de candidatos visual',
-              'Exportación CSV del banco de talento',
-            ].map((f) => (
-              <li key={f} className="flex items-start gap-2">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#c9a84c]" /> {f}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* CTA card */}
-        <div className="relative overflow-hidden rounded-3xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.04] p-8">
-          <div className="absolute -inset-1 -z-10 rounded-[2rem] bg-gradient-to-br from-[#c9a84c]/10 via-transparent to-transparent blur-2xl" />
-          <div className="flex items-baseline justify-between">
-            <h3 className="font-display text-xl text-cream">Plan Empresa</h3>
-            <Building2 className="h-4 w-4 text-[#c9a84c]" />
+    <section id="candidatos" className="border-t border-white/[0.12] py-16">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="flex items-center gap-6">
+          <div className="h-px flex-1 bg-white/[0.08]" />
+          <div className="text-center">
+            <Eyebrow>Para candidatos</Eyebrow>
+            <h2 className="font-display mt-2 text-2xl text-cream sm:text-3xl">
+              ¿Buscás empleo? <em>Comenzá gratis.</em>
+            </h2>
+            <p className="mt-3 max-w-lg text-sm text-muted-foreground">
+              Subí tu CV y CVitae te dice qué tan listo está para los sistemas ATS, encontrás miles de oportunidades en Paraguay y LATAM y generás versiones adaptadas para cada postulación — con tu experiencia real, sin frases vacías.
+            </p>
           </div>
-          <p className="font-display mt-3 text-4xl text-cream">
-            USD 79<span className="ml-1 text-sm text-muted-foreground">/ mes</span>
-          </p>
-          <p className="text-xs text-muted-foreground">o Gs. 500.000 / mes</p>
-          <div className="mt-8 space-y-3">
-            <Link
-              href="/empresas"
-              className="inline-flex w-full h-11 items-center justify-center gap-2 rounded-full bg-[#c9a84c] text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.5)]"
-            >
-              <Users className="h-4 w-4" /> Acceder al portal de empresas
-            </Link>
-            <Link
-              href="/demo"
-              className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-full border border-white/10 text-sm text-cream transition hover:border-white/25"
-            >
-              Ver demo del panel <ChevronRight className="h-4 w-4" />
-            </Link>
-          </div>
-          <p className="mt-4 text-center text-[11px] text-muted-foreground">Sin tarjeta requerida para el período de prueba.</p>
+          <div className="h-px flex-1 bg-white/[0.08]" />
         </div>
       </div>
     </section>
@@ -692,23 +981,28 @@ export default function LandingPage() {
   return (
     <>
       <Helmet>
-        <title>CVitae | Empleos, oportunidades y CV en Paraguay y LATAM</title>
-        <meta name="description" content="Encontrá empleos, becas y otras oportunidades en Paraguay y LATAM. CVitae las compara con tu experiencia y te ayuda a adaptar tu CV sin inventar experiencia." />
+        <title>CVitae | Software de RRHH con IA para Paraguay y LATAM</title>
+        <meta name="description" content="Plataforma de RRHH para empresas en Paraguay: publicá vacantes con SEO, filtrá CVs con IA, administrá banco de candidatos y legajos digitales. También herramientas gratuitas para candidatos." />
         <link rel="canonical" href="https://cvitae.lat" />
-        <meta property="og:title" content="CVitae | Empleos, oportunidades y CV en Paraguay y LATAM" />
-        <meta property="og:description" content="Encontrá oportunidades, comparalas con tu experiencia y adaptá tu CV sin inventar experiencia." />
+        <meta property="og:title" content="CVitae | Software de RRHH con IA para Paraguay y LATAM" />
+        <meta property="og:description" content="Vacantes con SEO, análisis masivo de CVs, banco de candidatos y legajos digitales — todo en un panel para empresas en Paraguay y LATAM." />
         <meta property="og:url" content="https://cvitae.lat" />
         <meta property="og:type" content="website" />
       </Helmet>
       <SiteShell>
+        {/* B2B-first */}
         <Hero />
+        <B2BFeatures />
+        <B2BPricing />
+        <B2BContactForm />
+        {/* B2C — claramente separado */}
+        <CandidatosDivider />
         <Analizador />
         <ComoFunciona />
         <RegistroBlock />
         <IATech />
         <StatsBar />
         <Pricing />
-        <ParaEmpresas />
       </SiteShell>
     </>
   )

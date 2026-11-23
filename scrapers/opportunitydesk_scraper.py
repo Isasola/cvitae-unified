@@ -148,4 +148,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"[opportunitydesk] error fatal: {type(e).__name__}: {e}")
+        import sys; sys.exit(1)

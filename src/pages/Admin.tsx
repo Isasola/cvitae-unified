@@ -985,6 +985,14 @@ export default function Admin() {
     } catch { /* non-fatal */ }
   }
 
+  const rechargeToken = async (tokenId: string, amount: number) => {
+    try {
+      await adminFetch('recharge_credits', { token_id: tokenId, amount })
+      await loadTokens()
+      setNotification({ type: 'success', message: `+${amount} créditos acreditados` })
+    } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
+  }
+
   const loadBeta = async () => {
     try {
       const json = await adminFetch('list_beta')
@@ -2729,7 +2737,7 @@ export default function Admin() {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr className="border-b border-white/[0.05]">
-                          {['EMAIL', 'TOKEN', 'BALANCE', 'PLAN', 'VERIFICACIÓN', 'ACCIÓN'].map(h => (
+                          {['EMPRESA', 'EMAIL', 'TOKEN', 'BALANCE', 'PLAN', 'ALERTAS', 'ACCIÓN'].map(h => (
                             <th key={h} className="text-left py-2.5 px-4 font-normal tracking-widest text-[rgba(232,232,224,0.3)]" style={{ fontFamily: MONO, fontSize: '10px' }}>{h}</th>
                           ))}
                         </tr>
@@ -2737,13 +2745,21 @@ export default function Admin() {
                       <tbody className="divide-y divide-white/[0.04]">
                         {tokens.map(token => (
                           <tr key={token.id} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="py-3 px-4">
+                              <p className="text-sm text-[#e8e8e0]">{token.company_name || '—'}</p>
+                              {token.contact_name && <p className="text-[10px] text-white/40">{token.contact_name}</p>}
+                              {token.ruc && <p className="text-[10px] text-white/30" style={{ fontFamily: MONO }}>RUC: {token.ruc}</p>}
+                            </td>
                             <td className="py-3 px-4 text-sm text-[#e8e8e0]">{token.email}</td>
                             <td className="py-3 px-4" style={{ fontFamily: MONO, fontSize: '11px', color: '#c9a84c' }}>{token.access_token}</td>
                             <td className="py-3 px-4 text-[#e8e8e0]" style={{ fontFamily: MONO }}>{token.token_balance}</td>
                             <td className="py-3 px-4">
-                              <span className="text-[10px] px-2 py-0.5 border border-white/10 text-[rgba(232,232,224,0.4)]" style={{ fontFamily: MONO, letterSpacing: '0.1em' }}>
-                                {(token.plan_type || '').toUpperCase()}
-                              </span>
+                              <p className="text-[10px] px-2 py-0.5 border border-white/10 text-[rgba(232,232,224,0.4)]" style={{ fontFamily: MONO, letterSpacing: '0.1em' }}>
+                                {(token.plan || token.plan_type || 'trial').toUpperCase()}
+                              </p>
+                              {token.plan_expires_at && (
+                                <p className="text-[10px] text-white/30 mt-0.5">vence {new Date(token.plan_expires_at).toLocaleDateString('es-PY')}</p>
+                              )}
                             </td>
                             <td className="py-3 px-4">
                               <span className={`text-[10px] uppercase tracking-[0.1em] ${token.verification_status === 'verified' ? 'text-emerald-400' : token.verification_status === 'rejected' ? 'text-red-400' : 'text-amber-300'}`} style={{ fontFamily: MONO }}>
@@ -2751,10 +2767,22 @@ export default function Admin() {
                               </span>
                             </td>
                             <td className="py-3 px-4">
-                              <div className="flex items-center gap-2">
-                                {token.verification_status !== 'verified' && <button onClick={() => reviewRecruiter(token.id, 'verified')} className="text-[10px] text-emerald-400/70 hover:text-emerald-400" style={{ fontFamily: MONO }}>APROBAR</button>}
-                                {token.verification_status !== 'in_review' && <button onClick={() => reviewRecruiter(token.id, 'in_review')} className="text-[10px] text-amber-300/60 hover:text-amber-300" style={{ fontFamily: MONO }}>REVISAR</button>}
-                                {token.verification_status !== 'rejected' && <button onClick={() => reviewRecruiter(token.id, 'rejected')} className="text-[10px] text-red-400/50 hover:text-red-400" style={{ fontFamily: MONO }}>RECHAZAR</button>}
+                              <div className="flex flex-col gap-1.5">
+                                <div className="flex items-center gap-2">
+                                  {token.verification_status !== 'verified' && <button onClick={() => reviewRecruiter(token.id, 'verified')} className="text-[10px] text-emerald-400/70 hover:text-emerald-400" style={{ fontFamily: MONO }}>APROBAR</button>}
+                                  {token.verification_status !== 'in_review' && <button onClick={() => reviewRecruiter(token.id, 'in_review')} className="text-[10px] text-amber-300/60 hover:text-amber-300" style={{ fontFamily: MONO }}>REVISAR</button>}
+                                  {token.verification_status !== 'rejected' && <button onClick={() => reviewRecruiter(token.id, 'rejected')} className="text-[10px] text-red-400/50 hover:text-red-400" style={{ fontFamily: MONO }}>RECHAZAR</button>}
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  {([10, 50, 100] as const).map(n => (
+                                    <button key={n} onClick={() => rechargeToken(token.id, n)} className="text-[10px] text-[#c9a84c]/60 hover:text-[#c9a84c] border border-[#c9a84c]/20 hover:border-[#c9a84c]/50 px-1.5 py-0.5 rounded transition" style={{ fontFamily: MONO }}>
+                                      +{n}
+                                    </button>
+                                  ))}
+                                  {token._alerts?.map((a: string) => (
+                                    <span key={a} className="text-[10px] text-amber-300" style={{ fontFamily: MONO }}>⚠ {a}</span>
+                                  ))}
+                                </div>
                               </div>
                             </td>
                           </tr>
