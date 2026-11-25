@@ -38,7 +38,7 @@ async function invokeModel(system: string, userPrompt: string): Promise<string> 
     accept: "application/json",
     body: JSON.stringify({
       anthropic_version: "bedrock-2023-05-31",
-      max_tokens: 1200,
+      max_tokens: 1600,
       system,
       messages: [{ role: "user", content: userPrompt }],
     }),
@@ -82,26 +82,40 @@ const handler: Handler = async (event) => {
       return jsonResponse(event, 413, { error: "El texto del CV supera el límite permitido." })
     }
 
-    const prompt = `Analizá el siguiente CV como experto en reclutamiento y empleabilidad en Latinoamérica.
+    const prompt = `Analizá este CV como consultor senior de RR.HH. El candidato quiere saber qué tan competitivo está y cómo mejorar para conseguir entrevistas.
 
-Primero extraé los datos clave del CV, luego evaluá su calidad técnica para sistemas ATS.
+RÚBRICA (atsScore 0-100):
+- 90-100: CV ejemplar — estructura clara, verbos de acción, logros concretos, keywords del sector, sin errores
+- 75-89: Buen CV — ordenado y legible, le faltan algunos detalles o métricas
+- 60-74: CV promedio — cumple lo básico pero con secciones vagas o incompletas
+- 40-59: Por debajo del promedio — secciones importantes débiles o información incompleta
+- 0-39: CV con problemas graves — difícil de leer, datos clave ausentes, no apto para sistemas ATS
 
-CV:
-${cvText.slice(0, 4000)}
+CV A ANALIZAR:
+${cvText.slice(0, 6000)}
 
 Respondé ÚNICAMENTE con JSON válido con esta estructura exacta:
 {
-  "atsScore": <número 0-100, basado en: formato, keywords, logros cuantificados, estructura, claridad>,
+  "atsScore": <0-100 según la rúbrica>,
   "nombre": "<nombre detectado o null>",
   "rolDetectado": "<título profesional principal detectado>",
-  "strengths": ["<fortaleza concreta 1>", "<fortaleza concreta 2>", "<fortaleza concreta 3>"],
-  "criticalImprovements": ["<mejora crítica 1>", "<mejora crítica 2>", "<mejora crítica 3>"],
-  "missingKeywords": ["<keyword ATS importante ausente 1>", "<keyword 2>", "<keyword 3>"],
-  "recommendation": "<1-2 oraciones directas sobre el estado del CV y el próximo paso más importante>"
+  "careerLevel": <"junior"|"semi-senior"|"senior"|"gerencial">,
+  "recommendation": <"Listo para postular"|"Mejorable"|"Necesita trabajo">,
+  "strengths": ["<fortaleza concreta y específica 1>", "<fortaleza 2>", "<fortaleza 3>"],
+  "criticalImprovements": [
+    "<Área — qué hacer exactamente (ej: Resumen profesional — Agregá 3-4 líneas al inicio con tu perfil y lo que buscás)>",
+    "<Área — qué hacer exactamente>",
+    "<Área — qué hacer exactamente>"
+  ],
+  "missingKeywords": ["<keyword ATS relevante ausente 1>", "<keyword 2>", "<keyword 3>"],
+  "quickWins": [
+    "<mejora concreta que puede hacer hoy en 10 minutos>",
+    "<mejora concreta 2>"
+  ]
 }`
 
     const responseText = await invokeModel(
-      "Sos un experto en reclutamiento y optimización de CVs para el mercado latinoamericano. Respondés ÚNICAMENTE con JSON válido, sin texto adicional ni markdown.",
+      "Sos un consultor senior de Recursos Humanos especializado en el mercado laboral latinoamericano (con énfasis en Paraguay: Código del Trabajo Ley N° 213/93, IPS, MTESS). Conocés cómo evalúan los CVs los sistemas ATS y los reclutadores de pymes. Sabés qué diferencia a un candidato que consigue entrevistas del que no. Respondés ÚNICAMENTE con JSON válido y bien formateado, sin texto adicional, sin markdown, sin bloques de código.",
       prompt
     )
 

@@ -138,7 +138,17 @@ export default function BatchAnalysis() {
       }).then(r => r.json()).then(data => {
         const active = (data.vacancies || []).filter((v: any) => v.is_active !== false)
         setVacancyList(active.map((v: any) => ({ id: v.id, title: v.title })))
-        if (active.length > 0) {
+        // Check if coming from ApplicantsPanel "Importar en lote" button
+        const preselect = sessionStorage.getItem('cvitae_batch_preselect_vacancy')
+        if (preselect) {
+          try {
+            const { vacancyId } = JSON.parse(preselect)
+            const match = active.find((v: any) => v.id === vacancyId)
+            if (match) { setVacancyMode('existing'); setSelectedVacancyId(match.id) }
+            else if (active.length > 0) { setVacancyMode('existing'); setSelectedVacancyId(active[0].id) }
+          } catch { /* silencioso */ }
+          sessionStorage.removeItem('cvitae_batch_preselect_vacancy')
+        } else if (active.length > 0) {
           setVacancyMode('existing')
           setSelectedVacancyId(active[0].id)
         }

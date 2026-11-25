@@ -192,9 +192,31 @@ const handler: Handler = async (event) => {
         .order("created_at", { ascending: false })
         .limit(100)
 
+      const list = vacancies || []
+      if (list.length > 0) {
+        const { data: scores } = await supabase
+          .from("vacancy_applications")
+          .select("vacancy_id, ats_score")
+          .in("vacancy_id", list.map((v: any) => v.id))
+          .not("ats_score", "is", null)
+        if (scores && scores.length > 0) {
+          const groups: Record<string, number[]> = {}
+          for (const s of scores) {
+            if (!groups[s.vacancy_id]) groups[s.vacancy_id] = []
+            groups[s.vacancy_id].push(Number(s.ats_score))
+          }
+          const enriched = list.map((v: any) => ({
+            ...v,
+            avg_score: groups[v.id]
+              ? Math.round(groups[v.id].reduce((a: number, b: number) => a + b, 0) / groups[v.id].length)
+              : null,
+          }))
+          return { statusCode: 200, body: JSON.stringify({ vacancies: enriched }) }
+        }
+      }
       return {
         statusCode: 200,
-        body: JSON.stringify({ vacancies: vacancies || [] }),
+        body: JSON.stringify({ vacancies: list }),
       }
     }
 

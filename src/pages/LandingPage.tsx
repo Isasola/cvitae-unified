@@ -405,10 +405,12 @@ interface PublicAnalysis {
   atsScore: number
   nombre: string | null
   rolDetectado: string
+  careerLevel?: 'junior' | 'semi-senior' | 'senior' | 'gerencial'
+  recommendation: string
   strengths: string[]
   criticalImprovements: string[]
   missingKeywords: string[]
-  recommendation: string
+  quickWins?: string[]
 }
 
 function Analizador() {
@@ -539,15 +541,22 @@ function Analizador() {
           <AnimatePresence mode="wait">
             {step === 'done' && result ? (
               <motion.div key="results" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
-                {/* Score */}
+                {/* Score + nivel */}
                 <div className="flex items-center gap-4">
                   <CompatibilityTrace score={result.atsScore} label="Score ATS" />
                   <div>
                     <p className={`font-display text-4xl font-bold ${scoreColor}`}>{result.atsScore}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {result.atsScore >= 70 ? 'CV bien preparado' : result.atsScore >= 50 ? 'Buen perfil, con mejoras' : 'Necesita optimización'}
-                    </p>
-                    {result.rolDetectado && <p className="mt-1 text-xs text-white/50">{result.rolDetectado}</p>}
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <p className="text-sm text-muted-foreground">
+                        {result.recommendation || (result.atsScore >= 70 ? 'CV bien preparado' : result.atsScore >= 50 ? 'Buen perfil, con mejoras' : 'Necesita optimización')}
+                      </p>
+                      {result.careerLevel && (
+                        <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-white/40">
+                          {result.careerLevel}
+                        </span>
+                      )}
+                    </div>
+                    {result.rolDetectado && <p className="mt-1 text-xs text-white/40">{result.rolDetectado}</p>}
                   </div>
                 </div>
 
@@ -574,6 +583,20 @@ function Analizador() {
                     ))}
                   </ul>
                 </div>
+
+                {/* Quick wins */}
+                {result.quickWins && result.quickWins.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-sky-400/80">Podés mejorar hoy</p>
+                    <ul className="space-y-1">
+                      {result.quickWins.slice(0, 2).map((w, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-cream/80">
+                          <Zap className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" /> {w}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {/* CTA post-analysis */}
                 <div className="rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.05] p-5">
@@ -951,6 +974,98 @@ function Pricing() {
 }
 
 
+// ─── FAQs B2B ─────────────────────────────────────────────────────────────────
+
+const FAQS = [
+  {
+    q: '¿Cómo funciona el análisis de CVs con IA?',
+    a: 'CVitae extrae el texto del CV (PDF, DOCX o TXT) y lo procesa con IA para generar un score ATS de 0 a 100, identifica los puntos fuertes del candidato, las brechas respecto al puesto y una recomendación clara: Llamar, Considerar o Revisado manualmente. Cada análisis consume 1 crédito y el resultado se guarda en tu historial.',
+  },
+  {
+    q: '¿Qué es el score ATS y para qué sirve?',
+    a: 'El score ATS (Applicant Tracking System) es un puntaje de 0 a 100 que indica qué tan bien se alinea el perfil del candidato con los requisitos del puesto. Un score alto (80+) indica ajuste fuerte; entre 50 y 79 es perfil a considerar; por debajo de 50 suele haber brechas importantes. Te ayuda a priorizar a quién entrevistar primero sin revisar cada CV manualmente.',
+  },
+  {
+    q: '¿Qué es el análisis masivo de CVs?',
+    a: 'Es la función de carga por lote: podés subir hasta 30 CVs de golpe y CVitae los analiza en paralelo con IA. Al terminar, obtenés un ranking comparativo de todos los candidatos con sus scores, fortalezas y brechas — ideal para procesos con muchas postulaciones o para evaluar tu base de candidatos anterior contra un puesto nuevo.',
+  },
+  {
+    q: '¿Cómo funciona la publicación de vacantes con SEO?',
+    a: 'Cada llamado que creás en CVitae genera automáticamente una URL pública con una página optimizada para buscadores. Google indexa esas páginas con el título del puesto, la descripción y la ubicación, lo que atrae candidatos orgánicamente sin que tengas que pagar publicidad en portales de empleo.',
+  },
+  {
+    q: '¿Puedo subir CVs manualmente a una vacante?',
+    a: 'Sí. Además de recibir postulaciones a través del link público de la vacante, podés subir CVs manualmente desde el panel de RRHH: candidatos referidos, CVs enviados por email o tu base de candidatos anterior. Todos aparecen en el panel de postulantes del llamado y pueden analizarse con IA.',
+  },
+  {
+    q: '¿Qué son los legajos digitales?',
+    a: 'Los legajos digitales son el expediente de cada empleado dentro de CVitae: podés cargar documentos (contrato, cédula, título, constancia IPS), agregar alertas de vencimiento y llevar el historial laboral en un solo lugar. El almacenamiento está incluido en todos los planes sin costo extra.',
+  },
+  {
+    q: '¿Los créditos vencen o se acumulan mes a mes?',
+    a: 'Los créditos no vencen: se acumulan mes a mes. Si en un mes usás menos créditos de los incluidos en tu plan, el saldo pasa al mes siguiente. Esto te permite ahorrar para meses con más actividad de reclutamiento sin perder lo que pagaste.',
+  },
+  {
+    q: '¿Tiene versión de prueba gratuita?',
+    a: 'Sí. El plan Trial incluye 20 créditos y 1 vacante activa sin costo y sin tarjeta. Con eso podés analizar hasta 20 CVs, publicar tu primer llamado con link SEO y explorar el banco de candidatos. Para acceder, completá el formulario de contacto y te mandamos el código de acceso.',
+  },
+]
+
+function B2BFAQs() {
+  const [open, setOpen] = useState<number | null>(null)
+  const schemaJson = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: FAQS.map(f => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  })
+  return (
+    <section id="preguntas-frecuentes" className="border-t border-white/[0.08] py-20">
+      <Helmet>
+        <script type="application/ld+json">{schemaJson}</script>
+      </Helmet>
+      <div className="mx-auto max-w-3xl px-6">
+        <Eyebrow>Preguntas frecuentes</Eyebrow>
+        <h2 className="font-display mt-3 text-3xl text-cream sm:text-4xl">Todo lo que necesitás saber</h2>
+        <p className="mt-3 text-sm text-muted-foreground">Sobre análisis de CVs con IA, vacantes SEO, legajos y créditos.</p>
+        <div className="mt-10 space-y-2">
+          {FAQS.map((faq, i) => (
+            <div key={i} className="rounded-2xl border border-white/[0.08] overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setOpen(open === i ? null : i)}
+                aria-expanded={open === i}
+                className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left text-sm font-medium text-cream transition hover:bg-white/[0.03]"
+              >
+                <span>{faq.q}</span>
+                <ChevronRight
+                  strokeWidth={1.5}
+                  className={`h-4 w-4 shrink-0 text-white/40 transition-transform duration-200 ${open === i ? 'rotate-90' : ''}`}
+                />
+              </button>
+              <AnimatePresence>
+                {open === i && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.25 }}
+                  >
+                    <p className="px-6 pb-5 pt-1 text-sm font-light leading-relaxed text-muted-foreground">{faq.a}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 // ─── Separador candidatos ─────────────────────────────────────────────────────
 
 function CandidatosDivider() {
@@ -995,6 +1110,7 @@ export default function LandingPage() {
         <B2BFeatures />
         <B2BPricing />
         <B2BContactForm />
+        <B2BFAQs />
         {/* B2C — claramente separado */}
         <CandidatosDivider />
         <Analizador />

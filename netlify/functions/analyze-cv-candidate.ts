@@ -160,7 +160,7 @@ const handler: Handler = async (event) => {
   }
   let reservedRecruiter: { id: string; operationId: string; balance: number } | null = null
   try {
-    const { cvText, mode, jobTitle, jobDescription, recruiterToken, fileName, operationId, fileBase64 } = JSON.parse(event.body || "{}")
+    const { cvText, mode, jobTitle, jobDescription, recruiterToken, fileName, operationId, fileBase64, vacancy_id } = JSON.parse(event.body || "{}")
     const recruiterMode = mode === 'analyze' || mode === 'batch_analyze'
     if (!recruiterMode) {
       if (mode != null && mode !== 'extract' && mode !== 'b2c_analyze' && mode !== 'extract_file') {
@@ -291,22 +291,43 @@ Evaluá este CV en función del puesto. Respondé ÚNICAMENTE con JSON válido:
 }`
 
     } else {
-      prompt = `Analizá este CV como reclutador experto. Respondé ÚNICAMENTE con JSON válido:
+      prompt = `Analizá este CV como consultor senior de RR.HH. para el mercado latinoamericano. El candidato quiere saber qué tan competitivo está y cómo mejorar para conseguir entrevistas.
+
+RÚBRICA (atsScore 0-100):
+- 90-100: CV ejemplar — estructura clara, verbos de acción, logros concretos, keywords del sector, sin errores
+- 75-89: Buen CV — ordenado y legible, le faltan algunos detalles o métricas
+- 60-74: CV promedio — cumple lo básico pero con secciones vagas o incompletas
+- 40-59: Por debajo del promedio — secciones importantes débiles o información incompleta
+- 0-39: CV con problemas graves — difícil de leer, datos clave ausentes, no apto para sistemas ATS
+
+Respondé ÚNICAMENTE con JSON válido:
 {
-  "atsScore": <0-100>,
-  "recommendation": <"Llamar"|"Considerar"|"No llamar">,
-  "summary": "máximo 4 líneas resumiendo el perfil",
-  "strengths": ["fortaleza 1", "fortaleza 2", "fortaleza 3"],
-  "criticalImprovements": ["mejora 1", "mejora 2", "mejora 3"]
+  "atsScore": <0-100 según la rúbrica>,
+  "careerLevel": <"junior"|"semi-senior"|"senior"|"gerencial">,
+  "recommendation": <"Listo para postular"|"Mejorable"|"Necesita trabajo">,
+  "summary": "2-3 líneas: quién es el candidato, en qué se destaca y en qué etapa de carrera está",
+  "strengths": ["fortaleza concreta y específica 1", "fortaleza 2", "fortaleza 3"],
+  "criticalImprovements": [
+    "Área — qué hacer exactamente (ej: 'Resumen profesional — Agregá 3-4 líneas al inicio contando tu perfil y lo que buscás')",
+    "Área — qué hacer exactamente"
+  ],
+  "sparseExperiences": [
+    {"company": "empresa", "role": "cargo", "issue": "qué falta exactamente (ej: sin responsabilidades, sin herramientas mencionadas)"}
+  ],
+  "missingSections": ["sección que faltaría agregar y por qué sumaría al CV"],
+  "quickWins": ["mejora concreta que puede hacer hoy en 10 minutos y mejoraría el CV notablemente"]
 }
-CV:
+
+NOTAS: sparseExperiences solo para trabajos donde solo figura el cargo sin ningún detalle adicional. Si todos tienen descripción aceptable, dejalo []. quickWins máximo 3.
+
+CV A ANALIZAR:
 ${cvText}`
     }
 
     const responseText = await invokeModel(
-      "Sos un reclutador experto latinoamericano. Respondés ÚNICAMENTE con JSON válido y bien formateado, sin texto adicional, sin markdown.",
+      "Sos un consultor senior de Recursos Humanos especializado en el mercado laboral latinoamericano (con énfasis en Paraguay: Código del Trabajo Ley N° 213/93, IPS, MTESS). Conocés cómo evalúan los CVs los sistemas ATS y los reclutadores de pymes y empresas medianas. Sabés qué diferencia a un candidato que consigue entrevistas del que no. Respondés ÚNICAMENTE con JSON válido y bien formateado, sin texto adicional, sin markdown, sin bloques de código.",
       prompt,
-      mode === 'extract' ? 2048 : mode === 'batch_analyze' ? 1500 : 1000,
+      mode === 'extract' ? 2048 : mode === 'batch_analyze' ? 1500 : mode === 'analyze' ? 1000 : 1500,
       mode === 'extract' ? MODEL_ID_EXTRACT : MODEL_ID_ANALYZE
     )
     const result = extractJSON(responseText)
@@ -330,6 +351,42 @@ ${cvText}`
       )
       if (completionError || completion?.status !== 'completed') {
         throw new Error(`No se pudo completar la operación: ${completionError?.message || completion?.status || 'unknown'}`)
+      }
+      // Link analysis to vacancy if vacancy_id provided (RRHH manual upload flow)
+      if (vacancy_id && reservedRecruiter) {
+        try {
+          const { data: vac } = await makeSupabaseAdmin()
+            .from('recruiter_vacancies')
+            .select('id, slug')
+            .eq('id', vacancy_id)
+            .eq('recruiter_token_id', reservedRecruiter.id)
+            .single()
+          if (vac) {
+            const candidateName = result.candidateName || (fileName ? String(fileName).replace(/\.[^.]+$/, '') : 'Importado')
+            await makeSupabaseAdmin()
+              .from('vacancy_applications')
+              .insert({
+                vacancy_id,
+                vacancy_slug: vac.slug,
+                name: candidateName,
+                email: `import-${Date.now()}-${Math.random().toString(36).slice(2)}@cvitae.import`,
+                cv_text: cvText,
+                cv_file_name: fileName || null,
+                cv_parse_status: 'parsed',
+                ats_score: result.atsScore || result.fitScore || null,
+                fit_score: result.fitScore || null,
+                recommendation: result.recommendation || null,
+                ai_summary: result.summary || null,
+                strengths: result.strengths || [],
+                key_matches: result.keyMatches || [],
+                key_gaps: result.keyGaps || [],
+                analyzed_at: new Date().toISOString(),
+                review_status: 'analyzed',
+              })
+          }
+        } catch (vacErr: any) {
+          console.error('vacancy_applications link error (non-fatal):', vacErr?.message || vacErr)
+        }
       }
       return jsonResponse(event, 200, {
         ...(completion.result || result), saved: true, new_balance: completion.balance,

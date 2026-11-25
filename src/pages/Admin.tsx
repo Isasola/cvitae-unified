@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { safeExternalUrl } from '@/lib/safe-url'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -363,6 +363,9 @@ export default function Admin() {
   const [tokenBetaDiscount, setTokenBetaDiscount] = useState('')
   const [tokenNotes, setTokenNotes] = useState('')
   const [tokenSendEmail, setTokenSendEmail] = useState(true)
+  const [editingToken, setEditingToken] = useState<string | null>(null)
+  const [editTokenData, setEditTokenData] = useState<Record<string, any>>({})
+  const [editTokenSaving, setEditTokenSaving] = useState(false)
 
   // Beta / Leads state
   const [betaList, setBetaList] = useState<any[]>([])
@@ -998,6 +1001,18 @@ export default function Admin() {
       await loadTokens()
       setNotification({ type: 'success', message: `+${amount} créditos acreditados` })
     } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
+  }
+
+  const updateToken = async (tokenId: string) => {
+    setEditTokenSaving(true)
+    try {
+      await adminFetch('update_token', { token_id: tokenId, ...editTokenData })
+      await loadTokens()
+      setEditingToken(null)
+      setEditTokenData({})
+      setNotification({ type: 'success', message: 'Token actualizado' })
+    } catch (err: any) { setNotification({ type: 'error', message: err.message }) }
+    finally { setEditTokenSaving(false) }
   }
 
   const loadBeta = async () => {
@@ -2821,7 +2836,8 @@ export default function Admin() {
                       </thead>
                       <tbody className="divide-y divide-white/[0.04]">
                         {tokens.map(token => (
-                          <tr key={token.id} className="hover:bg-white/[0.02] transition-colors">
+                          <React.Fragment key={token.id}>
+                          <tr className="hover:bg-white/[0.02] transition-colors">
                             <td className="py-3 px-4">
                               <p className="text-sm text-[#e8e8e0]">{token.company_name || '—'}</p>
                               {token.contact_name && <p className="text-[10px] text-white/40">{token.contact_name}</p>}
@@ -2856,6 +2872,27 @@ export default function Admin() {
                                       +{n}
                                     </button>
                                   ))}
+                                  <button
+                                    onClick={() => {
+                                      if (editingToken === token.id) { setEditingToken(null); setEditTokenData({}) }
+                                      else {
+                                        setEditingToken(token.id)
+                                        setEditTokenData({
+                                          company_name: token.company_name || '',
+                                          contact_name: token.contact_name || '',
+                                          contact_phone: token.contact_phone || '',
+                                          ruc: token.ruc || '',
+                                          plan: token.plan || '',
+                                          plan_expires_at: token.plan_expires_at ? token.plan_expires_at.slice(0, 10) : '',
+                                          notes: token.notes || '',
+                                          is_active: token.is_active ?? true,
+                                        })
+                                      }
+                                    }}
+                                    className="text-[10px] text-sky-400/60 hover:text-sky-400 border border-sky-400/20 hover:border-sky-400/50 px-1.5 py-0.5 rounded transition" style={{ fontFamily: MONO }}
+                                  >
+                                    {editingToken === token.id ? 'CERRAR' : 'EDITAR'}
+                                  </button>
                                   {token._alerts?.map((a: string) => (
                                     <span key={a} className="text-[10px] text-amber-300" style={{ fontFamily: MONO }}>⚠ {a}</span>
                                   ))}
@@ -2863,6 +2900,55 @@ export default function Admin() {
                               </div>
                             </td>
                           </tr>
+                          {editingToken === token.id && (
+                            <tr className="bg-sky-500/[0.03]">
+                              <td colSpan={7} className="px-4 pb-4 pt-2">
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
+                                  {[
+                                    { key: 'company_name', label: 'Empresa' },
+                                    { key: 'contact_name', label: 'Contacto' },
+                                    { key: 'contact_phone', label: 'Teléfono' },
+                                    { key: 'ruc', label: 'RUC' },
+                                    { key: 'plan', label: 'Plan' },
+                                    { key: 'plan_expires_at', label: 'Vence', type: 'date' },
+                                    { key: 'notes', label: 'Notas' },
+                                  ].map(({ key, label, type }) => (
+                                    <label key={key} className="flex flex-col gap-0.5">
+                                      <span className="text-[9px] uppercase tracking-[0.12em] text-white/35" style={{ fontFamily: MONO }}>{label}</span>
+                                      <input
+                                        type={type || 'text'}
+                                        value={editTokenData[key] ?? ''}
+                                        onChange={e => setEditTokenData(d => ({ ...d, [key]: e.target.value }))}
+                                        className="rounded-lg border border-white/10 bg-[#0f0f0f] px-2 py-1.5 text-xs text-white outline-none focus:border-sky-400/40"
+                                        style={{ fontFamily: MONO }}
+                                      />
+                                    </label>
+                                  ))}
+                                  <label className="flex items-center gap-2 mt-4">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!editTokenData.is_active}
+                                      onChange={e => setEditTokenData(d => ({ ...d, is_active: e.target.checked }))}
+                                    />
+                                    <span className="text-[10px] text-white/50" style={{ fontFamily: MONO }}>Activo</span>
+                                  </label>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => updateToken(token.id)}
+                                    disabled={editTokenSaving}
+                                    className="px-3 py-1.5 text-[10px] rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/30 hover:bg-sky-500/30 transition disabled:opacity-50" style={{ fontFamily: MONO }}
+                                  >
+                                    {editTokenSaving ? 'GUARDANDO…' : 'GUARDAR'}
+                                  </button>
+                                  <button onClick={() => { setEditingToken(null); setEditTokenData({}) }} className="px-3 py-1.5 text-[10px] rounded-lg border border-white/10 text-white/40 hover:text-white/70 transition" style={{ fontFamily: MONO }}>
+                                    CANCELAR
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          </React.Fragment>
                         ))}
                       </tbody>
                     </table>

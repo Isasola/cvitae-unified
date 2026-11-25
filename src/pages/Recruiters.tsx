@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Link } from 'wouter'
+import { Link, useLocation } from 'wouter'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ProductGuide } from '@/components/cv/ProductGuide'
 import { B2BInfoPopover } from '@/components/cv/B2BInfoPopover'
@@ -653,13 +653,14 @@ const ACTION_LABELS: Record<string, string> = {
   rejected: 'Descartado',
 }
 
-function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, onAnalyzeSingle }: {
+function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, onAnalyzeSingle, onGoToLegajos }: {
   token: string
   vacancyId: string
   vacancyTitle: string
   vacancySlug?: string
   onBack: () => void
   onAnalyzeSingle: (cvText: string, name: string) => void
+  onGoToLegajos?: (name: string) => void
 }) {
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [loading, setLoading] = useState(true)
@@ -676,6 +677,8 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, 
   const [linkCopied, setLinkCopied] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
+  const [, navigate] = useLocation()
 
   const handleActionUpdate = async (applicationId: string, action: string, notes?: string) => {
     setUpdatingAction(applicationId)
@@ -789,33 +792,53 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, 
         <span className="text-sm text-white/60 truncate max-w-xs">{vacancyTitle}</span>
       </div>
 
-      {/* Vacancy link — prominent */}
-      {vacancySlug && (
-        <div className="rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.05] p-4">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-[#c9a84c] mb-2">Link de postulación</p>
-          <div className="flex items-center gap-3">
-            <code className="flex-1 min-w-0 truncate text-sm text-white/85 font-mono">
-              https://cvitae.lat/vacante/{vacancySlug}
-            </code>
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(`https://cvitae.lat/vacante/${vacancySlug}`).then(() => {
-                  setLinkCopied(true)
-                  setTimeout(() => setLinkCopied(false), 2000)
-                }).catch(() => setRankError('No pudimos copiar el link. Seleccionalo y copialo manualmente.'))
-              }}
-              className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.08] px-3 py-1.5 text-xs text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.18]"
-            >
-              {linkCopied ? <CheckIcon strokeWidth={2} className="h-3.5 w-3.5" /> : <Copy strokeWidth={1.5} className="h-3.5 w-3.5" />}
-              {linkCopied ? 'Copiado' : 'Copiar'}
-            </button>
+      {/* Vacancy link + import batch actions */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {vacancySlug && (
+          <div className="rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.05] p-4">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[#c9a84c] mb-2">Link de postulación</p>
+            <div className="flex items-center gap-3">
+              <code className="flex-1 min-w-0 truncate text-sm text-white/85 font-mono">
+                cvitae.lat/vacante/{vacancySlug}
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(`https://cvitae.lat/vacante/${vacancySlug}`).then(() => {
+                    setLinkCopied(true)
+                    setTimeout(() => setLinkCopied(false), 2000)
+                  }).catch(() => setRankError('No pudimos copiar el link. Seleccionalo y copialo manualmente.'))
+                }}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.08] px-3 py-1.5 text-xs text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.18]"
+              >
+                {linkCopied ? <CheckIcon strokeWidth={2} className="h-3.5 w-3.5" /> : <Copy strokeWidth={1.5} className="h-3.5 w-3.5" />}
+                {linkCopied ? 'Copiado' : 'Copiar'}
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] font-light text-white/45">
+              Candidatos que completan el formulario aparecen aquí automáticamente
+            </p>
           </div>
-          <p className="mt-2 text-[11px] font-light text-white/45">
-            Compartí este link con candidatos — cada postulación queda registrada automáticamente
-          </p>
+        )}
+        <div className="rounded-2xl border border-sky-500/20 bg-sky-500/[0.04] p-4 flex flex-col justify-between gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-sky-400 mb-1">Importar CVs manualmente</p>
+            <p className="text-[11px] font-light text-white/50 leading-relaxed">
+              ¿Tenés CVs de otra fuente, referidos o de un proceso anterior? Subílos en lote y se vinculan a este llamado.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              sessionStorage.setItem('cvitae_batch_preselect_vacancy', JSON.stringify({ vacancyId, vacancyTitle }))
+              navigate('/empresas/masivo')
+            }}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/[0.08] px-4 py-2.5 text-xs font-medium uppercase tracking-[0.12em] text-sky-400 transition hover:bg-sky-500/[0.18]"
+          >
+            <Upload strokeWidth={1.5} className="h-3.5 w-3.5" /> Importar en lote →
+          </button>
         </div>
-      )}
+      </div>
 
       {loadError && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4 text-sm text-amber-100" role="alert">
@@ -937,27 +960,134 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, 
         </div>
       ) : (
         <>
-          {/* Filter tabs — only when analyzed */}
+          {/* Filter tabs + view toggle — only when analyzed */}
           {(review?.analyzed || analyzed.length) > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {(['all', 'Llamar', 'Considerar', 'Revisado'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
-                    filter === f
-                      ? 'bg-white/10 text-white'
-                      : 'border border-white/10 text-white/40 hover:border-white/25 hover:text-white/70'
-                  }`}
-                >
-                  {f === 'all' ? `Cargados (${applicants.length})` : `${f} (${counts[f]})`}
-                </button>
-              ))}
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {(['all', 'Llamar', 'Considerar', 'Revisado'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                      filter === f
+                        ? 'bg-white/10 text-white'
+                        : 'border border-white/10 text-white/40 hover:border-white/25 hover:text-white/70'
+                    }`}
+                  >
+                    {f === 'all' ? `Todos (${applicants.length})` : `${f} (${counts[f]})`}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-white/25">
+                  {filtered.length} {filtered.length === 1 ? 'candidato' : 'candidatos'}
+                </span>
+                <div className="flex rounded-full border border-white/10 overflow-hidden">
+                  <button
+                    onClick={() => setViewMode('list')}
+                    title="Vista lista"
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.1em] transition-all ${viewMode === 'list' ? 'bg-white/10 text-white' : 'text-white/35 hover:text-white/60'}`}
+                  >
+                    <span className="hidden sm:inline">Lista</span>
+                    <span className="sm:hidden">≡</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('kanban')}
+                    title="Vista pipeline"
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.1em] transition-all ${viewMode === 'kanban' ? 'bg-white/10 text-white' : 'text-white/35 hover:text-white/60'}`}
+                  >
+                    <span className="hidden sm:inline">Pipeline</span>
+                    <span className="sm:hidden">⋮⋮</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Kanban pipeline view */}
+          {viewMode === 'kanban' && (
+            <div>
+              <p className="mb-2 text-[10px] text-white/25 sm:hidden text-center">← deslizá para ver todas las etapas →</p>
+              <div className="overflow-x-auto pb-3 -mx-1 px-1">
+                <div className="flex gap-3" style={{ minWidth: '680px' }}>
+                  {([
+                    { key: 'pending',      label: 'Nuevos',       next: 'contacted',    color: 'border-white/15 bg-white/[0.025]',       textColor: 'text-white/55',  nextLabel: 'Contactar →' },
+                    { key: 'contacted',    label: 'Contactado',   next: 'interviewing', color: 'border-sky-500/20 bg-sky-500/[0.04]',    textColor: 'text-sky-400',   nextLabel: 'Entrevistar →' },
+                    { key: 'interviewing', label: 'Entrevistando', next: 'hired',        color: 'border-[#c9a84c]/20 bg-[#c9a84c]/[0.04]', textColor: 'text-[#c9a84c]', nextLabel: 'Contratar →' },
+                    { key: 'hired',        label: 'Contratado',   next: null,           color: 'border-emerald-500/20 bg-emerald-500/[0.04]', textColor: 'text-emerald-400', nextLabel: null },
+                    { key: 'rejected',     label: 'Descartado',   next: null,           color: 'border-red-500/15 bg-red-500/[0.03]',    textColor: 'text-red-400/60', nextLabel: null },
+                  ] as const).map(col => {
+                    const colApplicants = applicants.filter(a =>
+                      col.key === 'pending'
+                        ? !a.recruiter_action || a.recruiter_action === 'pending'
+                        : a.recruiter_action === col.key
+                    )
+                    return (
+                      <div key={col.key} className={`flex-1 rounded-2xl border ${col.color} p-3`} style={{ minWidth: '132px' }}>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className={`text-[10px] uppercase tracking-[0.15em] font-medium ${col.textColor}`}>{col.label}</span>
+                          <span className="text-[10px] text-white/20 font-display">{colApplicants.length}</span>
+                        </div>
+                        {colApplicants.length === 0 && (
+                          <p className="text-[10px] text-white/15 text-center py-6">vacío</p>
+                        )}
+                        <div className="space-y-2">
+                          {colApplicants.map(a => (
+                            <div
+                              key={a.id}
+                              className="group rounded-xl border border-white/8 bg-[#0d0d0d] p-2.5 hover:border-white/20 hover:bg-white/[0.03] transition-colors"
+                            >
+                              <button
+                                type="button"
+                                className="w-full text-left"
+                                onClick={() => { setExpandedId(a.id); setViewMode('list') }}
+                                title="Ver detalle"
+                              >
+                                <p className="text-xs font-medium text-white leading-tight mb-1 line-clamp-2">{a.name}</p>
+                                {a.fit_score !== null && (
+                                  <p className="text-[11px] font-display" style={{ color: fitColor(a.fit_score) }}>
+                                    {a.fit_score}<span className="text-white/20">/100</span>
+                                  </p>
+                                )}
+                                {a.recommendation && (
+                                  <span className={`inline-flex mt-1 items-center rounded-full border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.1em] ${recColor(a.recommendation)}`}>
+                                    {recommendationLabel(a.recommendation)}
+                                  </span>
+                                )}
+                              </button>
+                              {col.next && col.nextLabel && (
+                                <button
+                                  type="button"
+                                  disabled={updatingAction === a.id}
+                                  onClick={() => handleActionUpdate(a.id, col.next!)}
+                                  className="mt-2 w-full rounded-lg border border-white/8 py-1 text-[9px] uppercase tracking-[0.1em] text-white/30 hover:border-white/20 hover:text-white/60 transition-colors disabled:opacity-40"
+                                >
+                                  {col.nextLabel}
+                                </button>
+                              )}
+                              {col.key !== 'rejected' && (
+                                <button
+                                  type="button"
+                                  disabled={updatingAction === a.id}
+                                  onClick={() => handleActionUpdate(a.id, 'rejected')}
+                                  className="mt-1 w-full rounded-lg py-0.5 text-[8px] uppercase tracking-[0.08em] text-white/15 hover:text-red-400/60 transition-colors disabled:opacity-40"
+                                >
+                                  descartar
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
           {/* Candidate list */}
-          <ol className="space-y-3">
+          {viewMode === 'list' && <ol className="space-y-3">
             {filtered.map((a, i) => (
               <motion.li
                 key={a.id}
@@ -1185,14 +1315,29 @@ function ApplicantsPanel({ token, vacancyId, vacancyTitle, vacancySlug, onBack, 
                             <p className="text-xs text-amber-200/60 italic">Revisión manual: no se pudo extraer texto</p>
                           )}
                         </div>
+                        {a.recruiter_action === 'hired' && onGoToLegajos && (
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[10px] uppercase tracking-[0.15em] text-emerald-400 mb-0.5">Candidato contratado</p>
+                              <p className="text-xs font-light text-white/55">Creá el legajo digital para guardar contratos, documentos y alertas de compliance de IPS/MTESS.</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onGoToLegajos(a.name)}
+                              className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/[0.08] px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-emerald-400 hover:bg-emerald-500/[0.18] transition-colors"
+                            >
+                              <FolderOpen strokeWidth={1.5} className="h-3.5 w-3.5" /> Crear legajo →
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
               </motion.li>
             ))}
-          </ol>
-          {hasMore && (
+          </ol>}
+          {viewMode === 'list' && hasMore && (
             <div className="flex justify-center pt-3">
               <button
                 type="button"
@@ -1222,11 +1367,12 @@ interface VacancyRecord {
   is_active: boolean
   created_at: string
   vacancy_applications: { count: number }[]
+  avg_score?: number | null
 }
 
 const RUBROS = ['Tecnología', 'Administración', 'Contabilidad / Finanzas', 'Marketing / Ventas', 'Recursos Humanos', 'Logística / Operaciones', 'Producción / Manufactura', 'Salud', 'Educación', 'Gastronomía / Turismo', 'Construcción / Inmobiliaria', 'Legal', 'Otro']
 
-function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: string; companyName: string; onAnalyzeApplicant: (cvText: string, name: string) => void }) {
+function VacancyPanel({ token, companyName, onAnalyzeApplicant, onGoToLegajos }: { token: string; companyName: string; onAnalyzeApplicant: (cvText: string, name: string) => void; onGoToLegajos?: (name: string) => void }) {
   const [form, setForm] = useState({
     title: '', description: '', requirements: '',
     location: '', modality: 'Presencial', salary_range: '', company_name: companyName, rubro: '',
@@ -1315,6 +1461,7 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
         vacancySlug={selectedVacancy.slug}
         onBack={() => setSelectedVacancy(null)}
         onAnalyzeSingle={(cvText, name) => onAnalyzeApplicant(cvText, name)}
+        onGoToLegajos={onGoToLegajos}
       />
     )
   }
@@ -1351,6 +1498,7 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
                   <th className="text-left px-4 py-2.5 text-[10px] uppercase tracking-[0.18em] text-white/30 font-medium hidden sm:table-cell">Lugar</th>
                   <th className="text-left px-4 py-2.5 text-[10px] uppercase tracking-[0.18em] text-white/30 font-medium hidden md:table-cell">Modalidad</th>
                   <th className="text-right px-4 py-2.5 text-[10px] uppercase tracking-[0.18em] text-white/30 font-medium">CVs</th>
+                  <th className="text-right px-4 py-2.5 text-[10px] uppercase tracking-[0.18em] text-white/30 font-medium hidden lg:table-cell">Avg ATS</th>
                   <th className="px-4 py-2.5"></th>
                 </tr>
               </thead>
@@ -1372,6 +1520,12 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
                       <td className="px-4 py-3 text-xs text-white/50 hidden md:table-cell">{v.modality}</td>
                       <td className="px-4 py-3 text-right">
                         <span className={`font-display text-lg ${count > 0 && !closed ? 'text-[#c9a84c]' : 'text-white/20'}`}>{count}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right hidden lg:table-cell">
+                        {v.avg_score != null
+                          ? <span className="font-display text-lg" style={{ color: v.avg_score >= 70 ? 'oklch(0.75 0.18 145)' : v.avg_score >= 50 ? 'oklch(0.78 0.13 82)' : 'oklch(0.65 0.22 25)' }}>{v.avg_score}</span>
+                          : <span className="text-white/15 text-sm">—</span>
+                        }
                       </td>
                       <td className="px-4 py-3">
                         {closingVacancy === v.id ? (
@@ -1435,6 +1589,10 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
             <p className="mt-1 text-sm font-light text-white/40">
               Generá un link único para compartir con candidatos — cada CV que recibás queda registrado automáticamente en este llamado.
             </p>
+            <div className="mt-4 rounded-xl border border-sky-500/15 bg-sky-500/[0.04] px-4 py-3 text-xs text-sky-300/70 flex items-start gap-2">
+              <TrendingUp strokeWidth={1.5} className="h-3.5 w-3.5 shrink-0 mt-0.5 text-sky-400/60" />
+              <span>¿Ya tenés candidatos en tu banco para un puesto similar? Revisá en <strong className="text-sky-300/90">Banco de candidatos</strong> antes de publicar — puede que ya tengas el perfil ideal.</span>
+            </div>
 
             <div className="mt-7 grid gap-5 md:grid-cols-2">
               <div className="md:col-span-2">
@@ -1595,10 +1753,45 @@ function BancoPanel({ token }: { token: string }) {
     finally { setLoading(false) }
   }
 
+  const exportCsv = () => {
+    if (!results.length) return
+    const header = ['Candidato', 'Score ATS', 'Vacante / Puesto', 'Fecha', 'Destacado', 'Fortalezas', 'Mejoras críticas']
+    const rows = results.map(r => [
+      r.candidate_name || '',
+      r.ats_score ?? '',
+      r.vacancy_label || '',
+      new Date(r.created_at).toLocaleDateString('es-PY'),
+      r.is_starred ? 'Sí' : 'No',
+      (r.strengths || []).join(' | '),
+      (r.critical_improvements || []).join(' | '),
+    ])
+    const csv = [header, ...rows]
+      .map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `banco-candidatos-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   useEffect(() => { loadAll() }, [])
 
   return (
     <div>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">Banco de candidatos</p>
+        {results.length > 0 && (
+          <button
+            onClick={exportCsv}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[11px] text-white/40 transition hover:border-[#c9a84c]/40 hover:text-[#c9a84c]"
+          >
+            <Download strokeWidth={1.5} className="h-3.5 w-3.5" /> Exportar CSV
+          </button>
+        )}
+      </div>
       <div className="mb-6 flex gap-3">
         <div className="relative flex-1">
           <Search strokeWidth={1.5} className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
@@ -2279,12 +2472,20 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
   const [injectCandidateName, setInjectCandidateName] = useState<string>('')
   const [compareError, setCompareError] = useState('')
   const [creditRequestSent, setCreditRequestSent] = useState(false)
+  const [vacancyListR, setVacancyListR] = useState<{ id: string; title: string; slug: string }[]>([])
+  const [vacancyModeR, setVacancyModeR] = useState<'free' | 'existing'>('free')
+  const [selectedVacancyIdR, setSelectedVacancyIdR] = useState<string>('')
+  const [, navigateTo] = useLocation()
 
   useEffect(() => {
     fetch('/.netlify/functions/validate-recruiter-token', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: session.token, action: 'get_dashboard_stats' }),
     }).then(r => r.json()).then(d => { if (d.stats) setStats(d.stats) }).catch(() => {})
+    fetch('/.netlify/functions/validate-recruiter-token', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: session.token, action: 'get_vacancies' }),
+    }).then(r => r.json()).then(d => { if (d.vacancies) setVacancyListR(d.vacancies) }).catch(() => {})
   }, [])
 
   const requestCredits = async () => {
@@ -2323,7 +2524,10 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
           recruiterToken: session.token,
           operationId: operationIdRef.current,
           fileName,
-          jobTitle: vacancyLabel.trim() || null,
+          jobTitle: vacancyModeR === 'existing' && selectedVacancyIdR
+            ? (vacancyListR.find(v => v.id === selectedVacancyIdR)?.title || vacancyLabel.trim() || null)
+            : (vacancyLabel.trim() || null),
+          vacancy_id: vacancyModeR === 'existing' && selectedVacancyIdR ? selectedVacancyIdR : undefined,
         }),
       })
       const data: ATSResult & { saved?: boolean; new_balance?: number; error?: string; retryable?: boolean } = await res.json()
@@ -2474,16 +2678,71 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
                       className="glass-card rounded-3xl p-7 lg:col-span-5"
                     >
                       <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">01 · El puesto</p>
-                      <label htmlFor="vacancy" className="mt-7 block text-[11px] uppercase tracking-[0.18em] text-white/40">
-                        ¿Para qué puesto? <span className="normal-case text-white/25">(opcional)</span>
-                      </label>
-                      <input
-                        id="vacancy"
-                        value={vacancyLabel}
-                        onChange={e => setVacancyLabel(e.target.value)}
-                        placeholder="Ej: Analista de Marketing · Junio 2026"
-                        className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm font-light text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none"
-                      />
+                      {vacancyListR.length > 0 && (
+                        <div className="mt-5 flex rounded-xl border border-white/10 overflow-hidden">
+                          {(['existing', 'free'] as const).map(m => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => setVacancyModeR(m)}
+                              className={`flex-1 py-2 text-[11px] font-medium uppercase tracking-[0.1em] transition-all ${vacancyModeR === m ? 'bg-white/8 text-white' : 'text-white/35 hover:text-white/60'}`}
+                            >
+                              {m === 'existing' ? 'Vincular a llamado' : 'Sin llamado'}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {vacancyModeR === 'existing' && vacancyListR.length > 0 ? (
+                        <>
+                          <label className="mt-5 block text-[11px] uppercase tracking-[0.18em] text-white/40">¿A qué llamado vinculás este CV?</label>
+                          <select
+                            value={selectedVacancyIdR}
+                            onChange={e => setSelectedVacancyIdR(e.target.value)}
+                            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f0f0f] px-4 py-3 text-sm font-light text-white focus:border-[#c9a84c]/50 focus:outline-none"
+                          >
+                            <option value="">— Elegí un llamado —</option>
+                            {vacancyListR.map(v => (
+                              <option key={v.id} value={v.id}>{v.title}</option>
+                            ))}
+                          </select>
+                          {selectedVacancyIdR ? (
+                            <div className="mt-2 space-y-1.5">
+                              <p className="text-[10px] text-sky-400/80">✓ El CV analizado aparecerá en el panel de postulantes de este llamado.</p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  sessionStorage.setItem('cvitae_batch_preselect_vacancy', JSON.stringify({
+                                    vacancyId: selectedVacancyIdR,
+                                    vacancyTitle: vacancyListR.find(v => v.id === selectedVacancyIdR)?.title || '',
+                                  }))
+                                  navigateTo('/empresas/masivo')
+                                }}
+                                className="inline-flex items-center gap-1 text-[10px] text-white/35 hover:text-sky-400 transition-colors"
+                              >
+                                <Upload strokeWidth={1.5} className="h-3 w-3" /> ¿Tenés varios CVs? Importalos en lote →
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="mt-1.5 text-[10px] text-white/30">Elegí un llamado para vincular este CV a su panel de postulantes.</p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <label htmlFor="vacancy" className="mt-5 block text-[11px] uppercase tracking-[0.18em] text-white/40">
+                            ¿Para qué puesto? <span className="normal-case text-white/25">(opcional)</span>
+                          </label>
+                          <input
+                            id="vacancy"
+                            value={vacancyLabel}
+                            onChange={e => setVacancyLabel(e.target.value)}
+                            placeholder="Ej: Analista de Marketing · Junio 2026"
+                            className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm font-light text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none"
+                          />
+                          {vacancyListR.length > 0 && (
+                            <p className="mt-1.5 text-[10px] text-amber-300/50">El análisis irá solo al historial, no al panel de postulantes de ningún llamado.</p>
+                          )}
+                        </>
+                      )}
                       <div className="mt-6 rounded-2xl border border-white/8 bg-white/[0.02] p-4">
                         <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Cómo funciona</p>
                         <p className="mt-2 text-sm font-light leading-relaxed text-white/55">
@@ -2600,7 +2859,7 @@ function RecruiterPanel({ session, onLogout }: { session: RecruiterSession; onLo
               </motion.div>
             ) : activeTab === 'vacancies' ? (
               <motion.div key="vacancies" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <VacancyPanel token={session.token} companyName={session.company_name} onAnalyzeApplicant={handleAnalyzeApplicant} />
+                <VacancyPanel token={session.token} companyName={session.company_name} onAnalyzeApplicant={handleAnalyzeApplicant} onGoToLegajos={() => setActiveTab('legajos')} />
               </motion.div>
             ) : activeTab === 'banco' ? (
               <motion.div key="banco" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

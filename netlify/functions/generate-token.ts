@@ -73,29 +73,122 @@ const handler: Handler = async (event) => {
               bcc: ["contacto@cvitae.lat"],
               subject: `Tu acceso a CVitae está listo — ${companyName}`,
               html: `
-<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#1a1a1a">
-  <img src="https://cvitae.lat/logo.png" alt="CVitae" style="height:32px;margin-bottom:28px" />
-  <h2 style="margin:0 0 8px;font-size:22px;font-weight:700">Bienvenido/a${contactLabel} a CVitae</h2>
-  <p style="margin:0 0 20px;color:#555;font-size:15px">Tu cuenta para <strong>${companyName}</strong> está activa. Desde ahora podés publicar vacantes, recibir CVs y analizarlos con IA.</p>
+<div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:580px;margin:0 auto;background:#0a0a0a;color:#e8e8e0;padding:40px 28px 32px">
 
-  <div style="background:#f5f1e8;border-radius:12px;padding:20px 24px;margin:24px 0">
-    <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#888">Tu código de acceso</p>
-    <p style="margin:0;font-size:24px;font-family:monospace;font-weight:700;color:#c9a84c;letter-spacing:.08em">${token}</p>
-    <p style="margin:8px 0 0;font-size:12px;color:#999">Plan: ${planLabel.toUpperCase()} · ${creditsLabel} créditos iniciales</p>
+  <!-- Logo -->
+  <div style="margin-bottom:32px">
+    <span style="font-size:22px;font-weight:700;color:#c9a84c;letter-spacing:-.02em">CVitae</span>
+    <span style="font-size:12px;color:#555;margin-left:8px;letter-spacing:.1em;text-transform:uppercase">Empresas</span>
   </div>
 
-  <a href="https://cvitae.lat/empresas" style="display:inline-block;background:#c9a84c;color:#0a0a0a;text-decoration:none;padding:12px 28px;border-radius:100px;font-weight:600;font-size:14px;margin:4px 0 24px">
+  <!-- Headline -->
+  <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#fff;line-height:1.2">Bienvenido/a${contactLabel} 👋</h1>
+  <p style="margin:0 0 28px;color:#888;font-size:15px;line-height:1.6">Tu panel para <strong style="color:#e8e8e0">${companyName}</strong> está activo con <strong style="color:#c9a84c">${creditsLabel} créditos</strong> para empezar.</p>
+
+  <!-- Token box -->
+  <div style="background:#111;border:1px solid #c9a84c33;border-radius:12px;padding:20px 24px;margin-bottom:28px">
+    <p style="margin:0 0 6px;font-size:10px;text-transform:uppercase;letter-spacing:.15em;color:#666">Tu código de acceso</p>
+    <p style="margin:0 0 8px;font-size:26px;font-family:'Courier New',monospace;font-weight:700;color:#c9a84c;letter-spacing:.08em">${token}</p>
+    <p style="margin:0;font-size:12px;color:#555">Plan: <span style="color:#888;text-transform:uppercase">${planLabel}</span> · Guardalo en un lugar seguro</p>
+  </div>
+
+  <!-- CTA -->
+  <a href="https://cvitae.lat/empresas" style="display:inline-block;background:#c9a84c;color:#0a0a0a;text-decoration:none;padding:13px 32px;border-radius:100px;font-weight:700;font-size:14px;letter-spacing:.01em;margin-bottom:36px">
     Ingresar al panel →
   </a>
 
-  <ol style="padding-left:20px;color:#444;font-size:14px;line-height:1.9;margin:0 0 24px">
-    <li>Andá a <a href="https://cvitae.lat/empresas" style="color:#c9a84c">cvitae.lat/empresas</a></li>
-    <li>Ingresá tu código de acceso: <strong style="font-family:monospace">${token}</strong></li>
-    <li>Creá tu primera vacante y compartí el link con candidatos</li>
-    <li>Analizá los CVs recibidos con un clic — 1 crédito por análisis</li>
-  </ol>
+  <!-- Quick start -->
+  <div style="border-top:1px solid #1f1f1f;padding-top:28px;margin-bottom:28px">
+    <p style="margin:0 0 16px;font-size:11px;text-transform:uppercase;letter-spacing:.15em;color:#555">Inicio rápido</p>
+    <table style="width:100%;border-collapse:collapse">
+      <tr>
+        <td style="padding:8px 12px 8px 0;vertical-align:top;width:28px;font-size:18px">1️⃣</td>
+        <td style="padding:8px 0;vertical-align:top;font-size:14px;color:#ccc;line-height:1.5">
+          Ingresá con tu código en <a href="https://cvitae.lat/empresas" style="color:#c9a84c">cvitae.lat/empresas</a>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px 8px 0;vertical-align:top;font-size:18px">2️⃣</td>
+        <td style="padding:8px 0;vertical-align:top;font-size:14px;color:#ccc;line-height:1.5">
+          Creá tu primer <strong style="color:#e8e8e0">llamado / vacante</strong> — CVitae genera un link para candidatos con SEO automático
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px 8px 0;vertical-align:top;font-size:18px">3️⃣</td>
+        <td style="padding:8px 0;vertical-align:top;font-size:14px;color:#ccc;line-height:1.5">
+          Recibís postulaciones y también podés <strong style="color:#e8e8e0">subir CVs manualmente</strong> de candidatos referidos o de tu base anterior
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px 8px 0;vertical-align:top;font-size:18px">4️⃣</td>
+        <td style="padding:8px 0;vertical-align:top;font-size:14px;color:#ccc;line-height:1.5">
+          Analizá con IA — 1 crédito por CV, obtenés score ATS, fortalezas, brechas y ranking comparativo
+        </td>
+      </tr>
+    </table>
+  </div>
 
-  <p style="font-size:12px;color:#aaa;border-top:1px solid #eee;padding-top:16px;margin:0">¿Dudas o necesitás más créditos? Respondé este correo o escribinos a <a href="mailto:contacto@cvitae.lat" style="color:#c9a84c">contacto@cvitae.lat</a>.</p>
+  <!-- Features -->
+  <div style="border-top:1px solid #1f1f1f;padding-top:28px;margin-bottom:28px">
+    <p style="margin:0 0 16px;font-size:11px;text-transform:uppercase;letter-spacing:.15em;color:#555">Lo que tenés disponible</p>
+    <table style="width:100%;border-collapse:collapse">
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #1a1a1a;vertical-align:top">
+          <p style="margin:0 0 2px;font-size:14px;font-weight:600;color:#e8e8e0">📋 Vacantes con SEO</p>
+          <p style="margin:0;font-size:13px;color:#666;line-height:1.5">Publicá llamados en segundos. Cada vacante tiene URL propia que Google indexa — candidatos llegan sin pagar publicidad.</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #1a1a1a;vertical-align:top">
+          <p style="margin:0 0 2px;font-size:14px;font-weight:600;color:#e8e8e0">⚡ Análisis masivo de CVs</p>
+          <p style="margin:0;font-size:13px;color:#666;line-height:1.5">Subí hasta 30 CVs de golpe. La IA los rankea, puntúa y te da el orden sugerido de entrevistas — en minutos.</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #1a1a1a;vertical-align:top">
+          <p style="margin:0 0 2px;font-size:14px;font-weight:600;color:#e8e8e0">🏦 Banco de candidatos</p>
+          <p style="margin:0;font-size:13px;color:#666;line-height:1.5">Todos los CVs analizados quedan guardados. Buscá por habilidad o puesto en procesos anteriores — tu historial siempre disponible.</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #1a1a1a;vertical-align:top">
+          <p style="margin:0 0 2px;font-size:14px;font-weight:600;color:#e8e8e0">📁 Legajos digitales</p>
+          <p style="margin:0;font-size:13px;color:#666;line-height:1.5">Guardá documentos de cada empleado (contrato, cédula, IPS), agregá alertas de vencimiento y llevá el historial en un solo lugar. El almacenamiento es parte de tu plan.</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:10px 0;vertical-align:top">
+          <p style="margin:0 0 2px;font-size:14px;font-weight:600;color:#e8e8e0">🔔 Alertas de compliance</p>
+          <p style="margin:0;font-size:13px;color:#666;line-height:1.5">Recordatorios de IPS, MTESS y vencimientos de documentos — para no perder plazos legales ni pagar multas evitables.</p>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Credits model -->
+  <div style="background:#111;border:1px solid #1f1f1f;border-radius:10px;padding:18px 20px;margin-bottom:28px">
+    <p style="margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.15em;color:#555">Cómo funcionan los créditos</p>
+    <p style="margin:0;font-size:13px;color:#888;line-height:1.6">
+      Cada análisis de CV consume <strong style="color:#c9a84c">1 crédito</strong>. Los créditos no vencen — se acumulan mes a mes. El almacenamiento de legajos y documentos está incluido sin costo extra. Cuando necesites más créditos, respondé este correo o pedílos desde el panel.
+    </p>
+  </div>
+
+  <!-- Tips -->
+  <div style="border-top:1px solid #1f1f1f;padding-top:24px;margin-bottom:28px">
+    <p style="margin:0 0 12px;font-size:11px;text-transform:uppercase;letter-spacing:.15em;color:#555">3 tips para aprovechar al máximo</p>
+    <p style="margin:0 0 8px;font-size:13px;color:#888;line-height:1.5">💡 <strong style="color:#ccc">Cargá la descripción del puesto</strong> antes de analizar — el score mejora mucho cuando la IA tiene el contexto exacto.</p>
+    <p style="margin:0 0 8px;font-size:13px;color:#888;line-height:1.5">💡 <strong style="color:#ccc">Usá el análisis masivo</strong> para tu base de candidatos anterior — subí los CVs que tenés archivados y compará contra el nuevo puesto.</p>
+    <p style="margin:0;font-size:13px;color:#888;line-height:1.5">💡 <strong style="color:#ccc">Cuando contratés</strong>, marcá al candidato como "Contratado" y creá su legajo digital desde el mismo panel — sin exportar ni copiar datos.</p>
+  </div>
+
+  <!-- Footer -->
+  <div style="border-top:1px solid #1a1a1a;padding-top:20px">
+    <p style="margin:0;font-size:12px;color:#444;line-height:1.6">
+      ¿Dudas, sugerencias o necesitás más créditos? Respondé este correo directamente o escribinos a <a href="mailto:contacto@cvitae.lat" style="color:#c9a84c">contacto@cvitae.lat</a>.
+    </p>
+    <p style="margin:8px 0 0;font-size:11px;color:#333">CVitae · <a href="https://cvitae.lat" style="color:#444">cvitae.lat</a></p>
+  </div>
+
 </div>`,
             }),
           })
