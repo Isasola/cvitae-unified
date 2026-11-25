@@ -510,6 +510,27 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ ok: true }) }
     }
 
+    if (action === "get_upload_url") {
+      const { file_id, file_name, mime_type } = body
+      if (!file_id || !file_name) return { statusCode: 400, body: JSON.stringify({ error: "file_id y file_name requeridos" }) }
+      // Verify employee_file belongs to this token
+      const { data: ef } = await supabase.from("employee_files").select("id").eq("id", file_id).eq("token_id", data.id).single()
+      if (!ef) return { statusCode: 403, body: JSON.stringify({ error: "Legajo no encontrado" }) }
+      const sanitized = String(file_name).replace(/[^a-zA-Z0-9._\-áéíóúÁÉÍÓÚüÜñÑ ]/g, "_").replace(/\s+/g, "_").slice(0, 100)
+      const storagePath = `${data.id}/${file_id}/${Date.now()}_${sanitized}`
+      const { data: uploadData, error: uploadErr } = await supabase.storage.from("employee-documents").createSignedUploadUrl(storagePath)
+      if (uploadErr || !uploadData) throw uploadErr || new Error("Error generando URL de subida")
+      // Pre-generate signed download URL (10 years = 315360000 seconds)
+      const { data: dlData, error: dlErr } = await supabase.storage.from("employee-documents").createSignedUrl(storagePath, 315360000)
+      if (dlErr || !dlData?.signedUrl) throw dlErr || new Error("Error generando URL de descarga")
+      return { statusCode: 200, body: JSON.stringify({
+        uploadUrl: uploadData.signedUrl,
+        token: uploadData.token,
+        path: storagePath,
+        downloadUrl: dlData.signedUrl,
+      }) }
+    }
+
     // ─── Validación simple / inicio de sesión ───
     // Auto-activate prospect if was invited
     supabase.from("b2b_prospects").update({ status: "activated", activated_at: new Date().toISOString() }).eq("status", "invited").ilike("email", data.email).then(() => {})

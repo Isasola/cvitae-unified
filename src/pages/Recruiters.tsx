@@ -13,7 +13,7 @@ import {
   Star, Brain, Users, Trophy, ArrowLeft, Share2, Database,
   FileText, Upload, RotateCcw, X, Link2, Plus, Copy, Check as CheckIcon,
   UserCheck, Mail, Calendar, ChevronLeft, Download, Search,
-  BarChart2, TrendingUp, FolderOpen,
+  BarChart2, TrendingUp, FolderOpen, Bell,
 } from 'lucide-react'
 
 const ease = [0.22, 1, 0.36, 1] as const
@@ -366,20 +366,47 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
 
   return (
     <div className="space-y-4">
+      {/* Compare instruction banner — always visible */}
+      <div className={`rounded-2xl border p-4 transition-all ${selectedIds.length >= 2 ? 'border-[#c9a84c]/50 bg-[#c9a84c]/[0.08]' : 'border-white/10 bg-white/[0.015]'}`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm ${selectedIds.length >= 2 ? 'border-[#c9a84c]/50 bg-[#c9a84c]/[0.15] text-[#c9a84c]' : 'border-white/15 bg-white/[0.04] text-white/40'}`}>
+              {selectedIds.length >= 2 ? selectedIds.length : '☑'}
+            </div>
+            <div>
+              <p className={`text-xs font-medium ${selectedIds.length >= 2 ? 'text-[#c9a84c]' : 'text-white/60'}`}>
+                {selectedIds.length >= 2
+                  ? `${selectedIds.length} candidatos seleccionados — ¡listo para comparar!`
+                  : 'Tildá 2 o más CVs para comparar candidatos entre sí'}
+              </p>
+              <p className="text-[11px] text-white/30 mt-0.5">
+                {selectedIds.length >= 2
+                  ? 'La IA analizará en detalle las diferencias y te recomendará el mejor perfil para el puesto.'
+                  : 'La comparación usa IA para mostrarte fortalezas y diferencias de cada candidato.'}
+              </p>
+            </div>
+          </div>
+          {selectedIds.length >= 2 ? (
+            <button
+              onClick={() => onCompare(selectedIds)}
+              className="inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a] hover:shadow-[0_0_30px_-4px_rgba(201,168,76,0.6)]"
+            >
+              <Users strokeWidth={1.5} className="h-4 w-4" /> Comparar {selectedIds.length} perfiles →
+            </button>
+          ) : (
+            <button onClick={() => setSelectedIds([])} className="text-xs text-white/20 hover:text-white/40 transition" title="Limpiar selección">
+              {selectedIds.length > 0 ? `${selectedIds.length} sel. · Limpiar` : ''}
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/40">
           <span className="h-px w-8 bg-white/20" /> {history.length} análisis guardados
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {selectedIds.length >= 2 && (
-            <button
-              onClick={() => onCompare(selectedIds)}
-              className="inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-4 py-2 text-xs font-medium text-[#0a0a0a] transition hover:bg-[#e6cf8a]"
-            >
-              <Users strokeWidth={1.5} className="h-3.5 w-3.5" /> Comparar {selectedIds.length}
-            </button>
-          )}
           <button
             onClick={exportCSV}
             className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-2 text-xs text-white/50 transition hover:border-white/25 hover:text-white"
@@ -425,15 +452,17 @@ function HistoryPanel({ token, onToggleStar, onCompare }: {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: i * 0.04, ease }}
-            className="glass-card rounded-2xl px-5 py-4 transition-all hover:border-[#c9a84c]/25"
+            className={`glass-card rounded-2xl px-5 py-4 transition-all ${selectedIds.includes(record.id) ? 'border-[#c9a84c]/40 bg-[#c9a84c]/[0.04]' : 'hover:border-[#c9a84c]/25'}`}
           >
             <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={selectedIds.includes(record.id)}
-                onChange={() => setSelectedIds(prev => prev.includes(record.id) ? prev.filter(x => x !== record.id) : [...prev, record.id])}
-                className="h-4 w-4 accent-[#c9a84c]"
-              />
+              <button
+                type="button"
+                onClick={() => setSelectedIds(prev => prev.includes(record.id) ? prev.filter(x => x !== record.id) : [...prev, record.id])}
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-all ${selectedIds.includes(record.id) ? 'border-[#c9a84c] bg-[#c9a84c]' : 'border-white/20 hover:border-[#c9a84c]/60'}`}
+                title="Seleccionar para comparar"
+              >
+                {selectedIds.includes(record.id) && <CheckIcon strokeWidth={3} className="h-3.5 w-3.5 text-[#0a0a0a]" />}
+              </button>
               <div
                 className="flex-1 min-w-0 cursor-pointer"
                 onClick={() => setExpandedId(expandedId === record.id ? null : record.id)}
@@ -1212,6 +1241,7 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
   const [selectedVacancy, setSelectedVacancy] = useState<VacancyRecord | null>(null)
   const [closingVacancy, setClosingVacancy] = useState<string | null>(null)
   const [closingInProgress, setClosingInProgress] = useState(false)
+  const [showForm, setShowForm] = useState(false)
 
   useEffect(() => { loadVacancies() }, [])
 
@@ -1225,7 +1255,10 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'No pudimos cargar las vacantes')
-      setVacancies(data.vacancies || [])
+      const list = data.vacancies || []
+      setVacancies(list)
+      // Show form by default only when there are no vacancies
+      if (list.length === 0) setShowForm(true)
     } catch (error: any) { setListError(error?.message || 'No pudimos cargar las vacantes') }
     finally { setLoadingList(false) }
   }
@@ -1287,172 +1320,29 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {listError && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4 text-sm text-amber-100" role="alert">
           <span>{listError}</span>
           <button type="button" onClick={loadVacancies} className="rounded-full border border-amber-200/25 px-3 py-1.5 text-xs">Reintentar</button>
         </div>
       )}
-      {/* First-vacancy banner — only when list is loaded and empty */}
-      {!loadingList && vacancies.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease }}
-          className="rounded-2xl border border-[#c9a84c]/30 bg-[#c9a84c]/[0.05] px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4"
-        >
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[#c9a84c]">Creá tu primera vacante</p>
-            <p className="mt-0.5 text-xs font-light text-white/55">
-              Obtené un link de postulación propio listo para compartir — cada CV recibido queda registrado automáticamente.
-            </p>
-          </div>
-          <span className="shrink-0 text-xs font-light text-white/35 flex items-center gap-1.5">
-            <ChevronDown strokeWidth={1.5} className="h-4 w-4" /> Completá el formulario abajo
-          </span>
-        </motion.div>
-      )}
 
-      {/* Form */}
-      <motion.form
-        onSubmit={handleSubmit}
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease }}
-        className="glass-card rounded-3xl p-7"
-      >
-        <div className="flex items-center gap-3">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">Nueva vacante</p>
-          <B2BInfoPopover
-            label="Qué verá el candidato"
-            title="Un proceso claro para postular"
-            description="El candidato verá el puesto, la empresa verificada, los requisitos y el límite del archivo antes de enviar su CV."
-            points={['El CV se guarda en un espacio privado.', 'La postulación se envía sólo a esta empresa.', 'Crear un perfil general es opcional y requiere consentimiento separado.']}
-          />
-        </div>
-        <p className="mt-1 text-sm font-light text-white/40">Generá un link de postulación único para compartir con candidatos.</p>
-
-        <div className="mt-7 grid gap-5 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Título del puesto *</label>
-            <input required value={form.title} onChange={set('title')} placeholder="Ej: Desarrollador Frontend React"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition" />
-          </div>
-
-          <div>
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Empresa *</label>
-            <input
-              readOnly={isCompanyNameLocked}
-              value={form.company_name}
-              onChange={isCompanyNameLocked ? undefined : set('company_name')}
-              placeholder="Nombre de tu empresa"
-              aria-describedby="verified-company-help"
-              className={`w-full rounded-xl border px-4 py-3 text-sm text-white outline-none transition ${isCompanyNameLocked ? 'cursor-not-allowed border-emerald-400/15 bg-emerald-400/[0.03] text-white/75' : 'border-[#c9a84c]/40 bg-white/[0.02] placeholder:text-white/25 focus:border-[#c9a84c]/70'}`}
-            />
-            <p id="verified-company-help" className="mt-1.5 text-xs text-white/35">
-              {isCompanyNameLocked ? 'Identidad verificada por CVitae. Contactanos si necesitás corregirla.' : 'Ingresá el nombre de tu empresa para publicar vacantes.'}
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Ubicación *</label>
-            <input required value={form.location} onChange={set('location')} placeholder="Ej: Asunción, Paraguay"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition" />
-          </div>
-
-          <div>
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Modalidad *</label>
-            <select required value={form.modality} onChange={set('modality')}
-              className="w-full rounded-xl border border-white/10 bg-[#111] px-4 py-3 text-sm text-white focus:border-[#c9a84c]/50 focus:outline-none transition">
-              <option value="Presencial">Presencial</option>
-              <option value="Remoto">Remoto</option>
-              <option value="Híbrido">Híbrido</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Rubro / Área</label>
-            <select required value={form.rubro} onChange={set('rubro')}
-              className="w-full rounded-xl border border-white/10 bg-[#111] px-4 py-3 text-sm text-white focus:border-[#c9a84c]/50 focus:outline-none transition">
-              <option value="">Seleccioná el área…</option>
-              {RUBROS.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Rango salarial <span className="normal-case text-white/20">(opcional)</span></label>
-            <input value={form.salary_range} onChange={set('salary_range')} placeholder="Ej: Gs. 3.000.000 – 5.000.000"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition" />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Descripción *</label>
-            <textarea required value={form.description} onChange={set('description')} rows={4}
-              placeholder="Describí el rol, responsabilidades y el equipo de trabajo..."
-              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition resize-none" />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Requisitos *</label>
-            <textarea required value={form.requirements} onChange={set('requirements')} rows={4}
-              placeholder="Experiencia requerida, habilidades técnicas, formación..."
-              className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition resize-none" />
-          </div>
-        </div>
-
-        {saveError && (
-          <div className="mt-5 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-4 text-sm text-red-400">
-            <AlertCircle strokeWidth={1.5} className="h-4 w-4 shrink-0" /> {saveError}
-          </div>
-        )}
-
-        {createdUrl && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-            className="mt-5 rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] p-5">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[#c9a84c] mb-2">¡Vacante creada! Tu link de postulación:</p>
-            <div className="flex items-center gap-3">
-              <code className="flex-1 min-w-0 truncate text-sm text-white/90 font-mono">{createdUrl}</code>
-              <button type="button" onClick={() => copyToClipboard(createdUrl, 'new')}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.08] px-3 py-1.5 text-xs text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15] shrink-0">
-                {copied === 'new' ? <CheckIcon strokeWidth={2} className="h-3.5 w-3.5" /> : <Copy strokeWidth={1.5} className="h-3.5 w-3.5" />}
-                {copied === 'new' ? 'Copiado' : 'Copiar'}
-              </button>
+      {/* Vacancies list — shown FIRST when there are vacancies */}
+      {loadingList ? (
+        <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#c9a84c]" /></div>
+      ) : vacancies.length > 0 ? (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/40">
+              <span className="h-px w-8 bg-white/20" /> {vacancies.filter(v => v.is_active !== false).length} llamado{vacancies.filter(v => v.is_active !== false).length !== 1 ? 's' : ''} activo{vacancies.filter(v => v.is_active !== false).length !== 1 ? 's' : ''}
             </div>
-          </motion.div>
-        )}
-
-        <div className="mt-6 flex justify-end">
-          <button type="submit" disabled={saving}
-            className="inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-6 py-3 text-sm font-medium text-[#0a0a0a] transition hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.6)] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/30">
-            {saving ? <><Loader2 strokeWidth={1.5} className="h-4 w-4 animate-spin" /> Creando…</> : <><Plus strokeWidth={2} className="h-4 w-4" /> Crear vacante</>}
-          </button>
-        </div>
-      </motion.form>
-
-      {/* Vacancies list */}
-      <div>
-        <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/40 mb-4">
-          <span className="h-px w-8 bg-white/20" /> Vacantes activas
-        </div>
-        {loadingList ? (
-          <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#c9a84c]" /></div>
-        ) : vacancies.length === 0 ? (
-          <div className="glass-card rounded-3xl py-12 px-8 text-center border border-[#c9a84c]/15 bg-[#c9a84c]/[0.02]">
-            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.08]">
-              <Link2 strokeWidth={1.25} className="h-7 w-7 text-[#c9a84c]" />
-            </div>
-            <h3 className="font-display text-xl text-white">Creá tu primera vacante</h3>
-            <p className="mt-2 text-sm font-light text-white/50 max-w-xs mx-auto">
-              Obtené un link de postulación propio listo para compartir — cada CV recibido queda registrado automáticamente.
-            </p>
-            <button
-              type="button"
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-6 py-2.5 text-sm font-medium text-[#0a0a0a] transition hover:shadow-[0_0_30px_-4px_rgba(201,168,76,0.5)]"
-            >
-              <Plus strokeWidth={2} className="h-4 w-4" /> Crear vacante →
+            <button onClick={() => setShowForm(v => !v)}
+              className="inline-flex items-center gap-2 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-4 py-2 text-xs text-[#c9a84c] transition hover:border-[#c9a84c]/60">
+              <Plus strokeWidth={2} className="h-3.5 w-3.5" />
+              {showForm ? 'Cerrar formulario' : 'Nuevo llamado'}
             </button>
           </div>
-        ) : (
           <div className="rounded-xl overflow-hidden border border-white/8">
             <table className="w-full text-sm border-collapse">
               <thead>
@@ -1474,7 +1364,7 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <p className={`text-sm font-medium truncate max-w-[160px] ${closed ? 'text-white/40 line-through' : 'text-white'}`}>{v.title}</p>
-                          {closed && <span className="shrink-0 rounded-full border border-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.14em] text-white/30">Cerrada</span>}
+                          {closed && <span className="shrink-0 rounded-full border border-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.14em] text-white/30">Cerrado</span>}
                         </div>
                         <p className="text-[10px] text-white/30 mt-0.5">{new Date(v.created_at).toLocaleDateString('es-PY')}</p>
                       </td>
@@ -1487,21 +1377,16 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
                         {closingVacancy === v.id ? (
                           <div className="flex items-center justify-end gap-2">
                             <span className="text-[11px] text-white/50">¿Confirmar?</span>
-                            <button
-                              onClick={() => closeVacancy(v.id)}
-                              disabled={closingInProgress}
-                              className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/[0.08] px-2.5 py-1 text-[11px] text-red-400 transition hover:bg-red-500/[0.18] disabled:opacity-50"
-                            >
+                            <button onClick={() => closeVacancy(v.id)} disabled={closingInProgress}
+                              className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/[0.08] px-2.5 py-1 text-[11px] text-red-400 transition hover:bg-red-500/[0.18] disabled:opacity-50">
                               {closingInProgress ? <Loader2 strokeWidth={1.5} className="h-3 w-3 animate-spin" /> : 'Sí'}
                             </button>
                             <button onClick={() => setClosingVacancy(null)} className="text-[11px] text-white/30 hover:text-white/60">No</button>
                           </div>
                         ) : (
                           <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => setSelectedVacancy(v)}
-                              className="inline-flex items-center gap-1 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-2.5 py-1 text-[11px] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]"
-                            >
+                            <button onClick={() => setSelectedVacancy(v)}
+                              className="inline-flex items-center gap-1 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-2.5 py-1 text-[11px] text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15]">
                               <UserCheck strokeWidth={1.5} className="h-3 w-3" /> Ver →
                             </button>
                             {!closed && (
@@ -1511,11 +1396,9 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
                               </button>
                             )}
                             {!closed && (
-                              <button
-                                onClick={() => setClosingVacancy(v.id)}
+                              <button onClick={() => setClosingVacancy(v.id)}
                                 className="inline-flex items-center rounded-full border border-white/8 px-2.5 py-1 text-[11px] text-white/25 transition hover:border-red-500/30 hover:text-red-400"
-                                title="Cerrar vacante"
-                              >
+                                title="Cerrar llamado">
                                 <X strokeWidth={1.5} className="h-3 w-3" />
                               </button>
                             )}
@@ -1528,8 +1411,137 @@ function VacancyPanel({ token, companyName, onAnalyzeApplicant }: { token: strin
               </tbody>
             </table>
           </div>
+        </div>
+      ) : null}
+
+      {/* Form — always visible when no vacancies; collapsible when there are some */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.form
+            onSubmit={handleSubmit}
+            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.4, ease }}
+            className="glass-card rounded-3xl p-7 overflow-hidden"
+          >
+            <div className="flex items-center gap-3">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">Nuevo llamado / vacante</p>
+              <B2BInfoPopover
+                label="Qué verá el candidato"
+                title="Un proceso claro para postular"
+                description="El candidato verá el puesto, la empresa verificada, los requisitos y el límite del archivo antes de enviar su CV."
+                points={['El CV se guarda en un espacio privado.', 'La postulación se envía sólo a esta empresa.', 'Crear un perfil general es opcional y requiere consentimiento separado.']}
+              />
+            </div>
+            <p className="mt-1 text-sm font-light text-white/40">
+              Generá un link único para compartir con candidatos — cada CV que recibás queda registrado automáticamente en este llamado.
+            </p>
+
+            <div className="mt-7 grid gap-5 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Título del puesto *</label>
+                <input required value={form.title} onChange={set('title')}
+                  placeholder="Ej: Administrativo contable, Repositor de gondola, Desarrollador Frontend"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition" />
+              </div>
+
+              <div>
+                <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Empresa *</label>
+                <input
+                  readOnly={isCompanyNameLocked}
+                  value={form.company_name}
+                  onChange={isCompanyNameLocked ? undefined : set('company_name')}
+                  placeholder="Nombre de tu empresa o área"
+                  aria-describedby="verified-company-help"
+                  className={`w-full rounded-xl border px-4 py-3 text-sm text-white outline-none transition ${isCompanyNameLocked ? 'cursor-not-allowed border-emerald-400/15 bg-emerald-400/[0.03] text-white/75' : 'border-[#c9a84c]/40 bg-white/[0.02] placeholder:text-white/25 focus:border-[#c9a84c]/70'}`}
+                />
+                <p id="verified-company-help" className="mt-1.5 text-xs text-white/35">
+                  {isCompanyNameLocked ? 'Identidad verificada por CVitae. Contactanos si necesitás corregirla.' : 'Ingresá el nombre de tu empresa para publicar vacantes.'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Ubicación *</label>
+                <input required value={form.location} onChange={set('location')}
+                  placeholder="Ej: Asunción, PY — o 'Remoto'"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition" />
+              </div>
+
+              <div>
+                <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Modalidad *</label>
+                <select required value={form.modality} onChange={set('modality')}
+                  className="w-full rounded-xl border border-white/10 bg-[#111] px-4 py-3 text-sm text-white focus:border-[#c9a84c]/50 focus:outline-none transition">
+                  <option value="Presencial">Presencial</option>
+                  <option value="Remoto">Remoto</option>
+                  <option value="Híbrido">Híbrido</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Rubro / Área</label>
+                <select required value={form.rubro} onChange={set('rubro')}
+                  className="w-full rounded-xl border border-white/10 bg-[#111] px-4 py-3 text-sm text-white focus:border-[#c9a84c]/50 focus:outline-none transition">
+                  <option value="">Seleccioná el área…</option>
+                  {RUBROS.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Rango salarial <span className="normal-case text-white/20">(opcional)</span></label>
+                <input value={form.salary_range} onChange={set('salary_range')}
+                  placeholder="Ej: Gs. 3.000.000 – 5.000.000 o 'A convenir'"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition" />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Descripción *</label>
+                <textarea required value={form.description} onChange={set('description')} rows={4}
+                  placeholder="Describí el rol y las tareas del día a día. Ej: 'Será responsable de gestionar cuentas a cobrar, emitir facturas y dar soporte al área contable...'"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition resize-none" />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Requisitos *</label>
+                <textarea required value={form.requirements} onChange={set('requirements')} rows={4}
+                  placeholder="Qué necesitás que tenga el candidato. Ej: 'Estudiante o egresado de Contabilidad, manejo de Excel, 1 año de experiencia en posiciones similares...'"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition resize-none" />
+              </div>
+            </div>
+
+            {saveError && (
+              <div className="mt-5 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-4 text-sm text-red-400">
+                <AlertCircle strokeWidth={1.5} className="h-4 w-4 shrink-0" /> {saveError}
+              </div>
+            )}
+
+            {createdUrl && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                className="mt-5 rounded-2xl border border-[#c9a84c]/25 bg-[#c9a84c]/[0.06] p-5">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-[#c9a84c] mb-2">¡Llamado creado! Tu link de postulación:</p>
+                <div className="flex items-center gap-3">
+                  <code className="flex-1 min-w-0 truncate text-sm text-white/90 font-mono">{createdUrl}</code>
+                  <button type="button" onClick={() => copyToClipboard(createdUrl, 'new')}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.08] px-3 py-1.5 text-xs text-[#c9a84c] transition hover:bg-[#c9a84c]/[0.15] shrink-0">
+                    {copied === 'new' ? <CheckIcon strokeWidth={2} className="h-3.5 w-3.5" /> : <Copy strokeWidth={1.5} className="h-3.5 w-3.5" />}
+                    {copied === 'new' ? 'Copiado' : 'Copiar'}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            <div className="mt-6 flex items-center justify-between">
+              {vacancies.length > 0 && (
+                <button type="button" onClick={() => setShowForm(false)} className="text-xs text-white/35 hover:text-white/60">
+                  Cancelar
+                </button>
+              )}
+              <button type="submit" disabled={saving}
+                className="ml-auto inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-6 py-3 text-sm font-medium text-[#0a0a0a] transition hover:shadow-[0_0_40px_-4px_rgba(201,168,76,0.6)] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/30">
+                {saving ? <><Loader2 strokeWidth={1.5} className="h-4 w-4 animate-spin" /> Creando…</> : <><Plus strokeWidth={2} className="h-4 w-4" /> Crear llamado</>}
+              </button>
+            </div>
+          </motion.form>
         )}
-      </div>
+      </AnimatePresence>
     </div>
   )
 }
@@ -1662,6 +1674,442 @@ function BancoPanel({ token }: { token: string }) {
 
 // ─── Legajos ──────────────────────────────────────────────────────────────────
 
+interface EmployeeAlert {
+  id: string
+  employee_file_id: string
+  alert_date: string
+  title: string
+  notes: string | null
+  is_done: boolean
+}
+
+interface EmployeeDocument {
+  id: string
+  employee_file_id: string
+  doc_type: string
+  custom_label: string | null
+  file_name: string | null
+  file_url: string | null
+  notes: string | null
+  uploaded_at: string
+}
+
+const DOC_TYPES = [
+  { value: 'contrato', label: 'Contrato' },
+  { value: 'ci', label: 'Cédula de Identidad' },
+  { value: 'ips', label: 'IPS / Formulario de inscripción' },
+  { value: 'mtess', label: 'MTESS / Libro de salarios' },
+  { value: 'otro', label: 'Otro documento' },
+]
+
+function LegajoDetail({ token, file, onBack, onUpdated }: {
+  token: string
+  file: EmployeeFile
+  onBack: () => void
+  onUpdated: () => void
+}) {
+  const [tab, setTab] = useState<'alertas' | 'documentos'>('alertas')
+  const [alerts, setAlerts] = useState<EmployeeAlert[]>([])
+  const [docs, setDocs] = useState<EmployeeDocument[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [alertForm, setAlertForm] = useState({ alert_date: '', title: '', notes: '' })
+  const [docForm, setDocForm] = useState({ doc_type: 'otro', custom_label: '', file_name: '', file_url: '', notes: '' })
+  const [docInputMode, setDocInputMode] = useState<'upload' | 'link'>('upload')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [uploadProgress, setUploadProgress] = useState('')
+  const [savingAlert, setSavingAlert] = useState(false)
+  const [savingDoc, setSavingDoc] = useState(false)
+  const [showAlertForm, setShowAlertForm] = useState(false)
+  const [showDocForm, setShowDocForm] = useState(false)
+  const [markingDone, setMarkingDone] = useState<string | null>(null)
+
+  const call = async (body: Record<string, any>) => {
+    const res = await fetch('/.netlify/functions/validate-recruiter-token', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, ...body }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Error')
+    return data
+  }
+
+  const loadAll = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const [a, d] = await Promise.all([
+        call({ action: 'get_employee_alerts', file_id: file.id }),
+        call({ action: 'get_employee_documents', file_id: file.id }),
+      ])
+      setAlerts(a.data || [])
+      setDocs(d.data || [])
+    } catch (e: any) { setError(e.message) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { loadAll() }, [file.id])
+
+  const addAlert = async () => {
+    if (!alertForm.alert_date || !alertForm.title.trim()) return
+    setSavingAlert(true)
+    try {
+      await call({ action: 'add_employee_alert', file_id: file.id, ...alertForm })
+      setAlertForm({ alert_date: '', title: '', notes: '' })
+      setShowAlertForm(false)
+      await loadAll()
+    } catch (e: any) { setError(e.message) }
+    finally { setSavingAlert(false) }
+  }
+
+  const markDone = async (alertId: string) => {
+    setMarkingDone(alertId)
+    try {
+      await call({ action: 'mark_alert_done', alert_id: alertId })
+      setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, is_done: true } : a))
+    } catch (e: any) { setError(e.message) }
+    finally { setMarkingDone(null) }
+  }
+
+  const compressImage = async (f: File): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const img = new Image()
+      const url = URL.createObjectURL(f)
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        const MAX = 1920
+        let w = img.width, h = img.height
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX }
+          else { w = Math.round(w * MAX / h); h = MAX }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        canvas.toBlob(b => resolve(b!), 'image/jpeg', 0.85)
+      }
+      img.src = url
+    })
+  }
+
+  const addDoc = async () => {
+    setSavingDoc(true)
+    setError('')
+    try {
+      let finalUrl: string | null = null
+      let finalName: string | null = null
+
+      if (docInputMode === 'upload' && selectedFile) {
+        setUploadProgress('Preparando subida…')
+        // Get signed upload URL from backend
+        const urlData = await call({ action: 'get_upload_url', file_id: file.id, file_name: selectedFile.name, mime_type: selectedFile.type })
+        setUploadProgress('Subiendo archivo…')
+        // Compress if image, otherwise upload as-is
+        let blob: Blob = selectedFile
+        if (selectedFile.type.startsWith('image/')) {
+          blob = await compressImage(selectedFile)
+        }
+        // Upload directly to Supabase Storage via signed URL
+        const uploadRes = await fetch(urlData.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': selectedFile.type || 'application/octet-stream' },
+          body: blob,
+        })
+        if (!uploadRes.ok) throw new Error('Error subiendo el archivo al storage')
+        finalUrl = urlData.downloadUrl
+        finalName = selectedFile.name
+        setUploadProgress('')
+      } else if (docInputMode === 'link') {
+        if (!docForm.file_name.trim() && !docForm.file_url.trim()) {
+          setError('Ingresá un nombre o link del documento')
+          setSavingDoc(false)
+          return
+        }
+        finalUrl = docForm.file_url || null
+        finalName = docForm.file_name || null
+      } else {
+        setError('Seleccioná un archivo o pegá un link')
+        setSavingDoc(false)
+        return
+      }
+
+      await call({
+        action: 'add_employee_document',
+        file_id: file.id,
+        doc_type: docForm.doc_type,
+        custom_label: docForm.custom_label || null,
+        file_name: finalName,
+        file_url: finalUrl,
+        notes: docForm.notes || null,
+      })
+      setDocForm({ doc_type: 'otro', custom_label: '', file_name: '', file_url: '', notes: '' })
+      setSelectedFile(null)
+      setShowDocForm(false)
+      await loadAll()
+    } catch (e: any) { setError(e.message); setUploadProgress('') }
+    finally { setSavingDoc(false) }
+  }
+
+  const fieldCls = 'w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40'
+
+  return (
+    <div>
+      <button onClick={onBack} className="mb-5 inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/40 transition hover:text-white">
+        <ArrowLeft strokeWidth={1.5} className="h-4 w-4" /> Todos los legajos
+      </button>
+
+      {/* Employee header */}
+      <div className="mb-6 flex items-start gap-4 rounded-2xl border border-white/8 bg-white/[0.015] p-5">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#c9a84c]/25 bg-[#c9a84c]/[0.08]">
+          <UserCheck strokeWidth={1.25} className="h-5 w-5 text-[#c9a84c]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-medium text-white">{file.employee_name}</p>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] border ${file.status === 'active' ? 'border-emerald-500/30 text-emerald-400' : 'border-white/10 text-white/30'}`}>
+              {file.status === 'active' ? 'Activo' : file.status}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-white/50">
+            {[file.position, file.employee_email, file.employee_phone, file.hire_date ? `Ingresó: ${new Date(file.hire_date).toLocaleDateString('es-PY')}` : null].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-sm text-red-400">
+          <AlertCircle strokeWidth={1.5} className="h-4 w-4 shrink-0" /> {error}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="mb-6 flex gap-1 rounded-full border border-white/8 bg-black/20 p-1 w-fit">
+        {([['alertas', 'Alertas y vencimientos', Bell], ['documentos', 'Documentos', FileText]] as const).map(([t, label, Icon]) => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium transition ${tab === t ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white'}`}>
+            <Icon strokeWidth={1.5} className="h-3.5 w-3.5" /> {label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 strokeWidth={1.5} className="h-5 w-5 animate-spin text-white/40" /></div>
+      ) : tab === 'alertas' ? (
+        <div className="space-y-4">
+          {/* Explanation */}
+          <div className="rounded-2xl border border-[#c9a84c]/15 bg-[#c9a84c]/[0.03] p-4">
+            <p className="text-xs text-white/55 leading-relaxed">
+              <span className="font-medium text-[#c9a84c]">¿Para qué son las alertas?</span>{' '}
+              Recordatorios de fechas importantes del empleado: vencimiento de contrato, renovación de IPS, revisión de MTESS, período de prueba, etc. Aparecen ordenadas por fecha para que no se te pase nada.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-white/35 uppercase tracking-[0.18em]">{alerts.filter(a => !a.is_done).length} pendiente{alerts.filter(a => !a.is_done).length !== 1 ? 's' : ''}</p>
+            <button onClick={() => setShowAlertForm(v => !v)}
+              className="inline-flex items-center gap-2 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.06] px-4 py-2 text-xs text-[#c9a84c] transition hover:border-[#c9a84c]/60">
+              <Plus strokeWidth={2} className="h-3.5 w-3.5" /> Nueva alerta
+            </button>
+          </div>
+
+          <AnimatePresence>
+            {showAlertForm && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                className="rounded-2xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.03] p-5">
+                <p className="mb-4 text-[11px] uppercase tracking-[0.18em] text-[#c9a84c]">Nueva alerta</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] text-white/40">Fecha del vencimiento / recordatorio *</span>
+                    <input value={alertForm.alert_date} onChange={e => setAlertForm(p => ({ ...p, alert_date: e.target.value }))} type="date" className={fieldCls} />
+                  </label>
+                  <input value={alertForm.title} onChange={e => setAlertForm(p => ({ ...p, title: e.target.value }))} placeholder="Título * (ej: Renovación IPS, Venc. contrato)" className={fieldCls} />
+                  <input value={alertForm.notes} onChange={e => setAlertForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notas adicionales (opcional)" className={`${fieldCls} sm:col-span-2`} />
+                </div>
+                <div className="mt-4 flex gap-3">
+                  <button onClick={addAlert} disabled={savingAlert || !alertForm.alert_date || !alertForm.title.trim()}
+                    className="inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-medium text-[#0a0a0a] disabled:opacity-50">
+                    {savingAlert ? <Loader2 strokeWidth={2} className="h-4 w-4 animate-spin" /> : <CheckCircle2 strokeWidth={1.5} className="h-4 w-4" />} Guardar alerta
+                  </button>
+                  <button onClick={() => setShowAlertForm(false)} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/50">Cancelar</button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {alerts.length === 0 ? (
+            <div className="rounded-2xl border border-white/8 bg-white/[0.01] p-8 text-center">
+              <Bell strokeWidth={1.25} className="mx-auto h-7 w-7 text-white/15" />
+              <p className="mt-3 text-sm text-white/35">Sin alertas todavía.</p>
+              <p className="mt-1 text-xs text-white/20">Creá recordatorios de vencimientos de contratos, renovaciones de IPS, etc.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {[...alerts].sort((a, b) => a.alert_date.localeCompare(b.alert_date)).map(alert => {
+                const overdue = !alert.is_done && alert.alert_date < new Date().toISOString().split('T')[0]
+                const upcoming = !alert.is_done && !overdue
+                return (
+                  <div key={alert.id} className={`flex items-center gap-4 rounded-xl border p-4 ${alert.is_done ? 'border-white/5 opacity-50' : overdue ? 'border-red-400/30 bg-red-400/[0.04]' : 'border-white/8 bg-white/[0.015]'}`}>
+                    <div className="shrink-0">
+                      {alert.is_done
+                        ? <CheckCircle2 strokeWidth={1.5} className="h-5 w-5 text-emerald-400/50" />
+                        : overdue
+                          ? <AlertCircle strokeWidth={1.5} className="h-5 w-5 text-red-400" />
+                          : <Bell strokeWidth={1.5} className="h-5 w-5 text-[#c9a84c]" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm ${alert.is_done ? 'line-through text-white/30' : overdue ? 'text-red-200' : 'text-white'}`}>{alert.title}</p>
+                      <p className="text-xs text-white/35 mt-0.5">
+                        {new Date(alert.alert_date + 'T12:00:00').toLocaleDateString('es-PY', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        {overdue && <span className="ml-2 text-red-400">· Vencida</span>}
+                        {alert.notes && <span className="ml-2 text-white/25">— {alert.notes}</span>}
+                      </p>
+                    </div>
+                    {!alert.is_done && (
+                      <button onClick={() => markDone(alert.id)} disabled={markingDone === alert.id}
+                        className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 px-3 py-1.5 text-[11px] text-emerald-400 transition hover:bg-emerald-500/[0.08] disabled:opacity-50">
+                        {markingDone === alert.id ? <Loader2 strokeWidth={2} className="h-3 w-3 animate-spin" /> : <CheckCircle2 strokeWidth={1.5} className="h-3 w-3" />} Cumplida
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Explanation */}
+          <div className="rounded-2xl border border-white/8 bg-white/[0.015] p-4">
+            <p className="text-xs text-white/55 leading-relaxed">
+              <span className="font-medium text-white/80">¿Para qué son los documentos?</span>{' '}
+              Registrá los documentos del empleado: contrato firmado, copia de CI, inscripción a IPS, planilla MTESS, etc. Podés pegar el link de Google Drive, OneDrive o cualquier almacenamiento que ya uses.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-white/35 uppercase tracking-[0.18em]">{docs.length} documento{docs.length !== 1 ? 's' : ''}</p>
+            <button onClick={() => setShowDocForm(v => !v)}
+              className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs text-white/60 transition hover:border-white/30 hover:text-white">
+              <Plus strokeWidth={2} className="h-3.5 w-3.5" /> Registrar documento
+            </button>
+          </div>
+
+          <AnimatePresence>
+            {showDocForm && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Nuevo documento</p>
+                  {/* Upload / Link toggle */}
+                  <div className="flex gap-1 rounded-full border border-white/10 bg-black/20 p-0.5">
+                    <button type="button" onClick={() => setDocInputMode('upload')}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] transition ${docInputMode === 'upload' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white'}`}>
+                      <Upload strokeWidth={1.5} className="h-3 w-3" /> Subir archivo
+                    </button>
+                    <button type="button" onClick={() => setDocInputMode('link')}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] transition ${docInputMode === 'link' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white'}`}>
+                      <Link2 strokeWidth={1.5} className="h-3 w-3" /> Link externo
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <select value={docForm.doc_type} onChange={e => setDocForm(p => ({ ...p, doc_type: e.target.value }))}
+                    className="w-full rounded-xl border border-white/10 bg-[#111] px-4 py-3 text-sm text-white outline-none focus:border-[#c9a84c]/40">
+                    {DOC_TYPES.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                  </select>
+                  <input value={docForm.custom_label} onChange={e => setDocForm(p => ({ ...p, custom_label: e.target.value }))}
+                    placeholder="Descripción personalizada (opcional)" className={fieldCls} />
+
+                  {docInputMode === 'upload' ? (
+                    <div className="sm:col-span-2">
+                      <label className={`flex flex-col items-center justify-center gap-2 cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition ${selectedFile ? 'border-[#c9a84c]/40 bg-[#c9a84c]/[0.04]' : 'border-white/15 hover:border-white/30'}`}>
+                        <input type="file" className="hidden" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png,.webp"
+                          onChange={e => { const f = e.target.files?.[0]; setSelectedFile(f || null); e.target.value = '' }} />
+                        <Upload strokeWidth={1.25} className={`h-6 w-6 ${selectedFile ? 'text-[#c9a84c]' : 'text-white/25'}`} />
+                        {selectedFile ? (
+                          <>
+                            <p className="text-sm font-medium text-white">{selectedFile.name}</p>
+                            <p className="text-xs text-white/40">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                              {selectedFile.type.startsWith('image/') && <span className="ml-1 text-[#c9a84c]">· se comprime automáticamente</span>}
+                              {selectedFile.size > 10 * 1024 * 1024 && <span className="ml-1 text-red-400">· archivo muy grande (máx 10 MB)</span>}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm text-white/50">PDF, Word, imagen</p>
+                            <p className="text-xs text-white/25">Las imágenes se comprimen automáticamente. Para PDFs muy grandes usá smallpdf.com primero.</p>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                  ) : (
+                    <>
+                      <input value={docForm.file_name} onChange={e => setDocForm(p => ({ ...p, file_name: e.target.value }))}
+                        placeholder="Nombre del archivo (ej: contrato_firmado.pdf)" className={fieldCls} />
+                      <input value={docForm.file_url} onChange={e => setDocForm(p => ({ ...p, file_url: e.target.value }))}
+                        placeholder="Link de Google Drive, OneDrive, Dropbox…" type="url" className={fieldCls} />
+                    </>
+                  )}
+
+                  <input value={docForm.notes} onChange={e => setDocForm(p => ({ ...p, notes: e.target.value }))}
+                    placeholder="Notas adicionales (opcional)" className={`${fieldCls} sm:col-span-2`} />
+                </div>
+
+                {uploadProgress && (
+                  <div className="mt-3 flex items-center gap-2 text-xs text-[#c9a84c]">
+                    <Loader2 strokeWidth={2} className="h-3.5 w-3.5 animate-spin" /> {uploadProgress}
+                  </div>
+                )}
+
+                <div className="mt-4 flex gap-3">
+                  <button onClick={addDoc}
+                    disabled={savingDoc || (docInputMode === 'upload' ? !selectedFile || selectedFile.size > 10 * 1024 * 1024 : !docForm.file_name.trim() && !docForm.file_url.trim())}
+                    className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/15 px-5 py-2.5 text-sm text-white hover:bg-white/15 disabled:opacity-50">
+                    {savingDoc ? <Loader2 strokeWidth={2} className="h-4 w-4 animate-spin" /> : <CheckCircle2 strokeWidth={1.5} className="h-4 w-4" />}
+                    {savingDoc ? (uploadProgress || 'Guardando…') : 'Guardar documento'}
+                  </button>
+                  <button onClick={() => { setShowDocForm(false); setSelectedFile(null) }} className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/50">Cancelar</button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {docs.length === 0 ? (
+            <div className="rounded-2xl border border-white/8 bg-white/[0.01] p-8 text-center">
+              <FileText strokeWidth={1.25} className="mx-auto h-7 w-7 text-white/15" />
+              <p className="mt-3 text-sm text-white/35">Sin documentos registrados.</p>
+              <p className="mt-1 text-xs text-white/20">Subí contratos, CI, inscripción a IPS, planilla MTESS y más. El almacenamiento está incluido en tu plan.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {docs.map(doc => (
+                <div key={doc.id} className="flex items-center gap-4 rounded-xl border border-white/8 bg-white/[0.015] p-4">
+                  <FileText strokeWidth={1.25} className="h-5 w-5 shrink-0 text-white/30" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white truncate">{doc.custom_label || doc.file_name || DOC_TYPES.find(d => d.value === doc.doc_type)?.label || doc.doc_type}</p>
+                    <p className="text-[10px] text-white/35 mt-0.5">
+                      {DOC_TYPES.find(d => d.value === doc.doc_type)?.label}
+                      {doc.notes && ` · ${doc.notes}`}
+                      {' · '}{new Date(doc.uploaded_at).toLocaleDateString('es-PY')}
+                    </p>
+                  </div>
+                  {doc.file_url && (
+                    <a href={doc.file_url} target="_blank" rel="noopener noreferrer"
+                      className="shrink-0 inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1.5 text-[11px] text-white/50 transition hover:border-white/30 hover:text-white">
+                      Ver →
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function LegajosPanel({ token }: { token: string }) {
   const [files, setFiles] = useState<EmployeeFile[]>([])
   const [loading, setLoading] = useState(true)
@@ -1669,6 +2117,7 @@ function LegajosPanel({ token }: { token: string }) {
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ employee_name: '', employee_email: '', employee_phone: '', position: '', hire_date: '' })
   const [creating, setCreating] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<EmployeeFile | null>(null)
 
   const loadFiles = async () => {
     setLoading(true)
@@ -1703,6 +2152,10 @@ function LegajosPanel({ token }: { token: string }) {
 
   useEffect(() => { loadFiles() }, [])
 
+  if (selectedFile) {
+    return <LegajoDetail token={token} file={selectedFile} onBack={() => setSelectedFile(null)} onUpdated={loadFiles} />
+  }
+
   if (loading) return (
     <div className="flex items-center gap-3 py-16 text-white/40">
       <Loader2 strokeWidth={1.5} className="h-5 w-5 animate-spin" />
@@ -1712,6 +2165,14 @@ function LegajosPanel({ token }: { token: string }) {
 
   return (
     <div>
+      {/* Explanation */}
+      <div className="mb-6 rounded-2xl border border-white/8 bg-white/[0.015] p-4">
+        <p className="text-xs text-white/55 leading-relaxed">
+          <span className="font-medium text-white/80">¿Qué es un legajo?</span>{' '}
+          Es la carpeta digital de cada empleado contratado. Guardá alertas de vencimientos (contratos, IPS, MTESS) y los links a documentos importantes. Todo en un solo lugar, sin salir de CVitae.
+        </p>
+      </div>
+
       <div className="mb-6 flex items-center justify-between">
         <p className="text-xs text-white/40 uppercase tracking-[0.18em]">{files.length} legajo{files.length !== 1 ? 's' : ''}</p>
         <button
@@ -1728,14 +2189,15 @@ function LegajosPanel({ token }: { token: string }) {
             initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             className="mb-6 rounded-2xl border border-[#c9a84c]/20 bg-[#c9a84c]/[0.03] p-6"
           >
-            <p className="mb-4 text-[11px] uppercase tracking-[0.18em] text-[#c9a84c]">Nuevo legajo</p>
+            <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#c9a84c]">Nuevo legajo</p>
+            <p className="mb-4 text-xs text-white/40">Completá los datos del empleado. Podés agregar alertas y documentos después.</p>
             <div className="grid gap-4 sm:grid-cols-2">
-              <input value={form.employee_name} onChange={e => setForm(p => ({ ...p, employee_name: e.target.value }))} placeholder="Nombre del empleado *" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40" />
-              <input value={form.position} onChange={e => setForm(p => ({ ...p, position: e.target.value }))} placeholder="Puesto / cargo" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40" />
-              <input value={form.employee_email} onChange={e => setForm(p => ({ ...p, employee_email: e.target.value }))} placeholder="Email" type="email" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40" />
-              <input value={form.employee_phone} onChange={e => setForm(p => ({ ...p, employee_phone: e.target.value }))} placeholder="Teléfono / WhatsApp" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40" />
+              <input value={form.employee_name} onChange={e => setForm(p => ({ ...p, employee_name: e.target.value }))} placeholder="Nombre completo del empleado *" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40" />
+              <input value={form.position} onChange={e => setForm(p => ({ ...p, position: e.target.value }))} placeholder="Puesto / cargo (ej: Administrativo, Repositor)" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40" />
+              <input value={form.employee_email} onChange={e => setForm(p => ({ ...p, employee_email: e.target.value }))} placeholder="Email del empleado (opcional)" type="email" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40" />
+              <input value={form.employee_phone} onChange={e => setForm(p => ({ ...p, employee_phone: e.target.value }))} placeholder="WhatsApp / Teléfono (opcional)" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-[#c9a84c]/40" />
               <label className="block">
-                <span className="mb-1 block text-[11px] text-white/40">Fecha de ingreso</span>
+                <span className="mb-1 block text-[11px] text-white/40">Fecha de ingreso (opcional)</span>
                 <input value={form.hire_date} onChange={e => setForm(p => ({ ...p, hire_date: e.target.value }))} type="date" className="w-full rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white outline-none focus:border-[#c9a84c]/40" />
               </label>
             </div>
@@ -1761,15 +2223,19 @@ function LegajosPanel({ token }: { token: string }) {
       {files.length === 0 && !loading && (
         <div className="rounded-2xl border border-white/8 bg-white/[0.015] p-10 text-center">
           <FolderOpen strokeWidth={1.25} className="mx-auto h-8 w-8 text-white/20" />
-          <p className="mt-3 text-sm text-white/40">No hay legajos aún. Creá el primero con el botón de arriba.</p>
-          <p className="mt-2 text-xs text-white/25">También podés crear un legajo desde la postulación de un candidato contratado.</p>
+          <p className="mt-3 text-sm text-white/40">No hay legajos aún.</p>
+          <p className="mt-2 text-xs text-white/25">Creá el primero con el botón de arriba. También podés crear uno desde la vista de un candidato que contrataste.</p>
         </div>
       )}
 
       {files.length > 0 && (
         <div className="space-y-3">
           {files.map((f) => (
-            <div key={f.id} className="rounded-2xl border border-white/8 bg-white/[0.015] p-5">
+            <button
+              key={f.id}
+              onClick={() => setSelectedFile(f)}
+              className="w-full text-left rounded-2xl border border-white/8 bg-white/[0.015] p-5 transition hover:border-[#c9a84c]/30 hover:bg-[#c9a84c]/[0.03]"
+            >
               <div className="flex items-start gap-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
                   <UserCheck strokeWidth={1.25} className="h-4 w-4 text-[#c9a84c]" />
@@ -1782,13 +2248,12 @@ function LegajosPanel({ token }: { token: string }) {
                     </span>
                   </div>
                   <p className="mt-0.5 text-xs text-white/50">
-                    {[f.position, f.employee_email, f.hire_date ? `Ingreso: ${new Date(f.hire_date).toLocaleDateString('es-PY')}` : null].filter(Boolean).join(' · ')}
+                    {[f.position, f.employee_email, f.hire_date ? `Ingresó: ${new Date(f.hire_date).toLocaleDateString('es-PY')}` : null].filter(Boolean).join(' · ')}
                   </p>
-                  {f.notes && <p className="mt-1.5 text-xs text-white/35 line-clamp-1">{f.notes}</p>}
                 </div>
-                <p className="text-[10px] text-white/25 shrink-0">{new Date(f.created_at).toLocaleDateString('es-PY')}</p>
+                <ChevronRight strokeWidth={1.5} className="h-4 w-4 text-white/25 shrink-0 mt-1" />
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}

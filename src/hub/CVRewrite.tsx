@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import {
   AlertCircle, ArrowRight, Check, CheckCircle2, ChevronDown, FileCheck2,
   FileText, GitCompareArrows, History, Loader2, LockKeyhole, RotateCcw,
-  ShieldCheck, Sparkles, Target, Trash2, WandSparkles,
+  ShieldCheck, Sparkles, Target, Trash2, WandSparkles, MessageSquare,
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/cvitae/DashboardLayout'
 import { ProductGuide } from '@/components/cv/ProductGuide'
@@ -33,6 +33,13 @@ type RewriteProposal = {
 type Workspace = {
   profileExists: boolean; versions: CvVersion[]; proposals: RewriteProposal[]
   evidenceReadiness: { pending: number; confirmed: number; ready: boolean }
+}
+
+type GapItem = {
+  company: string
+  role: string
+  description: string
+  questions: string[]
 }
 
 const OBJECTIVES = [
@@ -164,6 +171,11 @@ export default function CVRewrite() {
   const [view, setView] = useState<'changes' | 'preview'>('changes')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [enrichMode, setEnrichMode] = useState(false)
+  const [gaps, setGaps] = useState<GapItem[]>([])
+  const [enrichAnswers, setEnrichAnswers] = useState<Record<string, Record<string, string>>>({})
+  const [analyzingGaps, setAnalyzingGaps] = useState(false)
+  const [creatingEnriched, setCreatingEnriched] = useState(false)
 
   const applyWorkspace = (next: Workspace, preferredProposal?: string | null) => {
     setWorkspace(next)
@@ -241,6 +253,46 @@ export default function CVRewrite() {
     finally { setDiscarding(false) }
   }
 
+  const analyzeGaps = async () => {
+    if (!selectedVersionId) return
+    setAnalyzingGaps(true); setError(''); setGaps([]); setEnrichAnswers({})
+    try {
+      const data = await postWorkspace({ action: 'analyze_gaps', sourceVersionId: selectedVersionId })
+      setGaps((data as any).gaps || [])
+    } catch (err: any) { setError(err.message || 'No pudimos analizar los gaps') }
+    finally { setAnalyzingGaps(false) }
+  }
+
+  const setAnswer = (gapKey: string, question: string, answer: string) => {
+    setEnrichAnswers(prev => ({
+      ...prev,
+      [gapKey]: { ...(prev[gapKey] || {}), [question]: answer },
+    }))
+  }
+
+  const createEnrichedProposal = async () => {
+    if (!selectedVersionId || !gaps.length) return
+    const enrichmentQa = gaps.map(g => ({
+      company: g.company,
+      role: g.role,
+      qa: g.questions.map(q => ({
+        question: q,
+        answer: enrichAnswers[`${g.company}_${g.role}`]?.[q] || '',
+      })).filter(item => item.answer.trim()),
+    })).filter(item => item.qa.length > 0)
+    if (!enrichmentQa.length) { setError('Respondé al menos una pregunta antes de enriquecer'); return }
+    setCreatingEnriched(true); setError('')
+    try {
+      const data = await postWorkspace({ action: 'create_enriched', sourceVersionId: selectedVersionId, enrichmentQa })
+      if (user?.id) clearRwCache(user.id)
+      applyWorkspace(data, (data as any).proposalId)
+      setEnrichMode(false)
+      setGaps([]); setEnrichAnswers({})
+      setMessage('CV enriquecido generado. Revisalo antes de aceptar — las líneas con ⚠ son inferencias de la IA para verificar.')
+    } catch (err: any) { setError(err.message || 'No pudimos generar el CV enriquecido') }
+    finally { setCreatingEnriched(false) }
+  }
+
   if (authLoading || loading) return <DashboardLayout><div className="mx-auto flex min-h-[60vh] max-w-3xl items-center"><B2CProgressLoader title="Preparando tu espacio de mejora" description="Cargamos tu CV y sus evidencias antes de proponer cambios." stages={[{ label: 'Leyendo tu experiencia confirmada' }, { label: 'Revisando la versión elegida' }, { label: 'Preparando tu propuesta' }]} /></div></DashboardLayout>
   if (!user) return <DashboardLayout><div className="mx-auto max-w-xl rounded-3xl border border-white/8 bg-white/[0.02] p-8 text-center"><LockKeyhole className="mx-auto h-8 w-8 text-[#c9a84c]" /><h1 className="font-display mt-4 text-3xl text-cream">Tu CV es privado</h1><p className="mt-3 text-sm text-white/45">Ingresá a Mi Carrera para preparar una reescritura trazable.</p><a href="/mi-carrera" className="mt-6 inline-flex rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-medium text-black">Ingresar</a></div></DashboardLayout>
 
@@ -272,18 +324,138 @@ export default function CVRewrite() {
           </div>
         </section>
 
+        {/* Enrichment flow */}
+        {workspace?.versions.length ? (
+          <section className="rounded-3xl border border-white/8 bg-white/[0.015] overflow-hidden">
+            <button type="button" onClick={() => { setEnrichMode(v => !v); if (!enrichMode && !gaps.length) analyzeGaps() }}
+              className="flex w-full items-center justify-between gap-3 p-5 md:p-7 text-left transition hover:bg-white/[0.02]">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/50">
+                  <MessageSquare className="h-5 w-5" />
+                </span>
+                <div>
+                  <h2 className="font-display text-xl text-cream">Enriquecer con preguntas de la IA</h2>
+                  <p className="text-xs text-white/40">La IA detecta experiencias vagas y te hace preguntas para agregar detalles reales al CV.</p>
+                </div>
+              </div>
+              <ChevronDown className={`h-5 w-5 shrink-0 text-white/30 transition ${enrichMode ? 'rotate-180' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+              {enrichMode && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-t border-white/8">
+                  <div className="p-5 md:p-7 space-y-6">
+                    <div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.04] p-4">
+                      <p className="text-xs text-amber-200/70 leading-relaxed">
+                        <strong className="text-amber-200">¿Cómo funciona?</strong>{' '}
+                        La IA analiza tu CV, detecta experiencias con descripciones pobres y te hace preguntas concretas: cuántos ítems manejabas, qué herramientas usabas, si tenías gente a cargo, etc. Respondés con tus datos reales y el CV se reescribe con más cuerpo. Revisás el resultado antes de aceptar.
+                      </p>
+                    </div>
+
+                    {analyzingGaps ? (
+                      <div className="flex items-center gap-3 py-8 justify-center text-white/40">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span className="text-sm">Analizando tu CV para detectar experiencias que podemos enriquecer…</span>
+                      </div>
+                    ) : gaps.length === 0 ? (
+                      <div className="text-center py-8">
+                        <p className="text-sm text-white/40 mb-4">Elegí una versión arriba y la IA busca qué experiencias necesitan más detalle.</p>
+                        <button type="button" onClick={analyzeGaps} disabled={!selectedVersionId}
+                          className="inline-flex items-center gap-2 rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/[0.08] px-5 py-2.5 text-sm text-[#c9a84c] hover:border-[#c9a84c]/60 disabled:opacity-40">
+                          <Sparkles className="h-4 w-4" /> Analizar mi CV
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-5">
+                        <p className="text-sm text-white/50">La IA encontró <strong className="text-white/80">{gaps.length} experiencia{gaps.length !== 1 ? 's' : ''}</strong> que podemos enriquecer. Respondé lo que puedas — no es obligatorio responder todo.</p>
+
+                        {gaps.map((gap, gi) => {
+                          const key = `${gap.company}_${gap.role}`
+                          return (
+                            <div key={key} className="rounded-2xl border border-white/8 bg-white/[0.015] p-5">
+                              <div className="mb-4">
+                                <p className="font-medium text-sm text-white">{gap.role}</p>
+                                <p className="text-xs text-white/40 mt-0.5">{gap.company}</p>
+                                {gap.description && <p className="text-xs text-white/25 mt-1 italic">"{gap.description}"</p>}
+                              </div>
+                              <div className="space-y-3">
+                                {gap.questions.map((q, qi) => (
+                                  <div key={qi}>
+                                    <label className="block text-xs text-white/55 mb-1.5">{q}</label>
+                                    <input
+                                      value={enrichAnswers[key]?.[q] || ''}
+                                      onChange={e => setAnswer(key, q, e.target.value)}
+                                      placeholder="Tu respuesta (opcional)"
+                                      className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-white/20 focus:border-[#c9a84c]/40 focus:outline-none transition"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        })}
+
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                          <p className="text-xs text-white/35">
+                            Podés responder solo algunas preguntas. Las que dejés vacías no se modificarán.
+                          </p>
+                          <button type="button" onClick={createEnrichedProposal} disabled={creatingEnriched}
+                            className="inline-flex items-center gap-2 rounded-full bg-[#c9a84c] px-5 py-2.5 text-sm font-medium text-[#0a0a0a] disabled:opacity-50 hover:bg-[#e6cf8a]">
+                            {creatingEnriched ? <><Loader2 className="h-4 w-4 animate-spin" /> Generando…</> : <><WandSparkles className="h-4 w-4" /> Enriquecer CV</>}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </section>
+        ) : null}
+
         {selectedProposal ? (
           <AnimatePresence mode="wait">
             <motion.div key={selectedProposal.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/8 pt-6"><div><p className="text-[10px] uppercase tracking-[0.18em] text-white/30">Propuesta seleccionada</p><p className="mt-1 text-sm text-cream">{OBJECTIVES.find((item) => item.id === selectedProposal.objective)?.title || 'Reescritura'} <span className="text-white/30">· {formatDate(selectedProposal.created_at)}</span></p></div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.15em] ${selectedProposal.status === 'draft' ? 'border-amber-400/25 text-amber-200' : selectedProposal.status === 'accepted' ? 'border-emerald-400/25 text-emerald-200' : 'border-white/10 text-white/35'}`}>{selectedProposal.status === 'draft' ? 'Pendiente de decisión' : selectedProposal.status === 'accepted' ? 'Aceptada' : 'Descartada'}</span>{workspace && workspace.proposals.length > 1 && <select value={selectedProposal.id} onChange={(event) => { setSelectedProposalId(event.target.value); setAttested(false) }} className="rounded-full border border-white/10 bg-[#0d0d0d] px-3 py-1.5 text-xs text-white/55 outline-none">{workspace.proposals.map((proposal) => <option key={proposal.id} value={proposal.id}>{formatDate(proposal.created_at)} · {proposal.status}</option>)}</select>}</div></div>
 
               <section className="overflow-hidden rounded-3xl border border-[#c9a84c]/18 bg-[#c9a84c]/[0.025]">
-                <div className="flex flex-col justify-between gap-4 border-b border-white/8 p-5 md:flex-row md:items-center md:px-7"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#c9a84c]/25 bg-[#c9a84c]/10 text-[#c9a84c]"><GitCompareArrows className="h-5 w-5" /></span><div><h2 className="font-display text-2xl text-cream">Mesa de cambios</h2><p className="text-xs text-white/40">{selectedProposal.changes.length} bloques · referencias verificadas en servidor</p></div></div><div className="flex rounded-full border border-white/10 bg-black/20 p-1"><button type="button" onClick={() => setView('changes')} className={`rounded-full px-4 py-1.5 text-xs transition ${view === 'changes' ? 'bg-white/10 text-cream' : 'text-white/40'}`}>Cambios</button><button type="button" onClick={() => setView('preview')} className={`rounded-full px-4 py-1.5 text-xs transition ${view === 'preview' ? 'bg-white/10 text-cream' : 'text-white/40'}`}>Vista completa</button></div></div>
-                <div className="p-5 md:p-7">{view === 'changes' ? <div className="space-y-3">{selectedProposal.changes.map((change, index) => <ChangeCard key={change.id} change={change} index={index} />)}</div> : <div className="grid gap-5 xl:grid-cols-2"><MarkdownPaper label={`Origen · ${proposalSource?.label || 'Versión anterior'}`}>{proposalSource?.cv_markdown || 'Versión de origen no disponible.'}</MarkdownPaper><MarkdownPaper label="Propuesta respaldada">{selectedProposal.proposal_markdown}</MarkdownPaper></div>}</div>
+                <div className="flex flex-col justify-between gap-4 border-b border-white/8 p-5 md:flex-row md:items-center md:px-7">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#c9a84c]/25 bg-[#c9a84c]/10 text-[#c9a84c]">
+                      {selectedProposal.objective === 'enriched' ? <MessageSquare className="h-5 w-5" /> : <GitCompareArrows className="h-5 w-5" />}
+                    </span>
+                    <div>
+                      <h2 className="font-display text-2xl text-cream">{selectedProposal.objective === 'enriched' ? 'CV enriquecido' : 'Mesa de cambios'}</h2>
+                      <p className="text-xs text-white/40">
+                        {selectedProposal.objective === 'enriched'
+                          ? 'Generado con tus respuestas · Revisá las líneas con ⚠ antes de aceptar'
+                          : `${selectedProposal.changes.length} bloques · referencias verificadas en servidor`}
+                      </p>
+                    </div>
+                  </div>
+                  {selectedProposal.objective !== 'enriched' && (
+                    <div className="flex rounded-full border border-white/10 bg-black/20 p-1">
+                      <button type="button" onClick={() => setView('changes')} className={`rounded-full px-4 py-1.5 text-xs transition ${view === 'changes' ? 'bg-white/10 text-cream' : 'text-white/40'}`}>Cambios</button>
+                      <button type="button" onClick={() => setView('preview')} className={`rounded-full px-4 py-1.5 text-xs transition ${view === 'preview' ? 'bg-white/10 text-cream' : 'text-white/40'}`}>Vista completa</button>
+                    </div>
+                  )}
+                </div>
+                <div className="p-5 md:p-7">
+                  {selectedProposal.objective === 'enriched' ? (
+                    <div className="grid gap-5 xl:grid-cols-2">
+                      <MarkdownPaper label={`Original · ${proposalSource?.label || 'Versión anterior'}`}>{proposalSource?.cv_markdown || 'Versión de origen no disponible.'}</MarkdownPaper>
+                      <MarkdownPaper label="CV enriquecido (revisá las líneas con ⚠)">{selectedProposal.proposal_markdown}</MarkdownPaper>
+                    </div>
+                  ) : view === 'changes' ? (
+                    <div className="space-y-3">{selectedProposal.changes.map((change, index) => <ChangeCard key={change.id} change={change} index={index} />)}</div>
+                  ) : (
+                    <div className="grid gap-5 xl:grid-cols-2"><MarkdownPaper label={`Origen · ${proposalSource?.label || 'Versión anterior'}`}>{proposalSource?.cv_markdown || 'Versión de origen no disponible.'}</MarkdownPaper><MarkdownPaper label="Propuesta respaldada">{selectedProposal.proposal_markdown}</MarkdownPaper></div>
+                  )}
+                </div>
               </section>
 
               <section className={`rounded-3xl border p-5 md:p-7 ${selectedProposal.status === 'draft' ? 'border-emerald-400/18 bg-emerald-400/[0.025]' : 'border-white/8 bg-white/[0.02]'}`}>
-                {selectedProposal.status === 'draft' ? <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center"><div><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-emerald-300" /><h2 className="font-display text-xl text-cream">3. Tu decisión</h2></div><label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/8 bg-black/15 p-4"><input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[#c9a84c]" /><span className="text-xs leading-relaxed text-white/55">Revisé los cambios y confirmo que la propuesta conserva información real. Entiendo que aceptar crea una versión nueva y mantiene intacta la anterior.</span></label></div><div className="flex flex-wrap gap-2 lg:justify-end"><button type="button" onClick={discardProposal} disabled={discarding || accepting} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/50 transition hover:border-rose-400/25 hover:text-rose-200 disabled:opacity-40">{discarding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Descartar</button><button type="button" onClick={acceptProposal} disabled={!attested || accepting || discarding} className="inline-flex items-center gap-2 rounded-full bg-emerald-300 px-5 py-2.5 text-sm font-medium text-emerald-950 transition hover:bg-emerald-200 disabled:opacity-40">{accepting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Aceptar como nueva versión</button></div></div> : selectedProposal.status === 'accepted' ? <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-300" /><div><h2 className="font-display text-xl text-cream">Reescritura guardada</h2><p className="mt-1 text-xs text-white/45">La versión de origen continúa disponible en el historial.</p></div></div><a href="/mi-carrera/cv" className="inline-flex items-center gap-2 self-start rounded-full border border-emerald-400/25 px-4 py-2 text-sm text-emerald-200">Abrir en Mi CV <ArrowRight className="h-4 w-4" /></a></div> : <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div className="flex items-start gap-3"><RotateCcw className="mt-0.5 h-5 w-5 text-white/40" /><div><h2 className="font-display text-xl text-cream">Propuesta descartada</h2><p className="mt-1 text-xs text-white/45">No se modificó ninguna versión del CV.</p></div></div><button type="button" onClick={createProposal} disabled={creating} className="inline-flex items-center gap-2 self-start rounded-full border border-white/10 px-4 py-2 text-sm text-white/55">Volver a abrir</button></div>}
+                {selectedProposal.status === 'draft' ? <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center"><div><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-emerald-300" /><h2 className="font-display text-xl text-cream">3. Tu decisión</h2></div><label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/8 bg-black/15 p-4"><input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[#c9a84c]" /><span className="text-xs leading-relaxed text-white/55">{selectedProposal.objective === 'enriched' ? 'Revisé el CV enriquecido y verifiqué las líneas con ⚠. Los detalles que agregué son verídicos. Entiendo que aceptar crea una versión nueva y mantiene intacta la anterior.' : 'Revisé los cambios y confirmo que la propuesta conserva información real. Entiendo que aceptar crea una versión nueva y mantiene intacta la anterior.'}</span></label></div><div className="flex flex-wrap gap-2 lg:justify-end"><button type="button" onClick={discardProposal} disabled={discarding || accepting} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/50 transition hover:border-rose-400/25 hover:text-rose-200 disabled:opacity-40">{discarding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Descartar</button><button type="button" onClick={acceptProposal} disabled={!attested || accepting || discarding} className="inline-flex items-center gap-2 rounded-full bg-emerald-300 px-5 py-2.5 text-sm font-medium text-emerald-950 transition hover:bg-emerald-200 disabled:opacity-40">{accepting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Aceptar como nueva versión</button></div></div> : selectedProposal.status === 'accepted' ? <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-300" /><div><h2 className="font-display text-xl text-cream">Reescritura guardada</h2><p className="mt-1 text-xs text-white/45">La versión de origen continúa disponible en el historial.</p></div></div><a href="/mi-carrera/cv" className="inline-flex items-center gap-2 self-start rounded-full border border-emerald-400/25 px-4 py-2 text-sm text-emerald-200">Abrir en Mi CV <ArrowRight className="h-4 w-4" /></a></div> : <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div className="flex items-start gap-3"><RotateCcw className="mt-0.5 h-5 w-5 text-white/40" /><div><h2 className="font-display text-xl text-cream">Propuesta descartada</h2><p className="mt-1 text-xs text-white/45">No se modificó ninguna versión del CV.</p></div></div><button type="button" onClick={createProposal} disabled={creating} className="inline-flex items-center gap-2 self-start rounded-full border border-white/10 px-4 py-2 text-sm text-white/55">Volver a abrir</button></div>}
               </section>
             </motion.div>
           </AnimatePresence>

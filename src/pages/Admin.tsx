@@ -356,6 +356,13 @@ export default function Admin() {
   const [tokenCompanyName, setTokenCompanyName] = useState('')
   const [tokenBalance, setTokenBalance] = useState(10)
   const [tokenPlan, setTokenPlan] = useState('starter')
+  const [tokenRuc, setTokenRuc] = useState('')
+  const [tokenContactName, setTokenContactName] = useState('')
+  const [tokenContactPhone, setTokenContactPhone] = useState('')
+  const [tokenPlanExpires, setTokenPlanExpires] = useState('')
+  const [tokenBetaDiscount, setTokenBetaDiscount] = useState('')
+  const [tokenNotes, setTokenNotes] = useState('')
+  const [tokenSendEmail, setTokenSendEmail] = useState(true)
 
   // Beta / Leads state
   const [betaList, setBetaList] = useState<any[]>([])
@@ -1120,13 +1127,33 @@ export default function Admin() {
       const response = await fetch('/.netlify/functions/generate-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPasswordRef.current, email: tokenEmail, company_name: tokenCompanyName, token_balance: tokenBalance, plan_type: tokenPlan }),
+        body: JSON.stringify({
+          password: adminPasswordRef.current,
+          email: tokenEmail,
+          company_name: tokenCompanyName,
+          token_balance: tokenBalance,
+          plan_type: tokenPlan,
+          ruc: tokenRuc || undefined,
+          contact_name: tokenContactName || undefined,
+          contact_phone: tokenContactPhone || undefined,
+          plan: tokenPlan,
+          plan_expires_at: tokenPlanExpires || undefined,
+          beta_discount: tokenBetaDiscount || undefined,
+          notes: tokenNotes || undefined,
+          send_welcome_email: tokenSendEmail,
+        }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Error generando token')
-      setNotification({ type: 'success', message: 'Token generado con éxito' })
-      setTokenCompanyName('')
+      setNotification({ type: 'success', message: `Token generado${tokenSendEmail ? ' y email de bienvenida enviado' : ''}` })
       setTokenEmail('')
+      setTokenCompanyName('')
+      setTokenRuc('')
+      setTokenContactName('')
+      setTokenContactPhone('')
+      setTokenPlanExpires('')
+      setTokenBetaDiscount('')
+      setTokenNotes('')
       loadTokens()
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message })
@@ -2678,12 +2705,12 @@ export default function Admin() {
                   <div className="border border-white/[0.07] p-5 mb-6">
                     <p style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.15em', color: 'rgba(232,232,224,0.3)', textTransform: 'uppercase', marginBottom: '16px' }}>GENERAR TOKEN</p>
                     <form onSubmit={generateToken} className="space-y-4">
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="grid grid-cols-2 gap-3">
                         <input
                           type="email"
                           value={tokenEmail}
                           onChange={e => setTokenEmail(e.target.value)}
-                          placeholder="Email del reclutador"
+                          placeholder="Email de la empresa *"
                           required
                           className={inputCls}
                           style={{ fontFamily: MONO, fontSize: '12px' }}
@@ -2691,7 +2718,7 @@ export default function Admin() {
                         <input
                           value={tokenCompanyName}
                           onChange={e => setTokenCompanyName(e.target.value)}
-                          placeholder="Nombre de empresa"
+                          placeholder="Nombre de empresa * (ej: Empresa / Área)"
                           minLength={2}
                           maxLength={240}
                           required
@@ -2699,10 +2726,31 @@ export default function Admin() {
                           style={{ fontFamily: MONO, fontSize: '12px' }}
                         />
                         <input
+                          value={tokenContactName}
+                          onChange={e => setTokenContactName(e.target.value)}
+                          placeholder="Nombre del contacto (opcional)"
+                          className={inputCls}
+                          style={{ fontFamily: MONO, fontSize: '12px' }}
+                        />
+                        <input
+                          value={tokenContactPhone}
+                          onChange={e => setTokenContactPhone(e.target.value)}
+                          placeholder="WhatsApp / Teléfono (opcional)"
+                          className={inputCls}
+                          style={{ fontFamily: MONO, fontSize: '12px' }}
+                        />
+                        <input
+                          value={tokenRuc}
+                          onChange={e => setTokenRuc(e.target.value)}
+                          placeholder="RUC (opcional)"
+                          className={inputCls}
+                          style={{ fontFamily: MONO, fontSize: '12px' }}
+                        />
+                        <input
                           type="number"
                           value={tokenBalance}
                           onChange={e => setTokenBalance(parseInt(e.target.value))}
-                          placeholder="Balance"
+                          placeholder="Créditos iniciales"
                           required
                           className={inputCls}
                           style={{ fontFamily: MONO }}
@@ -2713,11 +2761,40 @@ export default function Admin() {
                           className={inputCls}
                           style={{ fontFamily: MONO, fontSize: '12px' }}
                         >
-                          <option value="starter">Starter (10)</option>
-                          <option value="pro">Pro (100)</option>
-                          <option value="enterprise">Enterprise (Inf)</option>
+                          <option value="trial">Trial (gratis)</option>
+                          <option value="starter">Starter</option>
+                          <option value="pro">Pro</option>
+                          <option value="scale">Scale</option>
+                          <option value="enterprise">Enterprise</option>
                         </select>
+                        <input
+                          type="date"
+                          value={tokenPlanExpires}
+                          onChange={e => setTokenPlanExpires(e.target.value)}
+                          placeholder="Vencimiento del plan"
+                          className={inputCls}
+                          style={{ fontFamily: MONO, fontSize: '12px' }}
+                          title="Vencimiento del plan (opcional)"
+                        />
+                        <input
+                          value={tokenBetaDiscount}
+                          onChange={e => setTokenBetaDiscount(e.target.value)}
+                          placeholder="Descuento beta (ej: 50%)"
+                          className={inputCls}
+                          style={{ fontFamily: MONO, fontSize: '12px' }}
+                        />
+                        <input
+                          value={tokenNotes}
+                          onChange={e => setTokenNotes(e.target.value)}
+                          placeholder="Notas internas (opcional)"
+                          className={inputCls}
+                          style={{ fontFamily: MONO, fontSize: '12px' }}
+                        />
                       </div>
+                      <label className="flex items-center gap-2 cursor-pointer" style={{ fontFamily: MONO, fontSize: '11px', color: 'rgba(232,232,224,0.5)' }}>
+                        <input type="checkbox" checked={tokenSendEmail} onChange={e => setTokenSendEmail(e.target.checked)} className="accent-[#c9a84c]" />
+                        Enviar email de bienvenida con el token al crear
+                      </label>
                       <button
                         type="submit"
                         disabled={loading}

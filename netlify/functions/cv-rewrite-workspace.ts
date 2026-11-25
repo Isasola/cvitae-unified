@@ -377,6 +377,125 @@ export const handler = async (event: any) => {
       return jsonResponse(event, 200, await loadWorkspace(supabase, user))
     }
 
+    if (action === 'analyze_gaps') {
+      stage = 'PROVIDER'
+      const sourceVersionId = plain(body.sourceVersionId, 80)
+      if (!sourceVersionId) return jsonResponse(event, 400, { error: 'Versión de CV requerida' })
+      const { data: version, error: vErr } = await supabase.from('generated_cvs')
+        .select('cv_markdown').eq('id', sourceVersionId).eq('user_id', user.id).maybeSingle()
+      if (vErr) throw vErr
+      if (!version?.cv_markdown) return jsonResponse(event, 404, { error: 'Versión no encontrada' })
+
+      const prompt = `Analizá este CV y encontrá experiencias laborales con descripciones pobres o vagas — donde el candidato solo puso el cargo pero no explicó qué hacía, cuánto manejaba, qué herramientas usaba, ni logros concretos.
+
+CV:
+${plain(version.cv_markdown, 4000)}
+
+Para cada experiencia con descripción pobre, generá 3-5 preguntas directas y simples (en español, tuteo) que le harías al candidato para sacar detalles reales. Ejemplos de preguntas:
+- "¿Cuántos ítems o SKUs manejabas aproximadamente?"
+- "¿Qué sistema usabas para registrar las ventas?"
+- "¿Cuántas personas atendías por día?"
+- "¿Tenías personal a cargo? ¿Cuántos?"
+
+Respondé ÚNICAMENTE JSON válido:
+{
+  "gaps": [
+    {
+      "company": "nombre de la empresa",
+      "role": "cargo que figura en el CV",
+      "description": "lo que dice actualmente el CV (breve, 1 línea)",
+      "questions": ["pregunta 1", "pregunta 2", "pregunta 3"]
+    }
+  ]
+}`
+
+      const response = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'cv_rewrite_enrich', trigger: 'user_action', actor: 'user' }, () => bedrock.send(new InvokeModelCommand({
+        modelId: MODEL_ID,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify({
+          anthropic_version: 'bedrock-2023-05-31',
+          max_tokens: 1500,
+          system: 'Sos un coach de CV. Identificás descripciones vagas y hacés preguntas concretas para sacar detalles reales. Respondés JSON válido.',
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      }), { abortSignal: AbortSignal.timeout(20_000) }))
+      const decoded = JSON.parse(new TextDecoder().decode(response.body))
+      const result = extractJSON(decoded.content?.[0]?.text || '{}')
+      return jsonResponse(event, 200, { gaps: list(result?.gaps) })
+    }
+
+    if (action === 'create_enriched') {
+      stage = 'PROVIDER'
+      const sourceVersionId = plain(body.sourceVersionId, 80)
+      const enrichmentQa = list(body.enrichmentQa)
+      if (!sourceVersionId) return jsonResponse(event, 400, { error: 'Versión de CV requerida' })
+      if (!enrichmentQa.length) return jsonResponse(event, 400, { error: 'Respuestas de enriquecimiento requeridas' })
+
+      const { data: version, error: vErr } = await supabase.from('generated_cvs')
+        .select('cv_markdown,id').eq('id', sourceVersionId).eq('user_id', user.id).maybeSingle()
+      if (vErr) throw vErr
+      if (!version?.cv_markdown) return jsonResponse(event, 404, { error: 'Versión no encontrada' })
+
+      const qaText = enrichmentQa.map((item: any) => {
+        const lines = list(item.qa).map((q: any) => `  P: ${plain(q.question, 200)}\n  R: ${plain(q.answer, 500)}`).join('\n')
+        return `Empresa: ${plain(item.company, 100)} | Cargo: ${plain(item.role, 100)}\n${lines}`
+      }).join('\n\n')
+
+      const prompt = `Tenés el CV de un candidato con descripciones vagas. El candidato respondió preguntas sobre su experiencia real. Tu tarea es reescribir las secciones pobres del CV con los nuevos detalles para que se vea con cuerpo y quede claro qué sabe hacer.
+
+CV ORIGINAL:
+${plain(version.cv_markdown, 3000)}
+
+RESPUESTAS DEL CANDIDATO SOBRE SU EXPERIENCIA:
+${qaText}
+
+INSTRUCCIONES:
+- Reescribí el CV completo en markdown, mejorando las secciones que el candidato amplió con sus respuestas
+- Usá los detalles reales que dio (cantidades, herramientas, responsabilidades concretas)
+- Si el candidato no respondió algo, conservá lo que había en el CV original
+- No inventes datos que el candidato no mencionó
+- Estilo profesional, en español, con viñetas (- ) para responsabilidades
+- Si los detalles que da son limitados, podés agregar inferencias razonables para el rubro PERO marcalas con ⚠ al inicio de la línea para que el candidato las revise
+- El resultado debe ser un CV completo, listo para usar
+
+Respondé ÚNICAMENTE el markdown del CV reescrito, sin comentarios ni explicaciones.`
+
+      const response = await observeAiCall({ provider: 'bedrock', model: MODEL_ID, feature: 'cv_rewrite_enrich', trigger: 'user_action', actor: 'user' }, () => bedrock.send(new InvokeModelCommand({
+        modelId: MODEL_ID,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify({
+          anthropic_version: 'bedrock-2023-05-31',
+          max_tokens: 4000,
+          system: 'Sos un redactor de CV profesional. Reescribís con los detalles reales que el candidato proveyó. Respondés únicamente el markdown final del CV.',
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      }), { abortSignal: AbortSignal.timeout(30_000) }))
+      stage = 'PERSISTENCE'
+      const decoded = JSON.parse(new TextDecoder().decode(response.body))
+      const enrichedMarkdown = plain(decoded.content?.[0]?.text || '', 15000)
+      if (enrichedMarkdown.length < 100) throw new Error('El CV enriquecido resultó demasiado corto')
+
+      const { data: proposal, error: pErr } = await supabase.from('cv_rewrite_proposals').insert([{
+        user_id: user.id,
+        source_version_id: sourceVersionId,
+        source_content_hash: createHash('sha256').update(version.cv_markdown).digest('hex'),
+        evidence_hash: 'enriched',
+        objective: 'enriched',
+        status: 'pending',
+        proposal_markdown: enrichedMarkdown,
+        changes: [],
+        evidence_snapshot: [],
+        diagnostic_snapshot: { enrichmentQa },
+        safety_checks: { passed: true, enriched: true },
+        analysis_model: MODEL_ID,
+      }]).select('id,proposal_markdown,status,created_at').single()
+      if (pErr) throw pErr
+
+      return jsonResponse(event, 200, { ...(await loadWorkspace(supabase, user)), proposalId: proposal.id })
+    }
+
     return jsonResponse(event, 400, { error: 'Acción desconocida' })
   } catch (error: any) {
     const rawMessage = String(error?.message || error || '')

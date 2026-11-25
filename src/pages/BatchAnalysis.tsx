@@ -108,6 +108,9 @@ export default function BatchAnalysis() {
   const [isDragging, setIsDragging] = useState(false)
   const [folderMode, setFolderMode] = useState(false)
   const [showBancoHint, setShowBancoHint] = useState(false)
+  const [vacancyMode, setVacancyMode] = useState<'existing' | 'new' | 'free'>('free')
+  const [vacancyList, setVacancyList] = useState<{ id: string; title: string }[]>([])
+  const [selectedVacancyId, setSelectedVacancyId] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -126,7 +129,20 @@ export default function BatchAnalysis() {
       return
     }
     try {
-      setSession(JSON.parse(s))
+      const parsed = JSON.parse(s)
+      setSession(parsed)
+      // Load vacancies for this token
+      fetch('/.netlify/functions/validate-recruiter-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: parsed.token, action: 'get_vacancies' }),
+      }).then(r => r.json()).then(data => {
+        const active = (data.vacancies || []).filter((v: any) => v.is_active !== false)
+        setVacancyList(active.map((v: any) => ({ id: v.id, title: v.title })))
+        if (active.length > 0) {
+          setVacancyMode('existing')
+          setSelectedVacancyId(active[0].id)
+        }
+      }).catch(() => { /* silencioso */ })
     } catch {
       sessionStorage.removeItem(RECRUITER_SESSION_KEY)
       setLocation('/empresas')
@@ -175,7 +191,10 @@ export default function BatchAnalysis() {
   const removeCandidate = (id: string) => setCandidates(prev => prev.filter(c => c.id !== id))
 
   const startAnalysis = async () => {
-    if (!jobTitle.trim()) { setError('Ingresá el nombre del puesto'); return }
+    const effectiveTitle = vacancyMode === 'existing'
+      ? vacancyList.find(v => v.id === selectedVacancyId)?.title || jobTitle
+      : jobTitle
+    if (!effectiveTitle.trim()) { setError('Ingresá el nombre del puesto o seleccioná un llamado'); return }
     if (candidates.length < 2) { setError('Subí al menos 2 CVs'); return }
     if (!session?.token) { setError('La sesión de empresa expiró. Volvé a ingresar.'); return }
 
@@ -201,17 +220,26 @@ export default function BatchAnalysis() {
           setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'extracting' } : x))
           const text = await extractTextFromFile(c.file)
           setCandidates(prev => prev.map(x => x.id === c.id ? { ...x, status: 'analyzing', text } : x))
+          const effectiveTitle = vacancyMode === 'existing'
+            ? vacancyList.find(v => v.id === selectedVacancyId)?.title || jobTitle
+            : jobTitle
+          const extraVacancyFields = vacancyMode === 'existing' && selectedVacancyId
+            ? { vacancy_id: selectedVacancyId }
+            : vacancyMode === 'new' && jobTitle.trim()
+              ? { vacancy_label: jobTitle.trim() }
+              : {}
           const res = await fetch('/.netlify/functions/analyze-cv-candidate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               cvText: text,
               mode: 'batch_analyze',
-              jobTitle,
+              jobTitle: effectiveTitle,
               jobDescription: jobDesc,
               recruiterToken: session.token,
               operationId: c.operationId,
               fileName: c.file.name,
+              ...extraVacancyFields,
             }),
           })
           const result = await res.json()
@@ -349,27 +377,72 @@ export default function BatchAnalysis() {
               <div className="mt-12 grid gap-6 lg:grid-cols-12">
                 {/* Puesto */}
                 <div className="glass-card rounded-3xl p-7 lg:col-span-5">
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">01 · El puesto</p>
-                  <label className="mt-6 block text-[11px] uppercase tracking-[0.18em] text-white/40">Nombre del puesto</label>
-                  <input
-                    value={jobTitle}
-                    onChange={e => setJobTitle(e.target.value)}
-                    placeholder="Ej: Analista de Marketing Digital"
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm font-light text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition"
-                  />
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">01 · El llamado / puesto</p>
+
+                  {/* Vacancy mode selector */}
+                  <div className="mt-5 space-y-2">
+                    <p className="text-[11px] text-white/40 uppercase tracking-[0.18em] mb-3">¿Asignar a un llamado?</p>
+                    {vacancyList.length > 0 && (
+                      <label className={`flex items-start gap-3 rounded-xl border p-3.5 cursor-pointer transition ${vacancyMode === 'existing' ? 'border-[#c9a84c]/40 bg-[#c9a84c]/[0.05]' : 'border-white/8 hover:border-white/15'}`}>
+                        <input type="radio" name="vacancyMode" value="existing" checked={vacancyMode === 'existing'} onChange={() => setVacancyMode('existing')} className="mt-0.5 accent-[#c9a84c]" />
+                        <div>
+                          <p className="text-sm text-white">Llamado existente</p>
+                          <p className="text-xs text-white/35 mt-0.5">Los análisis quedarán vinculados a ese llamado y aparecen en "Postulaciones"</p>
+                        </div>
+                      </label>
+                    )}
+                    <label className={`flex items-start gap-3 rounded-xl border p-3.5 cursor-pointer transition ${vacancyMode === 'new' ? 'border-[#c9a84c]/40 bg-[#c9a84c]/[0.05]' : 'border-white/8 hover:border-white/15'}`}>
+                      <input type="radio" name="vacancyMode" value="new" checked={vacancyMode === 'new'} onChange={() => setVacancyMode('new')} className="mt-0.5 accent-[#c9a84c]" />
+                      <div>
+                        <p className="text-sm text-white">Nuevo puesto (solo etiqueta)</p>
+                        <p className="text-xs text-white/35 mt-0.5">Creá una etiqueta de puesto para identificar este lote en el historial</p>
+                      </div>
+                    </label>
+                    <label className={`flex items-start gap-3 rounded-xl border p-3.5 cursor-pointer transition ${vacancyMode === 'free' ? 'border-white/15 bg-white/[0.02]' : 'border-white/8 hover:border-white/15'}`}>
+                      <input type="radio" name="vacancyMode" value="free" checked={vacancyMode === 'free'} onChange={() => setVacancyMode('free')} className="mt-0.5 accent-[#c9a84c]" />
+                      <div>
+                        <p className="text-sm text-white/70">Sin llamado (análisis libre)</p>
+                        <p className="text-xs text-white/30 mt-0.5">El lote no queda vinculado a ninguna vacante</p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Existing vacancy dropdown */}
+                  {vacancyMode === 'existing' && vacancyList.length > 0 && (
+                    <div className="mt-4">
+                      <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">Llamado</label>
+                      <select value={selectedVacancyId} onChange={e => setSelectedVacancyId(e.target.value)}
+                        className="w-full rounded-xl border border-[#c9a84c]/30 bg-[#111] px-4 py-3 text-sm text-white focus:border-[#c9a84c]/60 focus:outline-none transition">
+                        {vacancyList.map(v => <option key={v.id} value={v.id}>{v.title}</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Title input for new/free */}
+                  {(vacancyMode === 'new' || vacancyMode === 'free') && (
+                    <div className="mt-4">
+                      <label className="block text-[11px] uppercase tracking-[0.18em] text-white/40 mb-2">
+                        {vacancyMode === 'new' ? 'Nombre del puesto *' : 'Nombre del puesto (guía para la IA) *'}
+                      </label>
+                      <input
+                        value={jobTitle}
+                        onChange={e => setJobTitle(e.target.value)}
+                        placeholder="Ej: Analista de Marketing Digital, Repositor de gondola…"
+                        className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm font-light text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition"
+                      />
+                    </div>
+                  )}
+
                   <label className="mt-5 block text-[11px] uppercase tracking-[0.18em] text-white/40">
-                    Descripción / requisitos <span className="normal-case text-white/25">(opcional)</span>
+                    Descripción / requisitos <span className="normal-case text-white/25">(opcional pero mejora el ranking)</span>
                   </label>
                   <textarea
-                    rows={7}
+                    rows={5}
                     value={jobDesc}
                     onChange={e => setJobDesc(e.target.value)}
-                    placeholder="Habilidades, experiencia requerida, contexto del puesto…"
+                    placeholder="Habilidades clave, experiencia requerida, contexto del equipo… La IA usará esto para comparar cada CV contra los requisitos exactos."
                     className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm font-light text-white placeholder:text-white/25 focus:border-[#c9a84c]/50 focus:outline-none transition"
                   />
-                  <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.02] p-4 text-xs font-light leading-relaxed text-white/45">
-                    La descripción mejora el ranking: la IA puede comparar cada CV contra los requisitos exactos del puesto.
-                  </div>
                 </div>
 
                 {/* Upload */}
